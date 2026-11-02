@@ -11,6 +11,11 @@ import {
   formatKm,
   formatScale,
   generateCommand,
+  LABEL_LINE_PX,
+  LABEL_PAD_PX,
+  labelWidthPx,
+  tileLabel,
+  tileLabelMode,
   gridCells,
   outlineRuns,
   parsePrintIndex,
@@ -397,5 +402,49 @@ describe('per-set datum series (detail)', () => {
     // series datum: sets join each other; duplicates count once; bad ids ignored
     expect(setKeys(parsePrintIndex(index({ sets: { a: ['E378_N5460', 'E380_N5460', 'bogus'], b: ['E380_N5460', 'E382_N5460'] } })).value)).toBe(4);
     expect(setKeys(parsePrintIndex(index({ series: { ...index().series, connectors: { enabled: false, positions: [], key: null } } })).value)).toBe(0);
+  });
+});
+
+describe('minimap tile labels (size-aware, never wider than the cell)', () => {
+  // Web Mercator at 49.3° N: ≈ 99.7 m/px at zoom 10, halving per zoom level.
+  const px = (tile_m: number, zoom: number) => tile_m / (102070 / 2 ** zoom);
+
+  it('2 km series: none at zoom 10, stacked grid numbers at 11, full id from 12', () => {
+    expect(tileLabel('E382_N5466', px(2000, 10))).toEqual({ mode: 'none', lines: [] });
+    expect(tileLabel('E382_N5466', px(2000, 11))).toEqual({ mode: 'compact', lines: ['382', '5466'] });
+    expect(tileLabel('E382_N5466', px(2000, 12))).toEqual({ mode: 'full', lines: ['E382_N5466'] });
+  });
+
+  it('500 m detail series with decimal ids: stacked from zoom 14, full from 15', () => {
+    expect(tileLabel('E381.5_N5463.5', px(500, 13)).mode).toBe('none');
+    expect(tileLabel('E381.5_N5463.5', px(500, 14))).toEqual({ mode: 'compact', lines: ['381.5', '5463.5'] });
+    expect(tileLabel('E381.5_N5463.5', px(500, 15)).mode).toBe('full');
+  });
+
+  it('every shown label fits inside its own square (so neighbours cannot collide)', () => {
+    for (const id of ['E382_N5466', 'E381.5_N5463.5', 'E376_N5462']) {
+      for (let s = 0; s <= 400; s += 3) {
+        const l = tileLabel(id, s);
+        if (l.mode === 'none') continue;
+        expect(Math.max(...l.lines.map(labelWidthPx))).toBeLessThanOrEqual(s);
+        expect(l.lines.length * LABEL_LINE_PX + LABEL_PAD_PX).toBeLessThanOrEqual(s);
+      }
+    }
+  });
+
+  it('one style per series: the widest id decides (no mix of full and stacked labels)', () => {
+    const ids = ['E382_N5463', 'E381.5_N5463.5'];
+    expect(tileLabel('E382_N5463', px(500, 13))).toEqual({ mode: 'compact', lines: ['382', '5463'] }); // alone it would fit
+    expect(tileLabelMode(ids, px(500, 13))).toBe('none');
+    expect(tileLabel('E382_N5463', px(500, 14), ids)).toEqual({ mode: 'compact', lines: ['382', '5463'] });
+    expect(tileLabelMode(ids, px(500, 15))).toBe('full');
+    expect(tileLabelMode([], 500)).toBe('none');
+  });
+
+  it('degenerate sizes and non-contract ids', () => {
+    expect(tileLabel('E382_N5466', 0).mode).toBe('none');
+    expect(tileLabel('E382_N5466', Number.NaN).mode).toBe('none');
+    expect(tileLabel('x', 30)).toEqual({ mode: 'full', lines: ['x'] });
+    expect(tileLabel('not-a-tile-id-at-all', 60)).toEqual({ mode: 'none', lines: [] });
   });
 });

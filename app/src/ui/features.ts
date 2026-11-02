@@ -15,6 +15,7 @@ import { initPrint } from '../print/Print3D';
 import { initReconstruction } from '../reconstruction/Reconstruction';
 import { openReportDialog } from '../report/ReportDialog';
 import { initVectorLayers } from '../vectors/VectorLayers';
+import { openAbout } from './about';
 import { showDisclaimer } from './disclaimer';
 import './features.css';
 import { Labels3D } from './Labels3D';
@@ -87,6 +88,11 @@ export function initFeatures(ctx: AppContext): Features {
     info.textContent = 'ⓘ';
     info.title = 'Hinweise: Schauen, nicht graben';
     info.addEventListener('click', () => showDisclaimer(true));
-    footer.replaceChildren(info, base, extra);
+    const about = document.createElement('button');
+    about.type = 'button';
+    about.className = 'sle-about-btn';
+    about.textContent = 'Über & Datenschutz';
+    about.addEventListener('click', openAbout);
+    footer.replaceChildren(info, about, ' · ', base, extra);
   }
 }

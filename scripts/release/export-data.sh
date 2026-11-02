@@ -17,6 +17,11 @@ OUT1="$RELEASE_DIR/$DATA_REPO"
 OUT2="$RELEASE_DIR/$DATA2_REPO"
 mkdir -p "$RELEASE_DIR"
 
+# The Pages workflow builds the castle viewer from COMMITTED code; its terrain must match that code.
+if [[ -n "$(git -C "$REPO" status --porcelain -- schloss-karlsberg/viewer schloss-karlsberg/model 2>/dev/null)" ]]; then
+  echo "[export-data] WARNING: schloss-karlsberg/ has uncommitted changes – castle-viewer/terrain/ may not match the" >&2
+  echo "              published viewer code. Review 'git -C $OUT1 status castle-viewer' and revert it if unsure." >&2
+fi
 [[ -f "$SRC/$RELEASE_AOI/manifest.json" ]] || { echo "no $SRC/$RELEASE_AOI/manifest.json – run the pipeline first" >&2; exit 1; }
 for IDX in "$SRC"/print/*/index.json; do
   [[ -f "$IDX" ]] || continue

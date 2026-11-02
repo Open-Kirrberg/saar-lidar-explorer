@@ -8,6 +8,8 @@
  *   VITE_PRINT_URL   root of the 3D-print series (`<root><series>/index.json`); default `<dataRoot>print/`
  *   VITE_AOIS        comma list of the AOIs the deployment has (e.g. `overall`); default: all known
  *   VITE_VIEWER_URL  castle viewer URL (relative ones resolve against the page); `off` hides the handover
+ *   VITE_IMPRESSUM_URL  optional Impressum page (http(s); relative ones resolve against the page),
+ *                    linked in „Über & Datenschutz“; unset → no Impressum link (no default)
  */
 import { dataRootUrl } from './manifest';
 
@@ -73,6 +75,23 @@ export function viewerUrlOverride(raw: string | undefined = env().VITE_VIEWER_UR
   if (raw.trim().toLowerCase() === 'off') return 'off';
   try {
     return href ? new URL(raw, href).href : new URL(raw).href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Impressum link for „Über & Datenschutz“ (`VITE_IMPRESSUM_URL`): an http(s) URL (relative values
+ * resolve against the page), else null (unset, other schemes such as `javascript:`, credentials).
+ */
+export function impressumUrl(raw: string | undefined = env().VITE_IMPRESSUM_URL, href: string | undefined = pageHref()): string | null {
+  const v = raw?.trim();
+  if (!v) return null;
+  try {
+    const u = href ? new URL(v, href) : new URL(v);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    if (u.username || u.password) return null;
+    return u.href;
   } catch {
     return null;
   }

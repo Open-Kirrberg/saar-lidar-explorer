@@ -20,6 +20,7 @@ import type { TourGuide } from './TourGuide';
 import type { Labels3D } from './Labels3D';
 import { copyText } from './clipboard';
 import { openQrDialog } from '../share/QrDialog';
+import { openAbout } from './about';
 import { watchContextLoss } from './contextLoss';
 import { UI_MODE_LABELS, deviceEnv, initMobile } from './mobile';
 import { autoQuality } from './mobileMode';
@@ -245,6 +246,7 @@ export function initPolish(ctx: AppContext, deps: PolishDeps): void {
       <button type="button" class="sle-btn" data-act="intro">Einführung <kbd>?</kbd></button>
       <button type="button" class="sle-btn" data-act="tour" hidden>Tour starten</button>
       <button type="button" class="sle-btn" data-act="reset">Einstellungen zurücksetzen</button>
+      <button type="button" class="sle-btn" data-act="about">Über &amp; Datenschutz</button>
     </div>
     <p class="sle-dim sle-small">Gespeichert werden nur Einstellungen in diesem Browser. Fundmarker, Bewertungen und
     Messungen bleiben beim Zurücksetzen erhalten und sind nie Teil eines geteilten Links.</p>`;
@@ -325,6 +327,7 @@ export function initPolish(ctx: AppContext, deps: PolishDeps): void {
   const q = <T extends HTMLElement>(s: string) => sec.body.querySelector<T>(s)!;
   q('[data-act=share]').addEventListener('click', () => void share());
   q('[data-act=intro]').addEventListener('click', openIntro);
+  q('[data-act=about]').addEventListener('click', openAbout);
   const tourCardBtn = q<HTMLButtonElement>('[data-act=tour]');
   tourCardBtn.addEventListener('click', startTour);
   void tourReady.then((t) => (tourCardBtn.hidden = t.stops.length === 0));

@@ -37,6 +37,7 @@ import {
   printTotals,
   setKeys,
   tileDatum,
+  tileLabel,
 } from './printData';
 import type { Bbox, DisplayCell, PrintIndex, PrintPrefs, PrintTile } from './printData';
 import { PrintOutline } from './PrintOutline';
@@ -242,7 +243,6 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
       const ring = bboxRing(c.bbox, 8).map(([E, N]) => ll(E, N));
       const p = L.polygon(ring, { ...styleOf(c), bubblingMouseEvents: false });
       if (c.tile) {
-        p.bindTooltip(c.id, { permanent: true, direction: 'center', className: 'sle-print-label', interactive: false });
         p.on('click', () => select(c.id, true));
       } else {
         p.bindTooltip(`${c.id} – noch nicht erzeugt${c.sets.length ? ` (Set ${c.sets.join(', ')})` : ''}`, { sticky: true });
@@ -254,7 +254,49 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
       polys.set(c.id, p);
       mapLayer.addLayer(p);
     }
+    labelKeys.clear();
+    syncLabels();
   }
+
+  /** On-screen width (px) of one tile square at the minimap's current zoom (0 without a map). */
+  function tilePx(): number {
+    const map = deps.minimap?.map;
+    const c = cells[0];
+    if (!map || !c) return 0;
+    const a = map.project(ll(c.bbox[0], c.bbox[1]));
+    const b = map.project(ll(c.bbox[2], c.bbox[1]));
+    return Math.hypot(b.x - a.x, b.y - a.y);
+  }
+
+  /**
+   * Generated tiles: permanent labels sized to the tile on screen (full id → stacked grid numbers →
+   * none, one style per series, see `tileLabelMode`); without a permanent label the id is a hover tooltip. Re-run on zoomend.
+   */
+  const labelKeys = new Map<string, string>();
+  function syncLabels(): void {
+    const px = tilePx();
+    const ids = cells.filter((c) => c.tile).map((c) => c.id);
+    for (const c of cells) {
+      const p = polys.get(c.id);
+      if (!c.tile || !p) continue;
+      const lab = tileLabel(c.id, px, ids);
+      const key = `${lab.mode}:${lab.lines.join('/')}`;
+      if (labelKeys.get(c.id) === key) continue;
+      labelKeys.set(c.id, key);
+      p.unbindTooltip();
+      if (lab.mode === 'none') {
+        p.bindTooltip(c.id, { sticky: true, className: 'sle-print-hover' });
+        continue;
+      }
+      const el = document.createElement('span');
+      lab.lines.forEach((t, i) => {
+        if (i) el.appendChild(document.createElement('br'));
+        el.appendChild(document.createTextNode(t));
+      });
+      p.bindTooltip(el, { permanent: true, direction: 'center', className: `sle-print-label sle-print-label-${lab.mode}`, interactive: false });
+    }
+  }
+  deps.minimap?.map.on('zoomend', syncLabels);
 
   function restyle(): void {
     for (const c of cells) {

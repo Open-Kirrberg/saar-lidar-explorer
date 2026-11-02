@@ -29,6 +29,7 @@ Everything is configured in `release.env` (org, host, repo names, AOI, `XYZ_MAX_
 | `VITE_PRINT_URL` | `https://open-kirrberg.github.io/saar-lidar-data-2/print/` | 3D-print series |
 | `VITE_AOIS` | `overall` | AOIs this deployment has: no probes for others, AOI switcher hidden, `?aoi=` outside → `overall` |
 | `VITE_VIEWER_URL` | `/saar-lidar-explorer/castle/` | castle viewer handover target (same origin is trusted); `off` hides „Schloss betreten“ |
+| `VITE_IMPRESSUM_URL` | – (unset) | optional http(s) link „Impressum“ in *Über & Datenschutz*; set the repo variable `SLE_IMPRESSUM_URL` |
 
 Castle viewer (`schloss-karlsberg/`): `VITE_EXPLORER_URL=/saar-lidar-explorer/` (default return target) and
 `vite build --base /saar-lidar-explorer/castle/`. Its back-URL guard accepts local hosts and the page's own origin.
@@ -59,7 +60,10 @@ Size report: `../_release/data-size-report.txt`. What it does:
 
 ```bash
 git status                                # commit first: only committed files are exported
-scripts/release/export-code.sh            # → ../_release/saar-lidar-explorer (fresh git repo, 1 commit)
+scripts/release/export-code.sh            # → ../_release/saar-lidar-explorer (1st run: fresh repo, 1 commit;
+                                          #   later runs keep its .git/ and add 1 update commit → fast-forward push)
+RELEASE_MESSAGE="Fix: …" scripts/release/export-code.sh   # custom subject for the update commit
+scripts/release/export-code.sh --fresh    # discard the staged history (needs a force push — avoid)
 scripts/release/export-code.sh --worktree # dry run from the working tree (tracked + untracked, not ignored)
 ```
 
@@ -72,14 +76,14 @@ scripts/release/export-code.sh --worktree # dry run from the working tree (track
 - `secret_scan.py`: neutralises absolute local paths (repo root, `$HOME`, Claude scratch dirs) and scans for
   tokens, private keys, credential assignments, `.env`/key files, `.claude/settings.local.json` (HIGH → abort, no
   commit) and lists e-mail addresses / home paths for review (`../_release/secret-scan.md`).
-- `git init -b main` + one commit with the local identity (override: `RELEASE_GIT_NAME`, `RELEASE_GIT_EMAIL`, e.g. a
+- First run: `git init -b main` + one commit; later runs: one update commit on the kept `.git/` (no changes → no commit). Local identity (override: `RELEASE_GIT_NAME`, `RELEASE_GIT_EMAIL`, e.g. a
   GitHub noreply address). Never pushes.
 
 The workflow builds the explorer (`pnpm install --frozen-lockfile`, tests, `SLE_PUBLIC=1` build), then the castle
 viewer into `app/dist/castle/`: textures via `scripts/fetch-textures.sh` (Poly Haven CC0, md5-checked, cached by
 `actions/cache`), terrain from `<VITE_DATA_URL>castle-viewer/terrain/` (sha256-checked). If that step fails, the
 explorer is rebuilt with `VITE_VIEWER_URL=off` (no handover) so the site still deploys. Repository variables
-`SLE_DATA_URL`, `SLE_PRINT_URL`, `SLE_AOIS` override the defaults without a code change.
+`SLE_DATA_URL`, `SLE_PRINT_URL`, `SLE_AOIS`, `SLE_IMPRESSUM_URL` override the defaults without a code change.
 
 ## 4. Publish (the lead / the user — not the scripts)
 

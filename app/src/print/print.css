@@ -26,3 +26,5 @@
 .leaflet-tooltip.sle-print-label { background: rgba(20, 20, 24, 0.78); color: #ffd27a; border: 0; box-shadow: none; padding: 1px 4px; font: 600 10px/1.2 var(--ui-font, system-ui); }
 .leaflet-tooltip.sle-print-label::before { display: none; }
 .sle-print-table .sle-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Compact label: the two grid numbers (E / N in km) stacked (Print3D syncLabels). */
+.leaflet-tooltip.sle-print-label-compact { padding: 1px 3px; line-height: 1.1; text-align: center; }

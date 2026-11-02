@@ -280,9 +280,16 @@ def main() -> int:
     shared_attr = []
     if (src / "shared").is_dir():
         for f in walk_files(src / "shared"):
-            plan1[f.relative_to(src).as_posix()] = f
+            rel = f.relative_to(src).as_posix()
+            plan1[rel] = f
             if f.name == "index.json":
-                shared_attr.append(json.loads(f.read_text(encoding="utf-8")).get("attribution", ""))
+                idx = json.loads(f.read_text(encoding="utf-8"))
+                shared_attr.append(idx.get("attribution", ""))
+                viewer = idx.get("viewer")
+                if isinstance(viewer, dict) and "url" in viewer:
+                    # the local file names the dev castle viewer (localhost:5260); publish the public one
+                    viewer["url"] = a.app_url.rstrip("/") + "/castle/"
+                    plan1[rel] = (json.dumps(idx, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
     has_castle = plan_castle_terrain(a.castle_terrain.resolve(), plan1)
     prints = plan_print(src, plan2)
 

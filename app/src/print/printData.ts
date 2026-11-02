@@ -545,6 +545,59 @@ export function outlineRuns(bbox: Readonly<Bbox>, origin: { E0: number; N0: numb
   return runs;
 }
 
+// ---- minimap tile labels --------------------------------------------------------------------------------
+
+/**
+ * Label metrics of `.sle-print-label` (600 10px system-ui): conservative mean glyph advance of
+ * digits/E/N/_/./ , padding + a margin to the cell edge, and the line height.
+ */
+export const LABEL_CHAR_PX = 6.4;
+export const LABEL_PAD_PX = 14;
+export const LABEL_LINE_PX = 12;
+
+export type TileLabelMode = 'full' | 'compact' | 'none';
+
+export interface TileLabel {
+  mode: TileLabelMode;
+  /** Text lines (empty for 'none'). */
+  lines: string[];
+}
+
+/** Estimated on-screen width of a label line (px). */
+export function labelWidthPx(text: string): number {
+  return text.length * LABEL_CHAR_PX + LABEL_PAD_PX;
+}
+
+function labelLines(id: string, mode: TileLabelMode): string[] {
+  if (mode === 'none') return [];
+  const m = mode === 'compact' ? TILE_ID_RE.exec(id) : null;
+  return m ? [m[1], m[2]] : [id];
+}
+
+function fits(lines: string[], tilePx: number): boolean {
+  return Math.max(...lines.map(labelWidthPx)) <= tilePx && lines.length * LABEL_LINE_PX + LABEL_PAD_PX <= tilePx;
+}
+
+/**
+ * Label style for all generated tiles of a series whose squares are `tilePx` screen pixels wide:
+ * 'full' (`E382_N5466`) when every id fits on one line, else 'compact' (the two grid numbers
+ * stacked, `382` / `5466`) when all of those fit, else 'none' (ids only in the hover tooltip).
+ * One style per series, so labels don't switch style from tile to tile. A shown label is never
+ * wider or taller than its own (centred) cell, so labels of neighbouring tiles cannot overlap.
+ */
+export function tileLabelMode(ids: readonly string[], tilePx: number): TileLabelMode {
+  if (!(tilePx > 0) || !ids.length) return 'none';
+  if (ids.every((id) => fits(labelLines(id, 'full'), tilePx))) return 'full';
+  if (ids.every((id) => TILE_ID_RE.test(id) && fits(labelLines(id, 'compact'), tilePx))) return 'compact';
+  return 'none';
+}
+
+/** Label of one tile (`ids` = all labelled tiles of the series, default just this one). */
+export function tileLabel(id: string, tilePx: number, ids: readonly string[] = [id]): TileLabel {
+  const mode = tileLabelMode(ids, tilePx);
+  return { mode, lines: labelLines(id, mode) };
+}
+
 // ---- formatting & prefs ---------------------------------------------------------------------------------
 
 export function formatScale(scale: number): string {

@@ -4,6 +4,7 @@ import { aoiBaseUrl, chunkUrl, dataRootUrl, pointTileUrl } from '../src/data/man
 import {
   absoluteRoot,
   deployedAois,
+  impressumUrl,
   isAbsoluteHttpUrl,
   parseAoiList,
   printRootUrl,
@@ -120,5 +121,35 @@ describe('castle viewer handover on the public site', () => {
     expect(buildViewerUrl('https://evil.example/', pose, 'fliegen', PAGE).startsWith(DEFAULT_VIEWER_URL)).toBe(true);
     const back = backTargetUrl(PAGE, pose);
     expect(back.startsWith(`${ORIGIN}/saar-lidar-explorer/?aoi=overall#382262.7,5466126.3,380,90,-20`)).toBe(true);
+  });
+});
+
+describe('Impressum link (VITE_IMPRESSUM_URL, „Über & Datenschutz“)', () => {
+  it('unset / blank → null (no link, nothing invented)', () => {
+    vi.stubEnv('VITE_IMPRESSUM_URL', '');
+    expect(impressumUrl()).toBeNull();
+    expect(impressumUrl(undefined, PAGE)).toBeNull();
+    expect(impressumUrl('   ', PAGE)).toBeNull();
+  });
+
+  it('absolute http(s) kept, relative resolved against the page', () => {
+    expect(impressumUrl('https://example.org/impressum', PAGE)).toBe('https://example.org/impressum');
+    expect(impressumUrl(' http://example.org/i ', undefined)).toBe('http://example.org/i');
+    expect(impressumUrl('impressum.html', PAGE)).toBe('https://open-kirrberg.github.io/saar-lidar-explorer/impressum.html');
+    expect(impressumUrl('/impressum/', PAGE)).toBe('https://open-kirrberg.github.io/impressum/');
+  });
+
+  it('rejects other schemes, credentials and garbage', () => {
+    expect(impressumUrl('javascript:alert(1)', PAGE)).toBeNull();
+    expect(impressumUrl('data:text/html,x', PAGE)).toBeNull();
+    expect(impressumUrl('mailto:a@b.c', PAGE)).toBeNull();
+    expect(impressumUrl('https://u:p@example.org/', PAGE)).toBeNull();
+    expect(impressumUrl('impressum.html', undefined)).toBeNull(); // relative without a page
+  });
+
+  it('reads the env var by default', () => {
+    vi.stubGlobal('location', { href: PAGE });
+    vi.stubEnv('VITE_IMPRESSUM_URL', 'https://example.org/impressum');
+    expect(impressumUrl()).toBe('https://example.org/impressum');
   });
 });
