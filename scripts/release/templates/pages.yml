@@ -79,7 +79,8 @@ jobs:
           done
           (cd "$T" && sha256sum -c SHA256SUMS)
           pnpm install --frozen-lockfile
-          pnpm run test
+          # GitHub runners are ~2x slower than a dev machine; model-building tests can exceed vitest's 5 s default
+          pnpm run test --testTimeout=30000
           pnpm exec tsc --noEmit
           pnpm exec vite build --base "/{{CODE_REPO}}/castle/" --outDir "$GITHUB_WORKSPACE/app/dist/castle" --emptyOutDir
 
