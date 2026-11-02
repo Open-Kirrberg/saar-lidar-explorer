@@ -182,7 +182,8 @@ describe('F22 manifest: crater classes', () => {
     expect(uxoClassesAllowed({ VITE_SLE_PUBLIC: '1' })).toBe(false);
     expect(uxoClassesAllowed({})).toBe(true);
     expect(uxoClassesAllowed({ VITE_SLE_PUBLIC: '0' })).toBe(true);
-    expect(uxoClassesAllowed()).toBe(true); // vitest is not a public build
+    // default env: local runs are not public; the Pages workflow runs the tests with SLE_PUBLIC=1 (vite.config.ts forces the flag)
+    expect(uxoClassesAllowed()).toBe(process.env.SLE_PUBLIC !== '1');
   });
 });
 
