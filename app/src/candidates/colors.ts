@@ -10,6 +10,9 @@ export const CLASS_COLORS: Readonly<Record<CandidateClass, number>> = {
   linear: 0xb4ff39, // lime
   rect: 0xff4fd8, // pink
   platform: 0xa98bff, // violet
+  // F22 UXO indicators: one red family (a field is a cluster of craters), apart from the relict hues.
+  crater: 0xff2e2e, // signal red
+  crater_field: 0xff9a8a, // light coral (field outline)
 };
 /** Known path: `linear` + `along_path` ("Weg (bekannt)"). */
 export const KNOWN_PATH_COLOR = 0xc9c9c9;

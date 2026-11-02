@@ -38,8 +38,13 @@ function parse(raw: string | null, base: CandidateFilter): CandidatePrefs | null
  * Prefs for `aoi` (defaults with `defaultMin` when nothing is stored). `migrated` is true when the
  * legacy shared key was consumed (and written to the AOI key, legacy key removed).
  */
-export function loadCandidatePrefs(kv: PrefsKV | null | undefined, aoi: string, defaultMin: number): { prefs: CandidatePrefs; migrated: boolean } {
-  const base = defaultFilter(defaultMin);
+export function loadCandidatePrefs(
+  kv: PrefsKV | null | undefined,
+  aoi: string,
+  defaultMin: number,
+  defaultCraterMin?: number,
+): { prefs: CandidatePrefs; migrated: boolean } {
+  const base = defaultFilter(defaultMin, defaultCraterMin);
   const fresh = (): CandidatePrefs => ({ on: false, filter: base });
   if (!kv) return { prefs: fresh(), migrated: false };
   let own: string | null = null;

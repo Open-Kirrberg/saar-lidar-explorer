@@ -53,6 +53,14 @@ Size report: `../_release/data-size-report.txt`. What it does:
 - `pois.geojson`, `shared/**` → repo 1; `schloss-karlsberg/viewer/public/terrain/` → repo 1 `castle-viewer/terrain/` + `SHA256SUMS`.
 - `print/*.json` and per series `index.json` (without `files.stl`), `*.3mf`, `*.png`, `keys/`, `printer/` → repo 2.
   Tile STLs are not published.
+- **F22: UXO candidate classes are stripped** (`crater`, `crater_field` from saar-lidar-detect are private): features
+  removed from `candidates.geojson`, manifest `counts`/`classes`/`params.crater_threshold`/crater versions and detectors
+  dropped, `featureCount` recomputed, mask PNGs rewritten with codes 6/7 → 0 (stdlib PNG codec; a non-8-bit-grey mask
+  aborts the export). The log prints how many were removed. The public app build drops them too (`VITE_SLE_PUBLIC=1`).
+  Mask chunks left empty are dropped (with their `mask.chunks` entry); a crater-only primary `method` is renamed.
+  Of `candidates/` only the manifest's GeoJSON and mask chunks are staged; saar-lidar-detect side files in the AOI dir
+  (`run.json`, `report*.html`, `eval*`, `fachbericht*`, `manifest.json.bak-*`, `*.sld-new/`) are never staged, and the
+  export **aborts** if a staged AOI text file still contains `crater`/`Bombentrichter`/`Trichterfeld`.
 - Both: `.nojekyll`, `README.md` (contents, licences, the **candidates are unverified hypotheses** note,
   „Schauen, nicht graben“), `ATTRIBUTION`, `index.html` landing page linking to the app.
 

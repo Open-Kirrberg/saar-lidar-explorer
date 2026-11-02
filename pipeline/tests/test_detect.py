@@ -403,6 +403,21 @@ CAND_AOIS = sorted(k for k in _KNOWN if (APP_DATA / k / "manifest.json").exists(
                    and "candidates" in json.loads((APP_DATA / k / "manifest.json").read_text()))
 
 
+# F22: additive UXO classes written by saar-lidar-detect (`sld run --out`), contract "Candidates".
+UXO_LABELS = {"crater": "Bombentrichter (Hypothese)", "crater_field": "Trichterfeld (Hypothese)"}
+
+
+def _check_uxo_feature(f, bbox):
+    p, g = f["properties"], f["geometry"]
+    assert g["type"] == "Point" and bbox[0] <= g["coordinates"][0] <= bbox[2] and bbox[1] <= g["coordinates"][1] <= bbox[3]
+    assert p["id"].startswith(p["class"] + "-") and 0 <= p["score"] <= 1 and p["reasons"]
+    assert p["near_path"] is False and p.get("along_path", False) is False and p["near_known"] is None
+    if p["class"] == "crater":
+        assert "outline" not in p and p["metrics"]["diameter_m"] > 0
+    else:
+        assert p["outline"]["type"] == "Polygon" and all(isinstance(m, str) for m in p["member_ids"])
+
+
 @pytest.mark.parametrize("aoi", CAND_AOIS)
 def test_generated_candidates_match_contract(aoi):
     from PIL import Image
@@ -411,7 +426,8 @@ def test_generated_candidates_match_contract(aoi):
     e = m["candidates"]
     assert e["path"] == "candidates/candidates.geojson" and e["crs"] == "EPSG:25832"
     assert e["method"] == D.METHOD and isinstance(e["version"], int) and isinstance(e["params"], dict)
-    assert set(e["counts"]) <= set(D.CLASSES) and e["classes"] == D.LABELS_DE
+    assert set(e["counts"]) <= set(D.CLASSES) | set(UXO_LABELS)
+    assert e["classes"] == {**D.LABELS_DE, **{k: v for k, v in UXO_LABELS.items() if k in e["classes"]}}
     fc = json.loads((APP_DATA / aoi / e["path"]).read_text())
     feats = fc["features"]
     assert len(feats) == e["featureCount"] == sum(e["counts"].values())
@@ -419,7 +435,10 @@ def test_generated_candidates_match_contract(aoi):
     assert scores == sorted(scores, reverse=True)
     assert len({f["properties"]["id"] for f in feats}) == len(feats)
     for f in feats:
-        _check_feature(f, (a.e0, a.n0, a.e1, a.n1), baked=e.get("heights") == "baked")
+        if f["properties"]["class"] in UXO_LABELS:
+            _check_uxo_feature(f, (a.e0, a.n0, a.e1, a.n1))
+        else:
+            _check_feature(f, (a.e0, a.n0, a.e1, a.n1), baked=e.get("heights") == "baked")
     mk = e.get("mask")
     if mk:
         assert mk["encoding"] == "class8" and mk["path"] == "candidates/mask/{i}_{j}.png"
@@ -428,7 +447,7 @@ def test_generated_candidates_match_contract(aoi):
             assert 0 <= i < nx and 0 <= j < ny
             im = Image.open(APP_DATA / aoi / mk["path"].format(i=i, j=j))
             assert im.mode == "L" and im.size == (a.chunk_size, a.chunk_size)
-            assert set(np.unique(np.asarray(im))) <= {0, 1, 2, 3, 4, 5}
+            assert set(np.unique(np.asarray(im))) <= {0, 1, 2, 3, 4, 5, 6, 7}  # 6/7 = crater/crater_field (F22)
 
 
 # ----------------------------------------------------------------------------- coarse pass (rule set 2, Q-15)

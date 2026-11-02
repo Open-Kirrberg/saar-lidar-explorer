@@ -94,7 +94,9 @@ describe('validateManifest + candidates', () => {
 
 describe('candidate constants', () => {
   it('class codes, guard and storage key', () => {
-    expect(Object.values(CANDIDATE_MASK_CODES)).toEqual(['pit', 'mound', 'linear', 'rect', 'platform']);
+    expect(Object.values(CANDIDATE_MASK_CODES)).toEqual(['pit', 'mound', 'linear', 'rect', 'platform', 'crater', 'crater_field']);
+    expect(CANDIDATE_MASK_CODES[6]).toBe('crater');
+    expect(CANDIDATE_MASK_CODES[7]).toBe('crater_field');
     expect(isCandidateClass('rect')).toBe(true);
     expect(isCandidateClass('wall')).toBe(false);
     expect(candidatesStorageKey('karlsberg')).toBe('sle.candidates.v1.karlsberg');

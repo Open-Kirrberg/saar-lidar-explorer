@@ -39,6 +39,8 @@ const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
 if (PUBLIC_BUILD) {
   // Vite reads VITE_* from process.env after loading this file; explicit env vars win.
   for (const [k, v] of Object.entries(PUBLIC_ENV_DEFAULTS)) process.env[k] ||= v;
+  // F22: forced (not a default) — the public app drops the private UXO candidate classes.
+  process.env.VITE_SLE_PUBLIC = '1';
   console.log(`[sle] public build: base ${PUBLIC_BASE}, data ${process.env.VITE_DATA_URL}, AOIs ${process.env.VITE_AOIS}`);
 }
 

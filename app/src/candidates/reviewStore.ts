@@ -3,8 +3,8 @@
  * `sle.candidates.v1.<aoi>` (docs/data-contract.md "Review decisions"). Never written into data
  * files, never uploaded. Pure apart from the injected key-value storage; unit-tested.
  */
-import { candidatesStorageKey, isCandidateClass } from '../data/manifest';
-import type { CandidateDecision, CandidateReviewStatus, CandidateReviewStore } from '../data/manifest';
+import { UXO_CLASSES, UXO_NOTE_DE, candidatesStorageKey, isCandidateClass } from '../data/manifest';
+import type { CandidateClass, CandidateDecision, CandidateReviewStatus, CandidateReviewStore } from '../data/manifest';
 import type { Candidate } from './candidateData';
 
 /** Minimal Storage subset (localStorage-compatible), injectable for tests. */
@@ -116,6 +116,8 @@ export interface DecisionExport {
   detector: { method: string; version: number };
   note: string;
   counts: Record<CandidateReviewStatus, number>;
+  /** F22 (additive): decisions per class, e.g. `{ crater: 12, pit: 3 }`. */
+  classes: Partial<Record<CandidateClass, number>>;
   version: 1;
   decisions: Record<string, CandidateDecision>;
 }
@@ -123,14 +125,21 @@ export interface DecisionExport {
 /** JSON document for the user-triggered local export of decisions. */
 export function exportDecisions(store: CandidateReviewStore, aoi: string, detector: { method: string; version: number }, now = new Date()): DecisionExport {
   const counts: Record<CandidateReviewStatus, number> = { confirmed: 0, rejected: 0, unsure: 0 };
-  for (const d of Object.values(store.decisions)) counts[d.status]++;
+  const classes: Partial<Record<CandidateClass, number>> = {};
+  for (const d of Object.values(store.decisions)) {
+    counts[d.status]++;
+    classes[d.class] = (classes[d.class] ?? 0) + 1;
+  }
   return {
     type: 'sle-candidate-decisions',
     aoi,
     exported: now.toISOString(),
     detector,
-    note: 'Private Prüfentscheidungen zu automatisch erkannten Verdachtsflächen (Hypothesen). Nicht veröffentlichen – Schauen, nicht graben.',
+    note:
+      'Private Prüfentscheidungen zu automatisch erkannten Verdachtsflächen (Hypothesen). Nicht veröffentlichen – Schauen, nicht graben.' +
+      (UXO_CLASSES.some((c) => classes[c]) ? ` Bombentrichter/Trichterfelder: ${UXO_NOTE_DE}.` : ''),
     counts,
+    classes,
     version: 1,
     decisions: store.decisions,
   };

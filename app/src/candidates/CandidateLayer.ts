@@ -17,8 +17,8 @@ import type { Candidate } from './candidateData';
 import { CLASS_COLORS, KNOWN_PATH_COLOR, SELECTED_COLOR, candidateColor, hexRgb } from './colors';
 
 /** Style slots in our own DrapedLines material (independent of the OSM style table). */
-const KNOWN_STYLE = CANDIDATE_CLASSES.length; // 5
-const SELECTED_STYLE = KNOWN_STYLE + 1; // 6
+const KNOWN_STYLE = CANDIDATE_CLASSES.length; // after the class styles
+const SELECTED_STYLE = KNOWN_STYLE + 1;
 const styleOf = (c: Candidate) => (isKnownPath(c) ? KNOWN_STYLE : CANDIDATE_CLASSES.indexOf(c.cls));
 
 function toLine(c: Candidate, origin: Origin, style: number): LocalLine | null {

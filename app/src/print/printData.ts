@@ -15,7 +15,7 @@ export const PRINT_SERIES_LIST = 'series.json';
 export const PRINT_PREFS_KEY = 'sle.print.v1';
 
 /** Series keys tried when `print/series.json` is absent (current series first, then older ones). */
-export const KNOWN_PRINT_SERIES: readonly string[] = ['saarpfalz-8500', 'detail-2125', 'saarpfalz-8400', 'detail-2100', 'saarpfalz-8000', 'detail-2000'];
+export const KNOWN_PRINT_SERIES: readonly string[] = ['saarpfalz-9200', 'detail-2300', 'saarpfalz-8500', 'detail-2125', 'saarpfalz-8400', 'detail-2100', 'saarpfalz-8000', 'detail-2000'];
 
 /** Tile id `E{km}_N{km}` (decimals only when needed, ≤ 3) — contract regex. */
 export const TILE_ID_RE = /^E(\d+(?:\.\d{1,3})?)_N(\d+(?:\.\d{1,3})?)$/;

@@ -463,7 +463,7 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
     const tdF = document.createElement('td');
     tdF.className = 'sle-print-dl';
     const pl = current.printerProfile?.placement_mm;
-    tdF.appendChild(link(t.files['3mf'], '.3mf', `${t.id}.3mf – Bambu Studio${pl ? ` (liegt bei Platte X ${formatNum(pl[0])}, Y ${formatNum(pl[1])} mm – nicht neu anordnen)` : ''}`));
+    tdF.appendChild(link(t.files['3mf'], '.3mf', `${t.id}.3mf – Bambu Studio${pl ? ` (einfach öffnen: Bambu Studio legt die Kachel in die Plattenmitte, X ${formatNum(pl[0])}–${formatNum(pl[0] + current.series.tile_mm)} mm)` : ''}`));
     if (t.files.stl) tdF.appendChild(link(t.files.stl, '.stl', `${t.id}.stl`));
     tr.append(tdImg, tdId, tdZ, tdG, tdF);
     tr.addEventListener('click', () => select(t.id, true));

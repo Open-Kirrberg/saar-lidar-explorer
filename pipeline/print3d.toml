@@ -4,21 +4,23 @@
 # datum rule and base, so any two tiles of the same series (and the same datum) join seamlessly (identical edge
 # heights) — also tiles generated later anywhere else ("other parts"). Never change scale/tile_m/exag/datum/base_mm/
 # origin/vertices of a series that already has printed tiles: create a new series key instead. Name a series after its
-# scale (saarpfalz-8500 = 1:8500) so the key never lies about the print.
+# scale (saarpfalz-9200 = 1:9200) so the key never lies about the print.
 #
 #   tile edge in print   = tile_m / scale · 1000 mm          (derived; an explicit tile_mm must match)
 #   grid                 = tile lower-left corner E, N ≡ origin (mod tile_m)
 #   tile id              = "E{E/1000}_N{N/1000}" (km, decimals only when needed: E382.5_N5466)
-#   vertex grid          = `vertices` × `vertices` incl. both edges, cell = tile_m / (vertices − 1)
+#   vertex grid          = `vertices` × `vertices` incl. both edges, cell = tile_m / (vertices − 1); the printed top
+#                          surface is simplified to max_error_mm at every vertex (edges kept → seams stay exact)
 #   z_mm                 = base_mm + (max(h, datum) − datum) / scale · 1000 · exag
 #   datum_mode "series"  → datum = datum_m for every tile
 #   datum_mode "set"     → datum per named set = floor(min h of the set) − datum_margin_m, recorded in index.json
 #                          (setDatum_m) and frozen; tiles of an overlapping / nested set adopt it
 #
 # Printer: Bambu Lab P1S 0.4, plate 256 × 256 mm, printable height 250 mm. printer = "stock" (default) must slice
-# with the UNMODIFIED profile: its front-left exclusion area (18 × 28 mm) and the start-G-code load line leave a
-# square of at most 238.0 mm (X 18–256) — 2 km at 1:8400 (238.095 mm) is 0.095 mm too wide and is refused by the
-# slicer at every position (checked with the Bambu Studio CLI), hence 1:8500 (235.29 mm) and 1:2125 for 500 m.
+# with the UNMODIFIED profile AS OPENED IN THE BAMBU STUDIO GUI: the GUI ignores the 3MF position and centres the tile,
+# and refuses any object whose outline touches the front-left exclusion area (18 × 28 mm) — a centred square must stay
+# below 220 mm; with a 1 mm margin < 218 mm. Hence 1:9200 (2 km → 217.39 mm) and 1:2300 for 500 m. (The former
+# 1:8500 / 235.29 mm series sliced in the CLI at X 19.4 but was refused in the GUI after centring — never printed.)
 # printer = "sle-250" (only for 250 mm tiles) needs the user printer preset print3d.py writes (see README).
 
 [defaults]
@@ -41,6 +43,8 @@ engrave_mm = 0.6
 material_density_g_cm3 = 1.24   # PLA
 shell_mm = 1.2               # filament estimate: ≈ 3 walls × 0.4 mm (also used for top/bottom skins)
 infill = 0.15
+max_error_mm = 0.03          # top surface simplified: every sampled vertex within 0.03 mm (≈ 1/7 of a 0.2 mm layer)
+max_triangles = 500000       # top-surface triangle budget (Bambu Studio warns above 1 M per object)
 
 [defaults.connectors]
 enabled = true               # bowtie (double dovetail) key recesses on the bottom face
@@ -52,34 +56,35 @@ end_mm = 14.0                # width at the inner end (dovetail undercut)
 clearance_mm = 0.15          # key outline offset inwards per side; key thickness = depth − clearance
 min_base_mm = 2.0            # material required above a recess (checked per tile)
 
-# Main series: stock P1S profile, tile at plate X 19.4–254.7, Y 17.1–252.4 mm.
-[series.saarpfalz-8500]
-name_de = "Saarpfalz 1:8500"
-scale = 8500
-tile_m = 2000                # 2 km → 235.29 mm; overall explorer area = 3 × 4 tiles ≈ 70.6 × 94.1 cm
+# Main series: stock P1S profile, tile centred on the plate (X/Y 19.30–236.70 mm).
+[series.saarpfalz-9200]
+name_de = "Saarpfalz 1:9200"
+scale = 9200
+tile_m = 2000                # 2 km → 217.39 mm; overall explorer area = 3 × 4 tiles ≈ 65.2 × 87.0 cm
 
-[series.saarpfalz-8500.sets]
+[series.saarpfalz-9200.sets]
 explorer = { bbox = [378000, 5460000, 384000, 5468000] }   # = aois.toml [overall]
 extension-west = ["E376_N5462"]                            # first "other part": west of Homburg (Bexbach/Kirkel)
 
-# Detail series: 500 m tiles, exactly 4 × the main scale (same 235.29 mm tile, same plate placement), local datum per
-# set so a showpiece is ≈ 30–70 mm tall instead of 100–190 mm with datum 180 m.
-[series.detail-2125]
-name_de = "Detail 1:2125"
+# Detail series: 500 m tiles, exactly 4 × the main scale (same 217.39 mm tile, same plate placement), local datum per
+# set so a showpiece is ≈ 30–65 mm tall instead of 100–175 mm with datum 180 m.
+[series.detail-2300]
+name_de = "Detail 1:2300"
 role = "detail"
-scale = 2125
-tile_m = 500                 # 500 m → 235.29 mm, cell 0.5 m (1 m DGM, area mean = bilinear at 0.5 m)
+scale = 2300
+tile_m = 500                 # 500 m → 217.39 mm, cell 0.5 m (1 m DGM, area mean = bilinear at 0.5 m)
 exag = 1.5
 datum_mode = "set"
 
-[series.detail-2125.sets]
+[series.detail-2300.sets]
 karlsberg = ["E382_N5465.5", "E382_N5466"]                 # Hauptschloss 382195/5466095 + Orangerie 382229/5465983 at the shared edge
 merburg = ["E381.5_N5463", "E382_N5463", "E381.5_N5463.5", "E382_N5463.5"]   # Merburg 381964/5463453 near the common corner
 
 # OPTIONAL, not generated: the former 250 mm / 1:8000 main series. A 250 mm tile does NOT fit the stock P1S profile;
 # printer = "sle-250" writes a user printer preset that moves the exclusion area to a 5 mm front strip and frees the
 # 18 × 28 mm front-left corner — Bambu does not document why that corner is excluded, so this is at your own risk
-# (print a small test tile first). Tiles of this series do not join 1:8500 tiles.
+# (print a small test tile first). The GUI centres the tile on import: set its position by hand (README). Tiles of
+# this series do not join 1:9200 tiles.
 # [series.saarpfalz-8000-custom-preset]
 # name_de = "Saarpfalz 1:8000 (eigenes Druckerprofil)"
 # scale = 8000

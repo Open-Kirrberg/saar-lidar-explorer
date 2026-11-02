@@ -25,7 +25,8 @@ export const STYLES: LineStyle[] = [
   { key: 'parcel', label_de: 'Flurstücksgrenze', color: hex(0xfff3a8), width: 1.2 },
 ];
 
-export const MAX_STYLES = 8;
+/** Uniform slots per DrapedLines material (OSM: 7; candidates: 7 classes + known path + selected). */
+export const MAX_STYLES = 12;
 
 const OSM_KINDS: readonly OsmKind[] = ['road', 'track', 'path', 'rail', 'water', 'barrier'];
 export const PARCEL_STYLE = STYLES.findIndex((s) => s.key === 'parcel');

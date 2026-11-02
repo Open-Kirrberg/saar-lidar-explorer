@@ -15,16 +15,17 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from print3d import (  # noqa: E402
     BAMBU_PROFILES, FRONT_EXCLUDE_MM, PLACEMENT_MM, PLATE_MM, PRESET_FILE, PRINT_DIR, STOCK_EXCLUDE_MM,
-    STOCK_LOAD_LINE_GCODE_MAX_Y, STOCK_PRINTER, Connectors, Series, axis_weights, bowtie_key, build_tile_mesh,
-    check_series, check_text_clearance, filament_g, keys_needed, key_mesh, label_lines, layout_blocks,
-    list_series, load_line_extent, load_line_plate_max_y, load_series, merge_index, mesh_check, mesh_stats,
-    parse_tile_id, patch_start_gcode, plate_placement, printer_meta, printer_preset, read_stl, recess_polygons,
-    resample, resolve_datums, set_datum, source_box, stock_profile_problems, stock_window, text_geometry, tile_id,
-    tiles_in_bbox, validate_index, vertex_coords, write_3mf, write_catalog, write_stl, z_from_h,
+    STOCK_LOAD_LINE_GCODE_MAX_Y, STOCK_MARGIN_MM, STOCK_PRINTER, Connectors, Series, axis_weights,
+    bambu_import_position, bowtie_key, build_tile_mesh, check_series, check_text_clearance, compact, filament_g,
+    keys_needed, key_mesh, label_lines, layout_blocks, list_series, load_line_extent, load_line_plate_max_y,
+    load_series, merge_index, mesh_check, mesh_stats, parse_tile_id, patch_start_gcode, plate_placement,
+    printer_meta, printer_preset, read_stl, recess_polygons, resample, resolve_datums, set_datum,
+    simplify_heightfield, source_box, stock_clearance, stock_max_tile_mm, stock_profile_problems, text_geometry,
+    tile_id, tiles_in_bbox, validate_index, vertex_coords, write_3mf, write_catalog, write_stl, z_from_h,
 )
 
-S8 = load_series("saarpfalz-8500")      # main series (name kept short: "the 2 km series")
-S2 = load_series("detail-2125")
+S8 = load_series("saarpfalz-9200")      # main series (name kept short: "the 2 km series")
+S2 = load_series("detail-2300")
 # the optional 250 mm series (commented out in print3d.toml) — same maths, user printer preset
 SC = replace(S8, key="saarpfalz-8000-custom-preset", scale=8000, tile_mm=250.0, printer="sle-250", sets={})
 
@@ -48,12 +49,13 @@ def sample(dem, dem_e0, dem_n1, s: Series, e0, n0):
 # ------------------------------------------------------------------------------------- config / ids
 def test_series_config():
     assert (S8.scale, S8.tile_m, S8.vertices, S8.cell_m, S8.exag, S8.datum_m, S8.base_mm, S8.printer) == \
-        (8500, 2000, 1001, 2.0, 2.0, 180.0, 4.0, "stock")
-    assert S8.tile_mm == pytest.approx(2000 / 8500 * 1000) and S8.datum_mode == "series" and S8.role == "main"
+        (9200, 2000, 1001, 2.0, 2.0, 180.0, 4.0, "stock")
+    assert S8.tile_mm == pytest.approx(2000 / 9200 * 1000) and S8.datum_mode == "series" and S8.role == "main"
     assert (S2.scale, S2.tile_m, S2.cell_m, S2.datum_m, S2.exag, S2.datum_mode, S2.datum_margin_m, S2.role) == \
-        (2125, 500, 0.5, None, 1.5, "set", 5.0, "detail")
+        (2300, 500, 0.5, None, 1.5, "set", 5.0, "detail")
     assert S2.tile_mm == pytest.approx(S8.tile_mm) and S2.placement_mm == S8.placement_mm   # 4 × the main scale
-    assert set(list_series()) == {"saarpfalz-8500", "detail-2125"}     # 8000 custom preset only commented out
+    assert (S8.max_error_mm, S8.max_triangles) == (S2.max_error_mm, S2.max_triangles) == (0.03, 500_000)
+    assert set(list_series()) == {"saarpfalz-9200", "detail-2300"}     # 8000 custom preset only commented out
     check_series(SC)
     with pytest.raises(ValueError):
         check_series(replace(S8, tile_m=2100))                      # 247.06 mm ≠ tile_mm
@@ -66,26 +68,55 @@ def test_series_config():
         check_series(replace(S2, datum_m=200.0))                    # "set" datum must not have one
     with pytest.raises(ValueError):
         check_series(replace(S8, printer="x1c"))
+    with pytest.raises(ValueError):
+        check_series(replace(S8, max_error_mm=-0.01))
 
 
 def test_stock_p1s_placement():
-    """Stock P1S: the tile must sit right of the 18 × 28 mm front-left exclusion area and behind the load line."""
-    x0, x1, y0, y1 = stock_window(S8.tile_mm)
-    assert (x0, y0) == (18.0, 13.5) and x1 == pytest.approx(256 - 235.2941, abs=1e-4)
+    """Stock P1S: where the Bambu Studio GUI puts the tile (centred) it must clear the 18 × 28 mm front-left
+    exclusion area (with our 1 mm margin) and lie behind the load line."""
     x, y = S8.placement_mm
-    assert (x, y) == (19.4, 17.1)
-    assert STOCK_EXCLUDE_MM[0] <= x and x + S8.tile_mm <= PLATE_MM[0]
+    assert (x, y) == pytest.approx(bambu_import_position(S8.tile_mm), abs=1e-4) == (19.3043, 19.3043)
+    assert stock_clearance(x, y, S8.tile_mm, margin=STOCK_MARGIN_MM) == []
+    assert STOCK_EXCLUDE_MM[0] + STOCK_MARGIN_MM <= x and x + S8.tile_mm <= PLATE_MM[0]
     assert y >= load_line_plate_max_y(STOCK_LOAD_LINE_GCODE_MAX_Y) and y + S8.tile_mm <= PLATE_MM[1]
-    assert plate_placement(238.0)[0] == 18.0                        # widest square: exactly X 18–256
-    for mm in (2000 / 8400 * 1000, 500 / 2100 * 1000, 250.0):      # 238.095 mm: refused by the slicer everywhere
+    assert stock_max_tile_mm() == 218.0 and plate_placement(217.99) == (19.005, 19.005)
+    for mm in (218.0, 2000 / 8500 * 1000, 2000 / 8400 * 1000, 500 / 2125 * 1000, 250.0):
         with pytest.raises(ValueError, match="stock P1S"):
             plate_placement(mm, "stock")
     with pytest.raises(ValueError):
-        check_series(replace(S8, scale=8400, tile_mm=2000 / 8400 * 1000))
+        check_series(replace(S8, scale=8500, tile_mm=2000 / 8500 * 1000))     # the former main series
     assert plate_placement(250.0, "sle-250") == PLACEMENT_MM
     pm = printer_meta(False, "", "stock", S8.placement_mm, S8.tile_mm)
     assert pm["mode"] == "stock" and pm["file"] is None and pm["bedExcludeArea"] == ["0x0", "18x0", "18x28", "0x28"]
+    assert "Plattenmitte" in pm["note_de"] and "19.3–236.7" in pm["note_de"]
     assert printer_meta(True, "v", "sle-250")["file"] == PRESET_FILE
+
+
+@pytest.mark.parametrize("w,x,y,ok", [
+    # Bambu Studio 02.08.02.61 CLI, stock "Bambu Lab P1S 0.4 nozzle", --arrange 0 (box at the given corner)
+    (235.294, 10.353, 10.353, False),   # the old 1:8500 tile where the GUI centres it → the user's error
+    (220.0, 18.0, 18.0, False),         # centred 220 mm: touching the exclusion edge is refused
+    (220.2, 17.9, 17.9, False),
+    (219.98, 18.01, 18.01, True),
+    (219.9, 18.05, 18.05, True),
+    (217.391, 19.3045, 19.3045, True),  # 1:9200 / 1:2300 tile, centred
+    (235.294, 19.4, 17.1, True),        # old CLI placement (passed the CLI; the GUI discards it)
+    (200.0, 10.0, 28.0, False),         # front edge on the exclusion's back edge (Y 28)
+    (200.0, 30.0, 28.0, True),
+    (200.0, 18.0, 30.0, True),
+    # exactly touching the X 18 edge is inconsistent in Bambu (Clipper): 220 / 200 mm at X 18 refused, 238.0 and
+    # 237.9 mm at X 18, Y 17.1 accepted — stock_clearance counts touching as a problem; we keep a 1 mm margin anyway
+    (238.095, 17.9, 17.1, False),       # "too close to exclusion area"
+    (238.095, 17.95, 17.1, False),      # sticks out of the plate
+])
+def test_bambu_clearance_rule_matches_slicer(w, x, y, ok):
+    """stock_clearance (no margin) reproduces the Bambu Studio checks measured with the CLI. The GUI first moves a
+    plain 3MF to bambu_import_position, so only centred squares < 220 mm open without the exclusion error."""
+    exclusion = [p for p in stock_clearance(x, y, w) if "exclusion" in p or "printable" in p]
+    assert (exclusion == []) == ok, exclusion
+    if (x, y) == pytest.approx(bambu_import_position(w), abs=1e-3):
+        assert (w < 220.0) == ok
 
 
 def test_tile_ids():
@@ -179,12 +210,12 @@ def test_shared_edges_are_bit_identical(tile_m, vertices):
 
 
 def test_z_formula_and_datum_clamp():
-    h = np.array([180.0, 188.5, 300.0, 170.0])
+    h = np.array([180.0, 189.2, 300.0, 170.0])
     z, clamped = z_from_h(h, S8)
-    assert z.tolist() == pytest.approx([4.0, 6.0, 4.0 + 120 / 8500 * 1000 * 2, 4.0])   # 1:8500 × 2 → 0.235 mm/m
+    assert z.tolist() == pytest.approx([4.0, 6.0, 4.0 + 120 / 9200 * 1000 * 2, 4.0])   # 1:9200 × 2 → 0.217 mm/m
     assert clamped == 1
     z2, c2 = z_from_h(np.array([380.0, 270.0]), S2, 274.0)
-    assert z2[0] == pytest.approx(4.0 + 106 * 1000 / 2125 * 1.5) and z2[1] == 4.0 and c2 == 1
+    assert z2[0] == pytest.approx(4.0 + 106 * 1000 / 2300 * 1.5) and z2[1] == 4.0 and c2 == 1
     with pytest.raises(ValueError):
         z_from_h(h, S2)                                         # per-set series: the tile datum is required
     assert set_datum(279.99, 5.0) == 274.0 and set_datum(280.0, 5.0) == 275.0 and set_datum(-0.5, 0) == -1.0
@@ -266,6 +297,93 @@ def test_tile_mesh_watertight_and_volume(conn, with_text):
     assert np.isclose(V[:, 2].max(), z.max())
     # top grid untouched: first n² vertices are the grid with the heights given
     assert np.array_equal(V[: n * n, 2], z.ravel())
+
+
+def terrain(n: int, seed: int = 0) -> np.ndarray:
+    """Smooth hills + a sharp ridge + a pit + small noise (mm), like a printed tile."""
+    rng = np.random.default_rng(seed)
+    y, x = np.mgrid[0:n, 0:n] / (n - 1)
+    z = 10 + 6 * np.sin(3 * x) * np.cos(2 * y) + 4 * np.exp(-((x - 0.3) ** 2 + (y - 0.6) ** 2) / 0.01)
+    z += 2 * np.clip(1 - np.abs(x - y) * 40, 0, None) - 3 * ((x - 0.7) ** 2 + (y - 0.2) ** 2 < 0.002)
+    return z + rng.normal(0, 0.005, z.shape)
+
+
+def interpolate(z: np.ndarray, F: np.ndarray, pts: np.ndarray) -> np.ndarray:
+    """Height of the triangulated top surface F (flat grid indices) at grid positions pts (k, 2) = (i, j)."""
+    from matplotlib.tri import LinearTriInterpolator, Triangulation
+    n = z.shape[0]
+    jj, ii = np.divmod(np.arange(n * n), n)
+    tri = Triangulation(ii.astype(float), jj.astype(float), F)
+    return np.asarray(LinearTriInterpolator(tri, z.ravel())(pts[:, 0], pts[:, 1]))
+
+
+@pytest.mark.parametrize("tol", [0.01, 0.03, 0.1])
+def test_simplify_error_bound_and_boundary(tol):
+    n = 121
+    z = terrain(n)
+    F, err = simplify_heightfield(z, tol, step=10)
+    assert err <= tol
+    used = np.unique(F)
+    jj, ii = np.divmod(used, n)
+    border = np.zeros((n, n), bool)
+    border[0, :] = border[-1, :] = border[:, 0] = border[:, -1] = True
+    assert border.ravel()[used].sum() == 4 * (n - 1)                 # every edge vertex kept
+    assert len(F) < 2 * (n - 1) ** 2                                  # actually simplified
+    # independent check: every grid vertex within tol of the simplified surface
+    jj, ii = np.divmod(np.arange(n * n), n)
+    got = interpolate(z, F, np.column_stack([ii, jj]).astype(float))
+    assert np.abs(got - z.ravel()).max() <= tol + 1e-9
+    # CCW from above, covering the square once
+    p = np.column_stack([ii, jj])[F].astype(float)
+    a2 = (p[:, 1, 0] - p[:, 0, 0]) * (p[:, 2, 1] - p[:, 0, 1]) - (p[:, 1, 1] - p[:, 0, 1]) * (p[:, 2, 0] - p[:, 0, 0])
+    assert (a2 > 0).all() and a2.sum() / 2 == (n - 1) ** 2
+
+
+def test_simplify_budget_flat_and_deterministic():
+    n = 81
+    z = terrain(n, 1)
+    F, err = simplify_heightfield(z, 1e-6, max_tris=2000, step=10)    # budget wins over the tolerance
+    assert len(F) <= 2000 + 4 and err > 1e-6
+    F2, err2 = simplify_heightfield(z, 1e-6, max_tris=2000, step=10)
+    assert np.array_equal(F, F2) and err == err2
+    Ff, ef = simplify_heightfield(np.full((n, n), 7.0), 0.01, step=10)  # flat: boundary + coarse lattice only
+    assert ef < 1e-12 and len(np.unique(Ff)) == 4 * (n - 1) + (n // 10 - 1) ** 2
+    Fa, ea = simplify_heightfield(z, 0.0, step=10)                     # tol 0 → every vertex kept
+    assert ea == 0.0 and len(np.unique(Fa)) == n * n and len(Fa) == 2 * (n - 1) ** 2
+
+
+@pytest.mark.parametrize("conn,with_text", [(True, True), (False, False)])
+def test_simplified_tile_mesh_watertight(conn, with_text):
+    n, W = 101, S8.tile_mm
+    z = terrain(n, 2) + 2
+    z[:, :3] = 4.0                                                     # clamped strip along the west edge
+    c = S8.connectors if conn else Connectors(enabled=False)
+    text = text_geometry(label_lines(S8, "E380_N5460"), W) if with_text else None
+    top, err = simplify_heightfield(z, 0.03, step=10)
+    V, F = build_tile_mesh(z, W, c, text, 0.6, top)
+    chk = mesh_check(F)
+    assert chk["watertight"], chk
+    assert len(np.unique(F)) == len(V)                                 # unused grid vertices dropped
+    full_V, full_F = build_tile_mesh(z, W, c, text, 0.6)
+    assert len(F) < len(full_F) * 0.6
+    vol, _ = mesh_stats(V, F)
+    vol_full, _ = mesh_stats(full_V, full_F)
+    assert vol > 0 and abs(vol - vol_full) <= 0.03 * W * W               # |Δz| ≤ 0.03 mm over the footprint
+    # walls / bottom / recesses unchanged: every non-top vertex of the full mesh is in the simplified one
+    key = lambda A: {tuple(np.round(v, 9)) for v in A}                # noqa: E731
+    assert key(full_V[n * n:]) <= key(V)
+    # edges exact: the boundary profile (all 4·(n−1) vertices) is identical
+    g = np.arange(n) * W / (n - 1)
+    south = {(round(x, 9), round(zz, 9)) for x, y, zz in V if y == 0 and zz > c.depth_mm + 1e-9}
+    assert south == {(round(x, 9), round(zz, 9)) for x, zz in zip(g, z[0])}
+
+
+def test_compact_keeps_order():
+    V = np.arange(15, dtype=float).reshape(5, 3)
+    V2, F2 = compact(V, np.array([[0, 2, 4]]))
+    assert V2.tolist() == V[[0, 2, 4]].tolist() and F2.tolist() == [[0, 1, 2]]
+    V3, F3 = compact(V, np.array([[0, 1, 2], [2, 3, 4]]))
+    assert V3 is V and F3.tolist() == [[0, 1, 2], [2, 3, 4]]
 
 
 def test_text_is_mirrored_and_inside():
@@ -479,7 +597,7 @@ def test_index_schema_and_merge():
     bad["tiles"][0]["bboxUTM"][0] += 1
     del bad["tiles"][1]["files"]
     assert len(validate_index(bad)) == 2
-    assert doc["printerProfile"]["mode"] == "stock" and doc["series"]["placement_mm"] == [19.4, 17.1]
+    assert doc["printerProfile"]["mode"] == "stock" and doc["series"]["placement_mm"] == [19.3043, 19.3043]
     assert "setDatum_m" not in doc
 
 
@@ -504,8 +622,8 @@ def test_series_catalog(tmp_path):
     cat = write_catalog(tmp_path)
     assert json.loads((tmp_path / "series.json").read_text()) == cat
     assert [(e["key"], e["role"], e["index"], e["tiles"], e["configured"]) for e in cat["series"]] == [
-        ("saarpfalz-8500", "main", "saarpfalz-8500/index.json", 1, True),
-        ("detail-2125", "detail", "detail-2125/index.json", 1, True)]
+        ("saarpfalz-9200", "main", "saarpfalz-9200/index.json", 1, True),
+        ("detail-2300", "detail", "detail-2300/index.json", 1, True)]
     assert cat["series"][1]["datum_m"] is None and cat["series"][1]["datumMode"] == "set"
 
 
@@ -553,3 +671,28 @@ def test_generated_print_index(idx):
         assert load_line_plate_max_y(load_line_extent(preset["machine_start_gcode"])[3]) <= FRONT_EXCLUDE_MM
     for t in doc["tiles"]:
         assert all(z <= pp["printableHeight_mm"] for z in (t["z_mm"]["max"],))
+
+
+@pytest.mark.skipif(not generated(), reason="no print tiles generated (run print3d.py)")
+@pytest.mark.parametrize("idx", generated(), ids=lambda p: p.parent.name)
+def test_generated_tiles_open_in_bambu_studio(idx):
+    """Every generated 3MF: footprint clears the stock P1S exclusion area both where the GUI puts it (centred) and
+    at its build position; well under Bambu's 1 M triangle warning; top-surface error within the series bound."""
+    import re
+    doc = json.loads(idx.read_text())
+    if doc["series"]["key"] not in list_series():
+        pytest.skip(f"{idx.parent.name}: series no longer configured in print3d.toml (obsolete output)")
+    s = load_series(doc["series"]["key"])
+    for t in doc["tiles"]:
+        with zipfile.ZipFile(idx.parent / t["files"]["3mf"]) as zf:
+            model = zf.read("3D/3dmodel.model")
+        xy = np.array(re.findall(rb'<vertex x="([-\d.]+)" y="([-\d.]+)"', model), float)
+        ntri = model.count(b"<triangle ")
+        tr = [float(v) for v in re.search(rb'<item objectid="1" transform="([^"]+)"', model).group(1).split()]
+        w, h = xy.max(0) - xy.min(0)
+        assert (w, h) == pytest.approx((s.tile_mm, s.tile_mm), abs=1e-3) and xy.min() == 0
+        assert ntri == t["triangles"] < 1_000_000 and len(xy) == t["vertices"]
+        assert t["maxError_mm"] <= s.max_error_mm + 1e-9
+        if s.printer == "stock":
+            assert stock_clearance(*bambu_import_position(w), w, margin=STOCK_MARGIN_MM) == [], t["id"]
+            assert stock_clearance(tr[9], tr[10], w, margin=STOCK_MARGIN_MM) == [], t["id"]

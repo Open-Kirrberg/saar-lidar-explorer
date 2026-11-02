@@ -7,10 +7,16 @@
  *
  * Candidates are hypotheses — the card always shows "Schauen, nicht graben". Nothing here sends
  * data anywhere; export is a user-triggered local download.
+ *
+ * F22: UXO indicator classes `crater` ("Bombentrichter (Hypothese)") and `crater_field`
+ * ("Trichterfeld (Hypothese)") from saar-lidar-detect — own chips and min-score slider (default
+ * `params.crater_threshold`), crater-field outlines on the minimap, and the note
+ * "Hinweis, keine Aussage über Kampfmittel/Blindgänger" wherever they are shown. Never in a
+ * public build (dropped by the parsers).
  */
 import L from 'leaflet';
 import type { Scene } from 'three';
-import { CANDIDATE_CLASSES } from '../data/manifest';
+import { CANDIDATE_CLASSES, UXO_CLASSES, UXO_NOTE_DE, isUxoClass } from '../data/manifest';
 import type { CandidateReviewStatus, CandidateReviewStore, ManifestCandidates } from '../data/manifest';
 import { utmToWgs84 } from '../geo';
 import type { AppContext } from '../main';
@@ -28,12 +34,15 @@ import {
   candidateRadius,
   countByClass,
   decisionFor,
+  defaultCraterMinScore,
   defaultMinScore,
   existingCandidateMarkerId,
   filterCandidates,
+  flyDistance,
   formatMetrics,
   formatScore,
   isKnownPath,
+  isUxoCandidate,
   markerCategoryFor,
   markerTextFor,
   parseCandidateCollection,
@@ -102,7 +111,8 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
   const defaultMin = defaultMinScore(meta.params); // write threshold, not the mask's (contract)
 
   // Per-AOI prefs (`sle.candidates.prefs.v1.<aoi>`); the old shared key is migrated once.
-  const loaded = loadCandidatePrefs(kv, aoi, defaultMin);
+  const defaultCraterMin = defaultCraterMinScore(meta.params); // F22: detector's display threshold
+  const loaded = loadCandidatePrefs(kv, aoi, defaultMin, defaultCraterMin);
   if (loaded.migrated) console.info(`[candidates] filter prefs migrated to ${aoi} (min score reset to ${defaultMin})`);
   const prefs: CandidatePrefs = loaded.prefs;
   const savePrefs = () => saveCandidatePrefs(kv, aoi, prefs);
@@ -128,11 +138,16 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
   // Minimap: canvas-rendered circles, only on the map while the layer is on.
   const mapRenderer = L.canvas({ padding: 0.3 });
   const mapLayer = L.layerGroup();
+  /** F22 crater-field outlines (below the circles). */
+  const mapFields = L.layerGroup();
+  /** F22: does this dataset have UXO classes (manifest counts, or found in the file once loaded)? */
+  let uxoPresent = UXO_CLASSES.some((c) => (meta.counts[c] ?? 0) > 0);
 
   // ---- panel --------------------------------------------------------------------------------
   const sec = createPanelSection(panel, 'candidates', meta.label_de || 'Verdachtsflächen', false);
   const classChips = CANDIDATE_CLASSES.map(
-    (c) => `<label class="sle-cand-chip" title="${esc(meta.classes[c])}"><input type="checkbox" data-cls="${c}"><i style="background:${hexCss(CLASS_COLORS[c])}"></i>${esc(meta.classes[c])} <span class="sle-dim" data-n="${c}"></span></label>`,
+    (c) =>
+      `<label class="sle-cand-chip${isUxoClass(c) ? ' sle-cand-uxo-only' : ''}" title="${esc(meta.classes[c])}${isUxoClass(c) ? ` – ${UXO_NOTE_DE}` : ''}"><input type="checkbox" data-cls="${c}"><i class="${c === 'crater_field' ? 'ring' : ''}" style="background:${hexCss(CLASS_COLORS[c])}"></i>${esc(meta.classes[c])} <span class="sle-dim" data-n="${c}"></span></label>`,
   ).join('');
   sec.body.innerHTML = `
     <div class="sle-row">
@@ -140,11 +155,17 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
       <span class="sle-spacer"></span><span class="sle-dim" data-k="status"></span>
     </div>
     <p class="sle-cand-warn">Hypothesen aus automatischer Reliefanalyse – keine Funde. <b>Schauen, nicht graben.</b> Daten und Entscheidungen bleiben lokal in diesem Browser. <button type="button" class="sle-link" data-act="info">Hinweise</button></p>
+    <p class="sle-cand-warn uxo sle-cand-uxo-only" data-k="uxo"><b>Bombentrichter/Trichterfelder: ${esc(UXO_NOTE_DE)}.</b> LiDAR zeigt, wo Bomben einschlugen, nicht wo Blindgänger liegen; fehlende Treffer bedeuten nicht „kampfmittelfrei“. Nichts berühren. Privat – nur lokal.</p>
     <div class="sle-cand-chips">${classChips}<label class="sle-cand-chip" title="Linienstrukturen auf einem bekannten Weg (OSM)"><input type="checkbox" data-k="known"><i style="background:${hexCss(KNOWN_PATH_COLOR)}"></i>Weg (bekannt) <span class="sle-dim" data-n="known"></span></label></div>
     <div class="sle-row sle-cand-score">
       <label for="sle-cand-min">Min. Score</label>
       <input id="sle-cand-min" type="range" min="0" max="1" step="0.05" data-k="min">
       <span data-k="minv"></span>
+    </div>
+    <div class="sle-row sle-cand-score sle-cand-uxo-only" title="Bombentrichter: der Detektor schreibt ab 0,3 (Prüf-Recall), empfiehlt die Anzeige ab ${esc(formatScore(defaultCraterMin))}">
+      <label for="sle-cand-cmin">Min. Score Trichter</label>
+      <input id="sle-cand-cmin" type="range" min="0" max="1" step="0.05" data-k="cmin">
+      <span data-k="cminv"></span>
     </div>
     <div class="sle-row">
       <label><input type="checkbox" data-k="rejected"> verworfene zeigen</label>
@@ -166,13 +187,20 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
   const cbOn = q<HTMLInputElement>('[data-k=on]');
   const cbKnown = q<HTMLInputElement>('[data-k=known]');
   const slider = q<HTMLInputElement>('[data-k=min]');
+  const craterSlider = q<HTMLInputElement>('[data-k=cmin]');
   const cbRejected = q<HTMLInputElement>('[data-k=rejected]');
   const cbOpen = q<HTMLInputElement>('[data-k=open]');
   const status = (t: string) => (q('[data-k=status]').textContent = t);
   const detail = q('[data-k=detail]');
   const listEl = q('[data-k=list]');
+  const methods = meta.method_versions?.length ? meta.method_versions.join(', ') : `${meta.method || 'unbekannt'}${meta.version ? ` v${meta.version}` : ''}`;
   q('[data-k=method]').textContent =
-    `Verfahren: ${meta.method || 'unbekannt'}${meta.version ? ` v${meta.version}` : ''}${meta.generated ? ` · ${meta.generated.slice(0, 10)}` : ''} · ${meta.featureCount} Kandidaten. Nur eine Lesehilfe – Funde dem Landesdenkmalamt melden.`;
+    `Verfahren: ${methods}${meta.generated ? ` · ${meta.generated.slice(0, 10)}` : ''} · ${meta.featureCount} Kandidaten. Nur eine Lesehilfe – Funde dem Landesdenkmalamt melden.`;
+  /** F22: show/hide the crater chips, slider and UXO note. */
+  const syncUxo = () => {
+    for (const el of sec.body.querySelectorAll<HTMLElement>('.sle-cand-uxo-only')) el.hidden = !uxoPresent;
+  };
+  syncUxo();
 
   const syncControls = () => {
     const f = prefs.filter;
@@ -181,6 +209,8 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
     cbKnown.checked = f.knownPaths;
     slider.value = String(f.minScore);
     q('[data-k=minv]').textContent = formatScore(f.minScore);
+    craterSlider.value = String(f.craterMinScore);
+    q('[data-k=cminv]').textContent = formatScore(f.craterMinScore);
     cbRejected.checked = f.showRejected;
     cbOpen.checked = f.onlyOpen;
   };
@@ -198,6 +228,12 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
     q('[data-k=minv]').textContent = formatScore(Number(slider.value));
     if (sliderTimer) clearTimeout(sliderTimer);
     sliderTimer = setTimeout(() => setFilter({ minScore: Number(slider.value) }), 120);
+  });
+  let craterTimer: ReturnType<typeof setTimeout> | null = null;
+  craterSlider.addEventListener('input', () => {
+    q('[data-k=cminv]').textContent = formatScore(Number(craterSlider.value));
+    if (craterTimer) clearTimeout(craterTimer);
+    craterTimer = setTimeout(() => setFilter({ craterMinScore: Number(craterSlider.value) }), 120);
   });
   cbRejected.addEventListener('change', () => setFilter({ showRejected: cbRejected.checked }));
   cbOpen.addEventListener('change', () => setFilter({ onlyOpen: cbOpen.checked }));
@@ -224,6 +260,10 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
         all = parsed.candidates;
         byId = new Map(all.map((c) => [c.id, c]));
         if (parsed.skipped) console.warn(`[candidates] ${parsed.skipped} features skipped (class/geometry/score)`);
+        if (!uxoPresent && all.some(isUxoCandidate)) {
+          uxoPresent = true;
+          syncUxo();
+        }
         const r = reattachDecisions(reviews, all);
         reviews = r.store;
         if (r.moved) {
@@ -254,11 +294,13 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
     if (prefs.on !== on) return; // toggled again while loading
     layer.visible = on;
     if (on) {
+      mapFields.addTo(deps.minimap.map);
       mapLayer.addTo(deps.minimap.map);
       refresh();
       openPanelSection(sec);
     } else {
       mapLayer.remove();
+      mapFields.remove();
       deps.labels.remove(LABEL_ID);
     }
     if (on && current) showCurrentPin();
@@ -293,9 +335,29 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
 
   function renderMap(): void {
     mapLayer.clearLayers();
+    mapFields.clearLayers();
     for (const c of visible) {
       const { lat, lon } = utmToWgs84(c.E, c.N);
       const sel = c.id === current?.id;
+      if (c.cls === 'crater_field' && c.outline?.type === 'Polygon') {
+        // F22: the field outline (every 2nd densified vertex is plenty at minimap scale).
+        const ring = c.outline.coords.filter((_, k, a) => k % 2 === 0 || k === a.length - 1).map((p) => {
+          const w = utmToWgs84(p[0], p[1]);
+          return [w.lat, w.lon] as [number, number];
+        });
+        const poly = L.polygon(ring, {
+          renderer: mapRenderer,
+          color: hexCss(sel ? SELECTED_COLOR : candidateColor(c)),
+          weight: sel ? 3 : 2,
+          fillColor: hexCss(candidateColor(c)),
+          fillOpacity: statusOf(c.id) === 'rejected' ? 0.04 : 0.12,
+          dashArray: statusOf(c.id) === 'rejected' ? '4 4' : undefined,
+          bubblingMouseEvents: false,
+        });
+        poly.bindTooltip(`${candidateLabel(c, meta!.classes)} · Score ${formatScore(c.score)} – ${UXO_NOTE_DE}`);
+        poly.on('click', () => select(c.id, true));
+        mapFields.addLayer(poly);
+      }
       const m = L.circleMarker([lat, lon], {
         renderer: mapRenderer,
         radius: sel ? 7 : Math.min(6, 3 + candidateRadius(c) / 10),
@@ -306,7 +368,7 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
         // Don't let the click reach the minimap's own click-to-fly (it would replace this flight).
         bubblingMouseEvents: false,
       });
-      m.bindTooltip(`${candidateLabel(c, meta!.classes)} · Score ${formatScore(c.score)}`);
+      m.bindTooltip(`${candidateLabel(c, meta!.classes)} · Score ${formatScore(c.score)}${isUxoCandidate(c) ? ` – ${UXO_NOTE_DE}` : ''}`);
       m.on('click', () => select(c.id, true));
       mapLayer.addLayer(m);
     }
@@ -354,14 +416,20 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
       c.forest ? 'unter Wald' : 'offenes Gelände',
       ...(isKnownPath(c) ? ['verläuft entlang eines OSM-Wegs'] : c.nearPath ? ['Weg/Gewässer in der Nähe (OSM)'] : []),
       ...(c.nearKnown ? [`nahe bekanntem Ort (${esc(c.nearKnown)})`] : []),
+      ...(c.dataDate ? [`Daten ${esc(c.dataDate)}`] : []),
     ];
+    const uxo = isUxoCandidate(c);
+    const members = c.memberIds?.length ? `<div class="sle-dim sle-small">Trichterfeld aus ${c.memberIds.length} Trichterverdachten (Score ≥ ${esc(formatScore(defaultCraterMin))}).</div>` : '';
     detail.hidden = false;
     detail.innerHTML = `
       <div class="sle-cand-head"><i style="background:${hexCss(candidateColor(c))}"></i><b>${esc(candidateLabel(c, meta!.classes))}</b>
         <span class="sle-spacer"></span><span>Score <b>${formatScore(c.score)}</b></span></div>
+      ${uxo ? `<div class="sle-cand-warn uxo">${esc(UXO_NOTE_DE)}. Nichts berühren.</div>` : ''}
       ${c.reasons.length ? `<div class="sle-cand-reasons">${c.reasons.map(esc).join(' · ')}</div>` : ''}
+      ${members}
       <dl class="sle-meta">${formatMetrics(c.metrics).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       <div class="sle-dim sle-small">${flags.join(' · ')}${st ? ` · Status: <b>${STATUS_LABELS_DE[st]}</b>` : ''}</div>
+      ${c.methodVersion ? `<div class="sle-dim sle-small">Verfahren: ${esc(c.methodVersion)}</div>` : ''}
       <div class="sle-row sle-cand-review">
         <button type="button" class="sle-btn${st === 'confirmed' ? ' on' : ''}" data-st="confirmed" title="Als privaten Fundmarker übernehmen">bestätigen</button>
         <button type="button" class="sle-btn${st === 'unsure' ? ' on' : ''}" data-st="unsure">unsicher</button>
@@ -390,7 +458,9 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
     el.innerHTML = `<span class="sle-pin-txt"></span><span class="sle-pin-stem"></span>`;
     el.querySelector('.sle-pin-txt')!.textContent = `${candidateLabel(current, meta!.classes)} · ${formatScore(current.score)}`;
     (el.querySelector('.sle-pin-txt') as HTMLElement).style.borderLeft = `4px solid ${hexCss(candidateColor(current))}`;
-    el.title = 'Verdachtsfläche (Hypothese) – Schauen, nicht graben';
+    el.title = isUxoCandidate(current)
+      ? `${candidateLabel(current, meta!.classes)} – ${UXO_NOTE_DE}. Schauen, nicht graben`
+      : 'Verdachtsfläche (Hypothese) – Schauen, nicht graben';
     deps.labels.set(LABEL_ID, LABEL_GROUP, current.E, current.N, el, { lift: 0, maxDistance: 4000 });
   }
 
@@ -405,8 +475,7 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
     listEl.querySelector('.sle-cand-row.active')?.scrollIntoView({ block: 'nearest' });
     renderDetail();
     if (current && fly) {
-      const r = candidateRadius(current);
-      const dist = Math.min(160, Math.max(45, r * 4));
+      const dist = flyDistance(current);
       void flyToSiteExag(ctx, current.E, current.N, dist, dist * 0.65, Number.isFinite(current.z) ? current.z : null);
     }
   }

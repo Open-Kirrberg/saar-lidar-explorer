@@ -10,8 +10,12 @@ import {
   CANDIDATE_CLASSES,
   CANDIDATE_CLASS_LABELS_DE,
   CANDIDATE_KNOWN_PATH_LABEL_DE,
-  isCandidateClass,
+  CRATER_THRESHOLD_DEFAULT,
+  UXO_NOTE_DE,
+  isAllowedCandidateClass,
+  isUxoClass,
 } from '../data/manifest';
+import { uxoClassesAllowed } from '../data/publicBuild';
 import type { CandidateClass, CandidateDecision, CandidateMetrics, CandidateReviewStatus } from '../data/manifest';
 
 /** One candidate, normalised; E/N/z in EPSG:25832 metres (z = baked true height or NaN). */
@@ -32,6 +36,12 @@ export interface Candidate {
   nearKnown: string | null;
   /** Outline parts (Polygon exterior ring or LineString), positions [E, N] or [E, N, z]. */
   outline?: { type: 'Polygon' | 'LineString'; coords: number[][] };
+  /** F22, crater_field only: member crater ids (else absent). */
+  memberIds?: string[];
+  /** F22 (saar-lidar-detect, informative): e.g. 'crater-rules/1+sld.0.1.0'. */
+  methodVersion?: string;
+  /** F22 (informative): ISO year of the terrain data, e.g. '2025'. */
+  dataDate?: string;
 }
 
 export interface ParseResult {
@@ -58,9 +68,11 @@ function parseOutline(o: unknown): Candidate['outline'] {
  * Tolerant parse of a candidates FeatureCollection. Skips features with an unknown class, a
  * non-Point geometry or a non-finite score; fills defaults (reasons [], booleans false,
  * near_known null). Missing/duplicate ids get a stable id from class + rounded position.
+ * F22: `crater`/`crater_field` are read only when `allowUxo` (never in a public build);
+ * `member_ids` (crater_field), `method_version` and `data_date` are optional extras.
  * Result is sorted by score descending (ties: id).
  */
-export function parseCandidateCollection(fc: unknown): ParseResult {
+export function parseCandidateCollection(fc: unknown, allowUxo: boolean = uxoClassesAllowed()): ParseResult {
   const feats = (fc as { features?: unknown })?.features;
   if (!Array.isArray(feats)) return { candidates: [], skipped: 0 };
   const out: Candidate[] = [];
@@ -71,7 +83,7 @@ export function parseCandidateCollection(fc: unknown): ParseResult {
     const g = f?.geometry;
     const cls = p.class;
     const score = p.score;
-    if (!isCandidateClass(cls) || !finite(score) || g?.type !== 'Point' || !isPos(g.coordinates)) {
+    if (!isAllowedCandidateClass(cls, allowUxo) || !finite(score) || g?.type !== 'Point' || !isPos(g.coordinates)) {
       skipped++;
       continue;
     }
@@ -90,6 +102,10 @@ export function parseCandidateCollection(fc: unknown): ParseResult {
       for (const [k, v] of Object.entries(p.metrics as Record<string, unknown>)) if (finite(v)) metrics[k] = v;
     }
     const outline = parseOutline(p.outline);
+    const memberIds =
+      cls === 'crater_field' && Array.isArray(p.member_ids)
+        ? p.member_ids.filter((m): m is string => typeof m === 'string' && m.length > 0)
+        : undefined;
     out.push({
       id,
       cls,
@@ -104,6 +120,9 @@ export function parseCandidateCollection(fc: unknown): ParseResult {
       alongPath: cls === 'linear' && p.along_path === true,
       nearKnown: typeof p.near_known === 'string' && p.near_known ? p.near_known : null,
       ...(outline ? { outline } : {}),
+      ...(cls === 'crater_field' ? { memberIds: memberIds ?? [] } : {}),
+      ...(typeof p.method_version === 'string' && p.method_version ? { methodVersion: p.method_version } : {}),
+      ...(typeof p.data_date === 'string' && p.data_date ? { dataDate: p.data_date } : {}),
     });
   }
   out.sort(byScore);
@@ -130,16 +149,20 @@ export interface CandidateFilter {
   classes: Record<CandidateClass, boolean>;
   /** Separate switch for known paths (`linear` + `along_path`, "Weg (bekannt)"). */
   knownPaths: boolean;
+  /** Min score for every class except `crater`. */
   minScore: number;
+  /** F22: min score for `crater` (detector writes from 0.3, recommends showing from 0.55). */
+  craterMinScore: number;
   showRejected: boolean;
   /** Only candidates without a decision. */
   onlyOpen: boolean;
 }
 
-export const defaultFilter = (minScore = 0.3): CandidateFilter => ({
+export const defaultFilter = (minScore = 0.3, craterMinScore = CRATER_THRESHOLD_DEFAULT): CandidateFilter => ({
   classes: Object.fromEntries(CANDIDATE_CLASSES.map((c) => [c, true])) as Record<CandidateClass, boolean>,
   knownPaths: true,
   minScore,
+  craterMinScore,
   showRejected: false,
   onlyOpen: false,
 });
@@ -153,6 +176,7 @@ export function sanitizeFilter(x: unknown, base: CandidateFilter = defaultFilter
     classes: Object.fromEntries(CANDIDATE_CLASSES.map((c) => [c, bool(cl[c], base.classes[c])])) as Record<CandidateClass, boolean>,
     knownPaths: bool(o.knownPaths, base.knownPaths),
     minScore: finite(o.minScore) ? Math.min(1, Math.max(0, o.minScore)) : base.minScore,
+    craterMinScore: finite(o.craterMinScore) ? Math.min(1, Math.max(0, o.craterMinScore)) : base.craterMinScore,
     showRejected: bool(o.showRejected, base.showRejected),
     onlyOpen: bool(o.onlyOpen, base.onlyOpen),
   };
@@ -163,7 +187,7 @@ export type DecisionLookup = (id: string) => CandidateReviewStatus | undefined;
 export function passesFilter(c: Candidate, f: CandidateFilter, status?: CandidateReviewStatus): boolean {
   if (!f.classes[c.cls]) return false;
   if (isKnownPath(c) && !f.knownPaths) return false;
-  if (c.score < f.minScore - 1e-9) return false;
+  if (c.score < (c.cls === 'crater' ? f.craterMinScore : f.minScore) - 1e-9) return false;
   if (status === 'rejected' && !f.showRejected) return false;
   if (f.onlyOpen && status !== undefined) return false;
   return true;
@@ -254,8 +278,24 @@ export function candidateRadius(c: Candidate): number {
   if (finite(m.diameter_m) && m.diameter_m > 0) return m.diameter_m / 2;
   if (finite(m.length_m) && m.length_m > 0) return m.length_m / 2;
   if (finite(m.area_m2) && m.area_m2 > 0) return Math.sqrt(m.area_m2 / Math.PI);
+  // F22 crater_field: the outline's farthest vertex, else its area in hectares.
+  if (c.outline?.type === 'Polygon') {
+    let r2 = 0;
+    for (const p of c.outline.coords) r2 = Math.max(r2, (p[0] - c.E) ** 2 + (p[1] - c.N) ** 2);
+    if (r2 > 0) return Math.sqrt(r2);
+  }
+  if (finite(m.area_ha) && m.area_ha > 0) return Math.sqrt((m.area_ha * 1e4) / Math.PI);
   return FALLBACK_DIAMETER_M / 2;
 }
+
+/** Horizontal fly-to distance (m) for a candidate: close for small ones, far enough to see a whole crater field. */
+export function flyDistance(c: Candidate): number {
+  const r = candidateRadius(c);
+  return c.cls === 'crater_field' ? Math.min(900, Math.max(120, r * 2.4)) : Math.min(160, Math.max(45, r * 4));
+}
+
+/** F22: is this a UXO indicator class (`crater`, `crater_field`)? */
+export const isUxoCandidate = (c: Pick<Candidate, 'cls'>): boolean => isUxoClass(c.cls);
 
 // ---- formatting + marker -----------------------------------------------------------------------
 
@@ -273,6 +313,16 @@ const METRIC_LABELS: Array<[keyof CandidateMetrics & string, string, string, num
   ['orientation_deg', 'Ausrichtung', '°', 0],
   ['slope_in_deg', 'Neigung innen', '°', 1],
   ['rim_m', 'Randwall', 'm', 2],
+  // F22 crater / crater_field (saar-lidar-detect)
+  ['rim_diameter_m', 'Durchmesser Randwall', 'm', 1],
+  ['rim_frac', 'Randwall geschlossen', '%', 0],
+  ['n_50m', 'weitere Trichter ≤ 50 m', '', 0],
+  ['n_craters', 'Trichterverdachte', '', 0],
+  ['area_ha', 'Fläche', 'ha', 2],
+  ['density_per_ha', 'Dichte', 'je ha', 1],
+  ['diam_median_m', 'Durchmesser (Median)', 'm', 1],
+  ['nn_median_m', 'Abstand (Median)', 'm', 0],
+  ['crater_score_mean', 'mittlerer Trichter-Score', '', 2],
 ];
 
 /** German metric rows [label, value] for the detail view (known metrics only, in a fixed order). */
@@ -280,7 +330,9 @@ export function formatMetrics(m: CandidateMetrics): Array<[string, string]> {
   const out: Array<[string, string]> = [];
   for (const [k, label, unit, d] of METRIC_LABELS) {
     const v = m[k];
-    if (finite(v)) out.push([label, `${fmtDe(v, d)}${unit === '°' ? unit : unit ? ` ${unit}` : ''}`]);
+    if (!finite(v)) continue;
+    if (unit === '%') out.push([label, `${fmtDe(v * 100, d)} %`]); // rim_frac is a 0..1 share
+    else out.push([label, `${fmtDe(v, d)}${unit === '°' ? unit : unit ? ` ${unit}` : ''}`]);
   }
   return out;
 }
@@ -298,6 +350,8 @@ export function markerCategoryFor(c: Pick<Candidate, 'cls' | 'alongPath'>): 'Gru
       return c.alongPath ? 'Weg' : 'Graben';
     case 'rect':
       return 'Gebäude';
+    case 'crater':
+      return 'Grube/Trichter';
     default:
       return 'Sonstiges';
   }
@@ -318,7 +372,9 @@ export function markerTextFor(c: Candidate, label: string, info?: DetectorInfo):
     ...(c.reasons.length ? [`Gründe: ${c.reasons.join('; ')}.`] : []),
     ...(formatMetrics(c.metrics).length ? [`Maße: ${formatMetrics(c.metrics).map(([k, v]) => `${k} ${v}`).join(', ')}.`] : []),
     ...(c.nearKnown ? [`Nahe bekanntem Ort: ${c.nearKnown}.`] : []),
-    `Hypothese aus automatischer Reliefanalyse${info?.method ? ` (${info.method} v${info.version})` : ''} – Schauen, nicht graben.`,
+    ...(c.memberIds?.length ? [`Trichterfeld aus ${c.memberIds.length} Trichterverdachten.`] : []),
+    `Hypothese aus automatischer Reliefanalyse${c.methodVersion ? ` (${c.methodVersion})` : info?.method ? ` (${info.method} v${info.version})` : ''} – Schauen, nicht graben.`,
+    ...(isUxoClass(c.cls) ? [`${UXO_NOTE_DE}. Nichts berühren.`] : []),
   ];
   return { title: `${label} (Kandidat)`, note: lines.join('\n') };
 }
@@ -336,6 +392,12 @@ export function existingCandidateMarkerId(
   if (markerId && markers.some((m) => m.id === markerId)) return markerId;
   const tag = candidateMarkerTag(id);
   return markers.find((m) => typeof m.note === 'string' && m.note.startsWith(tag))?.id;
+}
+
+/** F22: default crater min score = `params.crater_threshold` (finite, 0..1), else 0.55. */
+export function defaultCraterMinScore(params: Record<string, unknown> | undefined): number {
+  const v = params?.crater_threshold;
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1 ? v : CRATER_THRESHOLD_DEFAULT;
 }
 
 /** Default min-score filter: the detector's write threshold (`params.min_score`), not the mask's. */

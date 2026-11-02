@@ -1,12 +1,12 @@
 """F21 3D-Druck: printable terrain tiles (3MF, optional STL) on a global UTM grid, from the 1 m DGM.
 
 Usage:
-  uv run python print3d.py --series saarpfalz-8500 --tiles E380_N5460 E382_N5460
-  uv run python print3d.py --series saarpfalz-8500 --bbox 378000 5460000 384000 5468000
-  uv run python print3d.py --series saarpfalz-8500 --aoi overall          # bbox of an AOI in aois.toml
-  uv run python print3d.py --series detail-2125 --set karlsberg --set merburg   # named sets in print3d.toml
-  uv run python print3d.py --series detail-2125 --tiles E383_N5466 --datum 290   # ad-hoc tile, per-set datum
-  uv run python print3d.py --series saarpfalz-8500 --layout-only          # rebuild index summary + layout.png
+  uv run python print3d.py --series saarpfalz-9200 --tiles E380_N5460 E382_N5460
+  uv run python print3d.py --series saarpfalz-9200 --bbox 378000 5460000 384000 5468000
+  uv run python print3d.py --series saarpfalz-9200 --aoi overall          # bbox of an AOI in aois.toml
+  uv run python print3d.py --series detail-2300 --set karlsberg --set merburg   # named sets in print3d.toml
+  uv run python print3d.py --series detail-2300 --tiles E383_N5466 --datum 290   # ad-hoc tile, per-set datum
+  uv run python print3d.py --series saarpfalz-9200 --layout-only          # rebuild index summary + layout.png
   options: --no-fetch (cached tiles only) --stl (also write STL, ≈ 100 MB per tile) --out DIR --list
 
 Series are defined in print3d.toml. Every tile of a series lies on the series' global grid (lower-left E, N ≡
@@ -28,12 +28,16 @@ datum per named set (datum_mode "set": floor(min h of the set) − datum_margin_
 `setDatum_m` once written, so regenerated / extended / nested sets keep it). Tiles only join with tiles of the same
 series AND the same datum (`datum_m` per tile entry).
 
-Printer: by default (printer = "stock") the tile must slice with the STOCK Bambu Lab P1S 0.4 profile: square
-≤ 238 mm (plate 256 mm minus the 18 mm wide front-left exclusion area), placed right of that area and behind the
-start-G-code load line. printer = "sle-250" (250 mm tiles) needs the user preset print3d.py writes.
+Printer: by default (printer = "stock") the tile must slice with the STOCK Bambu Lab P1S 0.4 profile. Bambu Studio
+(GUI) ignores the build position of a plain 3MF and centres it on the plate (Plater.cpp: a 3MF without Bambu project
+settings → Model::center_instances_around_point(bed centre)); it then refuses an object whose 2D convex hull touches
+the 18 × 28 mm front-left exclusion area (Print.cpp layered_print_cleareance_valid, no offset). A centred square
+therefore passes only below 220 mm; with a 1 mm margin it must be < 218 mm (2 km at 1:9200 = 217.39 mm).
+printer = "sle-250" (250 mm tiles) needs the user preset print3d.py writes and a manual position.
 
-Mesh (mm, X = east, Y = north, Z up, origin = tile lower-left corner at z = 0): triangulated top surface
-(no decimation), four vertical walls, flat bottom with bowtie key recesses (2 per edge) and an engraved,
+Mesh (mm, X = east, Y = north, Z up, origin = tile lower-left corner at z = 0): top surface simplified by greedy
+Delaunay insertion (every sampled vertex within max_error_mm, all edge vertices kept, so walls and seams stay
+exact), four vertical walls, flat bottom with bowtie key recesses (2 per edge) and an engraved,
 mirrored label; watertight, 2-manifold, outward normals (checked for every tile).
 """
 from __future__ import annotations
@@ -106,6 +110,8 @@ class Series:
     material_density_g_cm3: float = 1.24
     shell_mm: float = 1.2
     infill: float = 0.15
+    max_error_mm: float = 0.03        # top-surface simplification: max |Δz| at every sampled vertex; 0 = full grid
+    max_triangles: int = 500_000      # top-surface triangle budget (walls + bottom add ≈ 10–20 k)
     connectors: Connectors = field(default_factory=Connectors)
     sets: dict = field(default_factory=dict, compare=False, hash=False)
 
@@ -155,6 +161,8 @@ def check_series(s: Series) -> None:
     plate_placement(s.tile_mm, s.printer, s.key)        # raises if the tile does not fit that printer setup
     if s.max_height_mm > PRINTABLE_HEIGHT_MM:
         raise ValueError(f"{s.key}: max_height_mm {s.max_height_mm} > printable height {PRINTABLE_HEIGHT_MM} mm")
+    if s.max_error_mm < 0 or s.max_triangles < 16 * (s.vertices - 1):
+        raise ValueError(f"{s.key}: max_error_mm must be ≥ 0 and max_triangles ≥ 16·(vertices − 1)")
     if s.text and not (0 < s.engrave_mm < s.base_mm):
         raise ValueError(f"{s.key}: engrave_mm must be in (0, base_mm)")
 
@@ -179,7 +187,8 @@ def load_series(key: str, path: Path = CONFIG_PATH) -> Series:
         counties=tuple(d.get("counties", ("SPK",))), max_height_mm=float(d.get("max_height_mm", 250.0)),
         text=bool(d.get("text", True)), engrave_mm=float(d.get("engrave_mm", 0.6)),
         material_density_g_cm3=float(d.get("material_density_g_cm3", 1.24)), shell_mm=float(d.get("shell_mm", 1.2)),
-        infill=float(d.get("infill", 0.15)),
+        infill=float(d.get("infill", 0.15)), max_error_mm=float(d.get("max_error_mm", 0.03)),
+        max_triangles=int(d.get("max_triangles", 500_000)),
         connectors=Connectors(enabled=bool(conn.get("enabled", True)),
                               positions=tuple(float(p) for p in conn.get("positions", (0.25, 0.75))),
                               **{k: float(conn[k]) for k in ("depth_mm", "length_mm", "waist_mm", "end_mm",
@@ -631,10 +640,71 @@ def recess_polygons(W: float, c: Connectors) -> list[list[list[tuple[float, floa
     return out
 
 
-def build_tile_mesh(z: np.ndarray, size_mm: float, conn: Connectors, text=None, engrave_mm: float = 0.6):
+def simplify_heightfield(z: np.ndarray, tol: float, max_tris: int | None = None,
+                         step: int = 25) -> tuple[np.ndarray, float]:
+    """Greedy Delaunay insertion on a grid heightfield → (top triangles as flat grid indices j·n + i, CCW seen
+    from above, max |Δz| at any grid vertex).
+
+    Starts from every boundary vertex plus a coarse lattice (`step`), then repeatedly re-triangulates (Qhull
+    Delaunay on integer grid positions) and inserts, per triangle, the grid vertex with the largest vertical error
+    as long as it exceeds `tol` (Garland & Heckbert's greedy insertion, one point per triangle per pass). All
+    boundary vertices are kept, so the walls and the shared edges of neighbouring tiles stay bit-identical. Stops
+    early when the next pass would exceed `max_tris` triangles; the returned error then may exceed `tol`.
+    Deterministic for a given input."""
+    from scipy.spatial import Delaunay
+    n = z.shape[0]
+    assert z.shape == (n, n) and n >= 2
+    keep = np.zeros((n, n), bool)
+    keep[0, :] = keep[-1, :] = keep[:, 0] = keep[:, -1] = True
+    keep[::step, ::step] = True
+    keep = keep.ravel()
+    jj, ii = np.divmod(np.arange(n * n), n)
+    Q = np.column_stack([ii, jj]).astype(np.float64)
+    zf = np.asarray(z, np.float64).ravel()
+    max_pts = None if max_tris is None else max_tris // 2 + 2
+    while True:
+        idx = np.flatnonzero(keep)
+        tri = Delaunay(Q[idx])
+        rest = np.flatnonzero(~keep)
+        err = np.zeros(n * n)
+        if len(rest):
+            si = tri.find_simplex(Q[rest])
+            miss = si < 0                                   # rare walk failures on the hull → exact search
+            if miss.any():
+                si[miss] = tri.find_simplex(Q[rest][miss], bruteforce=True, tol=1e-9)
+            if (si < 0).any():
+                raise RuntimeError("simplify: grid vertex outside the triangulation")
+            T = tri.transform[si]
+            b = np.einsum("ijk,ik->ij", T[:, :2], Q[rest] - T[:, 2])
+            b = np.column_stack([b, 1.0 - b.sum(1)])
+            err[rest] = np.abs(zf[rest] - (b * zf[idx[tri.simplices[si]]]).sum(1))
+        viol = np.flatnonzero(err > tol)
+        full = max_pts is not None and len(idx) >= max_pts
+        if len(viol) == 0 or full:
+            break
+        sv = np.full(n * n, -1)
+        sv[rest] = si
+        o = np.lexsort((-err[viol], sv[viol]))              # per triangle: worst vertex first
+        first = viol[o][np.r_[True, sv[viol][o][1:] != sv[viol][o][:-1]]]
+        if max_pts is not None and len(idx) + len(first) > max_pts:
+            first = first[np.argsort(-err[first], kind="stable")[:max_pts - len(idx)]]
+        keep[first] = True
+    F = idx[tri.simplices]
+    p = Q[F]
+    area2 = (p[:, 1, 0] - p[:, 0, 0]) * (p[:, 2, 1] - p[:, 0, 1]) - (p[:, 1, 1] - p[:, 0, 1]) * (p[:, 2, 0] - p[:, 0, 0])
+    if (area2 == 0).any() or abs(np.abs(area2).sum() / 2 - (n - 1) ** 2) > 1e-6 or len(np.unique(F)) != len(idx):
+        raise RuntimeError("simplify: degenerate triangulation")
+    F[area2 < 0] = F[area2 < 0][:, [0, 2, 1]]               # counter-clockwise (x = i east, y = j north) → +Z
+    return F.astype(np.int64), float(err.max())
+
+
+def build_tile_mesh(z: np.ndarray, size_mm: float, conn: Connectors, text=None, engrave_mm: float = 0.6,
+                    top: np.ndarray | None = None):
     """Watertight tile mesh. z: (n, n) top heights in mm, z[j, i] with j = north index (row 0 = south).
 
-    text: oriented shapely MultiPolygon of the engraving (bottom-face coordinates), or None."""
+    text: oriented shapely MultiPolygon of the engraving (bottom-face coordinates), or None.
+    top: top-surface triangles as flat grid indices (simplify_heightfield; must use every boundary vertex), or
+    None for the full grid (two triangles per cell). Unused grid vertices are dropped (order otherwise kept)."""
     n = z.shape[0]
     assert z.shape == (n, n) and float(z.min()) > (conn.depth_mm if conn.enabled else 0.0) + 1e-9
     W = float(size_mm)
@@ -642,11 +712,13 @@ def build_tile_mesh(z: np.ndarray, size_mm: float, conn: Connectors, text=None, 
     X, Y = np.meshgrid(g, g)
     base = np.column_stack([X.ravel(), Y.ravel(), np.asarray(z, np.float64).ravel()])
     mb = MeshBuilder(base)
-    # top surface, two triangles per cell, counter-clockwise seen from above → +Z
+    # top surface, counter-clockwise seen from above → +Z (full grid: two triangles per cell)
     idx = np.arange(n * n).reshape(n, n)
-    v00, v10, v01, v11 = idx[:-1, :-1], idx[:-1, 1:], idx[1:, :-1], idx[1:, 1:]
-    mb.add(np.concatenate([np.stack([v00, v10, v11], -1).reshape(-1, 3),
-                           np.stack([v00, v11, v01], -1).reshape(-1, 3)]))
+    if top is None:
+        v00, v10, v01, v11 = idx[:-1, :-1], idx[:-1, 1:], idx[1:, :-1], idx[1:, 1:]
+        top = np.concatenate([np.stack([v00, v10, v11], -1).reshape(-1, 3),
+                              np.stack([v00, v11, v01], -1).reshape(-1, 3)])
+    mb.add(top)
     rec = recess_polygons(W, conn)
     d = conn.depth_mm
     tops = [idx[0, :], idx[:, -1], idx[-1, ::-1], idx[::-1, 0]]   # grid vertices along each side, CCW order
@@ -684,7 +756,17 @@ def build_tile_mesh(z: np.ndarray, size_mm: float, conn: Connectors, text=None, 
             for r in ints:                                          # islands (inside O, 8, …) stay bottom face
                 mb.hpoly([r], 0.0, (0.0, 0.0, -1.0))
     mb.hpoly([bottom_ring] + holes, 0.0, (0.0, 0.0, -1.0))
-    return mb.finish()
+    return compact(*mb.finish())
+
+
+def compact(V: np.ndarray, F: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Drop vertices no face uses (keeps the order of the others)."""
+    used = np.zeros(len(V), bool)
+    used[F.ravel()] = True
+    if used.all():
+        return V, F
+    remap = np.cumsum(used) - 1
+    return V[used], remap[F]
 
 
 def check_text_clearance(text, W: float, conn: Connectors, margin: float = 3.0) -> None:
@@ -779,7 +861,8 @@ def _xml(s: str) -> str:
 def write_3mf(path: Path, V: np.ndarray, F: np.ndarray, name: str, meta: dict,
               place_mm: tuple[float, float] | None = None) -> None:
     """Minimal 3MF core package (unit millimeter), one object. Its lower-left corner goes to `place_mm` on the
-    plate (tiles: PLACEMENT_MM, clear of the patched load line), else it is centred on the 256 mm plate."""
+    plate (tiles: Series.placement_mm), else it is centred on the 256 mm plate. Bambu Studio's GUI re-centres a
+    plain 3MF on import anyway (see the printer section); the CLI keeps this position."""
     buf = io.BytesIO()
     buf.write(b'<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" '
               b'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n')
@@ -932,19 +1015,31 @@ def keys_needed(s: Series, tiles: list[dict]) -> int:
 # Stock "Bambu Lab P1S 0.4 nozzle" profile (Bambu Studio 02.08.02.61, profiles 02.08.00.05): printable area
 # 0–256 × 0–256 mm, bed_exclude_area plate 0–18 × 0–28 mm (front left), start-G-code nozzle load line along the front
 # (G-code X 18–240, Y 1.0–1.5) with a stroke to Y 11 at X 240; G-code Y = plate Y − 2 (extruder_offset 0x2), so the
-# line reaches plate Y ≈ 13.5 incl. its ≈ 0.8 mm width. Slicer probes (CLI, --arrange 0): a 238.095 mm square
-# (2 km at 1:8400) fails at every position — right of the exclusion it sticks out of the plate (18 + 238.095 > 256,
-# "no object fully inside"), any further left it is "too close to exclusion area"; the widest square is 238.0 mm.
-# printer = "stock" (default) therefore places the tile in the free window X ≥ 18, Y ≥ 13.5 (centred, 0.1 mm grid);
-# a 235.29 mm tile (1:8500 / 1:2125) lands at X 19.4, Y 17.1 and slices with the unmodified profile.
+# line reaches plate Y ≈ 13.5 incl. its ≈ 0.8 mm width.
+# How Bambu Studio decides (source tag v02.08.02.61, CLI-reproduced; see bambu_import_position / stock_clearance):
+#  1. Opening a plain 3MF (no Metadata/project_settings.config) in the GUI is a geometry import, not a project:
+#     src/slic3r/GUI/Plater.cpp load_files → `if (type_3mf && !is_project_file && !load_old_project)
+#     model.center_instances_around_point(bed_center())` — the build-item position is discarded and the bounding box
+#     centred on the plate (128, 128). The CLI keeps the build transform, which is why CLI slicing passed before.
+#  2. src/libslic3r/Print.cpp layered_print_cleareance_valid (and sequential_print_clearance_valid): an object whose
+#     2D convex hull (no offset, no brim/skirt) intersects a bed_exclude_area rectangle → error "<name> is too close
+#     to exclusion area, there may be collisions when printing." (DE: "… befindet sich zu nahe an einem
+#     Sperrbereich …"). Exactly touching is inconsistent (Clipper): a 220 mm square centred (edge at X 18) is
+#     refused, 219.98 mm passes, yet 238.0 mm at X 18 / Y 17.1 passed — stock_clearance treats touching as a hit.
+# So a stock tile must pass where the GUI puts it — centred: 128 − W/2 > 18, i.e. W < 220 mm; with
+# STOCK_MARGIN_MM = 1 mm, W < 218 mm (2 km at 1:9200 = 217.39 mm → plate X/Y 19.30–236.70). The 3MF build item puts
+# the tile there too, so CLI and GUI slice the same position. (1:8500 / 235.29 mm passed the CLI at X 19.4 / Y 17.1
+# but the GUI re-centred it to X 10.35 → refused.)
 # printer = "sle-250" keeps the former 250 mm option: a user printer preset (written to <series>/printer/) that
 # inherits the stock profile with two changes — bed_exclude_area = a 5 mm strip along the whole front instead of the
 # 18 × 28 mm corner (Bambu does not document why the corner is excluded: risk on the user), load line without the
-# Y 11 stroke — and the tile at plate X 3–253, Y 6–256.
+# Y 11 stroke — and the tile at plate X 3–253, Y 6–256 (the GUI centres it to Y 3 on import: set the position
+# manually, see printer_meta).
 PLATE_MM = (256.0, 256.0)            # P1S printable_area 0–256 × 0–256 mm
 PRINTABLE_HEIGHT_MM = 250.0          # P1S printable_height (Bambu profile fdm_machine_common)
 STOCK_EXCLUDE_MM = (18.0, 28.0)      # stock bed_exclude_area: plate X 0–18, Y 0–28 (front left)
 STOCK_LOAD_LINE_GCODE_MAX_Y = 11.0   # stock load line stroke at X 240 (G-code Y; checked against the template)
+STOCK_MARGIN_MM = 1.0                # our clearance to the exclusion area (Bambu itself: > 0)
 PLACEMENT_MM = (3.0, 6.0)            # sle-250: tile lower-left on the plate → X 3–253, Y 6–256
 FRONT_EXCLUDE_MM = 5.0               # sle-250 preset bed_exclude_area: plate Y 0–5 over the full width
 EXTRUDER_OFFSET_Y_MM = 2.0           # stock P1S extruder_offset "0x2": plate Y = G-code Y + 2
@@ -961,23 +1056,51 @@ _LOAD_STROKE_NEW = ("G0 Y1.5 E0.035 F{outer_wall_volumetric_speed/(0.3*0.5)/ 4 *
                     "; SLE 250 mm: stock stroke to Y 11 removed (tile starts at plate Y 6)", "G0 E0.2")
 
 
-def stock_window(tile_mm: float) -> tuple[float, float, float, float]:
-    """(x_lo, x_hi, y_lo, y_hi) range of the tile's lower-left corner on the stock P1S plate: right of the
-    front-left exclusion area, behind the load line (incl. its stroke), inside the printable area."""
-    return (STOCK_EXCLUDE_MM[0], PLATE_MM[0] - tile_mm,
-            load_line_plate_max_y(STOCK_LOAD_LINE_GCODE_MAX_Y), PLATE_MM[1] - tile_mm)
+def bambu_import_position(tile_mm: float) -> tuple[float, float]:
+    """Lower-left corner where Bambu Studio's GUI puts a plain-3MF object of tile_mm × tile_mm on import
+    (Model::center_instances_around_point: bounding box centred on the plate)."""
+    return ((PLATE_MM[0] - tile_mm) / 2, (PLATE_MM[1] - tile_mm) / 2)
+
+
+def rects_touch(a, b) -> bool:
+    """Closed rectangles (x0, y0, x1, y1) intersect or touch (conservative: Bambu's Clipper test is inconsistent
+    for exactly touching edges)."""
+    return a[0] <= b[2] and b[0] <= a[2] and a[1] <= b[3] and b[1] <= a[3]
+
+
+def stock_clearance(x0: float, y0: float, w: float, h: float | None = None, margin: float = 0.0) -> list[str]:
+    """Problems of a w × h footprint at plate (x0, y0) on the stock P1S profile ([] = slices): Bambu Studio's
+    exclusion check (convex hull ∩ bed_exclude_area, touching counts), inside the printable area, behind the
+    start-G-code load line. `margin` grows the footprint on every side (our safety margin, not Bambu's)."""
+    h = w if h is None else h
+    r = (x0 - margin, y0 - margin, x0 + w + margin, y0 + h + margin)
+    out = []
+    if rects_touch(r, (0.0, 0.0, *STOCK_EXCLUDE_MM)):
+        out.append(f"too close to exclusion area (plate X 0–{STOCK_EXCLUDE_MM[0]:g}, Y 0–{STOCK_EXCLUDE_MM[1]:g})")
+    if r[0] < 0 or r[1] < 0 or r[2] > PLATE_MM[0] or r[3] > PLATE_MM[1]:
+        out.append("not fully inside the printable area")
+    if r[1] < load_line_plate_max_y(STOCK_LOAD_LINE_GCODE_MAX_Y):
+        out.append("over the start-G-code load line")
+    return out
+
+
+def stock_max_tile_mm(margin: float = STOCK_MARGIN_MM) -> float:
+    """Supremum of the squares that pass stock_clearance(…, margin) when centred (as the GUI places them):
+    a tile must be strictly smaller."""
+    return 2 * (PLATE_MM[0] / 2 - STOCK_EXCLUDE_MM[0] - margin)
 
 
 def plate_placement(tile_mm: float, printer: str = "stock", key: str = "") -> tuple[float, float]:
     """Lower-left corner of a tile on the P1S plate (3MF build transform); ValueError if it does not fit."""
     if printer == "stock":
-        x0, x1, y0, y1 = stock_window(tile_mm)
-        if x1 < x0 - 1e-9 or y1 < y0 - 1e-9:
-            raise ValueError(f"{key}: a {tile_mm:.3f} mm tile does not fit the stock P1S profile (max "
-                             f"{PLATE_MM[0] - STOCK_EXCLUDE_MM[0]:g} mm wide right of the 18 × 28 mm exclusion area, "
-                             f"{PLATE_MM[1] - y0:g} mm deep behind the load line) — use a smaller scale or "
+        x0, y0 = bambu_import_position(tile_mm)
+        probs = stock_clearance(x0, y0, tile_mm, margin=STOCK_MARGIN_MM)
+        if probs:
+            raise ValueError(f"{key}: a {tile_mm:.3f} mm tile does not fit the stock P1S profile where Bambu Studio "
+                             f"places it (centred, X/Y {x0:.2f} mm; {STOCK_MARGIN_MM:g} mm margin): "
+                             f"{'; '.join(probs)} — must be < {stock_max_tile_mm():g} mm; use a smaller scale or "
                              "printer = \"sle-250\"")
-        return (min(max(round((x0 + x1) / 2, 1), x0), x1), min(max(round((y0 + y1) / 2, 1), y0), y1))
+        return (round(x0, 4), round(y0, 4))
     if printer == "sle-250":
         if any(PLACEMENT_MM[k] + tile_mm > PLATE_MM[k] + 1e-9 for k in (0, 1)) or PLACEMENT_MM[1] <= FRONT_EXCLUDE_MM:
             raise ValueError(f"{key}: tile_mm {tile_mm} at {PLACEMENT_MM} does not fit the {PLATE_MM} mm plate")
@@ -1071,10 +1194,10 @@ def printer_meta(written: bool, version: str = "", printer: str = "sle-250",
             "bedExcludeArea": stock_exclude_area(),
             "loadLine": ("G-code X 18–240, Y 1.0–1.5 plus a stroke to Y 11 at X 240; plate Y = G-code Y + 2 "
                          f"(≤ {load_line_plate_max_y(STOCK_LOAD_LINE_GCODE_MAX_Y):g} mm incl. line width)"),
-            "note_de": (f"Standardprofil „{STOCK_PRINTER}“ – kein eigenes Druckerprofil nötig. 3MF öffnen und "
-                        f"nicht anordnen/zentrieren: die Kachel liegt bei X {x0:g}–{x0 + tile_mm:.1f}, "
-                        f"Y {y0:g}–{y0 + tile_mm:.1f} mm, rechts neben dem Sperrbereich vorne links (18 × 28 mm) "
-                        "und hinter der Ladelinie. Zentriert würde sie den Sperrbereich berühren."),
+            "note_de": (f"Standardprofil „{STOCK_PRINTER}“ – kein eigenes Druckerprofil nötig. 3MF einfach "
+                        f"öffnen: Bambu Studio setzt die Kachel in die Plattenmitte (X und Y {x0:.1f}–"
+                        f"{x0 + tile_mm:.1f} mm), frei vom Sperrbereich vorne links (18 × 28 mm) und von der "
+                        "Ladelinie. Nicht nach vorne links verschieben."),
         }
     return {
         "mode": "sle-250", "name": PRESET_NAME, "inherits": STOCK_PRINTER, "file": PRESET_FILE if written else None,
@@ -1083,8 +1206,9 @@ def printer_meta(written: bool, version: str = "", printer: str = "sle-250",
         "bedExcludeArea": bed_exclude_area(),
         "loadLine": "G-code X 18–240, Y 1.0–1.5 (stock: plus a stroke to Y 11 at X 240); plate Y = G-code Y + 2",
         "note_de": ("250-mm-Kacheln passen nicht ins Standardprofil (Sperrbereich vorne links 18 × 28 mm, "
-                    "Ladelinie bis Y 11). Profil importieren (Datei → Importieren → Konfigurationen importieren), "
-                    "Kachel nicht anordnen/zentrieren: Position (Mitte) X 128, Y 131 mm = Ecke X 3, Y 6 mm, "
+                    "Ladelinie bis Y 11). Profil importieren (Datei → Importieren → Konfigurationen importieren); "
+                    "Bambu Studio zentriert die Kachel beim Öffnen, danach Position (Mitte) auf X 128, Y 131 mm "
+                    "setzen = Ecke X 3, Y 6 mm, "
                     "Hinterkante bündig. Der Sperrstreifen vorne (5 mm) hält die Ladelinie frei; der frühere "
                     "Sperrbereich vorne links ist auf eigene Verantwortung freigegeben — zuerst mit einer kleinen "
                     "Testkachel prüfen."),
@@ -1171,6 +1295,7 @@ def series_meta(s: Series) -> dict:
         "sampling": "area mean of the 1 m DGM (PixelIsArea) over a cell_m square centred on each vertex; "
                     "vertices on the tile edges (shared edges bit-identical)",
         "frame": "mm, X = east, Y = north, Z up, origin = tile lower-left corner at z = 0",
+        "maxError_mm": s.max_error_mm, "maxTriangles": s.max_triangles,
         "text": {"engraved": s.text, "depth_mm": s.engrave_mm, "mirrored": True,
                  "note_de": "Unterseite: gespiegelt graviert, lesbar nach Wenden um die Nord-Süd-Achse"},
         "connectors": {"enabled": c.enabled, "type": "bowtie", "positions": list(c.positions),
@@ -1307,7 +1432,14 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
     t = time.time()
     text = text_geometry(label_lines(s, tid, datum), s.tile_mm) if s.text else None
     check_text_clearance(text, s.tile_mm, s.connectors)
-    V, F = build_tile_mesh(z, s.tile_mm, s.connectors, text, s.engrave_mm)
+    top, max_err = (simplify_heightfield(z, s.max_error_mm, s.max_triangles) if s.max_error_mm > 0
+                    else (None, 0.0))
+    if max_err > s.max_error_mm + 1e-12:
+        print(f"  ! {tid}: triangle budget {s.max_triangles:,} reached, max error {max_err:.4f} mm > "
+              f"{s.max_error_mm} mm")
+    T["simplify"] = time.time() - t
+    t = time.time()
+    V, F = build_tile_mesh(z, s.tile_mm, s.connectors, text, s.engrave_mm, top)
     chk = mesh_check(F)
     vol, area = mesh_stats(V, F)
     if not chk["watertight"] or vol <= 0:
@@ -1320,8 +1452,8 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
            else f"printer preset '{PRESET_NAME}' ({PRESET_FILE})")
     meta = {"Title": f"{tid} {s.key}", "Designer": "Saar LiDAR Explorer (print3d.py)",
             "Description": (f"{s.name_de} ({s.key}), exag {s.exag:g}x, datum {datum:g} m NHN, base {s.base_mm:g} mm; "
-                            f"Bambu Studio: {prn}, do not re-arrange or centre "
-                            f"(lower-left corner at plate X {px:g} / Y {py:g} mm)"),
+                            f"Bambu Studio: {prn}, lower-left corner at plate X {px:g} / Y {py:g} mm"
+                            + (" (= centred, as Bambu Studio places it on import)" if s.printer == "stock" else "")),
             "Copyright": ATTRIBUTION_SL + ("; " + ATTRIBUTION_RLP if src["rlp"] else ""),
             "LicenseTerms": "dl-de/by-2-0", "CreationDate": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
     write_3mf(out / files["3mf"], V, F, tid, meta, place_mm=s.placement_mm)
@@ -1351,8 +1483,10 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
         base_above = round(min(mins) - c.depth_mm, 3)
         if base_above < c.min_base_mm:
             raise SystemExit(f"{tid}: only {base_above} mm above a key recess")
-    print(f"  {tid}: z {z.min():.2f}–{z.max():.2f} mm, {len(F):,} tris, {vol / 1000:.0f} cm³, "
-          f"{solid:.0f} g solid / {typical:.0f} g typical  [sample {T['sample']:.1f}s mesh {T['mesh']:.1f}s "
+    print(f"  {tid}: z {z.min():.2f}–{z.max():.2f} mm, {len(F):,} tris (max Δz {max_err:.3f} mm), "
+          f"{vol / 1000:.0f} cm³, "
+          f"{solid:.0f} g solid / {typical:.0f} g typical  [sample {T['sample']:.1f}s simplify {T['simplify']:.1f}s "
+          f"mesh {T['mesh']:.1f}s "
           f"write {T['write']:.1f}s]", flush=True)
     corners = corners_wgs84(e0, n0, e0 + s.tile_m, n0 + s.tile_m)
     lons, lats = [p[0] for p in corners], [p[1] for p in corners]
@@ -1372,6 +1506,7 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
         "surface_cm2": round(area / 100.0, 1),
         "filament_g": {"solid": round(solid), "typical": round(typical)},
         "triangles": int(len(F)), "vertices": int(len(V)),
+        "maxError_mm": round(max_err, 4),
         "watertight": True,
         "sources": src,
         "created": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
