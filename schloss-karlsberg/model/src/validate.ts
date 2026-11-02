@@ -7,9 +7,10 @@
  * Consistency checks (eaves = base + storeys, ridge reproducible) are warnings in both modes.
  */
 import { gridConvergenceDeg } from './frame.ts';
+import { epochIssues } from './layout/epoch.ts';
 import { signedArea } from './layout/geom.ts';
 import { roofSection } from './layout/roof.ts';
-import { ROOF_TYPES, SIDE_NAMES } from './spec.ts';
+import { FOLLY_KINDS, LANDCOVER_COVERS, parseEvidenceTags, ROOF_TYPES, SIDE_NAMES } from './spec.ts';
 
 export type ValidationMode = 'v1-compatible' | 'v2';
 
@@ -30,7 +31,7 @@ const CONFIDENCE = ['high', 'med', 'low'];
 const PLACEMENT = ['lidar', 'lidar+hms', 'map+lidar', 'map', 'existing', 'relative', 'hypothetical', 'unplaced'];
 const INTERIOR = ['detailed', 'simple', 'none'];
 const STOREY_KINDS = ['plinth', 'basement', 'floor', 'mezzanine', 'kneewall', 'wall', 'mound'];
-const TERRAIN_KINDS = ['court', 'terrace', 'scarp', 'avenue', 'rondell', 'pond', 'island', 'dam', 'cascade', 'moat', 'enclosure', 'well', 'wall', 'parterre', 'path'];
+const TERRAIN_KINDS = ['court', 'terrace', 'scarp', 'avenue', 'rondell', 'pond', 'island', 'dam', 'cascade', 'moat', 'enclosure', 'well', 'wall', 'parterre', 'path', 'lawn', 'clump', 'furniture', 'beds', 'fence'];
 const OPENING_KINDS = ['window', 'porte_fenetre', 'portal', 'durchfahrt', 'door', 'double_door', 'jib_door', 'carriage_gate', 'passage', 'oculus', 'dormer', 'cellar_window', 'stall_window', 'blind'];
 
 /** Plausible EPSG:25832 window around Homburg (generous). */
@@ -155,6 +156,7 @@ export function validateSite(raw: unknown, mode: ValidationMode = 'v2'): Validat
           if (r[k] !== undefined && (!isNum(r[k]) || (r[k] as number) < 0 || (r[k] as number) > 89)) err(`${P}.roof.${k}`, 'must be 0..89 deg');
         }
         for (const k of ['eaves_h', 'ridge_h', 'depth_m']) if (r[k] !== undefined && !isNum(r[k])) err(`${P}.roof.${k}`, 'must be a number');
+        if (r.dome_tiers !== undefined && (!Number.isInteger(r.dome_tiers) || (r.dome_tiers as number) < 1 || (r.dome_tiers as number) > 2)) err(P + '.roof.dome_tiers', 'must be 1 or 2');
         if (isNum(b.base_h) && isNum(r.eaves_h) && Array.isArray(b.storeys) && b.storeys.length) {
           const e = b.base_h + sum;
           if (Math.abs(e - r.eaves_h) > 0.05) warn(P + '.roof.eaves_h', `${r.eaves_h} != base_h + Σ storeys = ${e.toFixed(2)}`);
@@ -169,6 +171,7 @@ export function validateSite(raw: unknown, mode: ValidationMode = 'v2'): Validat
             pitch_upper: r.pitch_upper as number | undefined,
             break_ratio: isNum(r.break_ratio) ? r.break_ratio : undefined,
             dome_rise_ratio: isNum(r.dome_rise_ratio) ? r.dome_rise_ratio : undefined,
+            dome_tiers: isNum(r.dome_tiers) ? r.dome_tiers : undefined,
             matchRidge: false,
           });
           if (Math.abs(sec.ridge_h - r.ridge_h) > 0.1)
@@ -202,7 +205,58 @@ export function validateSite(raw: unknown, mode: ValidationMode = 'v2'): Validat
             f.portals.forEach((q, j) => {
               if (!isObj(q) || !(SIDE_NAMES as readonly string[]).includes(q.side as string) || !(q.axis === 'centre' || Number.isInteger(q.axis)))
                 err(`${P}.facade.portals[${j}]`, 'needs side and axis (int | "centre")');
+              // wave-8 review fix (KB-I72): continuous balcony across the portes-fenêtres of one entry
+              else if (q.balcony_run !== undefined && (!isObj(q.balcony_run) || q.kind !== 'porte_fenetre' || (q.balcony_run.depth !== undefined && !(isNum(q.balcony_run.depth) && (q.balcony_run.depth as number) > 0))))
+                err(`${P}.facade.portals[${j}].balcony_run`, "only on a 'porte_fenetre' entry; depth > 0 if given");
             });
+        }
+        if (f.glasshouse !== undefined && !isObj(f.glasshouse)) err(P + '.facade.glasshouse', 'must be an object');
+        // KB-I21 / KB-I28 / KB-I29 (wave 6, architecture)
+        const nSt = Array.isArray(b.storeys) ? b.storeys.length : 0;
+        const storeyList = (v: unknown) => Array.isArray(v) && v.every((x) => Number.isInteger(x) && (x as number) >= 0 && (x as number) < nSt);
+        if (f.joinery_colour !== undefined && !(isStr(f.joinery_colour) && /^#[0-9A-Fa-f]{6}$/.test(f.joinery_colour))) err(P + '.facade.joinery_colour', 'must be #RRGGBB');
+        if (f.shutters_omit_storeys !== undefined && !storeyList(f.shutters_omit_storeys)) err(P + '.facade.shutters_omit_storeys', 'must be storey indices');
+        // wave-6 review fix: per-storey window kind of a side
+        if (isObj(f.sides))
+          for (const [k, v] of Object.entries(f.sides))
+            if (isObj(v) && v.window_kind_storeys !== undefined && !storeyList(v.window_kind_storeys)) err(`${P}.facade.sides.${k}.window_kind_storeys`, 'must be storey indices');
+        if (f.fachwerk !== undefined) {
+          if (!isObj(f.fachwerk) || !isStr(f.fachwerk.tag)) err(P + '.facade.fachwerk', 'needs a tag');
+          else if (f.fachwerk.storeys !== undefined && !storeyList(f.fachwerk.storeys)) err(P + '.facade.fachwerk.storeys', 'must be storey indices');
+        }
+        if (f.menagerie !== undefined) {
+          const me = f.menagerie;
+          const mp = P + '.facade.menagerie';
+          if (!isObj(me) || !['ring', 'rows', 'island', 'open_pavilion'].includes(me.kind as string) || !isStr(me.tag)) err(mp, "needs kind 'ring' | 'rows' | 'island' | 'open_pavilion' and a tag");
+          else if (me.kind === 'island' && (!isObj(me.island) || !isNum(me.island.size) || (me.island.size as number) <= 0 || !isNum(me.island.top_h))) err(mp + '.island', 'needs size > 0 and top_h');
+          else if (me.kind === 'ring' && (!isObj(me.ring) || !isEN(me.ring.centre) || !isNum(me.ring.radius) || !Number.isInteger(me.ring.houses) || (me.ring.houses as number) < 3)) err(mp + '.ring', 'needs centre [E,N], radius, houses (int >= 3)');
+          else if (me.kind === 'rows' && (!Array.isArray(me.rows) || !me.rows.length || !me.rows.every((r) => isObj(r) && isEN(r.p0) && isEN(r.p1) && Number.isInteger(r.houses) && (r.houses as number) >= 1))) err(mp + '.rows', 'needs rows of {p0, p1, houses}');
+          if (isObj(me) && me.channel !== undefined && (!Array.isArray(me.channel) || me.channel.length < 2 || !me.channel.every(isEN))) err(mp + '.channel', 'needs >= 2 [E,N]');
+        }
+        // KB-I31 / KB-I39 / KB-I30: follies (exterior/folly.ts); a hypothesis by definition
+        if (f.folly !== undefined) {
+          const fo = f.folly;
+          const fp = P + '.facade.folly';
+          if (!isObj(fo) || !(FOLLY_KINDS as readonly string[]).includes(fo.kind as string)) err(fp, `needs kind ${FOLLY_KINDS.join(' | ')}`);
+          else {
+            if (fo.gate_width !== undefined && !(isNum(fo.gate_width) && (fo.gate_width as number) >= 0)) err(fp + '.gate_width', 'must be a number >= 0');
+            if (b.confidence !== 'low' || b.placement !== 'hypothetical') warn(fp, "a folly should be placement 'hypothetical' with confidence low");
+          }
+        }
+        // KB-I24: round temple pavilion
+        if (f.rotunda !== undefined) {
+          const ro = f.rotunda;
+          const rp = P + '.facade.rotunda';
+          if (!isObj(ro)) err(rp, 'must be an object');
+          else {
+            if (!['ionic', 'doric', 'tuscan'].includes(ro.order as string)) err(rp + '.order', 'must be ionic|doric|tuscan');
+            if (!isNum(ro.axis_azimuth)) err(rp + '.axis_azimuth', 'must be a number (grid deg)');
+            if (!Array.isArray(ro.bays) || ro.bays.length < 4 || !ro.bays.every((k) => ['door', 'niche', 'link'].includes(k as string))) err(rp + '.bays', 'needs >= 4 bays of door|niche|link');
+            if (ro.portico !== undefined && (!isObj(ro.portico) || !Number.isInteger(ro.portico.columns) || (ro.portico.columns as number) < 2 || !isNum(ro.portico.width) || !isNum(ro.portico.depth) || !Number.isInteger(ro.portico.steps)))
+              err(rp + '.portico', 'needs columns (int >= 2), width, depth, steps (int)');
+            if (ro.colonnade !== undefined && (!isObj(ro.colonnade) || !isNum(ro.colonnade.length) || !isNum(ro.colonnade.width) || !Number.isInteger(ro.colonnade.columns_per_side) || !isNum(ro.colonnade.floor_h) || !isNum(ro.colonnade.eaves_h)))
+              err(rp + '.colonnade', 'needs length, width, columns_per_side (int), floor_h, eaves_h');
+          }
         }
       }
 
@@ -219,6 +273,8 @@ export function validateSite(raw: unknown, mode: ValidationMode = 'v2'): Validat
             roomIds.add(r.id);
             if (!Number.isInteger(r.storey) || (r.storey as number) < 0 || (r.storey as number) >= nStoreys) err(rp + '.storey', 'index out of range');
             if (!Array.isArray(r.polygon) || r.polygon.length < 3 || !r.polygon.every(isEN)) err(rp + '.polygon', 'needs >= 3 [s,t] points');
+            // KB-I26/I27: optional silk hue and damask border colour
+            if (isObj(r.finish)) for (const k of ['colour', 'border']) if (r.finish[k] !== undefined && !(isStr(r.finish[k]) && /^#[0-9A-Fa-f]{6}$/.test(r.finish[k] as string))) err(`${rp}.finish.${k}`, 'must be #RRGGBB');
           });
       }
       if (b.openings !== undefined) {
@@ -239,6 +295,7 @@ export function validateSite(raw: unknown, mode: ValidationMode = 'v2'): Validat
       }
       if (b.stairs !== undefined && !Array.isArray(b.stairs)) err(P + '.stairs', 'must be an array');
       if (b.court_toward !== undefined && !(isEN(b.court_toward) || isStr(b.court_toward))) err(P + '.court_toward', 'must be [E,N] or a feature id');
+      for (const m of epochIssues(b.epoch)) err(P + '.epoch', m);
     });
 
   // ---- terrain features ----
@@ -277,7 +334,87 @@ export function validateSite(raw: unknown, mode: ValidationMode = 'v2'): Validat
         const tr = t.trees;
         if (!isObj(tr) || !isStr(tr.species) || !isNum(tr.rows) || !isNum(tr.spacing)) err(P + '.trees', 'needs species, rows, spacing');
       }
+      for (const m of epochIssues(t.epoch)) err(P + '.epoch', m);
+      // KB-I12/I13 garden fields
+      for (const k of ['radius', 'fountain_h']) if (t[k] !== undefined && !(isNum(t[k]) && (t[k] as number) > 0)) err(`${P}.${k}`, 'must be a positive number');
+      if (t.placement !== undefined && t.placement !== 'hypothetical') err(P + '.placement', "only 'hypothetical'");
+      if (t.mix !== undefined) {
+        const mx = t.mix;
+        if (!Array.isArray(mx) || !mx.length || !mx.every((e) => isObj(e) && isStr(e.species) && isNum(e.share) && e.share > 0)) err(P + '.mix', 'needs [{species, share > 0}]');
+        else if (Math.abs(mx.reduce((a, e) => a + (e as { share: number }).share, 0) - 1) > 0.01) err(P + '.mix', 'shares must sum to 1');
+      }
+      if (t.kind === 'clump' && g.type === 'Point' && !isNum(t.radius)) err(P + '.radius', 'a Point clump needs a radius');
+      if (t.coping !== undefined && !(isObj(t.coping) && isNum(t.coping.width) && isNum(t.coping.height))) err(P + '.coping', 'needs width, height');
+      // KB-I33/I34/I36 garden detail fields (wave 5)
+      if (t.items !== undefined) {
+        const it = t.items;
+        if (!Array.isArray(it) || !it.length || !it.every((e) => isObj(e) && (e.type === 'bench' || e.type === 'herm') && isEN(e.at) && isNum(e.facing))) err(P + '.items', "needs [{type: 'bench'|'herm', at: [E,N], facing: deg}]");
+      }
+      if (t.kind === 'furniture' && t.items === undefined) err(P + '.items', 'a furniture feature needs items');
+      if (t.parterre !== undefined) {
+        const pt = t.parterre;
+        if (!isObj(pt) || pt.type !== 'angloise' || !Array.isArray(pt.panels) || pt.panels.length !== 2 || !pt.panels.every((n) => Number.isInteger(n) && (n as number) >= 1)) err(P + '.parterre', "needs {type: 'angloise', panels: [nu, nv] >= 1}");
+        if (g.type !== 'Polygon') err(P + '.parterre', 'needs a Polygon geometry');
+      }
+      if (t.fence !== undefined) {
+        const fc = t.fence;
+        if (!isObj(fc) || fc.type !== 'treillage' || !isNum(fc.height) || !isNum(fc.portal_height) || !Array.isArray(fc.portals) || !fc.portals.every(isEN)) err(P + '.fence', "needs {type: 'treillage', height, portal_height, portals: [E,N][]}");
+      }
+      if (t.beds !== undefined) {
+        const bd = t.beds;
+        const lines = (x: unknown) => x === undefined || (Array.isArray(x) && x.every((l) => Array.isArray(l) && l.length === 2 && l.every(isEN)));
+        if (!isObj(bd) || !Array.isArray(bd.quarters) || bd.quarters.length !== 2 || !bd.quarters.every((n) => Number.isInteger(n) && (n as number) >= 1) || !lines(bd.frame_rows) || !lines(bd.espaliers)) err(P + '.beds', 'needs {quarters: [nu, nv], frame_rows?, espaliers?: 2-point lines}');
+      }
+      if (t.kind === 'beds' && (t.beds === undefined || g.type !== 'Polygon')) err(P + '.beds', 'a beds feature needs a Polygon and beds');
+      // KB-I68 fence features
+      if (t.fence_line !== undefined) {
+        const fl = t.fence_line;
+        if (!isObj(fl) || (fl.type !== 'post_rail' && fl.type !== 'barriere') || !(isNum(fl.height) && (fl.height as number) > 0) || (fl.post_spacing !== undefined && !(isNum(fl.post_spacing) && (fl.post_spacing as number) > 0)) || (fl.rails !== undefined && !(Number.isInteger(fl.rails) && (fl.rails as number) >= 1)))
+          err(P + '.fence_line', "needs {type: 'post_rail'|'barriere', height > 0, post_spacing? > 0, rails? >= 1}");
+      }
+      if (t.kind === 'fence') {
+        if (t.fence_line === undefined || g.type !== 'LineString') err(P + '.fence_line', 'a fence feature needs a LineString and fence_line');
+        else if (isObj(t.fence_line) && t.fence_line.type === 'barriere' && Array.isArray(c) && c.length !== 2) err(P + '.geometry', 'a barriere needs a 2-point line');
+      }
     });
+
+  // ---- land cover (KB-I09; optional top-level list, see LandcoverArea) ----
+  if (raw.landcover !== undefined) {
+    if (!Array.isArray(raw.landcover)) err('$.landcover', 'must be an array');
+    else {
+      const lids = new Set<string>();
+      raw.landcover.forEach((a, i) => {
+        const p = `$.landcover[${i}]`;
+        if (!isObj(a)) return err(p, 'must be an object');
+        const P = `${p}(${String(a.id)})`;
+        if (!isStr(a.id) || !/^LC-\d+$/.test(a.id)) err(P + '.id', "must be 'LC-nn'");
+        else if (lids.has(a.id)) err(P + '.id', 'duplicate id');
+        else lids.add(a.id);
+        if (!(LANDCOVER_COVERS as readonly string[]).includes(a.cover as string)) err(P + '.cover', `unknown cover ${String(a.cover)}`);
+        if (!isStr(a.name_de) || !a.name_de.trim()) err(P + '.name_de', 'must be a non-empty string');
+        if (!CONFIDENCE.includes(a.confidence as string)) err(P + '.confidence', 'must be high|med|low');
+        if (!isStr(a.tag) || !parseEvidenceTags(a.tag).length) err(P + '.tag', 'needs evidence tags (D, D->, I, N, U, HMS)');
+        const g = a.geometry;
+        const r = isObj(g) && g.type === 'Polygon' && Array.isArray(g.coordinates) && g.coordinates.length === 1 ? g.coordinates[0] : null;
+        if (!Array.isArray(r) || r.length < 4 || !r.every(isEN)) err(P + '.geometry', 'needs a Polygon with one ring of >= 4 [E,N] points');
+        else {
+          const f = r[0] as [number, number];
+          const l = r[r.length - 1] as [number, number];
+          if (f[0] !== l[0] || f[1] !== l[1]) err(P + '.geometry', 'ring must be closed');
+          else if (signedArea(r as [number, number][]) <= 0) err(P + '.geometry', 'ring must be counter-clockwise');
+          if (!(r as [number, number][]).every(inBounds)) err(P + '.geometry', 'outside the EPSG:25832 window');
+        }
+        if (a.min_slope !== undefined && !(isNum(a.min_slope) && a.min_slope > 0 && a.min_slope <= 2)) err(P + '.min_slope', 'must be in (0, 2] (rise / run)');
+        if (a.mix !== undefined) {
+          const mx = a.mix;
+          if (a.cover !== 'forest') warn(P + '.mix', 'mix only applies to forest');
+          if (!Array.isArray(mx) || !mx.length || !mx.every((e) => isObj(e) && isStr(e.species) && isNum(e.share) && e.share > 0)) err(P + '.mix', 'needs [{species, share > 0}]');
+          else if (Math.abs(mx.reduce((s, e) => s + (e as { share: number }).share, 0) - 1) > 0.01) err(P + '.mix', 'shares must sum to 1');
+        }
+        for (const m of epochIssues(a.epoch)) err(P + '.epoch', m);
+      });
+    }
+  }
 
   return { ok: errors.length === 0, errors, warnings };
 }

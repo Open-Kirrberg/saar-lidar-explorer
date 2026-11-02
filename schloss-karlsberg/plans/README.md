@@ -46,7 +46,7 @@ SVGs and returns their paths; `sheetList(spec)` lists the sheets with lazy build
 | AN-03 | Ansicht Südfront (Südflügel, dahinter Corps de logis) | 1:200 | A2 |
 | AN-04 | Ansicht Orangerie (Talseite, von Westen): B10–B14 | 1:200 | A2 |
 | SC-01 | Längsschnitt A–A in der Hauptachse (Ehrenhof – Vestibül – Festsaal – Garten) + Geländeschnitt 1:1000 bis zur Ostallee | 1:200 / 1:1000 | A2 |
-| SC-02 | Querschnitt B–B durch Vestibül und Prunktreppe (Kaiserstiege) | 1:200 | A3 |
+| SC-02 | Schnitt B–B quer zur Hofachse (längs durch den Corps de logis), Vestibül und Prunktreppe (Kaiserstiege) | 1:200 | A3 |
 
 **Deviation from the brief:** the whole residence (≈ 1.9 × 2.4 km incl. Karlslust) does not fit
 on A2 at 1:2000, so it is LP-00 at 1:5000; LP-01 is the 1:2000 Lageplan of the Schlossbezirk.

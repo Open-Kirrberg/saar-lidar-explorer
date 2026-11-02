@@ -14,6 +14,11 @@ export type V3 = [number, number, number];
 /** Building [s, t] + absolute height -> group object space. */
 export const O = (s: number, t: number, h: number): V3 => [s, h, -t];
 
+/** Translation matrix (furniture, fixtures, hearths). */
+export const T = (x: number, y: number, z: number): THREE.Matrix4 => new THREE.Matrix4().makeTranslation(x, y, z);
+/** Closed cylinder from radius `rBottom` to `rTop` over height h, centred on the origin. */
+export const cyl = (rBottom: number, rTop: number, h: number, seg = 8): THREE.CylinderGeometry => new THREE.CylinderGeometry(rTop, rBottom, h, seg);
+
 export interface PartInfo {
   buildingId: string;
   roomId?: string;
@@ -32,6 +37,10 @@ export class Bucket {
   nor: number[] = [];
   uv: number[] = [];
   idx: number[] = [];
+  /** Linear vertex colours (KB-I26 canvases, mirrors); written only once `ink` was used, white elsewhere. */
+  col: number[] = [];
+  private coloured = false;
+  private ink: V3 = [1, 1, 1];
 
   get vertexCount(): number {
     return this.pos.length / 3;
@@ -41,7 +50,38 @@ export class Bucket {
     this.pos.push(p[0], p[1], p[2]);
     this.nor.push(n[0], n[1], n[2]);
     this.uv.push(u, v);
+    this.col.push(this.ink[0], this.ink[1], this.ink[2]);
     return this.pos.length / 3 - 1;
+  }
+
+  /**
+   * Planar grid over the quad a (u0 v0) - b (u1 v0) - c (u1 v1) - d (u0 v1) with `nx` × `ny` vertices and one LINEAR
+   * colour per vertex (`colour(i, j)`, j from the a-b edge). The geometry then carries a `color` attribute (KB-I26).
+   */
+  colourGrid(a: V3, b: V3, c: V3, d: V3, normal: V3, nx: number, ny: number, colour: (i: number, j: number) => V3): void {
+    this.coloured = true;
+    const base = this.vertexCount;
+    const flip = dot(cross(sub(b, a), sub(d, a)), normal) < 0;
+    for (let j = 0; j < ny; j++) {
+      const ty = j / (ny - 1);
+      for (let i = 0; i < nx; i++) {
+        const tx = i / (nx - 1);
+        const p: V3 = [0, 1, 2].map((k) => (1 - ty) * ((1 - tx) * a[k] + tx * b[k]) + ty * ((1 - tx) * d[k] + tx * c[k])) as V3;
+        this.ink = colour(i, j);
+        this.vert(p, normal, tx, ty);
+      }
+    }
+    this.ink = [1, 1, 1];
+    for (let j = 0; j < ny - 1; j++) {
+      for (let i = 0; i < nx - 1; i++) {
+        const q0 = base + j * nx + i;
+        const q1 = q0 + 1;
+        const q3 = q0 + nx;
+        const q2 = q3 + 1;
+        if (flip) this.idx.push(q0, q2, q1, q0, q3, q2);
+        else this.idx.push(q0, q1, q2, q0, q2, q3);
+      }
+    }
   }
 
   /**
@@ -113,6 +153,7 @@ export class Bucket {
       } else w.set(0, 1, 0);
       this.pos.push(v.x, v.y, v.z);
       this.nor.push(w.x, w.y, w.z);
+      this.col.push(1, 1, 1);
       if (uv) this.uv.push(uv.getX(i), uv.getY(i));
       else this.uv.push(v.x, v.z);
     }
@@ -174,6 +215,7 @@ export class Bucket {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
+    if (this.coloured) g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
     g.setIndex(this.vertexCount > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
     g.computeBoundingBox();
     g.computeBoundingSphere();
@@ -288,5 +330,75 @@ export class ColliderBucket {
     m.visible = false;
     m.userData = { buildingId, part, lod: 2, collider: true };
     return m;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Moulded frames (KB-I26: gilt mouldings with a profile, so burnished gilding catches highlights)
+// ---------------------------------------------------------------------------------------------
+
+/** Cross-section of a moulding: [inset from the outer edge, height above the wall] from the outer to the inner edge. */
+export type MouldProfile = [number, number][];
+
+/**
+ * Gilt bead-and-fillet frame profile of width `w` and relief `z` [N Louis-seize "baguette"]: an outer fillet, a
+ * half-round bead (4 facets) and an inner step, so the faces turn through ≈ 150° and reflect different parts of the room.
+ */
+export function beadProfile(w: number, z: number): MouldProfile {
+  return [
+    [0, 0],
+    [0, z * 0.45],
+    [w * 0.12, z * 0.5],
+    [w * 0.22, z * 0.85],
+    [w * 0.42, z],
+    [w * 0.62, z * 0.88],
+    [w * 0.74, z * 0.55],
+    [w * 0.86, z * 0.45],
+    [w * 0.9, z * 0.2],
+    [w, z * 0.18],
+    [w, 0],
+  ];
+}
+
+/**
+ * Sweep `prof` around the rectangle [x0, x1] × [y0, y1] of a plane with mitred corners. `F(x, y, z)` maps plane
+ * coordinates (x along, y up, z towards the viewer) to object space and `N(x, y, z)` maps a plane direction to an
+ * object-space normal. `open` leaves the bottom side out (door surrounds run down to the floor).
+ */
+export function mouldFrame(
+  b: Bucket,
+  F: (x: number, y: number, z: number) => V3,
+  N: (x: number, y: number, z: number) => V3,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  prof: MouldProfile,
+  open = false,
+): void {
+  const maxI = Math.max(...prof.map((p) => p[0]));
+  if (x1 - x0 < 2 * maxI + 1e-3 || y1 - y0 < 2 * maxI + 1e-3) return;
+  // each side: inward unit (ix, iy) in the plane, and the endpoints of its edge at inset i
+  const sides: { ix: number; iy: number; ends: (i: number) => [number, number, number, number] }[] = [
+    { ix: 0, iy: -1, ends: (i) => [x0 + i, y1 - i, x1 - i, y1 - i] }, // top
+    { ix: 1, iy: 0, ends: (i) => [x0 + i, open ? y0 : y0 + i, x0 + i, y1 - i] }, // left
+    { ix: -1, iy: 0, ends: (i) => [x1 - i, open ? y0 : y0 + i, x1 - i, y1 - i] }, // right
+  ];
+  if (!open) sides.push({ ix: 0, iy: 1, ends: (i) => [x0 + i, y0 + i, x1 - i, y0 + i] }); // bottom
+  for (const sd of sides) {
+    for (let k = 0; k < prof.length - 1; k++) {
+      const [ia, za] = prof[k];
+      const [ib, zb] = prof[k + 1];
+      const di = ib - ia;
+      const dz = zb - za;
+      const l = Math.hypot(di, dz) || 1;
+      // outward section normal (-dz, di): -dz along the inward direction, di towards the viewer
+      const nIn = -dz / l;
+      const nZ = di / l;
+      const n = N(sd.ix * nIn, sd.iy * nIn, nZ);
+      const [ax0, ay0, ax1, ay1] = sd.ends(ia);
+      const [bx0, by0, bx1, by1] = sd.ends(ib);
+      b.quad(F(ax0, ay0, za), F(ax1, ay1, za), F(bx1, by1, zb), F(bx0, by0, zb), n);
+    }
   }
 }

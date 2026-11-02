@@ -17,3 +17,5 @@
 /model/out/
 /dist/
 /node_modules/
+# Before/after review shots per backlog item (regenerable with .claude/skills/skb-improve/scripts/shots.mjs; ~50 MB) — local only
+/docs/shots/

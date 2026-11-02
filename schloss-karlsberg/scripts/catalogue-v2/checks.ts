@@ -1,7 +1,8 @@
 /**
  * Consistency checks of catalogue v2 (pure): room programme vs facade (no wall may meet a
  * window, every window lights a room), rooms inside the footprint and not overlapping,
- * doors inside their walls, and footprint overlaps between buildings.
+ * doors inside their walls, building texts that name rooms the programme lacks (`functionIssues`), and
+ * footprint overlaps between buildings.
  * Used by build.ts (fails the build) and model/tests/catalogue-v2.test.ts.
  */
 import { layoutBuilding } from '../../model/src/layout/building.ts';
@@ -102,6 +103,70 @@ export function checkProgramme(spec: SiteSpec, b: Building): ProgrammeIssue[] {
     if (!ids.has(s.id.replace(/^stair-/, ''))) bad(`stair ${s.id} has no stair-hall room`);
     if (s.storey_to <= s.storey_from) bad(`stair ${s.id} goes nowhere`);
   }
+  out.push(...functionIssues(b));
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Building texts vs rooms (fix wave 4, review of KB-I25)
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Room kinds a building `function` text (English) or a storey name (German, in parentheses) may name, with the
+ * room names that must then exist. Keeps the info-panel texts in step with the room programme.
+ */
+export const ROOM_TERMS: { term: string; en: RegExp; de: RegExp; room: RegExp }[] = [
+  { term: 'silver chamber', en: /\bsilver\b|Silberkammer/i, de: /Silber/i, room: /Silber/i },
+  { term: 'dining room', en: /\bdining\b|Speisesa/i, de: /Speise/i, room: /Speise/i },
+  { term: 'buffet', en: /\bbuffet\b|Anrichte/i, de: /Anrichte|Buffet/i, room: /Anrichte|Buffet/i },
+  { term: 'library', en: /\blibrary\b|Bibliothek/i, de: /Bibliothek/i, room: /Bibliothek/i },
+  { term: 'armoury', en: /\barmou?ry\b|Waffensammlung/i, de: /Waffen/i, room: /Waffen/i },
+  { term: 'natural-history cabinet', en: /natural-history|Naturalien/i, de: /Naturalien/i, room: /Naturalien/i },
+  { term: 'picture room', en: /picture room|Bildersa/i, de: /Bilders[aä]/i, room: /Bildersaal/i },
+  { term: 'dance hall', en: /dance hall|Tanzsaal/i, de: /Tanzsaal/i, room: /Tanzsaal/i },
+  { term: 'guard room', en: /\bguard\b|Wach(t)?stube/i, de: /Wach/i, room: /Wach/i },
+  { term: 'guest apartment', en: /guest apartment/i, de: /Gäste/i, room: /Gäste/i },
+  { term: "cooks' lodgings", en: /cooks' lodgings|cooks' rooms/i, de: /Küchenbedienstete|Köche/i, room: /Koch|Köche/i },
+];
+
+/** Index of the n-th walkable floor storey (0 = EG, 1 = OG). */
+function floorStorey(b: Building, n: number): number | undefined {
+  return b.storeys.map((s, i) => [s, i] as const).filter(([s]) => s.kind === 'floor' || s.kind === undefined)[n]?.[1];
+}
+
+/**
+ * Terms of the building `function` and storey names without a matching room. A clause "EG: …" / "OG: …" or a phrase
+ * ending "… on the EG" / "… on the OG" binds its terms to that floor; other terms need the room on any storey.
+ */
+export function functionIssues(b: Building): ProgrammeIssue[] {
+  const out: ProgrammeIssue[] = [];
+  if (!b.rooms?.length) return out;
+  const roomsAt = (storey?: number) => b.rooms!.filter((r) => storey === undefined || r.storey === storey);
+  const need = (text: string, storey: number | undefined, where: string, key: 'en' | 'de') => {
+    for (const t of ROOM_TERMS)
+      if (t[key].test(text) && !roomsAt(storey).some((r) => t.room.test(r.name_de)))
+        out.push({ building: b.id, message: `${where} names a ${t.term}${storey === undefined ? '' : ` on storey ${storey}`} but no room matches` });
+  };
+  // a word right before a building id names that other building ("the Bibliothekspavillon KB-B06a")
+  const fn = (b.function ?? '').replace(/\S+\s+K[BL]-B\d+[a-z]?/g, '');
+  const st = (m: string) => floorStorey(b, m === 'EG' ? 0 : 1);
+  for (const clause of fn.split(';')) {
+    const head = /^\s*(EG|OG)\s*:/.exec(clause);
+    if (head) {
+      need(clause, st(head[1]), `function "${head[1]}:" clause`, 'en');
+      continue;
+    }
+    let rest = clause;
+    for (const m of clause.matchAll(/([^:]*?)\bon the (EG|OG)\b/g)) {
+      need(m[1], st(m[2]), `function "… on the ${m[2]}"`, 'en');
+      rest = rest.replace(m[0], '');
+    }
+    need(rest, undefined, 'function', 'en');
+  }
+  b.storeys.forEach((s, i) => {
+    const par = /\(([^)]*)\)/.exec(s.name)?.[1];
+    if (par && (s.kind === 'floor' || s.kind === undefined)) need(par, i, `storey name "${s.name}"`, 'de');
+  });
   return out;
 }
 
@@ -170,6 +235,9 @@ export interface Overlap {
   area: number;
 }
 
+/** Intended overlaps: an annex drawn as its own volume that reaches into its main building (KB-I32 apse). */
+export const ATTACHED: readonly (readonly [string, string])[] = [['KB-B28', 'KB-B28a']];
+
 /** Pairwise footprint overlaps of placed buildings (walls, gardens and envelopes excluded). */
 export function footprintOverlaps(spec: SiteSpec, minArea = 0.5): Overlap[] {
   const items = spec.buildings
@@ -186,6 +254,7 @@ export function footprintOverlaps(spec: SiteSpec, minArea = 0.5): Overlap[] {
       const A = items[i];
       const B = items[j];
       if (!A.convex || !B.convex) continue;
+      if (ATTACHED.some(([x, y]) => (x === A.id && y === B.id) || (x === B.id && y === A.id))) continue;
       const dx = B.ref[0] - A.ref[0];
       const dy = B.ref[1] - A.ref[1];
       if (Math.hypot(dx, dy) > 400) continue;

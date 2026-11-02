@@ -7,7 +7,9 @@
  */
 import type { BuildingLayout } from '../../../model/src/layout/building.ts';
 import { sidePoint } from '../../../model/src/layout/footprint.ts';
-import { WALL_THICKNESS } from '../../../model/src/layout/grammar.ts';
+import { PASSAGE_PORTICO, WALL_THICKNESS } from '../../../model/src/layout/grammar.ts';
+import { freitreppePlan } from '../../../model/src/layout/facade.ts';
+import { outerWall } from '../../../model/src/layout/fachwerk.ts';
 import { roomArea } from '../../../model/src/layout/rooms.ts';
 import type { Building, Opening, SideName, SiteSpec, ST } from '../../../model/src/spec.ts';
 import { CONF_DE, PLACEMENT_DE, evidenceNote, sourcesNote, sw, tagShort } from '../evidence.ts';
@@ -188,7 +190,7 @@ function drawRooms(c: Ctx, storey: number): void {
   const { b, L, P, parts } = c;
   const { rects, ids } = spacesOf(b, storey);
   c.spaces = rects;
-  const wallT = WALL_THICKNESS[b.cls];
+  const wallT = outerWall(b, storey).thickness; // KB-I21: 0.30 m on Fachwerk storeys
   const cells = planCells(c.outline, rects, { outerThickness: wallT + 0.25, outerWall: wallT });
   const poly = (r: Rect) => rectPoly(r).map(([s, t]) => P(s, t));
   for (const v of cells.voids) parts.push(path(poly(v), true, { class: 'void' }));
@@ -217,7 +219,7 @@ function drawRooms(c: Ctx, storey: number): void {
   parts.push(path(rectPoly(c.outline).map(([s, t]) => P(s, t)), true, { class: 'pen-xl' }));
 
   // openings: facade (layout) then interior (catalogue)
-  for (const o of L.openings) if (o.storey === storey) facadeOpening(c, o.side, o.a, o.width, o.kind);
+  for (const o of L.openings) if (o.storey === storey) facadeOpening(c, o.side, o.a, o.width, o.kind, storey);
   for (const o of b.openings ?? []) if (o.storey === storey) interiorOpening(c, o, ids);
   freitreppen(c, storey);
   for (const st of b.stairs ?? []) if (storey === st.storey_from || storey === st.storey_to) drawStair(c, st, storey);
@@ -226,13 +228,13 @@ function drawRooms(c: Ctx, storey: number): void {
 }
 
 /** Opening in an exterior side (white-out of the wall, window / door symbol). */
-function facadeOpening(c: Ctx, side: SideName, a: number, w: number, kind: string): void {
+function facadeOpening(c: Ctx, side: SideName, a: number, w: number, kind: string, storey?: number): void {
   const { L, P, parts } = c;
   const sd = L.frame.sides[side];
   const tan = sd.tangent;
   const nin: ST = [-sd.normal[0], -sd.normal[1]];
   const face = sidePoint(L.frame, side, a, 0);
-  const D = wallDepth(add(face, nin, 0.01), nin, c.spaces, 2.6, WALL_THICKNESS[c.b.cls]) + 0.01;
+  const D = wallDepth(add(face, nin, 0.01), nin, c.spaces, 2.6, storey === undefined ? WALL_THICKNESS[c.b.cls] : outerWall(c.b, storey).thickness) + 0.01;
   const pA = add(face, tan, -w / 2);
   const pB = add(face, tan, w / 2);
   const iA = add(pA, nin, D);
@@ -288,7 +290,7 @@ function interiorOpening(c: Ctx, o: Opening, ids: Map<string, Rect>): void {
   const { P, parts } = c;
   const Pp = (q: ST) => P(q[0], q[1]);
   if (o.wall.kind === 'side') {
-    facadeOpening(c, o.wall.side, o.a, o.width, o.kind);
+    facadeOpening(c, o.wall.side, o.a, o.width, o.kind, o.storey);
     return;
   }
   let p0: ST;
@@ -340,21 +342,76 @@ function interiorOpening(c: Ctx, o: Opening, ids: Map<string, Rect>): void {
   doorLeaves(parts, Pp, hA, hB, into, u, w, o.kind === 'double_door' ? 2 : 1);
 }
 
-/** Exterior Freitreppe in front of portals with steps (entrance storey only). */
+/**
+ * Exterior Freitreppe in front of portals with steps (entrance storey only); the main perron uses the 3D numbers
+ * (freitreppePlan: width, landing, treads, cheeks, pedestals; wave-8 review fix KB-I72). Also the columned porch of a
+ * Durchfahrt (columns cut, balcony deck above dashed) and continuous balconies on upper storeys (dashed, above the cut).
+ */
 function freitreppen(c: Ctx, storey: number): void {
   const { L, P, parts } = c;
   const Pp = (q: ST) => P(q[0], q[1]);
   for (const o of L.openings) {
-    if (o.storey !== storey || !o.steps) continue;
+    if (o.storey !== storey) continue;
     const sd = L.frame.sides[o.side];
     const out: ST = [sd.normal[0], sd.normal[1]];
     const tan = sd.tangent;
+    // the stair / porch starts at the wall face, in front of a risalit where there is one (as in 3D)
+    const rr = L.sides[o.side]?.risalits.find((r) => o.a >= r.a0 && o.a <= r.a1);
+    const face = sidePoint(L.frame, o.side, o.a, rr ? (rr.risalit.projection ?? 0) : 0);
+    const corner = (dx: number, dy: number) => Pp(add(add(face, tan, dx), out, dy));
+    const rectAt = (x0: number, x1: number, y0: number, y1: number) => [corner(x0, y0), corner(x1, y0), corner(x1, y1), corner(x0, y1)];
+    if (o.kind === 'durchfahrt' && o.portico) {
+      const PP = PASSAGE_PORTICO;
+      const cw = PP.columnDiameter;
+      const pairs = Math.max(1, Math.round(o.portico.columns / 2));
+      const xs: number[] = [];
+      for (const sg of [-1, 1]) for (let i = 0; i < pairs; i++) xs.push(sg * (o.width / 2 + PP.inner + cw / 2 + i * PP.pair));
+      const tc = o.portico.depth - cw / 2 - 0.15;
+      for (const x of xs) {
+        parts.push(path(rectAt(x - cw * 0.7, x + cw * 0.7, tc - cw * 0.7, tc + cw * 0.7), true, { class: 'pen-xs', fill: 'none' }));
+        parts.push(circle(corner(x, tc), (cw / 2) * c.k, { class: 'pen-m', fill: '#222' }));
+      }
+      const e0 = Math.min(...xs) - cw / 2 - 0.15;
+      const e1 = Math.max(...xs) + cw / 2 + 0.15;
+      parts.push(path(rectAt(e0, e1, 0, o.portico.depth), true, { class: 'pen-s hid', fill: 'none' }));
+      c.labels.push(text(corner(e1 + 0.4, o.portico.depth / 2), 'Säulenvorbau mit Balkon', { size: 1.6, class: 'halo' }));
+      continue;
+    }
+    if (o.balconyRun) {
+      const r = o.balconyRun;
+      const x0 = r.a0 - o.a;
+      const x1 = r.a1 - o.a;
+      parts.push(path(rectAt(x0, x1, 0, r.depth), true, { class: 'pen-s hid', fill: 'none' }));
+      c.labels.push(text(corner(x1 + 0.4, r.depth / 2), 'Balkon', { size: 1.6, class: 'halo' }));
+      continue;
+    }
+    if (!o.steps) continue;
+    const fp = freitreppePlan(o);
+    const n = o.steps;
+    if (fp?.main) {
+      const hw = fp.halfWidth;
+      parts.push(path(rectAt(-hw, hw, 0, fp.depth), true, { fill: '#fff', class: 'pen-m' }));
+      for (let i = 0; i < n - 1; i++) {
+        const y = fp.landing + i * fp.tread;
+        parts.push(line(corner(-hw, y), corner(hw, y), { class: 'pen-xs' }));
+      }
+      for (const sg of [-1, 1]) {
+        const x0 = sg * hw;
+        const x1 = sg * (hw + fp.cheek);
+        parts.push(path(rectAt(Math.min(x0, x1), Math.max(x0, x1), 0, fp.depth), true, { fill: '#efe9e6', class: 'pen-s' }));
+        if (fp.pedestal) {
+          const [pw, pd] = fp.pedestal;
+          const pc = (x0 + x1) / 2;
+          parts.push(path(rectAt(pc - pw / 2, pc + pw / 2, fp.depth - pd, fp.depth), true, { fill: '#efe9e6', class: 'pen-m' }));
+        }
+      }
+      parts.push(line(corner(0, fp.depth - 0.2), corner(0, 0.4), { class: 'pen-xs', 'marker-end': 'url(#arrow)' }));
+      c.labels.push(text(corner(hw + fp.cheek + 0.4, fp.depth / 2), `Freitreppe ${n} Stg.`, { size: 1.6, class: 'halo' }));
+      continue;
+    }
     const tread = 0.4;
     const width = o.width + 1.6;
-    const face = sidePoint(L.frame, o.side, o.a, 0);
-    const n = o.steps;
     const depth = (n - 1) * tread + 1.2; // top landing 1.2 m [N]
-    const corner = (dx: number, dy: number) => Pp(add(add(face, tan, dx), out, dy));
     parts.push(path([corner(-width / 2, 0), corner(width / 2, 0), corner(width / 2, depth), corner(-width / 2, depth)], true, { fill: '#fff', class: 'pen-m' }));
     for (let i = 0; i < n - 1; i++) {
       const y = 1.2 + i * tread;

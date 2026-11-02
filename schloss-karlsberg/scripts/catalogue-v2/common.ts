@@ -5,9 +5,9 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { gridFrame, type GridFrame } from '../../model/src/frame.ts';
+import type { GridFrame } from '../../model/src/frame.ts';
 import { closeRing, ensureCCW, minAreaRect, openRing, signedArea, type P2 } from '../../model/src/layout/geom.ts';
-import type { EN, GeoJsonGeometry, GroundDtm, PalaceGrid, RingEN } from '../../model/src/spec.ts';
+import type { EN, GeoJsonGeometry, GroundDtm, RingEN } from '../../model/src/spec.ts';
 
 export const ROOT = resolve(import.meta.dirname, '..', '..');
 
@@ -52,10 +52,6 @@ export function minRect(r: RingEN): { ring: RingEN; rectangularity: number; leng
 
 export function ringHash(r: RingEN | EN[]): string {
   return createHash('sha1').update(JSON.stringify(r)).digest('hex').slice(0, 12);
-}
-
-export function palaceGrid(pg: PalaceGrid): GridFrame {
-  return gridFrame(pg);
 }
 
 // ---------------------------------------------------------------------------------------------

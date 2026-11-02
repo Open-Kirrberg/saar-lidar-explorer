@@ -5,9 +5,10 @@
  */
 import type { BuildingLayout } from '../../../model/src/layout/building.ts';
 import { sidePoint, stToEN } from '../../../model/src/layout/footprint.ts';
-import { CORNICE, PORTICO } from '../../../model/src/layout/grammar.ts';
+import { ARTICULATION, BALCONY, PASSAGE_PORTICO, PORTAL_FRAME, PORTICO, glazingLayout } from '../../../model/src/layout/grammar.ts';
 import { wallFreeSpans } from '../../../model/src/layout/walls.ts';
-import type { FacadeOpening } from '../../../model/src/layout/facade.ts';
+import { inScene } from '../../../model/src/layout/epoch.ts';
+import { type FacadeOpening, freitreppePlan } from '../../../model/src/layout/facade.ts';
 import { pointAlong } from '../../../model/src/layout/geom.ts';
 import { enToST } from '../../../model/src/layout/footprint.ts';
 import { pointInPolygon } from '../../../model/src/layout/geom.ts';
@@ -110,13 +111,16 @@ function drawBuilding(L: BuildingLayout, v: ElevView, detail: 'full' | 'simple',
     const quad = (h0: number, h1: number) => [P3(sd.p0[0], sd.p0[1], h0), P3(sd.p1[0], sd.p1[1], h0), P3(sd.p1[0], sd.p1[1], h1), P3(sd.p0[0], sd.p0[1], h1)];
     parts.push(path(quad(bottom, eaves), true, { fill: '#fff', class: 'pen-l' }));
     parts.push(path(quad(bottom, plinthTop), true, { fill: '#f2e6e0', class: 'pen-s' }));
-    const ch = (CORNICE as Record<string, { height: number }>)[cls]?.height ?? CORNICE.default.height;
+    // main cornice: the same member as the 3D exterior (KB-I17: one continuous palace cornice, L.members)
+    const ch = L.members.cornice.height;
     parts.push(line(P3(sd.p0[0], sd.p0[1], eaves - ch), P3(sd.p1[0], sd.p1[1], eaves - ch), { class: 'pen-s' }));
     parts.push(line(P3(sd.p0[0], sd.p0[1], eaves - ch * 0.45), P3(sd.p1[0], sd.p1[1], eaves - ch * 0.45), { class: 'pen-xs' }));
-    // string course at the upper floors
-    for (const lv of L.stack.levels) {
-      if (lv.kind === 'plinth' || lv.floor_h <= plinthTop + 0.01) continue;
-      parts.push(line(P3(sd.p0[0], sd.p0[1], lv.floor_h - 0.1), P3(sd.p1[0], sd.p1[1], lv.floor_h - 0.1), { class: 'pen-xs' }));
+    // string course at the upper floors: only where the 3D exterior draws one (KB-I17: CdL only)
+    if (L.members.stringCourse) {
+      for (const lv of L.stack.levels) {
+        if (lv.kind === 'plinth' || lv.floor_h <= plinthTop + 0.01) continue;
+        parts.push(line(P3(sd.p0[0], sd.p0[1], lv.floor_h - 0.1), P3(sd.p1[0], sd.p1[1], lv.floor_h - 0.1), { class: 'pen-xs' }));
+      }
     }
     // risalits
     const lay = L.sides[side];
@@ -129,10 +133,12 @@ function drawBuilding(L: BuildingLayout, v: ElevView, detail: 'full' | 'simple',
     }
     for (const o of L.openings) {
       if (o.side !== side) continue;
-      parts.push(openingElev(f, side, o.a, o.width, o.bottom_h, o.top_h, o.head, o.kind, P3, detail));
+      parts.push(openingElev(f, side, o.a, o.width, o.bottom_h, o.top_h, o.head, o.kind, P3, detail, cls, o.row));
     }
     // Freitreppen / perrons and porticos in front of the portals (same layout portals as the 3D exterior)
     for (const o of L.openings) if (o.side === side && (o.steps ?? 0) > 0) parts.push(stepsElev(L, side, o, P3));
+    // wave-8 review fix (KB-I72): portal frame, passage porch and continuous balconies, as the 3D exterior draws them
+    for (const o of L.openings) if (o.side === side) parts.push(portalExtrasElev(L, side, o, P3));
   }
   // roof
   const roof = buildingRoof(L);
@@ -175,7 +181,8 @@ export function stepsElev(L: BuildingLayout, side: SideName, o: FacadeOpening, P
   const risalit = L.sides[side].risalits.find((r) => o.a >= r.a0 && o.a <= r.a1);
   const d = (risalit?.risalit.projection ?? 0) + 0.12;
   const por = o.portico;
-  const w = por ? o.width + PORTICO.stairWidthExtra + 2 * PORTICO.columnDiameter + 1.2 : o.width + 1.2;
+  const fp = freitreppePlan(o);
+  const w = por ? o.width + PORTICO.stairWidthExtra + 2 * PORTICO.columnDiameter + 1.2 : fp ? fp.halfWidth * 2 : o.width + 1.2;
   const pt = (a: number, h: number): P2 => {
     const q = sidePoint(f, side, a, d);
     return P3(q[0], q[1], h);
@@ -185,7 +192,21 @@ export function stepsElev(L: BuildingLayout, side: SideName, o: FacadeOpening, P
   const a1 = o.a + w / 2;
   parts.push(path([pt(a0, base), pt(a1, base), pt(a1, o.bottom_h), pt(a0, o.bottom_h)], true, { fill: '#f2e6e0', class: 'pen-m' }));
   for (let i = 1; i < n; i++) parts.push(line(pt(a0, base + i * rise), pt(a1, base + i * rise), { class: 'pen-xs' }));
-  for (const [x0, x1] of [[a0 - 0.35, a0], [a1, a1 + 0.35]]) parts.push(path([pt(x0, base), pt(x1, base), pt(x1, o.bottom_h + 0.15), pt(x0, o.bottom_h + 0.15)], true, { fill: '#f2e6e0', class: 'pen-s' }));
+  const ch = fp?.cheek ?? 0.35;
+  const above = fp?.cheekAbove ?? 0.15;
+  if (fp?.main) {
+    // wave-8 review fix (KB-I72): main perron: cheeks stepped with the treads (seen head-on: their top at the
+    // landing), foot pedestals in front
+    for (const [x0, x1] of [[a0 - ch, a0], [a1, a1 + ch]]) parts.push(path([pt(x0, base), pt(x1, base), pt(x1, o.bottom_h + above), pt(x0, o.bottom_h + above)], true, { fill: '#efe9e6', class: 'pen-s' }));
+    if (fp.pedestal) {
+      const [pw, , ph] = fp.pedestal;
+      const ptF = (a: number, h: number): P2 => {
+        const q = sidePoint(f, side, a, d + fp.depth);
+        return P3(q[0], q[1], h);
+      };
+      for (const c of [a0 - ch / 2, a1 + ch / 2]) parts.push(path([ptF(c - pw / 2, base), ptF(c + pw / 2, base), ptF(c + pw / 2, base + ph + 0.1), ptF(c - pw / 2, base + ph + 0.1)], true, { fill: '#efe9e6', class: 'pen-m' }));
+    }
+  } else for (const [x0, x1] of [[a0 - ch, a0], [a1, a1 + ch]]) parts.push(path([pt(x0, base), pt(x1, base), pt(x1, o.bottom_h + above), pt(x0, o.bottom_h + above)], true, { fill: '#f2e6e0', class: 'pen-s' }));
   if (por) {
     const top = o.top_h + 0.3;
     const cw = PORTICO.columnDiameter;
@@ -209,6 +230,69 @@ export function stepsElev(L: BuildingLayout, side: SideName, o: FacadeOpening, P
     }
   }
   return g({ class: 'steps' }, ...parts);
+}
+
+/**
+ * Wave-8 review fix (KB-I72): what the 3D exterior adds round an opening besides its stair (exterior/facade.ts):
+ * the sandstone PORTAL_FRAME of a portal without portico, the columned porch of a Durchfahrt (PASSAGE_PORTICO) and
+ * a continuous balcony across a porte-fenêtre run (BALCONY). Seen head-on.
+ */
+export function portalExtrasElev(L: BuildingLayout, side: SideName, o: FacadeOpening, P3: (s: number, t: number, h: number) => P2): string {
+  const f = L.frame;
+  const risalit = L.sides[side].risalits.find((r) => o.a >= r.a0 && o.a <= r.a1);
+  const d0 = risalit?.risalit.projection ?? 0;
+  const at = (a: number, h: number, d = d0): P2 => {
+    const q = sidePoint(f, side, a, d);
+    return P3(q[0], q[1], h);
+  };
+  const box = (x0: number, x1: number, h0: number, h1: number, d: number, fill: string, cls = 'pen-s') => path([at(x0, h0, d), at(x1, h0, d), at(x1, h1, d), at(x0, h1, d)], true, { fill, class: cls });
+  const parts: string[] = [];
+  const sf = ARTICULATION.surround.face;
+  if (o.kind === 'portal' && !o.portico) {
+    const P = PORTAL_FRAME;
+    const crown = o.top_h + sf;
+    const top = crown + P.above;
+    const l0 = o.a - o.width / 2 - sf - P.pilaster;
+    const l1 = o.a + o.width / 2 + sf + P.pilaster;
+    parts.push(box(l0, o.a - o.width / 2 - sf, o.bottom_h, top, d0 + 0.1, '#efe9e6'));
+    parts.push(box(o.a + o.width / 2 + sf, l1, o.bottom_h, top, d0 + 0.1, '#efe9e6'));
+    parts.push(box(l0 - 0.05, l1 + 0.05, top, top + P.frieze, d0 + 0.12, '#efe9e6'));
+    parts.push(box(l0 - 0.15, l1 + 0.15, top + P.frieze, top + P.frieze + P.cornice, d0 + 0.2, '#efe9e6', 'pen-m'));
+  }
+  const railing = (x0: number, x1: number, deck: number, h: number, d: number) => {
+    parts.push(path([at(x0, deck, d), at(x1, deck, d), at(x1, deck + h, d), at(x0, deck + h, d)], true, { fill: 'none', class: 'pen-s' }));
+    for (let x = x0 + 0.25; x < x1 - 0.1; x += 0.3) parts.push(line(at(x, deck + 0.1, d), at(x, deck + h - 0.08, d), { class: 'pen-xs grey' }));
+  };
+  if (o.kind === 'durchfahrt' && o.portico) {
+    const P = PASSAGE_PORTICO;
+    const p = o.portico;
+    const deck = p.deck_h ?? o.top_h + P.entablature + P.slab;
+    const cw = P.columnDiameter;
+    const dd = d0 + p.depth;
+    const pairs = Math.max(1, Math.round(p.columns / 2));
+    const xs: number[] = [];
+    for (const sg of [-1, 1]) for (let i = 0; i < pairs; i++) xs.push(o.a + sg * (o.width / 2 + P.inner + cw / 2 + i * P.pair));
+    const e0 = Math.min(...xs) - cw / 2 - 0.15;
+    const e1 = Math.max(...xs) + cw / 2 + 0.15;
+    const base = o.grade_h ?? L.stack.base_h;
+    const entB = deck - P.slab - P.entablature;
+    for (const c of xs) {
+      parts.push(box(c - cw * 0.7, c + cw * 0.7, base, base + P.pedestal, dd, '#efe9e6'));
+      parts.push(path([at(c - cw / 2, base + P.pedestal, dd), at(c + cw / 2, base + P.pedestal, dd), at(c + cw * 0.42, entB, dd), at(c - cw * 0.42, entB, dd)], true, { fill: '#fff', class: 'pen-s' }));
+    }
+    parts.push(box(e0, e1, entB, deck - P.slab, dd, '#fff', 'pen-m'));
+    parts.push(box(e0 - 0.12, e1 + 0.12, deck - P.slab, deck, dd, '#efe9e6', 'pen-m'));
+    if (p.balcony) railing(e0 - 0.05, e1 + 0.05, deck, P.railing, dd);
+  }
+  if (o.balconyRun) {
+    const r = o.balconyRun;
+    const B = BALCONY;
+    const deck = o.bottom_h;
+    const dd = d0 + r.depth;
+    parts.push(box(r.a0, r.a1, deck - B.slab, deck, dd, '#efe9e6', 'pen-m'));
+    railing(r.a0 + 0.04, r.a1 - 0.04, deck, B.railing, dd);
+  }
+  return parts.length ? g({ class: 'extras' }, ...parts) : '';
 }
 
 function faceTowardViewer(pts: V3[], f: BuildingLayout['frame'], v: ElevView): boolean {
@@ -253,6 +337,8 @@ function openingElev(
   kind: string,
   P3: (s: number, t: number, h: number) => P2,
   detail: 'full' | 'simple',
+  cls: BuildingLayout['building']['cls'],
+  row: FacadeOpening['row'],
 ): string {
   const l = sidePoint(f, side, a - w / 2, 0);
   const r = sidePoint(f, side, a + w / 2, 0);
@@ -280,16 +366,29 @@ function openingElev(
   }
   const glass = kind === 'window' || kind === 'porte_fenetre' || kind === 'cellar_window' || kind === 'stall_window' || kind === 'oculus';
   parts.push(`<path d="${outline.replace(/(\d+\.\d{3})\d+/g, '$1')}" class="pen-m" style="fill:${glass ? '#eef1f4' : '#f7f3ee'}"/>`);
-  if (detail === 'full' && wp > 1.2) {
+  if (detail === 'full' && wp > 1.2 && kind !== 'cellar_window' && kind !== 'oculus') {
     const cx = (pl0[0] + pr0[0]) / 2;
     if (glass) {
-      // casement meeting rail + transom + glazing bars (pane ≈ 0.5 m)
-      parts.push(line([cx, pl0[1]], [cx, springY], { class: 'pen-xs' }));
+      // French casement (KB-I16, the 3D glazingLayout): meeting stile on two leaves, transom only on tall windows,
+      // glazing bars per class (pane rows; pane columns only where they stay legible at the sheet scale)
       const kpm = wp / w;
-      const panes = Math.max(1, Math.round((h1 - h0) / 0.55));
-      for (let i = 1; i < panes; i++) {
-        const y = pl0[1] - ((h1 - h0) * kpm * i) / panes;
-        if (y > springY + 0.2) parts.push(line([pl0[0] + 0.25, y], [pr0[0] - 0.25, y], { class: 'pen-xs grey' }));
+      const rise = (springY - pl1[1]) / kpm;
+      const hRect = h1 - h0 - rise;
+      const gl = glazingLayout(cls, row, w, hRect, rise);
+      const yAt = (hh: number) => pl0[1] - hh * kpm;
+      const top = gl.transom !== null ? yAt(gl.transom) : springY;
+      if (gl.leaves === 2) parts.push(line([cx, pl0[1]], [cx, top], { class: 'pen-xs' }));
+      if (gl.transom !== null) parts.push(line([pl0[0], top], [pr0[0], top], { class: 'pen-xs' }));
+      const low = gl.transom ?? hRect;
+      const bars = (y: number) => parts.push(line([pl0[0] + 0.25, y], [pr0[0] - 0.25, y], { class: 'pen-xs grey' }));
+      for (let i = 1; i < gl.rowsLow; i++) bars(yAt((low * i) / gl.rowsLow));
+      for (let i = 1; i < gl.rowsTop; i++) bars(yAt(low + ((hRect - low) * i) / gl.rowsTop));
+      if (wp / gl.cols > 0.8) {
+        for (let i = 1; i < gl.cols; i++) {
+          if (gl.leaves === 2 && i * 2 === gl.cols) continue;
+          const x = pl0[0] + (wp * i) / gl.cols;
+          parts.push(line([x, pl0[1]], [x, top], { class: 'pen-xs grey' }));
+        }
       }
     } else {
       parts.push(line([cx, pl0[1]], [cx, springY], { class: 'pen-s' }));
@@ -333,7 +432,7 @@ const LEVEL_KINDS = new Set(['court', 'terrace', 'parterre', 'rondell', 'island'
 
 /** 1789 ground: level of the most specific (smallest) levelled terrain feature, else today's DTM. */
 export function ground1789(spec: SiteSpec, dtm: Dtm | null): (E: number, N: number) => { h: number; src: 'level' | 'dtm'; id?: string } {
-  const polys = spec.terrain_features
+  const polys = inScene(spec.terrain_features)
     .filter((f) => LEVEL_KINDS.has(f.kind) && f.level !== undefined && f.geometry.type === 'Polygon')
     .map((f) => ({ f, ring: (f.geometry as { coordinates: EN[][] }).coordinates[0], area: Math.abs(areaEN((f.geometry as { coordinates: EN[][] }).coordinates[0])) }))
     .sort((a, b) => a.area - b.area);

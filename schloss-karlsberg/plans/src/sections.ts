@@ -42,7 +42,7 @@ export function sectionDefs(spec: SiteSpec): SectionDef[] {
     },
     {
       id: 'B',
-      title: 'Querschnitt B–B durch Vestibül und Prunktreppe (Kaiserstiege), Blick nach Westen',
+      title: 'Schnitt B–B quer zur Hofachse, längs durch den Corps de logis: Vestibül und Prunktreppe (Kaiserstiege), Blick nach Westen',
       building: 'KB-B01',
       along: 's',
       at: 0,

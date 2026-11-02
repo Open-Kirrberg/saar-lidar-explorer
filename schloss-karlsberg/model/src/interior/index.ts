@@ -12,18 +12,21 @@
  *   userData.warnings  : string[]
  * Every mesh carries { buildingId, part, lod, roomId, name_de, evidence, tag }; instanced
  * furniture carries userData.instances[instanceId] = { roomId, name_de, evidence, tag }.
+ * Every visible mesh receives shadows; only room walls, cornices and ceilings cast (interiorShadows).
  * Empty group for interior 'none', unplaced buildings, hidden hypothetical ones and lod < 2.
  */
 import * as THREE from 'three';
 import type { BuildInteriorFn } from '../api.ts';
 import { isPlaced } from '../spec.ts';
+import { inEpoch } from '../layout/epoch.ts';
 import { buildFixture } from './fixtures.ts';
 import { InstanceRegistry } from './furniture.ts';
 import { Tints } from './materials.ts';
 import { Accumulator, ColliderBucket, O, type PartInfo, placeMatrix } from './mesh.ts';
 import { interiorModel } from './model.ts';
 import { INSTANCED_KINDS, type InstancedKind } from './programme.ts';
-import { buildShell } from './shell.ts';
+import { buildShell, materialOr } from './shell.ts';
+import { silkHue } from './finish.ts';
 import { buildStair } from './stairs3d.ts';
 
 export const buildInterior: BuildInteriorFn = (b, ctx) => {
@@ -32,6 +35,7 @@ export const buildInterior: BuildInteriorFn = (b, ctx) => {
   g.userData = { buildingId: b.id, part: 'interior', lod: ctx.lod, colliders: [], lights: [], pois: [], warnings: [], stats: { triangles: 0, meshes: 0, instances: 0 } };
   if (b.interior === 'none' || !isPlaced(b) || ctx.lod < 2) return g;
   if (b.placement === 'hypothetical' && !ctx.options.showHypothetical) return g;
+  if (!inEpoch(b.epoch, ctx.options.year)) return g; // KB-I03: not standing in the scene year
   if (b.cls === 'WALL' || b.cls === 'FARM_GROUP' || b.cls === 'GARD') return g;
 
   const layout = ctx.layout(b);
@@ -66,10 +70,14 @@ export const buildInterior: BuildInteriorFn = (b, ctx) => {
       tints,
       col,
       leavesDone,
+      rosettes: r.items.filter((it) => it.kind === 'chandelier').map((it) => it.pos),
     });
 
     // furnishing
     const columns: [number, number][] = [];
+    // the room's wall colour above the dado (what its mirrors reflect, finish.ts mirrorGrid)
+    const wn = materialOr(r.room.finish?.walls, 'wall.limewash');
+    const wallColour = silkHue(r.room.finish) ?? (wn === 'wall.boiserie' ? '#F1EFE8' : '#E6E1D5');
     for (const it of r.items) {
       const info = { roomId: r.room.id, name_de: it.name_de, evidence: it.evidence, tag: it.tag };
       if (INSTANCED_KINDS.has(it.kind)) {
@@ -85,7 +93,7 @@ export const buildInterior: BuildInteriorFn = (b, ctx) => {
           }
         }
       } else {
-        buildFixture(it, { acc, lib, tints, buildingId: b.id, roomId: r.room.id, floor_h: r.floor_h, ceiling_h: r.ceiling_h, colour: r.colour, state: r.grade === 'state' });
+        buildFixture(it, { acc, lib, tints, buildingId: b.id, roomId: r.room.id, floor_h: r.floor_h, ceiling_h: r.ceiling_h, colour: r.colour, state: r.grade === 'state', wall: wallColour });
         if (it.kind === 'column') {
           columns.push(it.pos);
           col.box([it.pos[0] - 0.36, r.floor_h, -it.pos[1] - 0.36], [it.pos[0] + 0.36, r.floor_h + 2.5, -it.pos[1] + 0.36]);
@@ -134,11 +142,13 @@ export const buildInterior: BuildInteriorFn = (b, ctx) => {
   const meshes = acc.meshes(2);
   for (const m of meshes) {
     triangles += (m.geometry.getIndex()?.count ?? 0) / 3;
+    interiorShadows(m);
     g.add(m);
   }
   const ims = inst.meshes();
   for (const im of ims) {
     triangles += ((im.geometry.getIndex()?.count ?? im.geometry.getAttribute('position').count) / 3) * im.count;
+    interiorShadows(im);
     g.add(im);
   }
   const colMesh = col.mesh(b.id, 'colliders', 'interior/collider');
@@ -162,6 +172,21 @@ export const buildInterior: BuildInteriorFn = (b, ctx) => {
   g.userData.stats = { triangles: Math.round(triangles), meshes: meshes.length + ims.length, instances: inst.count() };
   return g;
 };
+
+/** Interior parts that cast the sun's shadow: room walls, cornices and ceilings (see interiorShadows). */
+export const INTERIOR_SHADOW_CASTERS: ReadonlySet<string> = new Set(['interior/wand', 'interior/gesims', 'interior/decke']);
+
+/**
+ * Interior shadow policy (KB-I06, owned by the model since the wave-1 review; the viewer no longer overrides it):
+ * rooms RECEIVE the sun's shadow map, so daylight enters only through the openings. Only the room walls, cornices and
+ * ceilings CAST: the exterior shell's single-sided roofs drop out of the (back-face) shadow pass on the sun side, and
+ * without the ceilings the sun lit whole rooms through them (wave-1 review, pose 06). Furniture, fixtures and wall
+ * linings never cast (a second pass over ~100k triangles per building that adds nothing outside).
+ */
+export function interiorShadows(m: THREE.Mesh): void {
+  m.castShadow = INTERIOR_SHADOW_CASTERS.has(m.userData.part as string);
+  m.receiveShadow = true;
+}
 
 export { interiorModel } from './model.ts';
 export { createFallbackMaterials } from './materials.ts';

@@ -7,6 +7,7 @@ import { wallFreeSpans } from '../../../model/src/layout/walls.ts';
 import type { BuildingLayout } from '../../../model/src/layout/building.ts';
 import { sidePoint, stToEN } from '../../../model/src/layout/footprint.ts';
 import { raisedRoofs } from '../../../model/src/layout/raised.ts';
+import { inEpoch } from '../../../model/src/layout/epoch.ts';
 import type { Building, SideName, SiteSpec } from '../../../model/src/spec.ts';
 import { CONF_DE, evidenceNote, sourcesNote, sw, tagShort } from '../evidence.ts';
 import { dimChain, drawDimChain } from '../geom/dims.ts';
@@ -36,12 +37,13 @@ export function ansichtRequests(): AnsichtReq[] {
     { sheetNo: 'AN-01', slug: 'Ansicht_Hofseite_W', title: 'Ansicht Hofseite (Ehrenhof, von Westen)', subtitle: 'Corps de logis mit Kopfbauten von Süd- und Nordflügel', buildings: ['KB-B01', 'KB-B02', 'KB-B03'], main: 'KB-B01', side: 'court', groundOffset: 20 },
     { sheetNo: 'AN-02', slug: 'Ansicht_Gartenseite_O', title: 'Ansicht Gartenseite (von Osten)', subtitle: 'Corps de logis zwischen den Ostenden von Süd- und Nordflügel', buildings: ['KB-B01', 'KB-B02', 'KB-B03'], main: 'KB-B01', side: 'garden', groundOffset: 3 },
     { sheetNo: 'AN-03', slug: 'Ansicht_Suedfront', title: 'Ansicht Südfront (von Süden)', subtitle: 'Südflügel – Flügel der Herzogin, dahinter Corps de logis', buildings: ['KB-B02', 'KB-B01'], main: 'KB-B02', side: 'garden', groundOffset: 4 },
-    { sheetNo: 'AN-04', slug: 'Ansicht_Orangerie_W', title: 'Ansicht Orangerie (Talseite, von Westen)', subtitle: 'Orangerie-Hauptflügel mit hohem Kellergeschoss, Stützmauer, Seitenflügel und Rotunde', buildings: ['KB-B10', 'KB-B11', 'KB-B12', 'KB-B13', 'KB-B14'], main: 'KB-B10', side: 'garden', groundOffset: 3 },
+    { sheetNo: 'AN-04', slug: 'Ansicht_Orangerie_W', title: 'Ansicht Orangerie (Talseite, von Westen)', subtitle: 'Orangerie-Hauptflügel mit hohem Kellergeschoss, Stützmauer und Seitenflügeln (Stand 1789: ohne die Festrotunde von 1785)', buildings: ['KB-B10', 'KB-B11', 'KB-B12', 'KB-B14'], main: 'KB-B10', side: 'garden', groundOffset: 3 },
   ];
 }
 
 export function ansichtSheet(spec: SiteSpec, layoutOf: (b: Building) => BuildingLayout, r: AnsichtReq): Sheet {
-  const bs = r.buildings.map((id) => spec.buildings.find((b) => b.id === id)!).filter(Boolean);
+  // KB-I03: only buildings standing in the scene year (default 1789)
+  const bs = r.buildings.map((id) => spec.buildings.find((b) => b.id === id)!).filter((b) => b && inEpoch(b.epoch));
   const Ls = bs.map(layoutOf);
   const M = layoutOf(spec.buildings.find((b) => b.id === r.main)!);
   const sd = M.frame.sides[r.side];

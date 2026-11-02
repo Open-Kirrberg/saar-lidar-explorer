@@ -32,7 +32,7 @@ three-mesh-bvh 0.9.16 (peer `three >= 0.159`), vite 8.3.5, typescript 7.0.2, vit
 | `pnpm run test` | vitest (`model/tests`, `plans/tests`, `viewer/tests`) |
 | `pnpm run export` | `tsx scripts/export-glb.ts` → `model/out/` |
 | `pnpm run export:explorer` | `tsx scripts/export-explorer.ts` → `../app/public/data/shared/karlsberg1789/` (light layer `sle-recon-v1`, see `docs/explorer-integration.md`) |
-| `pnpm run plans` | `tsx plans/src/main.ts` (stub) |
+| `pnpm run plans` | `tsx plans/src/main.ts` → 30 sheets in `plans/out/`, PNG previews in `docs/plans-preview/` |
 | `pnpm run textures` | `bash scripts/fetch-textures.sh` |
 
 **Imports.** The viewer imports the model as `@model/...` (alias to `model/src`, also in tsconfig `paths`) or by
@@ -50,10 +50,10 @@ relative path. Vite `server.fs.allow` covers the whole sub-project. Use explicit
 | `model/src/layout/**` | core | pure layout; **no three imports** |
 | `model/src/context.ts`, `model/src/api.ts`, `model/src/index.ts` | core | BuildContext, material names, function types |
 | `model/tests/**` | core (+ anyone adding tests for core code) | vitest |
-| `scripts/**` | core; `export-glb.ts` will be filled by **exterior** | |
-| `model/src/exterior/**`, `model/src/site/**`, `viewer/**` | **exterior + viewer** package | `viewer/src/main.ts` is a placeholder (cube) |
-| `model/src/interior/**` | **interiors** package | `index.ts` is a stub returning an empty Group |
-| `plans/**` | **plans** package | `plans/src/main.ts` is a stub |
+| `scripts/**` | core; `export-glb.ts` and `export-explorer.ts` by **exterior** | |
+| `model/src/exterior/**`, `model/src/site/**`, `viewer/**` | **exterior + viewer** package | `viewer/src/main.ts` wires the viewer |
+| `model/src/interior/**` | **interiors** package | `index.ts`: `buildInterior` |
+| `plans/**` | **plans** package | `plans/src/main.ts`: CLI over `generatePlans` |
 | `viewer/public/textures/` | git-ignored, filled by `scripts/fetch-textures.sh` | manifest: `viewer/textures.json` (committed) |
 | `model/out/`, `dist/`, `node_modules/` | git-ignored build output | |
 
@@ -134,6 +134,71 @@ The viewer can mix LODs per building by distance. The export writes LOD0 and LOD
   `spec.defaults.*`. Use `materials.tinted(name, colour)` for them.
 - `MATERIAL_TEXTURE` maps material names to the texture sets in `viewer/textures.json`.
 - Low-confidence parts can use `hypothesis` (evidence style).
+- **Exterior palette (KB-I15, research/09 §3.7):** `render.member` (additive, `#B9B8B2`, render texture, not ashlar) is
+  painted render for Lisenen, bands, surrounds, sills, window caps and the cornice on court buildings [D→ Koblenz; I].
+  `exterior/index.ts palette()` picks the member material: `facade.members_material` (`'render' | 'stone'`, default
+  `stone` for FARM, FARM_GROUP, RIDE and STABLE, `render` otherwise); a red member hex (`#A…`, `#9…`, `#8…`) still
+  means red ashlar (`stone.red`). Exposed sandstone appears only at plinths and steps (`plinth_colour`, `stone.red`)
+  and at portals, Durchfahrten, porticos and gate piers (`palette().stone` = `stone.grey` in `facade.portal_colour`,
+  palace default LC grey-pink `#BFAEA5`). Colours: `wood.shutter` `#5F6F7A` (court buildings and court-town ranges;
+  farm `#3F5A3A`, stables `#6E2E26` via `shutter_colour`), `roof.slate` `#4A525C`, `metal.iron` `#2E3439`.
+- **Finish variation and baked AO (KB-I19/I20, `exterior/shade.ts`, pure):** the exterior `GeoBuilder({ bake: true })`
+  writes a per-vertex `aShade` attribute (Uint16 normalised RGBA: rgb = albedo multiplier / `SHADE_RGB_MAX` 4,
+  a = ambient occlusion). It carries per-building limewash luminance (±3 %, `buildingLum`), slate/tile jitter
+  (`roofTint`), per-block sandstone hues following the `sandstone_ashlar` texture joints (`ASHLAR`, `ashlarBlocks`,
+  `blockTint`; every block ±5 % value and at most a 12 % hue step toward yellow-grey, LOD2 only; the ashlar
+  texture maps to 3 × 1.8 m (`TEXTURE_SIZE` in `materials/index.ts`), so courses are 0.36 m), grime under cornices and sills, and AO in
+  reveals (darker toward the joinery and never lighter than the wall zone they are cut into, `revealCornerAO`; plinth
+  reveals also take `REVEAL_GRIME.stone` 0.7 albedo), under cornices (`CORNICE_AO`), at the wall foot and plinth ledge and at
+  dormer cheeks. Walls are split at the AO/grime break heights (`wallBreaks`) so vertex interpolation reproduces the
+  profiles. Meshes with `aShade` use `materials.baked(name, colour?)` (optional in `MaterialLibrary`): the albedo is
+  multiplied by rgb, AO darkens the indirect light fully and the direct light by `BAKED_AO_DIRECT` (0.3). The limewash
+  base follows `facade.build_year` (catalogue, set by `scripts/catalogue-v2/buildings.ts`): warm `#EDE6D8` up to
+  1780, cool `#E6E6E2` from 1786 (`limewashColour`). `glass.crown` is tinted green-grey `#22302C` (M6); at LOD2 each
+  casement leaf (and top light) gets a slightly jittered normal (±1.5°) so the leaves catch the sky differently.
+  Seen from outside (camera on the side of the outward normals), `glassPatch` (`GLASS_LOOK`) makes the pane cover
+  85 % of the view with a dark room proxy lit by the facade's own irradiance (sky × AO, 30 % of the sun) and adds the
+  reflections without the alpha dimming them, so shaded glass stays darker than the wall whatever is (or is not) built
+  behind it; from inside the glass keeps its plain transparent look, dimmed by the shared uniform `glassView`
+  (exported from `materials/index.ts`, default 1; the viewer sets it per frame indoors to its window pull, KB-I75).
+  Wave 7 (KB-I42 interior mapping): panes that carry the optional vertex attributes `aWin` (x along the facade from
+  the window centre, y up from the window bottom, window half width, window height; m), `aRoom` (depth to the back
+  wall, mode 1 room / 2 room with pictures / 3 dark cavity, open share between the curtains, sRGB 5-6-5 wall colour +
+  65536 · curtain kind 0 white muslin / 1 cream muslin / 2 the room's silk) and `aRoom2` (side walls left / right of
+  the window axis, floor below and ceiling above the window bottom; m) show a box room cast per pixel instead of the
+  flat proxy (`GLASS_LOOK.interior`: curtains, parquet, ceiling, cavity, gain 0.2, saturation, fallback room), fully
+  opaque. The viewer writes them on LOD2 panes (`viewer/src/night.ts`) from the **catalogue room behind each window**
+  (`viewer/src/windowRooms.ts`: its polygon gives depth and side walls, its storey floor and ceiling, its finish the wall
+  colour; curtains per room in ~35 %; roof glass, service rooms and windows without a room get the dark cavity); every
+  other consumer (glb export, explorer layer, LOD0/1) leaves them zero and keeps the proxy. Box-shaped glass (both
+  faces drawn) gets `aWin.z` −1 on the outer and −2 on the room-side faces; −2 never counts as seen from outside
+  (KB-I70). The outside test uses the unflipped normal: three.js draws a transparent double-sided material in two
+  passes and negates `vNormal` under `FLIP_SIDED` in the back-face pass (wave-7 review: from inside a room its own
+  panes tested as outside and showed the opaque mapped room).
+  The model glbs keep the attribute as `_ASHADE`; the explorer light layer bakes it into `COLOR_0` (§6).
+- **Water (KB-I37):** `waterPatch(m)` (materials/index.ts, applied to `water` and to basin clones) tilts the normal by
+  `WATER_RIPPLE_GLSL` (time from the shared `waterTime` uniform, advanced by the viewer; `skbRippleLod` fades waves finer
+  than the pixel footprint, KB-I69) and writes **alpha 0**, the
+  marker by which the viewer's post chain finds water pixels for its screen-space reflection. Opaque materials must
+  keep alpha 1 in the scene target. `water.bank` (multiply blend, keeps the target's alpha) and `water.spray` (points)
+  are viewer-only looks from `site/water.ts`; the explorer light layer exports neither (only `stone.*` site parts).
+  Wave 9: ponds with a natural bank (`naturalShore(f)`, `site/shore.ts`; the terrain is graded by
+  `scripts/prepare-terrain.py` `natural_shores`) draw their water as `shoreWater(ring, level, terrain)`: a grid on the
+  terrain's own 1 m vertices (x, z = k + 0.5) over the ring grown by `SHORE.reach`, so the terrain contour is the shore;
+  a `water` clone with `vertexColors` (shallow tint by depth) that keeps the `waterPatch` marker; no `water.bank`.
+  Wave-9 review fix: each shore vertex also carries `aDepth` (level − ground, unclamped); the clone fades in over the
+  first `SHORE.fade` m of depth (`shoreFade`) and is drawn transparent with custom blending (colour SrcAlpha /
+  OneMinusSrcAlpha, alpha Zero / OneMinusSrcAlpha), so the scene alpha is dst · (1 − fade): the water marker (< 0.25)
+  holds where the water is nearly opaque and the shallow rim lets the bank show through.
+- **Graded drives and the forecourt strip (wave-9 review fix, `site/drive.ts`):** a `path` LineString with `top`
+  (first vertex), `foot` (last), `width` **and** `wall_height` (0 = unwalled) is a drive on a straight grade
+  (`isDrive`; TF-35 with top/foot/width but no `wall_height` is not); `wall_height` > 0 adds sloping flank walls
+  (`driveWalls`, `DRIVE` in grammar.ts) while the fill exceeds `DRIVE.wallMinFill`, `access.ts` opens the terrace wall
+  across its top (`driveCuts`) and a fence across it is clipped (`clipOutsideDrives`). A path whose surface names a
+  forecourt is the forecourt strip (`isForecourt`). Both are drawn as draped gravel ribbons (`isDrapedWay`, the drive
+  on its graded plane) and are **not painted into the ground classes** (`prepare-terrain.py` `is_drive` /
+  `is_forecourt` grade the terrain only), so the viewer's seeded tree planners never see them; the grass blades keep
+  off every `isDrapedWay` path.
 
 ### 3.7 Object naming and userData
 - Names follow `<buildingId>/<part>[/<detail>]`, for example `KB-B01/roof`, `KB-B01/facade/court`,
@@ -172,13 +237,20 @@ parseEvidenceTags(note?: string): EvidenceTag[]
 |---|---|
 | Building | `court_toward`, `rooms?: Room[]`, `openings?: Opening[]`, `stairs?: Stair[]` |
 | Storey | `kind`, `floor_build_up` |
-| Roof | `type` normalised to `mansard \| hip \| gable \| flat \| pavilion \| cone \| dome \| mound \| none`, plus `cover`, `break_ratio`, `dome_rise_ratio`, `hipped_ends`, `raised[]` (raised centre with `turret`), structured `chimneys`, `dormers` |
-| Facade | `sides{court, garden, end_a, end_b: {axes, spacing, groups, from, to, blind}}`, `risalits[]`, `portals[]`, `shutter_type`, `members_colour`, `plinth_colour` |
-| Room | `{id, name_de, function, storey, polygon [s,t][], floor_h?, ceiling_h?, finish{floor, walls, ceiling}, tag, sources?}` |
+| Roof | `type` normalised to `mansard \| hip \| gable \| flat \| pavilion \| cone \| dome \| mound \| none`, plus `cover`, `break_ratio`, `dome_rise_ratio`, `dome_tiers` (2 = double-stepped dome with drum-head cornice and lantern, `steppedDomeSection`, GARDEN_DETAIL.steppedDome), `hipped_ends`, `raised[]` (raised centre with `turret`), structured `chimneys`, `dormers` |
+| Building, TerrainFeature | `epoch?: { from?, to? }` (KB-I03: years it stood, `to` inclusive, open ends) + `epoch_tag?` (evidence). Absent = stood throughout. Not `placement: 'hypothetical'` (= uncertain) |
+| Facade | `sides{court, garden, end_a, end_b: {axes, spacing, groups, from, to, blind}}`, `risalits[]`, `portals[]`, `shutter_type`, `members_colour`, `plinth_colour`, `members_material` (`render \| stone`, KB-I15), `portal_colour` (KB-I15), `rotunda?` (KB-I24: `{order, axis_azimuth, bays[door\|niche\|link], portico?{columns, width, depth, steps, pediment}, colonnade?{length, width, columns_per_side, floor_h, eaves_h, to?}}` on a round footprint), `glasshouse?` (wave 5: `{tag}` lean-to forcing house on a rect footprint with roof `none`; solid N back wall, S-sloped glazing, tiled back strip; exterior/glasshouse.ts, GARDEN_DETAIL.glasshouse); wave 6: `joinery_colour?` (KB-I28: `#RRGGBB` of window frames, glazing bars and door leaves, default `wood.frame` #E9E6DE / `wood.door`), `shutters_omit_storeys?` (KB-I28: storey indices whose windows get no shutters), `fachwerk?` (KB-I21: `{storeys?, tag}` rendered timber frame, absent `storeys` = every storey above plinth/basement; `layout/fachwerk.ts`), `menagerie?` (KB-I29: `{kind 'ring' \| 'rows' \| 'island' \| 'open_pavilion', ring?{centre, radius, houses, loge_azimuth?, roof 'pyramid', cover, moat_radius?}, island?{size, top_h, stair?}, rows?[{p0, p1, houses}], front_azimuth?, run_depth?, channel? EN[], tag}` drawn by `exterior/menagerie.ts` instead of the GARD enclosure wall; wave-6 review fix added `island` (quay over the foundations + spiral stair), `open_pavilion` (hypothetical posts + beam under the catalogue roof) and `ring.moat_radius` (radial grilles run in to the water)). `FacadeSideSpec.window_kind_storeys?` (wave-6 review fix, KB-I28: storey indices whose openings on that side are forced to sill windows (`window`) instead of the side's `window_kind`; validated as integers). `Roof.raised[].turret.fachwerk?` (KB-I21, record only). Wave 7: `folly?` (KB-I31/I39/I30: `{kind 'altan' \| 'chinese' \| 'tent' \| 'hay_wagon' \| 'aviary' \| 'monopteros' \| 'apiary', gate_width?, tag?}`, `FOLLY_KINDS`; a small structure on a one-storey footprint with roof `none`, drawn by `exterior/folly.ts` instead of walls/roof; validate warns unless `placement: 'hypothetical'` + confidence low) |
+| Room | `{id, name_de, function, storey, polygon [s,t][], floor_h?, ceiling_h?, finish{floor, walls, ceiling, colour?, border?}, tag, sources?}` (KB-I26/I27: `colour` = the room's silk hue `#RRGGBB` overriding the `wall.silk.*` base, `border` = the damask border colour; validated as hex) |
 | Opening | `{kind, storey, wall: {kind:'side', side} \| {kind:'room', room, edge} \| {kind:'segment', p0, p1, rooms?}, a, width, height, sill, head?, tag}` |
-| TerrainFeature | kinds: court, terrace, scarp, avenue, rondell, pond, island, dam, cascade, moat, enclosure, well, wall, parterre, path. GeoJSON geometry in EN; `trees{species, rows, spacing, row_distance}`, levels, `wall_height` |
+| TerrainFeature | kinds: court, terrace, scarp, avenue, rondell, pond, island, dam, cascade, moat, enclosure, well, wall, parterre, path, `lawn` (KB-I12: open lawn on the natural slope, no level), `clump` (KB-I12: Point + `radius` = a clump, MultiPoint = single trees). GeoJSON geometry in EN; `trees{species, rows, spacing, row_distance}`, levels, `wall_height`; KB-I12/I13: `placement?: 'hypothetical'` (skipped only when `showHypothetical` is false; its trees go to a `site/trees-hypothetical` group the viewer's low-confidence select hides), `mix?: {species, share, height?}[]`, `radius?`; a `pond` with `coping{width, height, material}` is a formal basin (`fountain_h?`, `ornaments?{kind: 'stag_head', count, facing}`); a `terrace` with `coping` is a gravel terrace drawn as a level surface with a stone kerb on its free edges and a broad perron at doors whose `grade_h` is its level (wave-2 fix, GARDEN.terraceKerb / GARDEN.perron). A `path` ≤ 4 m wide is drawn as a gravel ribbon draped on the terrain. Wave 5 (KB-I32..I38): a `parterre` or `terrace` with `parterre{type: 'angloise', panels [nu, nv], cross_walk?, tubs?}` is drawn as a parterre à l'angloise (lawn panels with cut corners, sanded sentiers, raised box-edged plates-bandes with border flowers, yew cones, standard roses, optional citrus tubs; `layout/garden.ts parterreAnglaise`); `fence{type: 'treillage', height, portal_height, portals EN[], open_edges?}` adds a green treillage with arched portals on the edges that do not stand against a building; kind `furniture` (MultiPoint) carries `items{type: 'bench' \| 'herm', at, facing (grid az), platform?, name_de?}`; kind `beds` (Polygon) carries `beds{quarters, axis_deg?, frame_rows? EN[][], espaliers? EN[][]}` (`kitchenBeds`). These are built by `site/gardenDetail.ts` into their own meshes `site/garden-detail/<material>`. GARD enclosure walls are stepped bays with a saddle coping, piers and a baked foot shade (`site/gardenWall.ts`, `steppedWallTops`, GARDEN_DETAIL.wall). Wave 8 (KB-I68): kind `fence` (LineString) with `fence_line{type: 'post_rail' \| 'barriere', height, post_spacing?, rails?, tag?}` is a timber fence draped on the terrain: `post_rail` = posts every ≤ FENCE.postRail.spacing with `rails` rails per bay (`site/fence.ts postRailLayout`); `barriere` = a 2-point gap closed by a Schlagbaum on a pivot post with a counterweight, resting in a forked post, and rails on the rest of the gap (`barriereLayout`); validation requires `fence_line` and a LineString (2 points for a barrière); built by `site/features.ts` (timber, not in the stone-only explorer export). A `well` of confidence `low` is drawn as a flush kerb with a stone cover, a med/high one as a Buntsandstein well-head with a grey coping |
 
 Room polygons are in building-local `[s, t]`, so they survive footprint edits that keep the frame.
+
+**Time slice (KB-I03, `layout/epoch.ts`, pure):** `SCENE_YEAR = 1789`; `inEpoch(epoch, year = 1789)` is the one test
+every consumer uses; `inScene(items, year)` filters a list; `epochIssues(epoch)` is the `validate.ts` check (integer
+years, `from ≤ to`). `BuildOptions.year` (default 1789) is the scene year of a `BuildContext`. In the 1789 catalogue
+KB-B13 (Dec 1785 fair rotunda) and KL-B49 (1785 Hymen temple stage set) carry `epoch {from: 1785, to: 1785}`
+[D T1/T5/T6]. This is not the viewer's `state.epoch` ('1789' | '2025'), which only switches the terrain.
 
 ### 4.2 Frames (`frame.ts`)
 ```ts
@@ -208,7 +280,7 @@ storeyStack(b, { groundMin?, buildUp? }): StoreyStack  // levels[], floors[], ea
 inferStoreyKind(storey); levelAt(stack, y); entranceStorey(stack)
 
 // roof
-roofSection({ type, depth, eaves_h, pitch_lower?, pitch_upper?, break_ratio?, dome_rise_ratio?, ridge_h?, matchRidge? }): RoofSection
+roofSection({ type, depth, eaves_h, pitch_lower?, pitch_upper?, break_ratio?, dome_rise_ratio?, dome_tiers?, ridge_h?, matchRidge? }): RoofSection   // dome_tiers 2: final stepped profile, `tiers: 2` on the section
   // eaves_h, ridge_h, rise, break_h, break_inset, deck_width, ridge_inset, profile [t, h][], adjusted, notes
 roofPlan(section, length, hippedEnds?): RoofPlan       // ridgeLength, ridgeEndInset, breakRect, deckRect
 roofHeightAtInset(section, inset)
@@ -236,6 +308,47 @@ stairRun(rise, 'prunk' | 'secondary' | 'service' | 'freitreppe'): StairRun   // 
 avenueTrees(line, trees, { seed?, jitter?, endClearance? }): TreePosition[]
 geometryCentroid(g); resolveCourtToward(spec, v, from?); nearestOnLine(line, p); featuresOfKind(spec, kind)
 
+// garden (KB-I11..I13, layout/garden.ts; norms in grammar GARDEN)
+chaikin(line, iterations); resample(line, step); walkRibbon(line, width, step?): {centre, left, right, width}
+polylineSelfIntersects(pts); distanceToLine(line, p)
+allocateShares(mix, n); clumpPlants(centre, radius, mix, {seed?, areaPerPlant?}): Plant[]; singleTrees(points, mix, seed)
+circleRing(centre, r, n); basinOrnaments(centre, r, count, toward): {p, facing}[]
+avenueBlockers(spec, feature, year): EN[][]; treeBlocked(E, N, blockers)   // shared by site/features.ts and plans
+
+// rotunda (KB-I24, layout/rotunda.ts; norms in grammar ROTUNDA): round temple pavilion with facade.rotunda
+rotundaLayout(L): RotundaLayout | null   // radius, axis, floor_h, order (orderFor), attic, bays[], pilasters[],
+                                         // portico {columns, steps, pediment {base_h, apex_h, halfWidth},
+                                         //   atticBlock {front, back, halfWidth, top_h} (the portico roof ends
+                                         //   against it, top ≥ pediment roof + ROTUNDA.atticBlockClear), outline},
+                                         // colonnade {columns, steps, outline, to_id}
+orderFor(name, foot_h, height); stepsBetween(drop, maxRiser?); drumPoint(angle, r); rotateST
+// consumers: exterior/rotunda.ts buildRotunda (registered in exterior/index.ts for round footprints with
+// facade.rotunda) and plans/src/sheets/lageplan.ts (portico + colonnade outlines)
+
+// KB-I21 Fachwerk (layout/fachwerk.ts; norms in grammar FACHWERK): the one place that decides outer wall and reveal
+fachwerkStoreys(b): number[]; isFachwerk(b, storey)
+outerWall(b, storey?): { thickness, reveal, fachwerk }   // 0.30 m / 0.13 m on Fachwerk storeys, else WALL_THICKNESS
+// consumers: exterior/facade.ts (per-opening reveal depth and frame plane), interior/model.ts generatedRooms,
+// plans grundriss.ts / schnitt.ts; the gallery programme (scripts/catalogue-v2/programme.ts) uses FACHWERK.wall
+
+// KB-I29 menagerie (layout/menagerie.ts; norms in grammar MENAGERIE): EN plan of houses, grilles, runs, posts, channel
+menagerieLayout(m: MenagerieSpec, seed = 0): { houses[{kind 'house'|'loge', centre, front, width, depth, eaves, pitch,
+                                     roof 'pyramid'|'gable'}], grilles[{a, b, radial?}], runs[{ring}],
+                                     terraces[{a, b, back}], posts EN[], channel }
+// rows: seeded jitter (grammar MENAGERIE.rowJitter, mulberry32(seed)); ring: yards closed behind the houses, radial
+// grilles to ring.moat_radius; 'island' / 'open_pavilion' return an empty layout (drawn directly from the spec)
+distToPolyline(p, line)   // slots the watercourse crosses stay open
+// consumer: exterior/menagerie.ts buildMenagerie (dispatched in exterior/index.ts before the glasshouse/facades)
+
+// wave 7 follies (layout/folly.ts; norms in grammar FOLLY): local [s, t] placement helpers, no three
+polygonRing(n, r, phase = 0): [s, t][]                       // regular n-gon, CCW
+altanPiers(width, gate = 0, pier?, maxSpan?): number[]       // symmetric pier centres; gate mouth clear; clear span ≤ maxSpan (a front too narrow for jamb piers: end piers only)
+concaveRoofProfile(r, rise, upturn, n = 4): [radius, h][]    // Chinese tent roof, eave (upturned) → apex, sags below the chord
+skepCentres(len, spacing?, skep?): number[]                  // straw skeps on one apiary shelf
+upsweptRoofPoint(a, b, t, u, {top, rise, upturn, cornerLift, cornerOut}): [s, t, h]  // wave 8: one sector of an up-swept polygonal roof (hips lift + reach out ∝ c²(1−u)²); KL-B50 double roof (grammar CHINESE_ROOF)
+// consumer: exterior/folly.ts buildFolly(g, gr, L, pal, ctx) (dispatched in exterior/index.ts after the menagerie
+// branch); the Altan's deck height is the building's eaves_h (= the S wing Beletage floor in the catalogue)
+
 // free-standing walls (fix round 1): parts of a WALL line clear of other footprints (exterior + elevations)
 wallFreeSpans(line, footprints, tol = 0.8): [d0, d1][]; distanceToRing(p, ring)
 
@@ -250,8 +363,51 @@ This file holds all period-norm numbers, from research/02 §2 plus the HMS overr
 - `WINDOW[class][ground | upper | mezz]`, `PORTE_FENETRE_HEIGHT`, `CELLAR_WINDOW`, `PORTAL`, `INTERIOR_DOOR`
 - `ROOF` (mansard break 0.4·d/2, dome 0.3·d), `CORNICE`, `DORMER`, `CHIMNEY`, `ARTICULATION`, `STAIR`,
   `AVENUE`, `SILL_WINDOW` (facade sides with `window_kind: 'window'`), `PORTICO` (portal option `portico`)
+- KB-I18/I22/I23 (research/09 §2.7-2.8, §3.5-3.6, §5, G5, G10, G11, E3-E5, C6, M9; HMS 06 §3.2): `ROOF_COVER`
+  (Biberschwanz format, `leadDeckMaxPitch` 10°: a mansard deck flatter than that is drawn `roof.lead`,
+  `exterior/roof.ts isLeadDeckSegment`), `LIGHTNING_ROD` (Hemmer five-point masts ≤ 18 m apart, down-conductor at a
+  free garden-side corner), `DOWNPIPE` (Ø 0.11 m, hopper head, none on FARM/FARM_GROUP/GARD/WALL; wave-4 review:
+  corners first, then risalit / passage flanks, a pier only where it is free of surrounds and open shutter leaves,
+  never inside a risalit, ≤ `maxSpacing` 25 m apart where a free spot exists), `WEATHER_VANE` (Dachreiter and pavilion apexes), `COURT_FURNITURE` (sentry boxes,
+  Prellsteine, cobbled lanes, gutters). Pure planning in `exterior/hardwarePlan.ts` (`rodMasts`, wave 8 `hemmerMasts(ridgeLength, sMid, rule, chimneys)` (masts on the high points: one at each ridge end inset `HEMMER_ROD.endInset`, no intermediates, one central mast on short ridges, moved clear of chimney stations; wave-8 review fix), `hemmerMastHeight(roofRise, rule?, area?)` (mast scaled to the roof, `HEMMER_ROD.mastRoofShare` within `mastMin`..`mast`; wave 9: footprints under `pointArea` get a short `pointMast` point; the head drawn by `hardware.ts hemmerMast()` is a gilt knob with a vertical spike and four short level points, no arms), `chimneyStations(L)` (the chimney positions shared by `facade.ts chimneys()` and the masts), `conductorCorner`,
+  `conductorPath`, `downpipePositions`, `sideDownpipes`, `openingBlock`) and `site/courtPlan.ts` (`courtPlan`,
+  `diagonalBands`; the axis lane `lane.width`, cross lanes `lane.crossWidth`); geometry in
+  `exterior/hardware.ts` (`roofHardware`: downpipes and vanes from LOD1, rods and conductor at LOD2; wave 8: tapered dark masts with the gilt five-point head from LOD1, the conductor at LOD2) and
+  `site/court.ts` (`buildCourtFurniture`, called by `site/features.ts` for the Ehrenhof court; the lanes are one
+  quad each with an `aLane` attribute (`laneGeometry`) drawn by the procedural Katzenkopf shader
+  `materials/cobbles.ts` `cobblePatch`, whose `userData.groundLit` makes the viewer light it like the terrain:
+  SH sky diffuse, no PMREM). `massing()` and
+  `grille()` take the LOD (spear tips on railings from LOD1, gilt on gate leaves).
+- KB-I24 (research/10 §0.2, §b.1 KB-B07): `ROTUNDA` (appended at the end of the file): Vignola orders (Ionic 9 D,
+  Doric 8 D, Tuscan 7 D; entablature 1/4 of the column; base, capital, taper), pilaster projection, door share of a
+  bay, door head gap, niche depth, steps (riser 0.16, tread 0.38), attic 0.9 m, drum wall 0.45 m, pediment 22°,
+  `atticBlockClear` 0.2 m, `domeRibs` 16 [N]. Revolved roofs (`exterior/roof.ts roundRoof`) have smooth normals
+  (dome: also along the profile) and 48 segments × 12 dome steps from LOD1.
 
-Fix round 1 added these optional, additive spec fields: `FacadeSideSpec.window_kind`, `PortalSpec.grade_h` (the level the steps start from, e.g. a parterre) and `PortalSpec.portico { columns, balcony, depth? }`. `FacadeOpening` carries `grade_h`/`portico`. In the interiors, `collectOpenings(b, layout, groundAt?)` and `interiorModel(b, layout, seed, groundAt?)` cull terrain-buried facade openings with the same `cullBuriedOpenings` as the exterior. Deep straight reveals get a splay (`revealSplay`).
+KB-I16/I17 (research/09 §3.1, §3.4, G1-G9): `CASEMENT` (French two-leaf casement: meeting stile, frame, transom
+only at ≥ 2.6 m at 3/4 h), `GLAZING` (`state` CdL Beletage 1 pane per leaf h ≈ 0.55 m; `court` 2 per leaf ≈ 0.25 ×
+0.33 m; `farm` 2 per leaf in 3-4 rows) with `glazingClass(cls, row)` and the pure `glazingLayout(cls, row, w, h,
+archRise)` used by the exterior and the plan elevations; `MEMBERS` (string course and window caps only on the CdL;
+caps only on its centre-risalit Beletage axes) and `CORNICE.palace` + `corniceFor()` (one continuous palace cornice
+where `defaults.eaves_continuous` and the eaves sit on `eaves_palace`). `layoutBuilding()` resolves them into
+`BuildingLayout.members` (`cornice`, `stringCourse`, `cornerLisenen` – not on FARM/FARM_GROUP – and
+`risalitLisenen` `'all'` on the CdL, `'portico'` elsewhere); `FacadeOpening` gains `row`, `hood` and `balcony`
+(balconets only before a porte-fenêtre above a portal). Surrounds are flat 0.20 m bands, `ARTICULATION.ecklisene`
+0.6 × 0.02 m.
+
+Fix round 1 added these optional, additive spec fields: `FacadeSideSpec.window_kind`, `PortalSpec.grade_h` (the level the steps start from, e.g. a parterre) and `PortalSpec.portico { columns, balcony, depth? }`. `FacadeOpening` carries `grade_h`/`portico`. The wave-7 review fix added `PortalSpec.balconet` (default true; `false` = an upper-storey porte-fenêtre without an iron balconet because it opens onto a terrace drawn as its own building, e.g. the S-wing Altan KB-B02a). In the interiors, `collectOpenings(b, layout, groundAt?)` and `interiorModel(b, layout, seed, groundAt?)` cull terrain-buried facade openings with the same `cullBuriedOpenings` as the exterior. Deep straight reveals get a splay (`revealSplay`).
+
+Wave 4 fix (KB-I25 review) added wall niches to the interiors, all optional and additive: `Item.niche` (a furnishing piece standing in a niche, `{wall, u0, u1, v1, depth, head, tag}`), `RoomWall.niches` (filled by `interiorModel` from the items; `buildShell` cuts them into the room face as a semi-elliptic, round-headed niche with a moulded surround) and the pure `stoveNichePlan(walls, clearH)` with the sizes in `STOVE_NICHE` (`interior/programme.ts`). A dining room whose function names "stove niches" gets two `altar_stove` pieces in such niches on one blind outer wall.
+
+KB-I26/I27 (state-room finishes) added, all additive: `Finish.colour?` / `Finish.border?` (above); the material names `wall.silk.yellow` and `wall.silk.grey` (`MATERIAL_NAMES`, `MATERIAL_BASE`, interior `FALLBACK`); `STATE_ROOM` in `layout/grammar.ts` (dado 0.9 m, Tapetenleiste, damask border and repeat, parquet panel 0.974 m = `PARQUET_PANEL`, supraporte minimum, rosette, sconce, library oak/frieze/taffeta, gallery counts); the pure module `interior/finish.ts` (`silkHue`, `borderColour`, `silkFields`, `borderRects`, `damaskMotif` + its GLSL twin `DAMASK_GLSL`, `canvasGrid`, `mirrorGrid`, `meanderRects`, `countIn`; `SILK_BASE` is tested equal to `MATERIAL_BASE`); in `interior/mesh.ts` `Bucket.colourGrid` (per-vertex linear colours, the geometry then carries `color`), `MouldProfile`, `beadProfile` and `mouldFrame` (mitred profiled frame sweep for Tapetenleisten, boiserie, door surrounds, picture and mirror frames); `damaskMaterial(lib, name, colour)` and the extras `interior.canvas` / `interior.vitrine` in `interior/materials.ts`; `ShellInput.rosettes` (a stucco rosette only under a chandelier); item kinds `bergere`, `curule` (instanced) and `sconce`, `candelabrum` (sized, no footprint), and `Item.style {oak, frieze, wireDoors, white}` for the library cases and the white collection cabinets. Documented counts (20 chandeliers, 104 curule chairs, 2 bergères) are read from the room `function` text with `countIn`, so the catalogue stays the single source.
+
+Wave-5 review fix (interiors), additive: `damaskMaterial(lib, name, colour, figure = 'floral')` with `DamaskFigure` `'floral' | 'arabesque'` and `damaskFigureOf(fn)`; `damaskMotif(u, v, aa, figure)` (GLSL twin switches on `DAMASK_ARABESQUE`); `mirrorGrid(seed, w, h, room = { wall })` paints the room's own colours under `MERCURY_TINT` (`interior.mirror` is a clear-coated non-metal glass), plus `gridLuminance`; `corniceHeight`, `supraportePanels` and `splitField` in `finish.ts` (shell and gallery hang share the supraporte geometry); `STATE_ROOM.panelMax` and `STATE_ROOM.damask.sheen`; `wallOverlap` and `fitSconces` in `programme.ts`; `PEARL_COVER` in `evidence.ts`; `marbleMaterial(lib, colour, vein)` in `materials.ts`; `FixtureCtx.wall?` (the room wall colour for mirrors).
+
+Wave 6 (architecture), appended at the end of the file: `FACHWERK` (KB-I21: wall 0.30 m, reveal 0.13 m, masonry joinery plane 0.17 m), `ORANGERIE_JOINERY` (KB-I28: #F2F0EA, D T5 white; hue N), `MENAGERIE` (KB-I29: ring house 3.6 × 3.6 m, eaves 2.6 m, pyramid 40°; loge 5.6 × 4.8 m; `ringYard` 1.2 m; row house 3.4 × 3.0 m, eaves 2.4 m, gable 30°, slate (D T20) with `rowJitter` shift 0.35 / narrow 0.3 / eaves 0.12 m; grille square bars 26 mm at 0.2 m, height 2.2 m; run depth 9 m, net 3.6 m on posts ≤ 4.5 m apart, 1.5 m cord cells; channel 2.2 m + 0.35 m kerbs; `terraceWall` 0.55 m thick, rise 0.35-1.6 m, 0.12 m coping; `runGround`; `island` quay/foundation/stair; `openPavilion` posts 0.18 m, 3 per side, beam 0.22 m) and `HEARTH` (marble palettes state/private, cast iron, faience glaze/joint/band/brass, tile 0.21 m, 16 flutes). Interior pure modules: `interior/chandelier.ts` (`chandelierPlan()`, `CHANDELIER`: the glass-dressed lustre, ≤ 2,500 triangles as a prototype) and `interior/hearth.ts` (`HearthKit`, `consoleProfile`, `chimneypiece`, `flutedSection`, `faienceStove`), used by `interior/fixtures.ts`.
+
+Wave 7 (architecture), appended at the end of the file: `FOLLY` (all form/sizes N unless noted): `altan` (D existence T5 Abb. 11: piers 0.75 m, clear span ≤ 4.4 m, deck 0.45 m, balustrade 1.0 m), `chinese` (octagon on a 0.45 m plinth, red posts / green railing, eaves 3.4 m, concave roof with 0.55 m upturn, gilt finial; research/11 S14), `tent` (16-segment striped drum 2.3 m, cone rise 2.6 m, valance), `hayWagon` (4.6 m bed, wheels 1.35/1.05 m, hay load), `aviary` (V23 no. 20: octagonal core 4.6 m with slate pyramid 38° and two wire wings), `monopteros` (V23 no. 2: three steps, 8 Tuscan columns 4.2 m, entablature, shallow dome) and `apiary` (V23 no. 16: tiled lean-to, three shelves of straw skeps). The wave-7 review fix changed: `altan` deck 0.6 m (architrave/frieze/cornice, `baseCourse`), `chinese` (`finialProfile` stacked finial, `bell`, `valance`, `fretCells`, matt green roof), `tent` (24 segments, blue/white, `swell`, `crescent`), `hayWagon` (`loadOver` 0.5, flaring `ladder`/`ladderFlare`), `monopteros` (`base`, `capital`, `architrave`, `frieze`, `corniceProjection`, `domeRise` 0.5, `domeSegments`, `domeColour`, `finialBall`), and appended `GLASSHOUSE` (lapped crown-glass panes, sash bars, rails, chimneys, night-mats for `exterior/glasshouse.ts`; the panes face into the house so `glass.crown` shows them as clear glass from outside).
+
+The explorer export (`model/src/explorer/export.ts`, wave 7, KB-I62) adds `POSITION_STEP` (1/64 m), `POSITION_MAX_ERROR` (0.01 m) and the pure `quantisePositions(pos, step, maxError)` → `QuantisedPositions | null` (`q` Int16Array, `offset`, `step`, …) (offset snapped to the global grid; `null` = keep float32); `scripts/export-explorer.ts` writes the node translation/scale (see `docs/explorer-integration.md` §2.1).
 
 Consumers read these constants and must not hard-code numbers. A new norm goes into this file with its tag.
 
@@ -273,7 +429,7 @@ The types are in `model/src/api.ts` and `model/src/context.ts`.
 // model/src/exterior/index.ts            (exterior + viewer package)
 export const buildExterior: BuildExteriorFn;   // (b: Building, ctx: BuildContext) => THREE.Group
 
-// model/src/interior/index.ts            (interiors package; stub exists)
+// model/src/interior/index.ts            (interiors package)
 export const buildInterior: BuildInteriorFn;   // (b: Building, ctx: BuildContext) => THREE.Group
 
 // model/src/site/index.ts                (exterior + viewer package)
@@ -296,7 +452,10 @@ interface Poi { id; name_de; kind: 'building' | 'room' | 'feature' | 'view' | 'e
 Rules for all builders:
 1. Start from `ctx.layout(b)`. Do not recompute frames, axes or heights.
 2. Skip buildings for which `isPlaced(b)` is false. Skip `placement === 'hypothetical'` unless
-   `ctx.options.showHypothetical` is set.
+   `ctx.options.showHypothetical` is set. Skip buildings and terrain features whose `epoch` excludes the scene year
+   (`!inEpoch(x.epoch, ctx.options.year)`; KB-I03). `site/access.ts` `siteBuildings(spec, ctx)` and
+   `siteFeatures(spec, year)` apply all three rules; the plans (`placedBuildings(spec, year?)`, sheet lists, tree
+   blockers, 1789 ground) and both exports (`export-glb.ts`, `export-explorer.ts`) use the same filters.
 3. Return a Group positioned with the building-group convention (§3.2). Name it `<id>/exterior` or
    `<id>/interior` and set `userData.buildingId`.
 4. `buildExterior` uses `cullBuriedOpenings(openings, frame, (E, N) => ctx.terrain(E − 381000, N0 − N))` for
@@ -309,8 +468,12 @@ Rules for all builders:
      and `stairRun`. Generated rooms carry tag `I`/`N`. The CdL hypothesis is in research/05 §e.
    - The rooms must line up with `layout.openings`: same axes, same sills.
    - Walk colliders are floors, walls and stairs (`userData.collider = true`).
-6. `buildSite` covers terrain features (courts, terraces with retaining walls, scarps, avenues via `avenueTrees`,
-   ponds at `water_level`, cascade) plus walk colliders and POIs (German `name_de`). There is a POI per placed
+6. `buildSite` covers terrain features (courts, terraces with retaining walls, scarps, avenues via `avenueTrees`
+   (young trees on stakes, KB-I11), ponds at `water_level` (natural banks get a `wetBank` band; a pond with
+   `fountain_h` gets a jet at its centroid, KB-I37), formal basins with coping, jet (+ `jetSpray`) and rim sculpture (KB-I13),
+   garden walks, clumps and single trees (KB-I12), cascade, and the Ehrenhof furniture of KB-I23: paired striped
+  sentry boxes at the CdL portal, the court Durchfahrten and the approach, Prellsteine beside the passages, cobbled
+  carriage lanes and sandstone gutters, all colliders) plus walk colliders and POIs (German `name_de`). There is a POI per placed
    building and an entrance POI per portal.
 7. `generatePlans` writes SVG plans (and PDF, if the package chooses a dependency):
    - Lageplan 1:2000 and 1:500; Grundrisse (one per walkable storey); Ansichten (court, garden, ends);
@@ -363,7 +526,9 @@ there in `docs/data-contract.md`. This package only guarantees the frame and the
 
 **Explorer layer (2026-11-01).** The explorer does not load `model/out/`. It loads the light, single-file product
 `sle-recon-v1` from `pnpm run export:explorer`: one meshopt-compressed glb with one node per building, vertex
-colours, a `_CONF` attribute and base skirts to the 2025 DTM, plus `footprints.geojson` and `index.json`. Camera
+colours, a `_CONF` attribute and base skirts to the 2025 DTM, plus `footprints.geojson` and `index.json`. Since
+KB-I19/I20 `COLOR_0` = material colour × the builder's `aShade` (albedo variation × AO at `EXPLORER_AO_STRENGTH`
+0.6, `shadeColour`); the format is unchanged (≈ 5.6 MB, 388 k triangles). Camera
 handover runs in both directions through URL parameters (`viewer/src/handover.ts`). Both are specified in
 `docs/explorer-integration.md`.
 
@@ -384,6 +549,12 @@ handover runs in both directions through URL parameters (`viewer/src/handover.ts
 - `scripts/fetch-textures.sh` downloads 8 CC0 sets from Poly Haven into `viewer/public/textures/<name>/`:
   2K JPG `diff.jpg` (sRGB), `nor_gl.jpg` (OpenGL normal) and `arm.jpg` (AO/rough/metal → `aoMap`,
   `roughnessMap`, `metalnessMap`).
+- Both maps are normalised to their mean in the shader (`model/src/materials/index.ts`): the colour map only
+  modulates luminance around the catalogue tint, and the ARM G channel only varies roughness around
+  `MATERIAL_BASE[*].roughness` (`roughnessScale`, ratio clamped 0.5–1.6, contrast 0.5). three.js would otherwise
+  multiply roughness by G, and Poly Haven's parquet (G ≈ 0.10) and sandstone (G ≈ 0.51) went mirror-like and glossy.
+  Roof covers use no ARM map at all.
+- Interior meshes receive shadows; only room walls, cornices and ceilings cast (`INTERIOR_SHADOW_CASTERS`). `buildInterior` sets the flags (`interiorShadows`); the viewer keeps them as an upper bound.
 - The script works sequentially with a UA, retries and an MD5 check. It is idempotent. The total is 66 MiB.
 - The sets:
 
@@ -399,7 +570,10 @@ handover runs in both directions through URL parameters (`viewer/src/handover.ts
 | `grass` | leafy_grass | lawns, parterres |
 
 - `viewer/textures.json` records each set's source URL, authors, licence (CC0), real-world size in m (for
-  UV scale), files with MD5 and byte sizes.
+  UV scale), files with MD5 and byte sizes. `TEXTURE_SIZE` in `model/src/materials/index.ts` overrides the size where
+  the model needs another grid (`sandstone_ashlar`: 3 × 1.8 m, 0.36 m courses, matching `ASHLAR`; `clay_tile_roof`:
+  `clayTileSize()` = 3.65 × 1.84 m, so the measured 12.26 courses / 20.25 tiles per image give the Biberschwanz 0.15 m
+  course and 0.18 m width of grammar `ROOF_COVER`, KB-I18).
 
 ## 9. Known limits of the core (to revisit with evidence)
 - `upgradeV1()` reads portals from v1 free text with a few explicit rules (§ catalogue.ts). Anything it cannot
@@ -412,3 +586,13 @@ handover runs in both directions through URL parameters (`viewer/src/handover.ts
   FARM_GROUP) get `shape: 'polygon'` and their sides refer to the bounding rectangle.
 - Baumagazin (12 axes on 38 m) and Reithaus (13 axes on 54 m) do not fit their catalogue spacing. The layout
   compresses them and warns.
+
+Wave 8 (architecture), all additive: the material name `wall.granite` (`MATERIAL_NAMES`, `MATERIAL_BASE` #96928A, interior `FALLBACK`) with its shader patch in `materials/granite.ts` (`GRANITE`, `graniteFlecks` / `graniteShares` CPU twin, `GRANITE_GLSL`, `granitePatch`; flecks on the face UVs, faded to the mean shares beyond ~2 grains per pixel); `exterior/rotunda.ts` exports `glazedDoor` (one outward-facing glass plane per leaf, full clear width) and `banquette`; grammar `CHINESE_ROOF`, `HEMMER_ROD`, `PORTAL_FRAME` (sandstone pilaster strips + entablature on a `portal` without a portico, LOD1+); `layout/folly.ts` `upsweptRoofPoint`; `exterior/hardwarePlan.ts` `hemmerMasts`; catalogue-v2 `checks.ts` `ATTACHED` (intended footprint overlaps of an annex drawn as its own volume: KB-B28 / apse KB-B28a) and `pipeline.ts` `V2_FACADE` (v1 buildings whose v2 edit writes facade sides / portals itself). `scripts/prepare-terrain.py`: `WALL_FOOT_IDS` (a straight ramp in the distance to a walled terrace edge, ±0.8 m, so the 1 m mesh shows no saw teeth at the wall foot) and `PORTICO_PADS` (a level forecourt pad in front of a portico stair on falling ground, KB-B02 W end).
+
+Wave-8 review fix (architecture), all additive: `PortalSpec.balcony_run?: {depth?, tag?}` (only on a `porte_fenetre` entry above the entrance storey: one continuous balcony across all its doors instead of a balconet each; validated) and `PortalSpec.portico` on a `durchfahrt` (a columned porch on the court in front of the passage, balcony deck at the floor of the storey above). `FacadeOpening.portico.deck_h?` (passage porch deck) and `FacadeOpening.balconyRun?: {a0, a1, depth, tag}` (on the first door of a run). `layout/facade.ts` `freitreppePlan(o)` / `FreitreppePlan` (the Freitreppe numbers shared by `exterior/facade.ts`, `site/courtPlan.ts openingClearance` and the plan sheets: main perron for a `portal` without portico per `MAIN_PERRON`, the old plain stair for doors); a main perron also takes the cellar windows behind it. Grammar `MAIN_PERRON`, `PASSAGE_PORTICO`, `BALCONY`; `HEMMER_ROD` loses `spacing` and gains `mastMin`, `mastRoofShare`, `minArea`, `chimneyClear` (`armRise` 0: the NDB Fünfspitz is a level cross). `courtPlan`: the sentry pair of a portal with a Freitreppe or a passage porch stands at the stair foot / porch front (`CourtPortal.porch`). Plans: `elevation.ts` exports `portalExtrasElev` (portal frame, passage porch, balcony runs) and draws the main perron with cheeks and pedestals; `grundriss.ts` draws the main perron, the porch columns and the balconies (dashed).
+
+Wave 9 (architecture), additive: `MAIN_PERRON.beyondFrame` 1.92 m (the CdL perron spans the three central axes, cheeks on the piers beyond the neighbouring EG windows) and `MAIN_PERRON.stoneTreads` (treads in the portal sandstone `FacadeOptions.stone`, nosings a paler tint of it). `HEMMER_ROD` replaces `arm` / `armRise` / `tip` / `tipRadius` / `collar` with `knob`, `spike`, `spikeRadius`, `point`, `pointRadius` and gains `pointArea` / `pointMast`; `hemmerMastHeight(roofRise, rule?, area?)`. `exterior/rotunda.ts`: the inner (marble, LOD2) pilasters get base and Ionic capital blocks with volutes like the outer order.
+
+Wave-9 review fix (architecture), additive: `MAIN_PERRON.beyondFrame` back to 0.9 m (portal frame + 0.9 m, closest to the HMS short stair between the sentry boxes; the three-axis width had no source) and the tag no longer cites LC (research/07 §1.1 gives Le Clerc's broad Freitreppe to the KB-B02 head). New `MAIN_PERRON.riser` (riser albedo share of the tread stone; the exterior builds each main-perron step as a riser block standing on the step below + a tread slab + the nosing) and `AO.stepCorner` in `exterior/shade.ts` (baked AO at each step's inner corner). New pure `layout/facade.ts` `perronSentryAlong(o, openings, clear, box, gap)`: the signed along offsets of a main perron's sentry pair, snapped to the pier centres between the portal storey's window bays; `site/courtPlan.ts` stores them as `CourtPortal.sentryAlong` and places the foot pair there.
+
+Wave 8 (look), all additive: grammar `FESTIVAL` (KB-I48: lamp colour temperature, the illuminated buildings, spacing and offsets per group, tags) appended to `layout/grammar.ts`; pure `layout/festival.ts` `festivalLamps(spec, layouts, {year?, seed?})` → `FestLamp {p, n, wall, kind 'lampion' | 'pot', group 'cornice' | 'sill' | 'rotunda' | 'court' | 'parterre' | 'rim', kelvin, src}` plus `ringPoints`, `distanceToRing`, `festivalCounts` (filters `isPlaced`, non-hypothetical, `inEpoch(year)`; never three). Wave-8 review fix: `FESTIVAL.rotunda.event {year, buildings}` and `festRotundaRings(building, year)`: the dense `rotunda` group only for the event's buildings in a scene of the event year whose epoch contains it (KB-B13 in 1785); any other rotunda gets `cornice` + door `sill` lamps. The glass patch's room attributes `vRoom` / `vRoom2` are plain varyings (no `flat`: ANGLE/Metal rewrites index buffers per draw for flat varyings); cache key `glass|imap3`. Viewer only: `festival.ts` / `festivalMath.ts`, `night.ts` `setWindowFest`, and the KB-I50 far shadow (`shadowsFar.ts` `installFarShadowChunk` patches three's `lights_fragment_begin` once before any compile, so directional light 0 is the sun with the near map faded into directional shadow 1, a lightless far light; consumers that derive from that chunk, such as `atmosphere.ts` `terrainLightsBegin`, keep working; the scene must hold no other shadow-casting directional light).

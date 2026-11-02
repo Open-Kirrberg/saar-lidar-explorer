@@ -15,6 +15,13 @@
    "max": 345.9,
    "n_cells": 1277
   },
+  "KB-B02a": {
+   "hash": "6c421359c962",
+   "min": 344.46,
+   "median": 344.78,
+   "max": 345.21,
+   "n_cells": 25
+  },
   "KB-B03": {
    "hash": "d5b80b11abfe",
    "min": 343.91,
@@ -43,12 +50,19 @@
    "max": 348.54,
    "n_cells": 661
   },
+  "KB-B06a": {
+   "hash": "548c73963a0b",
+   "min": 345.94,
+   "median": 346.53,
+   "max": 347.17,
+   "n_cells": 36
+  },
   "KB-B07": {
-   "hash": "b8ddf0e2fc06",
-   "min": 348.34,
-   "median": 348.57,
-   "max": 348.89,
-   "n_cells": 120
+   "hash": "ae838adfda66",
+   "min": 348.5,
+   "median": 348.74,
+   "max": 349.19,
+   "n_cells": 88
   },
   "KB-B10": {
    "hash": "27cd2de0fbdf",
@@ -70,6 +84,13 @@
    "median": 341.42,
    "max": 345.63,
    "n_cells": 703
+  },
+  "KB-B12a": {
+   "hash": "d611692a4c4f",
+   "min": 340.81,
+   "median": 341.55,
+   "max": 342.08,
+   "n_cells": 217
   },
   "KB-B13": {
    "hash": "21c308863514",
@@ -142,11 +163,18 @@
    "n_cells": 11346
   },
   "KB-B28": {
-   "hash": "fc1c576a1c47",
+   "hash": "d346bcd59351",
    "min": 354.02,
-   "median": 355.61,
+   "median": 356.08,
    "max": 356.54,
-   "n_cells": 80
+   "n_cells": 100
+  },
+  "KB-B28a": {
+   "hash": "24476ecca918",
+   "min": 354.37,
+   "median": 356.21,
+   "max": 356.36,
+   "n_cells": 24
   },
   "KB-B29": {
    "hash": "e08f2de12bf4",
@@ -575,6 +603,41 @@
    "max": 353.68,
    "n_cells": 620
   },
+  "KB-B87": {
+   "hash": "10a476c8c96f",
+   "min": 346.41,
+   "median": 346.7,
+   "max": 347.09,
+   "n_cells": 64
+  },
+  "KB-B88": {
+   "hash": "890985473f33",
+   "min": 329.83,
+   "median": 330.92,
+   "max": 331.83,
+   "n_cells": 51
+  },
+  "KB-B89": {
+   "hash": "77eda892786b",
+   "min": 278.98,
+   "median": 279.47,
+   "max": 279.79,
+   "n_cells": 44
+  },
+  "KB-B90": {
+   "hash": "50afe6c0531d",
+   "min": 345.44,
+   "median": 345.57,
+   "max": 345.72,
+   "n_cells": 8
+  },
+  "KB-B91": {
+   "hash": "bb548d3340c7",
+   "min": 331.48,
+   "median": 332.92,
+   "max": 334.13,
+   "n_cells": 34
+  },
   "KL-B40": {
    "hash": "f545aecd2a8e",
    "min": 297.91,
@@ -583,6 +646,13 @@
    "n_cells": 2284
   },
   "KL-B41": {
+   "hash": "354ee5aff14c",
+   "min": 298.31,
+   "median": 298.46,
+   "max": 298.49,
+   "n_cells": 64
+  },
+  "KL-B41a": {
    "hash": "354ee5aff14c",
    "min": 298.31,
    "median": 298.46,
@@ -645,6 +715,69 @@
    "max": 287.51,
    "n_cells": 121
   },
+  "KL-B50": {
+   "hash": "6ff37d365759",
+   "min": 261.73,
+   "median": 261.98,
+   "max": 262.22,
+   "n_cells": 52
+  },
+  "KL-B51": {
+   "hash": "69f7ae664de3",
+   "min": 306.0,
+   "median": 306.82,
+   "max": 307.68,
+   "n_cells": 52
+  },
+  "KL-B52": {
+   "hash": "d9f207328fe0",
+   "min": 316.53,
+   "median": 316.95,
+   "max": 317.41,
+   "n_cells": 30
+  },
+  "KL-B53": {
+   "hash": "a76ad661df62",
+   "min": 300.78,
+   "median": 301.15,
+   "max": 301.78,
+   "n_cells": 64
+  },
+  "HG-01": {
+   "hash": "c94e2a69c852",
+   "min": 327.35,
+   "median": 350.39,
+   "max": 355.46,
+   "n_cells": 78880
+  },
+  "HG-04": {
+   "hash": "fc1fb5b04349",
+   "min": 348.94,
+   "median": 349.44,
+   "max": 349.96,
+   "n_cells": 147
+  },
+  "HG-05": {
+   "hash": "b5ec078c9390",
+   "min": 348.74,
+   "median": 349.44,
+   "max": 350.29,
+   "n_cells": 307
+  },
+  "KB-L1": {
+   "hash": "157106c86169",
+   "min": 277.15,
+   "median": 279.25,
+   "max": 280.49,
+   "n_cells": 376
+  },
+  "KG-01": {
+   "hash": "4aa90d1e38ab",
+   "min": 344.14,
+   "median": 347.59,
+   "max": 349.25,
+   "n_cells": 11346
+  },
   "TF-01": {
    "hash": "633d06dc9a58",
    "min": 341.88,
@@ -660,11 +793,11 @@
    "n_cells": 2224
   },
   "TF-03": {
-   "hash": "d4aac2c664f6",
+   "hash": "a1e404b51ecd",
    "min": 340.08,
    "median": 344.74,
    "max": 347.78,
-   "n_cells": 11081
+   "n_cells": 11047
   },
   "TF-05": {
    "hash": "fb4690a3b2d7",
@@ -674,18 +807,18 @@
    "n_cells": 17766
   },
   "TF-06": {
-   "hash": "86652a38720a",
-   "min": 340.4,
-   "median": 341.1,
+   "hash": "82d9b7056f89",
+   "min": 340.45,
+   "median": 341.11,
    "max": 343.59,
-   "n_cells": 3323
+   "n_cells": 3014
   },
   "TF-07": {
-   "hash": "664faf13f760",
+   "hash": "42dcce7885d7",
    "min": 333.45,
-   "median": 335.23,
-   "max": 337.2,
-   "n_cells": 1050
+   "median": 335.4,
+   "max": 340.79,
+   "n_cells": 1479
   },
   "TF-08": {
    "hash": "973157185fa3",
@@ -695,11 +828,11 @@
    "n_cells": 1593
   },
   "TF-09": {
-   "hash": "ee65cb82b535",
+   "hash": "b49e1dc804cc",
    "min": 345.13,
-   "median": 347.39,
-   "max": 350.13,
-   "n_cells": 3779
+   "median": 345.42,
+   "max": 346.08,
+   "n_cells": 424
   },
   "TF-13": {
    "hash": "74f26962185d",

@@ -1,6 +1,7 @@
 /** Helpers shared by the building sheets (Grundriss, Ansicht, Schnitt). */
 import type { BuildingLayout } from '../../../model/src/layout/building.ts';
 import { stToEN } from '../../../model/src/layout/footprint.ts';
+import { inEpoch } from '../../../model/src/layout/epoch.ts';
 import { isPlaced } from '../../../model/src/spec.ts';
 import type { Building, SiteSpec, ST } from '../../../model/src/spec.ts';
 import type { PlanView } from '../geom/transform.ts';
@@ -78,7 +79,10 @@ export function swingArc(hinge: P2, closedEnd: P2, openEnd: P2): string {
 
 export const add = (a: ST, b: ST, k = 1): ST => [a[0] + b[0] * k, a[1] + b[1] * k];
 
-/** Buildings with a position and a base height (unplaced catalogue entries have base_h null). */
-export function placedBuildings(spec: SiteSpec): Building[] {
-  return spec.buildings.filter(isPlaced);
+/**
+ * Buildings with a position and a base height (unplaced catalogue entries have base_h null) that stand in the
+ * scene year (KB-I03 `epoch`, default 1789: e.g. the 1785 Orangerie rotunda KB-B13 is not drawn).
+ */
+export function placedBuildings(spec: SiteSpec, year?: number): Building[] {
+  return spec.buildings.filter((b) => isPlaced(b) && inEpoch(b.epoch, year));
 }

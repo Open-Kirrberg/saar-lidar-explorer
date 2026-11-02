@@ -12,8 +12,10 @@
 import type { BuildContext, TerrainSampler } from '../context.ts';
 import { E0, N0 } from '../frame.ts';
 import { stToEN } from '../layout/footprint.ts';
-import type { Building, EN, SideName, SiteSpec } from '../spec.ts';
+import type { Building, EN, SideName, SiteSpec, TerrainFeature } from '../spec.ts';
 import { isPlaced } from '../spec.ts';
+import { SCENE_YEAR, inEpoch, inScene } from '../layout/epoch.ts';
+import { driveCuts, isDrive } from './drive.ts';
 
 /** Highest step the walker climbs without a stair (m). Shared with viewer/src/controls.ts. */
 export const WALK_STEP_MAX = 0.35;
@@ -29,9 +31,15 @@ const WALKER_RADIUS = 0.3;
 
 type XZ = [number, number];
 
-/** Buildings to render: placed, and hypothetical ones only on request. */
+/** Buildings to render: placed, standing in the scene year (KB-I03 `epoch`), and hypothetical ones only on request. */
 export function siteBuildings(spec: SiteSpec, ctx: Pick<BuildContext, 'options'>): Building[] {
-  return spec.buildings.filter((b) => isPlaced(b) && (b.placement !== 'hypothetical' || ctx.options.showHypothetical));
+  const year = ctx.options.year ?? SCENE_YEAR;
+  return spec.buildings.filter((b) => isPlaced(b) && inEpoch(b.epoch, year) && (b.placement !== 'hypothetical' || ctx.options.showHypothetical));
+}
+
+/** Terrain features that existed in the scene year (KB-I03 `epoch`; default 1789). */
+export function siteFeatures(spec: SiteSpec, year: number = SCENE_YEAR): TerrainFeature[] {
+  return inScene(spec.terrain_features, year);
 }
 
 export interface Entrance {
@@ -172,10 +180,12 @@ const local = ([E, N]: EN): XZ => [E - E0, -(N - N0)];
  * level and whose outward corridor (−1 … ENTRANCE_POI_DIST + 4 m) crosses that terrace's edge gets a gap of
  * (opening width + 0.6 m) in the wall and, where the wall would stand, a flight of steps down to the outside ground.
  */
-export function siteWalls(spec: SiteSpec, terr: TerrainSampler, entrances: readonly Entrance[]): SiteWalls {
+export function siteWalls(spec: SiteSpec, terr: TerrainSampler, entrances: readonly Entrance[], year: number = SCENE_YEAR): SiteWalls {
   const pieces: WallPiece[] = [];
   const stairs: GapStair[] = [];
-  for (const f of spec.terrain_features) {
+  // wave-9 review fix: a graded drive leaving a terrace edge (KB-V2) cuts the terrace wall (drive.ts driveCuts)
+  const drives = siteFeatures(spec, year).filter(isDrive);
+  for (const f of siteFeatures(spec, year)) {
     if (f.kind === 'terrace') {
       if (f.level === undefined || !f.wall_height || f.geometry.type !== 'Polygon') continue;
       const lvl = f.level;
@@ -202,7 +212,7 @@ export function siteWalls(spec: SiteSpec, terr: TerrainSampler, entrances: reado
         const uz = (b[1] - a[1]) / len;
         const onx = nx; // outward normal in local (x, z) = (nx, −ny)
         const onz = -ny;
-        const cuts: [number, number][] = [];
+        const cuts: [number, number][] = driveCuts(drives, a, b);
         for (const e of doors) {
           // corridor centre line door + out·d crosses the segment a + u·s?
           const cos = e.out[0] * onx + e.out[1] * onz;

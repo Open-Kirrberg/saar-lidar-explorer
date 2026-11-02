@@ -152,10 +152,3 @@ export function signedArea2(p: [number, number][]): number {
 function ccw(p: [number, number][]): [number, number][] {
   return signedArea2(p) < 0 ? p.slice().reverse() : p;
 }
-
-/** Glazing-bar layout (Sprossen): number of panes across and up for a window w × h [N: panes ≈ 0.3-0.4 m wide, 0.4-0.5 m high]. */
-export function glazingGrid(w: number, h: number): { cols: number; rows: number } {
-  const cols = w > 0.9 ? 2 * Math.max(1, Math.round(w / 2 / 0.42)) : Math.max(1, Math.round(w / 0.42));
-  const rows = Math.max(1, Math.round(h / 0.48));
-  return { cols, rows };
-}

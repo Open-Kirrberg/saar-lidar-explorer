@@ -7,7 +7,7 @@
  * dotted `.hyp` = hypothetical outline, dash-dot `.axis` = axes and section lines.
  */
 import { gridConvergenceDeg } from '../../model/src/frame.ts';
-import { type P2, circle, de, el, esc, g, line, n, path, rect, text, textWidth } from './svg.ts';
+import { type P2, circle, de, el, esc, g, line, path, rect, text, textWidth } from './svg.ts';
 import { scaleBarSteps } from './geom/transform.ts';
 
 export const STAND = '2026-11-01';
@@ -316,8 +316,4 @@ export function northArrow(c: P2, upAzimuth: number, E: number, N: number, r = 9
     text([c[0], c[1] + r + 3.6], `Gitternord GN · Meridiankonvergenz γ = ${de(gamma, 2)}°`, { size: 1.45, anchor: 'middle', class: 'muted' }),
   );
   return g({ class: 'north' }, ...p);
-}
-
-export function fmtScale(scale: number): string {
-  return `1:${n(scale)}`;
 }

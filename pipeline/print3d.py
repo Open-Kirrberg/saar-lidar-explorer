@@ -70,7 +70,9 @@ PREVIEW_H_M = (220.0, 420.0)   # fixed colour range for previews (same colours o
 PREVIEW_PX = 512
 DISCLAIMER_DE = "Geländemodell zum Anschauen (Hypothesen, keine Befunde). Schauen, nicht graben."
 FILAMENT_FORMULA = ("solid = V·ρ; typical = ρ·(S + infill·(V − S)) with S = min(V, A·shell_mm) "
-                    "(A = mesh surface, shell ≈ 3 walls × 0.4 mm, also standing in for top/bottom skins); ±25 %")
+                    "(A = mesh surface; shell_mm / infill fitted to Bambu Studio slices with the stock process); "
+                    "recommended = same with slicer.estimate shell_mm / infill; ±10 %")
+STOCK_PROCESS = "0.20mm Standard @BBL X1C"   # Bambu Studio's default process for the P1S 0.4 (= the GUI default)
 
 
 # ============================================================================ config
@@ -84,6 +86,26 @@ class Connectors:
     end_mm: float = 14.0
     clearance_mm: float = 0.15
     min_base_mm: float = 2.0
+
+
+@dataclass(frozen=True)
+class Slicer:
+    """Recommended Bambu Studio process changes against the stock STOCK_PROCESS (filament saving, measured with the
+    Bambu Studio CLI). A plain 3MF cannot carry them into the GUI (see the printer section), so they are only
+    shown (index.json `slicer`, app planner, README); `shell_mm` / `infill` model the filament for these settings."""
+    sparse_infill_pattern: str = "lightning"
+    sparse_infill_density: float = 0.10
+    wall_loops: int = 3
+    top_shell_layers: int = 6
+    top_shell_thickness_mm: float = 1.2
+    shell_mm: float = 1.25
+    infill: float = 0.02
+    saving_pct: tuple[int, int] = (24, 55)     # measured range vs. the stock process (all generated tiles)
+    time_saving_pct: tuple[int, int] = (-3, 22)
+
+
+SLICER_PATTERNS_DE = {"lightning": "Blitz", "gyroid": "Gyroid", "adaptivecubic": "Adaptiv kubisch",
+                      "grid": "Gitternetz"}   # Bambu Studio 02.08 German UI (i18n/de/BambuStudio.mo)
 
 
 @dataclass(frozen=True)
@@ -108,11 +130,12 @@ class Series:
     text: bool = True
     engrave_mm: float = 0.6
     material_density_g_cm3: float = 1.24
-    shell_mm: float = 1.2
-    infill: float = 0.15
+    shell_mm: float = 0.9
+    infill: float = 0.155
     max_error_mm: float = 0.03        # top-surface simplification: max |Δz| at every sampled vertex; 0 = full grid
     max_triangles: int = 500_000      # top-surface triangle budget (walls + bottom add ≈ 10–20 k)
     connectors: Connectors = field(default_factory=Connectors)
+    slicer: Slicer | None = None      # recommended process changes (None: none recommended)
     sets: dict = field(default_factory=dict, compare=False, hash=False)
 
     @property
@@ -165,6 +188,13 @@ def check_series(s: Series) -> None:
         raise ValueError(f"{s.key}: max_error_mm must be ≥ 0 and max_triangles ≥ 16·(vertices − 1)")
     if s.text and not (0 < s.engrave_mm < s.base_mm):
         raise ValueError(f"{s.key}: engrave_mm must be in (0, base_mm)")
+    sl = s.slicer
+    if sl is not None:
+        if sl.sparse_infill_pattern not in SLICER_PATTERNS_DE:
+            raise ValueError(f"{s.key}: slicer.sparse_infill_pattern must be one of {list(SLICER_PATTERNS_DE)}")
+        if not (0 < sl.sparse_infill_density <= 1 and 0 <= sl.infill <= 1 and sl.shell_mm > 0 and sl.wall_loops >= 1
+                and sl.top_shell_layers >= 1 and sl.top_shell_thickness_mm >= 0):
+            raise ValueError(f"{s.key}: slicer values out of range")
 
 
 def load_series(key: str, path: Path = CONFIG_PATH) -> Series:
@@ -174,6 +204,7 @@ def load_series(key: str, path: Path = CONFIG_PATH) -> Series:
         raise SystemExit(f"unknown series {key!r}; known: {', '.join(allser)}")
     d = {**cfg.get("defaults", {}), **allser[key]}
     conn = {**cfg.get("defaults", {}).get("connectors", {}), **allser[key].get("connectors", {})}
+    slc = {**cfg.get("defaults", {}).get("slicer", {}), **allser[key].get("slicer", {})}
     scale, tile_m = int(d["scale"]), int(d["tile_m"])
     mode = str(d.get("datum_mode", "series"))
     s = Series(
@@ -186,13 +217,14 @@ def load_series(key: str, path: Path = CONFIG_PATH) -> Series:
         origin=tuple(int(v) for v in d.get("origin", (0, 0))), rlp_offset_m=float(d.get("rlp_offset_m", -0.07)),
         counties=tuple(d.get("counties", ("SPK",))), max_height_mm=float(d.get("max_height_mm", 250.0)),
         text=bool(d.get("text", True)), engrave_mm=float(d.get("engrave_mm", 0.6)),
-        material_density_g_cm3=float(d.get("material_density_g_cm3", 1.24)), shell_mm=float(d.get("shell_mm", 1.2)),
-        infill=float(d.get("infill", 0.15)), max_error_mm=float(d.get("max_error_mm", 0.03)),
+        material_density_g_cm3=float(d.get("material_density_g_cm3", 1.24)), shell_mm=float(d.get("shell_mm", 0.9)),
+        infill=float(d.get("infill", 0.155)), max_error_mm=float(d.get("max_error_mm", 0.03)),
         max_triangles=int(d.get("max_triangles", 500_000)),
         connectors=Connectors(enabled=bool(conn.get("enabled", True)),
                               positions=tuple(float(p) for p in conn.get("positions", (0.25, 0.75))),
                               **{k: float(conn[k]) for k in ("depth_mm", "length_mm", "waist_mm", "end_mm",
                                                              "clearance_mm", "min_base_mm") if k in conn}),
+        slicer=slicer_from_config(slc),
         sets=dict(allser[key].get("sets", {})),
     )
     try:
@@ -200,6 +232,17 @@ def load_series(key: str, path: Path = CONFIG_PATH) -> Series:
     except ValueError as e:
         raise SystemExit(str(e))
     return s
+
+
+def slicer_from_config(d: dict) -> Slicer | None:
+    """`[defaults.slicer]` / `[series.X.slicer]` table → Slicer (None when absent or `enabled = false`)."""
+    if not d or not d.get("enabled", True):
+        return None
+    kw = {k: d[k] for k in ("sparse_infill_pattern",) if k in d}
+    kw |= {k: float(d[k]) for k in ("sparse_infill_density", "top_shell_thickness_mm", "shell_mm", "infill") if k in d}
+    kw |= {k: int(d[k]) for k in ("wall_loops", "top_shell_layers") if k in d}
+    kw |= {k: tuple(int(v) for v in d[k]) for k in ("saving_pct", "time_saving_pct") if k in d}
+    return Slicer(**kw)
 
 
 def list_series(path: Path = CONFIG_PATH) -> list[str]:
@@ -823,10 +866,59 @@ def mesh_stats(V: np.ndarray, F: np.ndarray) -> tuple[float, float]:
     return vol, float(0.5 * np.linalg.norm(cr, axis=1).sum())
 
 
-def filament_g(vol_mm3: float, area_mm2: float, s: Series) -> tuple[float, float]:
+def filament_g(vol_mm3: float, area_mm2: float, s: Series, shell_mm: float | None = None,
+               infill: float | None = None) -> tuple[float, float]:
+    """(solid, typical) grams; shell_mm / infill default to the series' stock-process model."""
     rho = s.material_density_g_cm3 / 1000.0
-    shell = min(vol_mm3, area_mm2 * s.shell_mm)
-    return vol_mm3 * rho, (shell + s.infill * (vol_mm3 - shell)) * rho
+    shell = min(vol_mm3, area_mm2 * (s.shell_mm if shell_mm is None else shell_mm))
+    return vol_mm3 * rho, (shell + (s.infill if infill is None else infill) * (vol_mm3 - shell)) * rho
+
+
+def tile_filament(volume_cm3: float, surface_cm2: float, s: Series) -> dict:
+    """index.json `filament_g` of a tile from its stored volume / surface: solid, typical (stock process) and —
+    with slicer recommendations — recommended (grams, rounded). Recomputed for every tile on each index write,
+    so a changed estimate model reaches old entries with --layout-only."""
+    vol, area = volume_cm3 * 1000.0, surface_cm2 * 100.0
+    solid, typical = filament_g(vol, area, s)
+    out = {"solid": round(solid), "typical": round(typical)}
+    if s.slicer is not None:
+        out["recommended"] = round(filament_g(vol, area, s, s.slicer.shell_mm, s.slicer.infill)[1])
+    return out
+
+
+def _de_num(v: float) -> str:
+    return f"{v:g}".replace(".", ",")
+
+
+def slicer_note_de(sl: Slicer) -> str:
+    """Short German recommendation for the app planner (Bambu Studio 02.08 German UI labels)."""
+    lo, hi = sl.saving_pct
+    tlo, thi = sl.time_saving_pct
+    pat = SLICER_PATTERNS_DE[sl.sparse_infill_pattern]
+    t = (f"Druckzeit etwa gleich bis ≈ {thi} % kürzer" if tlo <= 0 else f"≈ {tlo}–{thi} % weniger Druckzeit")
+    return (f"Filament sparen: in Bambu Studio unter Prozess → Stärke Füllmuster „{pat}“, Fülldichte "
+            f"{_de_num(round(sl.sparse_infill_density * 100, 1))} %, Wandlinien {sl.wall_loops}, Obere "
+            f"Schalenschichten {sl.top_shell_layers} (Dicke der oberen Schale {_de_num(sl.top_shell_thickness_mm)} mm)"
+            f" – spart ≈ {lo}–{hi} % Filament (dicke Kacheln am meisten), {t} als mit dem Standardprozess. Das "
+            f"Modell bleibt gleich; die 3MF kann diese Einstellungen nicht mitbringen – einmal als eigenes "
+            f"Prozessprofil speichern.")
+
+
+def slicer_meta(s: Series) -> dict | None:
+    """index.json `slicer` block (None without recommendations)."""
+    sl = s.slicer
+    if sl is None:
+        return None
+    return {
+        "base": STOCK_PROCESS,
+        "settings": {"sparse_infill_pattern": sl.sparse_infill_pattern,
+                     "sparse_infill_density": f"{sl.sparse_infill_density * 100:g}%", "wall_loops": sl.wall_loops,
+                     "top_shell_layers": sl.top_shell_layers, "top_shell_thickness": sl.top_shell_thickness_mm},
+        "savingPct": list(sl.saving_pct), "timeSavingPct": list(sl.time_saving_pct),
+        "estimate": {"shell_mm": sl.shell_mm, "infill": sl.infill},
+        "inFile": False,
+        "note_de": slicer_note_de(sl),
+    }
 
 
 # ============================================================================ writers
@@ -988,7 +1080,8 @@ def write_layout(path: Path, s: Series, tiles: list[dict], out_dir: Path, cell_p
             if p.exists():
                 img.paste(Image.open(p).convert("RGB").resize((cell_px, cell_px), Image.LANCZOS), (x, y))
             dr.rectangle([x, y, x + cell_px - 1, y + cell_px - 1], outline=(40, 40, 40), width=2)
-            lab = f"{t['id']}\nmax {t['z_mm']['max']:.0f} mm · {t['filament_g']['typical']:.0f} g"
+            fg = t["filament_g"]
+            lab = f"{t['id']}\nmax {t['z_mm']['max']:.0f} mm · {fg.get('recommended', fg['typical']):.0f} g"
             dr.multiline_text((x + 6, y + 5), lab, fill=(0, 0, 0), font=f_id, stroke_width=3,
                               stroke_fill=(255, 255, 255))
         bx += b["nx"] * cell_px + gap
@@ -1353,7 +1446,7 @@ def validate_index(doc: dict) -> list[str]:
             errs.append(f"{t['id']}: datum_m (per-set datum series)")
         if not all(isinstance(t["files"].get(k), str) for k in ("3mf", "png")):
             errs.append(f"{t['id']}: files")
-        if set(t["filament_g"]) != {"solid", "typical"}:
+        if not {"solid", "typical"} <= set(t["filament_g"]) <= {"solid", "typical", "recommended"}:
             errs.append(f"{t['id']}: filament_g")
     return errs
 
@@ -1367,6 +1460,8 @@ def merge_index(old: dict | None, s: Series, new_tiles: list[dict], attribution:
                 printer: dict | None = None, set_datums: dict | None = None) -> dict:
     tiles = {t["id"]: t for t in (old or {}).get("tiles", [])}
     tiles.update({t["id"]: t for t in new_tiles})
+    tiles = {k: ({**t, "filament_g": tile_filament(t["volume_cm3"], t["surface_cm2"], s)}
+                 if "volume_cm3" in t and "surface_cm2" in t else t) for k, t in tiles.items()}
     ordered = sorted(tiles.values(), key=lambda t: (-t["bboxUTM"][1], t["bboxUTM"][0]))
     att = [a for a in (old or {}).get("attribution", "").split("; ") if a]
     for a in attribution:
@@ -1388,6 +1483,8 @@ def merge_index(old: dict | None, s: Series, new_tiles: list[dict], attribution:
         "attribution": "; ".join(att), "disclaimer_de": DISCLAIMER_DE,
         "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "tiles": ordered,
     }
+    if s.slicer is not None:
+        doc["slicer"] = slicer_meta(s)
     if s.datum_mode == "set" or sd:
         doc["setDatum_m"] = {k: sd[k] for k in sorted(sd)}
     return doc
@@ -1504,7 +1601,7 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
         "baseAboveRecess_mm": base_above,
         "volume_cm3": round(vol / 1000.0, 1),
         "surface_cm2": round(area / 100.0, 1),
-        "filament_g": {"solid": round(solid), "typical": round(typical)},
+        "filament_g": tile_filament(round(vol / 1000.0, 1), round(area / 100.0, 1), s),
         "triangles": int(len(F)), "vertices": int(len(V)),
         "maxError_mm": round(max_err, 4),
         "watertight": True,
@@ -1695,8 +1792,11 @@ def main():
     write_layout(out / "layout.png", s, doc["tiles"], out, sets=doc["sets"])
     write_catalog(out.parent)
     tot = sum(t["filament_g"]["typical"] for t in doc["tiles"])
+    rec = sum(t["filament_g"].get("recommended", t["filament_g"]["typical"]) for t in doc["tiles"])
     print(f"done in {time.time() - T0:.0f}s: {len(new)} tile(s) written, index has {len(doc['tiles'])} "
-          f"(≈ {tot / 1000:.1f} kg PLA typical), {doc['keysNeeded']} keys → {out}")
+          f"(≈ {tot / 1000:.1f} kg PLA with the stock process"
+          + (f", ≈ {rec / 1000:.1f} kg with the recommended slicer settings" if s.slicer else "")
+          + f"), {doc['keysNeeded']} keys → {out}")
 
 
 if __name__ == "__main__":

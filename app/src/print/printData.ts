@@ -100,7 +100,8 @@ export interface PrintTile {
   files: { '3mf': string; png?: string; stl?: string };
   z_mm: { min: number; max: number; mean?: number };
   h_m?: { min: number; max: number; mean: number };
-  filament_g: { solid: number; typical: number };
+  /** typical = stock slicer process; recommended = with `PrintIndex.slicer` settings (optional, newer files). */
+  filament_g: { solid: number; typical: number; recommended?: number };
   /** Datum of this tile (m NHN); absent in older files → `series.datum_m`. */
   datum_m?: number;
   volume_cm3?: number;
@@ -133,6 +134,8 @@ export interface PrintIndex {
   printer?: string;
   printerProfile?: { mode?: string; name?: string; file: string | null; note_de?: string; placement_mm?: [number, number] };
   filament?: { material?: string; infill?: number };
+  /** Recommended slicer process changes (display only — a plain 3MF cannot carry them). */
+  slicer?: { note_de: string; savingPct?: [number, number] };
   layout?: string;
   sets: Record<string, string[]>;
   /** datumMode "set": frozen datum per named set (m NHN). */
@@ -183,7 +186,7 @@ function parseTile(t: unknown, g: GridSpec): PrintTile | string {
     },
     z_mm: { min: z.min, max: z.max, ...(num(z.mean) ? { mean: z.mean } : {}) },
     ...(isObj(h) && num(h.min) && num(h.max) && num(h.mean) ? { h_m: { min: h.min, max: h.max, mean: h.mean } } : {}),
-    filament_g: { solid: fg.solid, typical: fg.typical },
+    filament_g: { solid: fg.solid, typical: fg.typical, ...(num(fg.recommended) ? { recommended: fg.recommended } : {}) },
     ...(num(t.datum_m) ? { datum_m: t.datum_m } : {}),
     ...(num(t.volume_cm3) ? { volume_cm3: t.volume_cm3 } : {}),
     ...(num(t.clampedVertices) ? { clampedVertices: t.clampedVertices } : {}),
@@ -249,6 +252,7 @@ export function parsePrintIndex(raw: unknown): { value: PrintIndex; warnings: st
   const setDatum_m: Record<string, number> = {};
   if (isObj(raw.setDatum_m)) for (const [name, d] of Object.entries(raw.setDatum_m)) if (num(d)) setDatum_m[name] = d;
   const pp = raw.printerProfile;
+  const sl = raw.slicer;
   return {
     value: {
       series,
@@ -268,6 +272,16 @@ export function parsePrintIndex(raw: unknown): { value: PrintIndex; warnings: st
         : {}),
       ...(isObj(raw.filament)
         ? { filament: { ...(str(raw.filament.material) ? { material: raw.filament.material } : {}), ...(num(raw.filament.infill) ? { infill: raw.filament.infill } : {}) } }
+        : {}),
+      ...(isObj(sl) && str(sl.note_de) && sl.note_de
+        ? {
+            slicer: {
+              note_de: sl.note_de,
+              ...(Array.isArray(sl.savingPct) && sl.savingPct.length === 2 && sl.savingPct.every(num)
+                ? { savingPct: [sl.savingPct[0], sl.savingPct[1]] as [number, number] }
+                : {}),
+            },
+          }
         : {}),
       ...(safeRelPath(raw.layout) ? { layout: raw.layout } : {}),
       sets,
@@ -343,8 +357,10 @@ export function tileDatum(series: Pick<PrintSeries, 'datum_m'>, t: Pick<PrintTil
 
 export interface PrintTotals {
   tiles: number;
-  /** Typical filament (shell + infill), grams. */
+  /** Typical filament (shell + infill), grams — stock slicer process. */
   gramsTypical: number;
+  /** Filament with the recommended slicer settings, grams; null unless every tile has an estimate. */
+  gramsRecommended: number | null;
   gramsSolid: number;
   /** Bounding rectangle of all tiles once assembled (cm). */
   widthCm: number;
@@ -370,9 +386,12 @@ export function printTotals(
   }
   let gramsTypical = 0;
   let gramsSolid = 0;
+  let gramsRecommended: number | null = tiles.length ? 0 : null;
   let maxZmm = 0;
   for (const t of tiles) {
     gramsTypical += t.filament_g.typical;
+    const rec = t.filament_g.recommended;
+    gramsRecommended = gramsRecommended === null || rec === undefined ? null : gramsRecommended + rec;
     gramsSolid += t.filament_g.solid;
     maxZmm = Math.max(maxZmm, t.z_mm.max);
   }
@@ -388,6 +407,7 @@ export function printTotals(
   return {
     tiles: tiles.length,
     gramsTypical,
+    gramsRecommended,
     gramsSolid,
     widthCm,
     heightCm,

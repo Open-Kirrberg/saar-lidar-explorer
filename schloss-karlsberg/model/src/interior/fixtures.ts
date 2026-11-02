@@ -1,15 +1,17 @@
 /**
  * Sized fixtures and furniture (merged into the room buckets): chimneypieces with trumeaux,
- * stoves, pier-glasses, the Paradebett alcove, beds, tables, bookcases, vitrines, racks,
+ * stoves (Kachelofen; O4 altar stoves in niches), pier-glasses, the Paradebett alcove, beds, tables, bookcases, vitrines, racks,
  * pictures (plain colour fields - NO artwork), kitchen hearth / potager / oven, columns.
  * Local frame as in furniture.ts (X width along the wall, Y up, Z depth, front +Z).
  */
 import * as THREE from 'three';
 import type { MaterialLibrary, MaterialName } from '../context.ts';
-import type { ST } from '../spec.ts';
-import { type Accumulator, type Bucket, type PartInfo, type V3, placeMatrix } from './mesh.ts';
-import { type InteriorExtra, type Tints, interiorMaterial } from './materials.ts';
-import { type Item, type SizedKind, wallPoint, type RoomWall } from './programme.ts';
+import { HEARTH, STATE_ROOM } from '../layout/grammar.ts';
+import { type HearthKit, chimneypiece, faienceStove } from './hearth.ts';
+import { type RGB, canvasGrid, meanderRects, mirrorGrid, srgbToLinear } from './finish.ts';
+import { type Accumulator, type Bucket, type MouldProfile, type PartInfo, type V3, T, beadProfile, cyl, mouldFrame, placeMatrix } from './mesh.ts';
+import { type InteriorExtra, type Tints, interiorMaterial, marbleMaterial } from './materials.ts';
+import type { Item, SizedKind } from './programme.ts';
 import { mulberry32, hashString } from '../layout/geom.ts';
 
 export interface FixtureCtx {
@@ -24,11 +26,11 @@ export interface FixtureCtx {
   colour: string;
   /** Grade 'state' gets gilt mouldings. */
   state: boolean;
+  /** sRGB colour of the room's walls above the dado (silk hue, boiserie white): what its mirrors reflect. */
+  wall?: string;
 }
 
 const LEATHER = ['#5a2a1e', '#6e4a2a', '#3d3b2a', '#7a5a34', '#4a2c34'];
-const T = (x: number, y: number, z: number) => new THREE.Matrix4().makeTranslation(x, y, z);
-const cyl = (rBottom: number, rTop: number, h: number, seg = 8) => new THREE.CylinderGeometry(rTop, rBottom, h, seg);
 
 /** Build one sized item into the accumulator. */
 export function buildFixture(it: Item, fc: FixtureCtx): void {
@@ -47,6 +49,32 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
   const gilt = M('metal.gilt');
   const moulding = fc.state ? gilt : M('wall.boiserie');
 
+  /** Moulded frame (KB-I26) in the local XY plane, standing on depth z0, profile `prof`. */
+  const mould = (b: Bucket, x0: number, y0: number, x1: number, y1: number, prof: MouldProfile, z0 = 0) => {
+    const F = (x: number, y: number, z: number): V3 => {
+      const v = new THREE.Vector3(x, y, z0 + z).applyMatrix4(m);
+      return [v.x, v.y, v.z];
+    };
+    const N = (x: number, y: number, z: number): V3 => {
+      const v = new THREE.Vector3(x, y, z).transformDirection(m);
+      return [v.x, v.y, v.z];
+    };
+    mouldFrame(b, F, N, x0, y0, x1, y1, prof);
+  };
+  /** Colour grid (canvas, mirror glass) on the local XY plane at depth z, sRGB colours in. */
+  const grid = (b: Bucket, x0: number, y0: number, x1: number, y1: number, z: number, g: { nx: number; ny: number; colours: RGB[] }) => {
+    const P = (x: number, y: number): V3 => {
+      const v = new THREE.Vector3(x, y, z).applyMatrix4(m);
+      return [v.x, v.y, v.z];
+    };
+    const nv = new THREE.Vector3(0, 0, 1).transformDirection(m);
+    b.colourGrid(P(x0, y0), P(x1, y0), P(x1, y1), P(x0, y1), [nv.x, nv.y, nv.z], g.nx, g.ny, (i, j) => {
+      const c = g.colours[j * g.nx + i];
+      return [srgbToLinear(c[0]), srgbToLinear(c[1]), srgbToLinear(c[2])];
+    });
+  };
+  const seed = hashString(`${fc.roomId}|${it.kind}|${it.pos[0].toFixed(2)}|${it.pos[1].toFixed(2)}|${(it.z ?? 0).toFixed(2)}`);
+
   /** Rectangular frame of four bars in the XY plane at depth z0..z1. */
   const frame = (b: Bucket, x0: number, y0: number, x1: number, y1: number, bw: number, z0: number, z1: number) => {
     box(b, [x0, y0, z0], [x0 + bw, y1, z1]);
@@ -56,36 +84,91 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
   };
 
   switch (kind) {
-    case 'fireplace': {
-      const mb = M('stone.marble');
-      const zb = -d / 2;
-      box(mb, [-w / 2, 0, zb], [-w / 2 + 0.24, 1.0, d / 2], ['-y', '-z']);
-      box(mb, [w / 2 - 0.24, 0, zb], [w / 2, 1.0, d / 2], ['-y', '-z']);
-      box(mb, [-w / 2 + 0.24, 0.84, zb], [w / 2 - 0.24, 1.0, d / 2 - 0.02], ['-z']);
-      box(mb, [-w / 2 - 0.06, 1.0, zb], [w / 2 + 0.06, h, d / 2 + 0.05], ['-z']);
-      box(mb, [-w / 2 - 0.12, 0, zb], [w / 2 + 0.12, 0.03, d / 2 + 0.4], ['-y']);
-      box(tint('stone.rubble', '#2b2622'), [-w / 2 + 0.24, 0.03, zb], [w / 2 - 0.24, 0.84, zb + 0.06], ['-y']);
-      box(gilt, [-0.18, 0.88, d / 2 - 0.02], [0.18, 0.96, d / 2 + 0.005]);
-      // andirons and logs - summer 1789: the fire is not lit
-      const iron = M('metal.iron');
-      for (const sx of [-0.28, 0.28]) box(iron, [sx - 0.02, 0.03, zb + 0.12], [sx + 0.02, 0.32, d / 2 - 0.02]);
-      geo(tint('wood.door', '#5a3a22'), cyl(0.06, 0.06, 0.7, 6), T(0, 0.12, zb + 0.18).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2)));
+    case 'fireplace':
+    case 'stove': {
+      // Wave-6 residuals (wave-5 review: plain white boxes with box andirons; a stove that read as a snowman): a
+      // Louis-seize cheminée with console jambs, inlaid frieze, gilt-bronze mounts, cast-iron fireback and chenets, and a
+      // faience column stove with tile joints, a blue-grey band and brass rings (interior/hearth.ts, grammar HEARTH) [N].
+      const kit: HearthKit = {
+        marble: (body, vein) => M(marbleMaterial(fc.lib, body, vein)),
+        tint: (c) => tint('stone.marble', c),
+        iron: tint('metal.iron', HEARTH.ironColour),
+        gilt,
+        box: (b, min, max, skip = []) => box(b, min, max, skip),
+        geo,
+      };
+      if (kind === 'fireplace') chimneypiece(kit, w, d, h, fc.state);
+      else faienceStove(kit, w, d, h);
       break;
     }
-    case 'stove': {
-      const fa = tint('stone.marble', '#f3f0e8');
-      box(fa, [-w / 2, 0, -d / 2], [w / 2, 0.3, d / 2], ['-y', '-z']);
-      box(fa, [-w / 2 + 0.05, 0.3, -d / 2], [w / 2 - 0.05, 1.5, d / 2 - 0.05], ['-z']);
-      box(fa, [-w / 2, 1.5, -d / 2], [w / 2, 1.6, d / 2], ['-z']);
-      geo(fa, cyl(0.36, 0.3, Math.max(0.4, h - 1.9), 12), T(0, 1.6 + Math.max(0.4, h - 1.9) / 2, 0));
-      geo(fa, new THREE.SphereGeometry(0.18, 10, 6), T(0, h - 0.15, 0));
+    case 'altar_stove': {
+      // O4 (T26 Ottomeyer; T1 p. 341): altar-shaped stove of enamelled copper with gilt mounts, crowned by a bronze
+      // figure (Ceres / Diana-Hebe). Proportions after the size [w, d, h] (body 0.9 x 0.6 x 1.4 m, figure 0.7 m) N;
+      // enamel colour N (dark blue-grey); the figure is a plain draped silhouette, no likeness.
+      const enamel = tint('stone.marble', '#27343d');
+      const stone = tint('stone.marble', '#5b5650');
+      const bronze = tint('metal.gilt', '#A07E46');
+      const hw = w / 2;
+      const hd = d / 2;
+      // pedestal (stone), base moulding (gilt), die (enamel)
+      box(stone, [-hw - 0.05, 0, -hd - 0.05], [hw + 0.05, 0.22, hd + 0.05], ['-y']);
+      box(gilt, [-hw - 0.02, 0.22, -hd - 0.02], [hw + 0.02, 0.28, hd + 0.02], ['-y']);
+      box(enamel, [-hw, 0.28, -hd], [hw, 1.68, hd], ['-y']);
+      // gilt mounts: front panel frame, medallion, corner rosettes, garland swag of beads
+      frame(gilt, -hw + 0.1, 0.45, hw - 0.1, 1.48, 0.03, hd, hd + 0.015);
+      geo(gilt, cyl(0.13, 0.13, 0.025, 16), T(0, 0.98, hd + 0.0125).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
+      for (const sx of [-1, 1]) {
+        geo(gilt, new THREE.SphereGeometry(0.045, 8, 6), T(sx * (hw - 0.06), 1.6, hd + 0.01));
+        for (let k = 1; k < 6; k++) {
+          const x = sx * (hw - 0.06) * (1 - k / 6);
+          geo(gilt, new THREE.SphereGeometry(0.022, 6, 4), T(x, 1.6 - 0.12 * Math.sin((Math.PI * k) / 6), hd + 0.01));
+        }
+      }
+      // cornice: gilt band, enamel top slab, then the figure's plinth (bronze)
+      box(gilt, [-hw - 0.03, 1.68, -hd - 0.03], [hw + 0.03, 1.74, hd + 0.03]);
+      box(enamel, [-hw - 0.06, 1.74, -hd - 0.06], [hw + 0.06, 1.84, hd + 0.06]);
+      geo(bronze, cyl(0.17, 0.15, 0.1, 14), T(0, 1.89, 0));
+      // figure ≈ 0.75 m (h - 1.94), a draped standing goddess as a smooth silhouette (wave-5 review: the stacked
+      // cylinders read as a crude toy): a lathed robe falling in a flared hem, a high-waisted bodice, shoulders under a
+      // mantle, a small head with a chignon; the right arm raised with a torch, the left lowered with a sheaf [N form;
+      // no likeness]. Gilt-bronze tone, one material with the plinth [N].
+      const k = Math.max(0.5, h - 1.94) / 0.76;
+      const y0 = 1.94;
+      const fig = bronze;
+      const L = (pts: [number, number][], seg: number, m: THREE.Matrix4) => geo(fig, new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x * k, y * k)), seg), m);
+      const flat = (x: number, y: number, z: number, sz: number) => T(x * k, y0 + y * k, z * k).multiply(new THREE.Matrix4().makeScale(1, 1, sz));
+      L([[0.001, 0], [0.135, 0], [0.14, 0.03], [0.12, 0.12], [0.1, 0.26], [0.085, 0.38], [0.072, 0.46], [0.08, 0.5], [0.088, 0.55], [0.1, 0.6], [0.06, 0.635], [0.025, 0.65], [0.001, 0.655]], 18, flat(0, 0, 0, 0.72));
+      // mantle swag across the body
+      geo(fig, new THREE.TorusGeometry(0.1 * k, 0.018 * k, 6, 14, Math.PI), flat(0, 0.36, 0.01, 0.6).multiply(new THREE.Matrix4().makeRotationZ(Math.PI + 0.35)));
+      geo(fig, new THREE.SphereGeometry(0.052 * k, 14, 10), T(0, y0 + 0.705 * k, 0.005 * k).multiply(new THREE.Matrix4().makeScale(0.92, 1.08, 0.95)));
+      geo(fig, new THREE.SphereGeometry(0.03 * k, 10, 8), T(0, y0 + 0.73 * k, -0.04 * k));
+      geo(fig, cyl(0.022 * k, 0.02 * k, 0.05 * k, 8), T(0, y0 + 0.655 * k, 0));
+      // right arm raised (upper arm out, forearm up) holding a torch with a flame
+      const limb = (ax: number, ay: number, bx: number, by: number, r0: number, r1: number) => {
+        const len = Math.hypot(bx - ax, by - ay) * k;
+        const ang = Math.atan2(bx - ax, by - ay);
+        geo(fig, cyl(r0 * k, r1 * k, len, 8), T(((ax + bx) / 2) * k, y0 + ((ay + by) / 2) * k, 0.01 * k).multiply(new THREE.Matrix4().makeRotationZ(-ang)));
+      };
+      limb(0.085, 0.61, 0.17, 0.66, 0.024, 0.02);
+      limb(0.17, 0.66, 0.19, 0.8, 0.02, 0.016);
+      geo(fig, cyl(0.012 * k, 0.016 * k, 0.32 * k, 8), T(0.19 * k, y0 + 0.82 * k, 0.01 * k));
+      geo(fig, cyl(0.035 * k, 0.0, 0.08 * k, 8), T(0.19 * k, y0 + 1.02 * k, 0.01 * k));
+      // left arm lowered along the robe, a sheaf of corn in the hand
+      limb(-0.085, 0.61, -0.12, 0.45, 0.024, 0.02);
+      limb(-0.12, 0.45, -0.13, 0.33, 0.02, 0.016);
+      geo(fig, cyl(0.045 * k, 0.018 * k, 0.2 * k, 10), T(-0.13 * k, y0 + 0.25 * k, 0.03 * k));
       break;
     }
     case 'trumeau':
     case 'pier_glass': {
-      box(M('interior.mirror'), [-w / 2 + 0.06, 0.06, 0], [w / 2 - 0.06, h - 0.06, 0.015], ['-z']);
-      frame(gilt, -w / 2, 0, w / 2, h, 0.075, 0, 0.045);
-      box(gilt, [-w / 4, h, 0], [w / 4, h + 0.22, 0.04]);
+      // KB-I26 review: the glass carries a soft reflected room (finish.ts mirrorGrid) so it reads as a mirror; moulded
+      // gilt frame and a cresting [N]
+      const fw = Math.min(0.1, 0.06 + w * 0.02);
+      grid(M('interior.mirror'), -w / 2 + fw * 0.8, fw * 0.8, w / 2 - fw * 0.8, h - fw * 0.8, 0.012, mirrorGrid(seed, w, h, { wall: fc.wall ?? '#E2DDD0' }));
+      box(M('wall.boiserie'), [-w / 2, 0, 0], [w / 2, h, 0.01], ['-z']);
+      mould(gilt, -w / 2, 0, w / 2, h, beadProfile(fw, 0.045), 0.01);
+      box(gilt, [-w / 4, h, 0], [w / 4, h + 0.06, 0.04]);
+      geo(gilt, new THREE.CylinderGeometry(0.14, 0.14, 0.035, 14, 1, false, 0, Math.PI), T(0, h + 0.06, 0.02).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)).multiply(new THREE.Matrix4().makeRotationY(-Math.PI / 2)));
       break;
     }
     case 'alcove': {
@@ -181,8 +264,19 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
     case 'chest':
     case 'vitrine':
     case 'weapon_rack': {
-      const case_ = kind === 'bookcase' && fc.state ? M('wall.boiserie') : tint('wood.door', kind === 'weapon_rack' ? '#6b4b2e' : '#7a5534');
+      const st = it.style ?? {};
+      const L = STATE_ROOM.library;
+      // KB-I27: oak library cases and white-painted cabinets (T5) from the item style; otherwise as before
+      const case_ = st.white ? tint('wall.boiserie', STATE_ROOM.cabinet.white) : st.oak ? tint('wood.door', L.oak) : kind === 'bookcase' && fc.state ? M('wall.boiserie') : tint('wood.door', kind === 'weapon_rack' ? '#6b4b2e' : '#7a5534');
       const z0 = -d / 2;
+      if (kind === 'vitrine' && st.white) {
+        whiteCabinet(it, fc, M, tint, case_, seed);
+        break;
+      }
+      if (kind === 'bookcase' && st.oak) {
+        oakBookcase(it, fc, M, tint, case_, seed);
+        break;
+      }
       if (kind === 'chest' || kind === 'wardrobe') {
         box(case_, [-w / 2, 0, z0], [w / 2, h, d / 2], ['-y', '-z']);
         if (kind === 'chest' && /Buffet/.test(it.name_de)) box(M('stone.marble'), [-w / 2 - 0.02, h, z0], [w / 2 + 0.02, h + 0.04, d / 2 + 0.03], ['-z']);
@@ -241,8 +335,42 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
       break;
     }
     case 'picture': {
-      box(tint('ceiling.stucco', it.colour ?? '#6b4f3a'), [-w / 2 + 0.06, 0.06, 0], [w / 2 - 0.06, h - 0.06, 0.02], ['-z']);
-      frame(gilt, -w / 2, 0, w / 2, h, 0.07, 0, 0.05);
+      // KB-I27 review: a varnished canvas with tonal variation (finish.ts canvasGrid; placeholder, no artwork) in a
+      // moulded gilt frame; frame width grows with the picture [N]
+      const fw = Math.min(0.12, 0.05 + 0.03 * Math.max(w, h));
+      grid(M('interior.canvas'), -w / 2 + fw * 0.85, fw * 0.85, w / 2 - fw * 0.85, h - fw * 0.85, 0.018, canvasGrid(seed, w - 1.7 * fw, h - 1.7 * fw));
+      box(tint('wood.door', '#2a2018'), [-w / 2 + 0.02, 0.02, 0], [w / 2 - 0.02, h - 0.02, 0.016], ['-z']);
+      mould(gilt, -w / 2, 0, w / 2, h, beadProfile(fw, 0.05), 0.0);
+      break;
+    }
+    case 'sconce': {
+      // KB-I26: bras de lumière, two arms with bobèches and candles on a gilt-bronze backplate [N research/09 I7]
+      const iy = 0.0;
+      geo(gilt, new THREE.SphereGeometry(1, 10, 8), T(0, iy + 0.18, 0.02).multiply(new THREE.Matrix4().makeScale(0.07, 0.17, 0.025)));
+      geo(gilt, new THREE.SphereGeometry(0.035, 8, 6), T(0, iy + 0.36, 0.03));
+      const candle = M('interior.candle');
+      for (const sx of [-1, 1]) {
+        geo(gilt, new THREE.TorusGeometry(0.1, 0.012, 5, 10, Math.PI), T(sx * 0.1, iy + 0.12, 0.09).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeRotationZ(sx > 0 ? Math.PI : 0)));
+        geo(gilt, cyl(0.045, 0.03, 0.03, 10), T(sx * 0.2, iy + 0.22, 0.17));
+        geo(candle, cyl(0.011, 0.011, 0.16, 6), T(sx * 0.2, iy + 0.315, 0.17));
+      }
+      break;
+    }
+    case 'candelabrum': {
+      // KB-I27: six-arm gilt-bronze candelabrum on the gallery side tables (T1 pp. 374 f.) [D; form N]
+      geo(gilt, cyl(0.12, 0.09, 0.05, 14), T(0, 0.025, 0));
+      geo(gilt, cyl(0.03, 0.022, 0.45, 8), T(0, 0.27, 0));
+      geo(gilt, new THREE.SphereGeometry(0.05, 10, 6), T(0, 0.3, 0));
+      const candle = M('interior.candle');
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        const r = 0.2;
+        const rot = new THREE.Matrix4().makeRotationY(a);
+        geo(gilt, cyl(0.009, 0.009, r, 5), T(0, 0.5, 0).multiply(rot).multiply(T(0, 0, r / 2)).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
+        geo(gilt, cyl(0.03, 0.02, 0.025, 8), T(Math.sin(a) * r, 0.52, Math.cos(a) * r));
+        geo(candle, cyl(0.01, 0.01, 0.14, 6), T(Math.sin(a) * r, 0.6, Math.cos(a) * r));
+      }
+      geo(candle, cyl(0.011, 0.011, 0.16, 6), T(0, 0.62, 0));
       break;
     }
     case 'hearth':
@@ -315,8 +443,163 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
   }
 }
 
-/** Point on a wall at height h (object space). */
-export function wallPointO(w: RoomWall, u: number, inset: number, h: number): V3 {
-  const p: ST = wallPoint(w, u, inset);
-  return [p[0], h, -p[1]];
+type MFn = (m: MaterialName | InteriorExtra | THREE.Material) => Bucket;
+type TintFn = (m: MaterialName, c: string) => Bucket;
+
+/**
+ * KB-I27 Hofbibliothek case (T5, research/10 §c.3): oak, floor to the cove cornice, a closed cupboard base, open
+ * adjustable shelves of leather and vellum bindings, a Greek-key frieze ≈ 12 cm under a moulded cornice; in the room
+ * so described, brass-wire doors backed with crimson taffeta instead of open shelves [D; hues and mesh pitch N/I].
+ */
+function oakBookcase(it: Item, fc: FixtureCtx, M: MFn, tint: TintFn, oak: Bucket, seed: number): void {
+  const [w, d, h] = it.size ?? [2, 0.46, 3];
+  const L = STATE_ROOM.library;
+  const st = it.style ?? {};
+  const m = placeMatrix(it.pos, fc.floor_h + (it.z ?? 0), it.facing);
+  const box = (b: Bucket, a: V3, c: V3, skip: string[] = []) => b.box(a, c, m, skip);
+  const z0 = -d / 2;
+  const zf = d / 2;
+  const corn = L.cornice;
+  const fr = st.frieze ? L.frieze : 0;
+  const top = h - corn - fr; // top of the shelf zone
+  const base = 0.78; // closed cupboard base [N]
+  // carcass: back, sides, plinth, base cupboard with two panelled doors and a moulded top
+  box(oak, [-w / 2, 0, z0], [w / 2, h, z0 + 0.03], ['-z']);
+  box(oak, [-w / 2, 0, z0], [-w / 2 + 0.05, h - corn, zf], ['-z']);
+  box(oak, [w / 2 - 0.05, 0, z0], [w / 2, h - corn, zf], ['-z']);
+  box(oak, [-w / 2, 0, z0], [w / 2, 0.1, zf + 0.02]);
+  box(oak, [-w / 2 + 0.05, 0.1, z0], [w / 2 - 0.05, base, zf - 0.02], ['-z']);
+  box(oak, [-w / 2 - 0.01, base, z0], [w / 2 + 0.01, base + 0.04, zf + 0.04], ['-z']);
+  const dark = tint('wood.door', L.oakDark);
+  for (const sx of [-1, 1]) box(dark, [sx > 0 ? 0.04 : -w / 2 + 0.12, 0.2, zf - 0.02], [sx > 0 ? w / 2 - 0.12 : -0.04, base - 0.1, zf - 0.01]);
+  // frieze and cornice
+  if (fr > 0) {
+    box(dark, [-w / 2, top, z0], [w / 2, top + fr, zf + 0.005], ['-z']);
+    const light = tint('wood.door', L.oakLight);
+    const P = (u: number, v: number, zz: number): V3 => {
+      const p = new THREE.Vector3(-w / 2 + u, top + v, zz).applyMatrix4(m);
+      return [p.x, p.y, p.z];
+    };
+    const nv = new THREE.Vector3(0, 0, 1).transformDirection(m);
+    const n: V3 = [nv.x, nv.y, nv.z];
+    for (const r of meanderRects(w, fr)) light.quad(P(r.u0, r.v0, zf + 0.012), P(r.u1, r.v0, zf + 0.012), P(r.u1, r.v1, zf + 0.012), P(r.u0, r.v1, zf + 0.012), n);
+  }
+  box(oak, [-w / 2 - 0.02, h - corn, z0], [w / 2 + 0.02, h - corn * 0.45, zf + 0.04], ['-z']);
+  box(oak, [-w / 2 - 0.04, h - corn * 0.45, z0], [w / 2 + 0.04, h, zf + 0.07], ['-z']);
+  // bays: uprights every ≈ 0.8 m
+  const bays = Math.max(1, Math.round(w / 0.8));
+  for (let k = 1; k < bays; k++) {
+    const x = -w / 2 + (k * w) / bays;
+    box(oak, [x - 0.022, base, z0], [x + 0.022, top, zf]);
+  }
+  if (st.wireDoors) {
+    // brass-wire doors on crimson taffeta: the taffeta behind, a brass lattice in front, oak stiles and rails
+    const taffeta = tint('wall.silk.crimson', L.taffeta);
+    box(taffeta, [-w / 2 + 0.05, base + 0.04, zf - 0.03], [w / 2 - 0.05, top, zf - 0.025]);
+    const brass = M('metal.gilt');
+    const P = (x: number, y: number): V3 => {
+      const p = new THREE.Vector3(x, y, zf - 0.008).applyMatrix4(m);
+      return [p.x, p.y, p.z];
+    };
+    const nv = new THREE.Vector3(0, 0, 1).transformDirection(m);
+    const n: V3 = [nv.x, nv.y, nv.z];
+    const t = 0.004;
+    for (let x = -w / 2 + 0.05 + L.mesh / 2; x < w / 2 - 0.05; x += L.mesh) brass.quad(P(x - t, base + 0.04), P(x + t, base + 0.04), P(x + t, top), P(x - t, top), n);
+    for (let y = base + 0.04 + L.mesh / 2; y < top; y += L.mesh) brass.quad(P(-w / 2 + 0.05, y - t), P(w / 2 - 0.05, y - t), P(w / 2 - 0.05, y + t), P(-w / 2 + 0.05, y + t), n);
+    for (let k = 0; k <= bays; k++) {
+      const x = -w / 2 + (k * w) / bays;
+      box(oak, [x - 0.035, base + 0.04, zf - 0.005], [x + 0.035, top, zf + 0.02]);
+    }
+    box(oak, [-w / 2, top - 0.06, zf - 0.005], [w / 2, top, zf + 0.02]);
+    return;
+  }
+  // open shelves with leather and vellum bindings (books of the rescued library, now Bamberg [D research/01])
+  const rnd = mulberry32(seed >>> 0);
+  const gap = 0.31;
+  for (let y = base + 0.04; y < top - 0.2; y += gap) {
+    box(oak, [-w / 2 + 0.05, y, z0 + 0.03], [w / 2 - 0.05, y + 0.025, zf - 0.02]);
+    let x = -w / 2 + 0.06;
+    while (x < w / 2 - 0.1) {
+      const run = Math.min(w / 2 - 0.06 - x, 0.2 + rnd() * 0.4);
+      const bh = Math.min(gap - 0.05, 0.19 + rnd() * 0.08);
+      const c = rnd() < 0.18 ? '#CDBE98' : BOOKS[Math.floor(rnd() * BOOKS.length)];
+      box(tint('wood.door', c), [x, y + 0.025, z0 + 0.06], [x + run - 0.006, y + 0.025 + bh, z0 + 0.06 + 0.25]);
+      x += run;
+    }
+  }
+}
+
+/** Calf and morocco bindings under candle-dark varnish [N]. */
+const BOOKS = ['#5a2a1e', '#6e4a2a', '#4a3423', '#7a5a34', '#4a2c34', '#3a3226', '#6b3a22'];
+
+/**
+ * KB-I27 Naturalienkabinett (T5, research/10 §c.3): white-painted glass cabinets (tall: closed base, glazed upper
+ * case with shelves of spirit jars, mounted birds, shells and minerals) and display tables with glass tops (h < 1.3 m).
+ * Contents are generic shapes [N]; the glass is the clear interior.vitrine.
+ */
+function whiteCabinet(it: Item, fc: FixtureCtx, M: MFn, tint: TintFn, white: Bucket, seed: number): void {
+  const [w, d, h] = it.size ?? [2, 0.6, 2.4];
+  const m = placeMatrix(it.pos, fc.floor_h + (it.z ?? 0), it.facing);
+  const box = (b: Bucket, a: V3, c: V3, skip: string[] = []) => b.box(a, c, m, skip);
+  const geo = (b: Bucket, g: THREE.BufferGeometry, x: number, y: number, z: number) => b.geometry(g, m.clone().multiply(new THREE.Matrix4().makeTranslation(x, y, z)));
+  const glass = M('interior.vitrine');
+  const rnd = mulberry32((seed ^ 0x2545f491) >>> 0);
+  const jar = tint('stone.marble', '#CFC48E');
+  const bird = tint('wood.door', '#6E5A44');
+  const shell = tint('stone.marble', '#E3D7C3');
+  const mineral = tint('stone.marble', '#8E8A86');
+  const gilt = M('metal.gilt');
+  const objects = (y: number, x0: number, x1: number, zc: number, depth: number) => {
+    let x = x0 + 0.08;
+    while (x < x1 - 0.08) {
+      const r = rnd();
+      if (r < 0.35) geo(jar, new THREE.CylinderGeometry(0.045, 0.05, 0.2 + rnd() * 0.08, 8), x, y + 0.12, zc);
+      else if (r < 0.6) {
+        geo(bird, new THREE.SphereGeometry(1, 7, 5).scale(0.05, 0.07, 0.04), x, y + 0.1, zc);
+        geo(bird, new THREE.SphereGeometry(0.028, 6, 4), x, y + 0.19, zc + 0.01);
+        geo(white, new THREE.CylinderGeometry(0.04, 0.05, 0.03, 8), x, y + 0.015, zc);
+      } else if (r < 0.8) geo(shell, new THREE.SphereGeometry(1, 7, 4).scale(0.06, 0.035, depth * 0.12), x, y + 0.03, zc);
+      else geo(mineral, new THREE.IcosahedronGeometry(0.045 + rnd() * 0.03, 0), x, y + 0.05, zc);
+      x += 0.16 + rnd() * 0.12;
+    }
+  };
+  if (h < 1.3) {
+    // display table: tapered legs, a shallow white case, glass top
+    const ct = h - 0.06;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) geo(white, new THREE.CylinderGeometry(0.035, 0.025, ct - 0.12, 6), sx * (w / 2 - 0.08), (ct - 0.12) / 2, sz * (d / 2 - 0.08));
+    box(white, [-w / 2, ct - 0.14, -d / 2], [w / 2, ct - 0.1, d / 2]);
+    for (const [a, b] of [[-w / 2, -w / 2 + 0.04], [w / 2 - 0.04, w / 2]] as [number, number][]) box(white, [a, ct - 0.1, -d / 2], [b, ct, d / 2]);
+    for (const [a, b] of [[-d / 2, -d / 2 + 0.04], [d / 2 - 0.04, d / 2]] as [number, number][]) box(white, [-w / 2, ct - 0.1, a], [w / 2, ct, b]);
+    box(gilt, [-w / 2, ct, -d / 2], [w / 2, ct + 0.012, -d / 2 + 0.02]);
+    box(glass, [-w / 2 + 0.04, ct, -d / 2 + 0.04], [w / 2 - 0.04, ct + 0.006, d / 2 - 0.04]);
+    for (const zc of [-d / 4, d / 4]) {
+      let x = -w / 2 + 0.12;
+      while (x < w / 2 - 0.12) {
+        const r = rnd();
+        geo(r < 0.5 ? shell : mineral, new THREE.SphereGeometry(1, 6, 4).scale(0.05, 0.025, 0.04), x, ct - 0.08, zc);
+        x += 0.13 + rnd() * 0.1;
+      }
+    }
+    return;
+  }
+  const z0 = -d / 2;
+  const base = 0.85;
+  box(white, [-w / 2, 0, z0], [w / 2, h, z0 + 0.03], ['-z']);
+  box(white, [-w / 2, 0, z0], [-w / 2 + 0.045, h, d / 2], ['-z']);
+  box(white, [w / 2 - 0.045, 0, z0], [w / 2, h, d / 2], ['-z']);
+  box(white, [-w / 2, 0, z0], [w / 2, base, d / 2], ['-z']);
+  box(white, [-w / 2 - 0.02, base, z0], [w / 2 + 0.02, base + 0.04, d / 2 + 0.03], ['-z']);
+  box(white, [-w / 2 - 0.03, h - 0.12, z0], [w / 2 + 0.03, h, d / 2 + 0.05], ['-z']);
+  box(gilt, [-w / 2 - 0.03, h - 0.13, d / 2 + 0.04], [w / 2 + 0.03, h - 0.12, d / 2 + 0.05]);
+  for (const sx of [-1, 1]) box(tint('wall.boiserie', '#E2DED4'), [sx > 0 ? 0.04 : -w / 2 + 0.1, 0.12, d / 2], [sx > 0 ? w / 2 - 0.1 : -0.04, base - 0.1, d / 2 + 0.012]);
+  // glazed upper case: shelves, glazing bars (two doors), glass
+  const shelves = Math.max(2, Math.floor((h - base - 0.2) / 0.5));
+  const step = (h - 0.12 - base - 0.04) / shelves;
+  for (let k = 0; k < shelves; k++) {
+    const y = base + 0.04 + k * step;
+    if (k > 0) box(white, [-w / 2 + 0.045, y, z0 + 0.03], [w / 2 - 0.045, y + 0.02, d / 2 - 0.03]);
+    objects(y + 0.02, -w / 2 + 0.05, w / 2 - 0.05, -0.02, d);
+  }
+  for (const x of [-w / 2 + 0.03, 0, w / 2 - 0.03]) box(white, [x - 0.025, base + 0.04, d / 2 - 0.02], [x + 0.025, h - 0.12, d / 2 + 0.01]);
+  box(glass, [-w / 2 + 0.04, base + 0.04, d / 2 - 0.006], [w / 2 - 0.04, h - 0.12, d / 2 - 0.002]);
 }

@@ -8,7 +8,7 @@ import { SIDE_NAMES } from '../spec.ts';
 import { type BuildingFrame, buildingFrame } from './footprint.ts';
 import { type BayLayout, type FacadeOpening, type RoofOpening, facadeOpenings, layoutBays, roofOpenings, sideSpec } from './facade.ts';
 import { centroid } from './geom.ts';
-import { WALL_THICKNESS } from './grammar.ts';
+import { MEMBERS, WALL_THICKNESS, corniceFor } from './grammar.ts';
 import { type RoofPlan, type RoofSection, roofPlan, roofSection } from './roof.ts';
 import { resolveCourtToward } from './site.ts';
 import { type StoreyStack, storeyStack } from './storeys.ts';
@@ -47,7 +47,31 @@ export interface BuildingLayout {
   openings: FacadeOpening[];
   roofOpenings: RoofOpening[];
   raised: RaisedRange[];
+  /** KB-I17 facade members shared by the 3D exterior and the plan elevations. */
+  members: FacadeMembers;
   warnings: string[];
+}
+
+/**
+ * KB-I17 (research/09 §3.4 G7-G9): main cornice (one continuous palace cornice, CORNICE.palace), string courses
+ * (Gurtgesims, only MEMBERS.stringCourse classes) and where Lisenen go: corner strips everywhere except plain farm
+ * buildings; risalit-edge Lisenen only on the CdL and on risalits carrying a porticoed portal (B02 head, LC 1790).
+ */
+export interface FacadeMembers {
+  cornice: { height: number; projection: number };
+  stringCourse: boolean;
+  cornerLisenen: boolean;
+  /** Risalit-edge Lisenen on all risalits (CdL) or only porticoed risalits ('portico'). */
+  risalitLisenen: 'all' | 'portico';
+}
+
+export function facadeMembers(b: Building, spec: SiteSpec, eaves: number): FacadeMembers {
+  return {
+    cornice: corniceFor(b.cls, eaves, spec.defaults),
+    stringCourse: MEMBERS.stringCourse.has(b.cls),
+    cornerLisenen: b.cls !== 'FARM' && b.cls !== 'FARM_GROUP',
+    risalitLisenen: b.cls === 'CDL' ? 'all' : 'portico',
+  };
 }
 
 export function applyRoofVariant(b: Building, variant: RoofVariant = 'catalogue'): Roof {
@@ -101,6 +125,7 @@ export function layoutBuilding(b: Building, spec: SiteSpec, opts: LayoutOptions 
     pitch_upper: roofSpec.pitch_upper,
     break_ratio: roofSpec.break_ratio,
     dome_rise_ratio: roofSpec.dome_rise_ratio,
+    dome_tiers: roofSpec.dome_tiers,
     ridge_h: roofSpec.ridge_h,
   });
   warnings.push(...roof.notes);
@@ -128,7 +153,7 @@ export function layoutBuilding(b: Building, spec: SiteSpec, opts: LayoutOptions 
     });
     if (lay.compressed && ss.spacing !== undefined && lay.spacing < ss.spacing * 0.99) warnings.push(`${side}: ${ss.axes} axes compressed to ${lay.spacing.toFixed(2)} m spacing`);
     sides[side] = lay;
-    openings.push(...facadeOpenings({ cls: b.cls, side, layout: lay, stack, portals: b.facade.portals, windowKind: 'window_kind' in ss ? ss.window_kind : undefined }));
+    openings.push(...facadeOpenings({ cls: b.cls, side, layout: lay, stack, portals: b.facade.portals, windowKind: 'window_kind' in ss ? ss.window_kind : undefined, windowKindStoreys: 'window_kind_storeys' in ss ? ss.window_kind_storeys : undefined }));
     roofOps.push(...roofOpenings(lay, roof, roofSpec.dormers ?? {}));
   }
 
@@ -149,5 +174,6 @@ export function layoutBuilding(b: Building, spec: SiteSpec, opts: LayoutOptions 
     raised.push({ section: r, s0: Math.min(sA, sB), s1: Math.max(sA, sB) });
   }
 
-  return { id: b.id, building: b, frame, ring, stack, roofSpec, roof, roofPlan: plan, sides, openings, roofOpenings: roofOps, raised, warnings };
+  const members = facadeMembers(b, spec, stack.eaves_h);
+  return { id: b.id, building: b, frame, ring, stack, roofSpec, roof, roofPlan: plan, sides, openings, roofOpenings: roofOps, raised, members, warnings };
 }

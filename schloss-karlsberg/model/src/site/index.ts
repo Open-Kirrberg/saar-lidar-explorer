@@ -14,7 +14,8 @@ import { ENTRANCE_POI_DIST, entranceWalkable, siteBuildings, siteEntrances, site
 
 export { siteBuildings };
 
-const ROOM_POI = /Vestib|Prunktreppe|Festsaal|Speisesaal|Bibliothek|Bildergalerie|Pfeilersaal|Hofküche|Paradeschlaf|Audienzzimmer$|Waffensammlung/;
+// KB-I24/I25: + Tempelzimmer, Bildersäle, Tanzsaal, Naturalienkabinett (research/10 §b.1)
+const ROOM_POI = /Vestib|Prunktreppe|Festsaal|Speisesaal|Bibliothek|Bildergalerie|Pfeilersaal|Hofküche|Paradeschlaf|Audienzzimmer$|Waffensammlung|Tempelzimmer|Bildersaal|Tanzsaal|Naturalienkabinett|Hofbibliothek$/;
 
 /**
  * POIs: one per placed building (view from the court side), one per portal / Durchfahrt (entrance, with `walkable`
@@ -51,7 +52,7 @@ export function sitePois(spec: SiteSpec, ctx: BuildContext): Poi[] {
     });
     // state rooms / halls as walk-in POIs (room centre, eye height above the room floor)
     for (const r of b.rooms ?? []) {
-      if (!ROOM_POI.test(r.name_de) || /Austritt|Dienertreppe/.test(r.name_de)) continue;
+      if (!ROOM_POI.test(r.name_de) || /Austritt|Dienertreppe|Hofbibliothek I[IV]/.test(r.name_de)) continue; // KB-I25: one entry for the four library rooms
       const lvl = L.stack.levels[r.storey];
       if (!lvl) continue;
       const n = r.polygon.length;

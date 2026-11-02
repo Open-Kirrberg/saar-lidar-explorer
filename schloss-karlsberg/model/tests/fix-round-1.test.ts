@@ -20,7 +20,7 @@ const { spec } = loadSite(JSON.parse(readFileSync(resolve(import.meta.dirname, '
 const layout = makeLayoutFn(spec);
 const ctx = (lod: 0 | 1 | 2, terrain: (x: number, z: number) => number = () => NaN): BuildContext => ({ spec, lod, materials: createFallbackMaterials(), terrain, options: { ...DEFAULT_BUILD_OPTIONS }, layout });
 const get = (id: string) => spec.buildings.find((b) => b.id === id)!;
-const DETAILED = ['KB-B01', 'KB-B02', 'KB-B03', 'KB-B04', 'KB-B05', 'KB-B06', 'KB-B10'];
+const DETAILED = ['KB-B01', 'KB-B02', 'KB-B03', 'KB-B04', 'KB-B05', 'KB-B06', 'KB-B10', 'KB-B11'];
 
 describe('#1 Orangerie-Stützmauer = KB-B10 basement front', () => {
   it('wallFreeSpans drops a wall line that runs along a footprint face and keeps a free one', () => {

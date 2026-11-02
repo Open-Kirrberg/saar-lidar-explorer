@@ -28,3 +28,5 @@
 .sle-print-table .sle-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* Compact label: the two grid numbers (E / N in km) stacked (Print3D syncLabels). */
 .leaflet-tooltip.sle-print-label-compact { padding: 1px 3px; line-height: 1.1; text-align: center; }
+/* Recommended slicer settings (index.json `slicer.note_de`) next to the downloads. */
+.sle-print-slicer { margin: 6px 0 0; padding: 4px 6px; line-height: 1.4; background: rgba(120, 200, 120, 0.1); border-left: 3px solid #6fbf73; }

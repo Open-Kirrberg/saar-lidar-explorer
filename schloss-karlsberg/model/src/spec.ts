@@ -122,7 +122,11 @@ export interface RaisedRoofSection {
   /** Extra eaves / ridge height of the raised part in m. */
   extra_h?: number;
   type?: RoofType;
-  turret?: { kind: 'dachreiter' | 'lantern'; height?: number; tag?: TagNote };
+  /**
+   * KB-I21: `fachwerk` = the turret is a rendered or boarded timber frame (research/09 §6.5 C1 "Dachreiter" [I]); a
+   * record only, the drum looks the same.
+   */
+  turret?: { kind: 'dachreiter' | 'lantern'; height?: number; fachwerk?: boolean; tag?: TagNote };
   tag?: TagNote;
 }
 
@@ -160,6 +164,8 @@ export interface Roof {
   break_ratio?: number;
   /** v2. Dome rise as a fraction of the depth/diameter (default 0.3). */
   dome_rise_ratio?: number;
+  /** v2. Dome only: 2 = double-stepped dome with drum-head cornice and lantern (GARDEN_DETAIL.steppedDome); default 1. */
+  dome_tiers?: number;
   /** v2. Hipped ends for mansard (default true) - gable roofs never have them. */
   hipped_ends?: boolean;
   /** Free-text material ("slate (rectangular French cover)"). */
@@ -230,6 +236,11 @@ export interface FacadeSideSpec {
    * would give portes-fenêtres (Orangerie W front: two window tiers above the high basement). Default: class.
    */
   window_kind?: 'window' | 'porte_fenetre';
+  /**
+   * Wave-6 review fix (KB-I28): storey indices `window_kind` applies to; absent = every main storey of the side (Orangerie
+   * parterre front: portes-fenêtres on the Saalgeschoss, sill windows on the courtiers' upper tier).
+   */
+  window_kind_storeys?: number[];
   tag?: TagNote;
 }
 
@@ -252,6 +263,17 @@ export interface PortalSpec {
   grade_h?: number;
   /** Columned portico in front of a portal (fix round 1, B02 W head D LC 1790): columns, balcony on top. */
   portico?: { columns: number; balcony: boolean; depth?: number; tag?: TagNote };
+  /**
+   * Wave-7 review fix (KB-I31): an upper-storey porte-fenêtre gets an iron balconet unless this is false, e.g. where it
+   * opens onto a terrace or an Altan that is drawn as its own building (KB-B02a). Default true.
+   */
+  balconet?: boolean;
+  /**
+   * Wave-8 review fix (KB-I72): one continuous balcony (stone slab on consoles, iron railing; grammar BALCONY) across
+   * all portes-fenêtres of this entry instead of a balconet per door, e.g. the Festsaal garden balcony. Only on a
+   * `porte_fenetre` entry above the entrance storey; `depth` overrides BALCONY.depth.
+   */
+  balcony_run?: { depth?: number; tag?: TagNote };
   tag?: TagNote;
 }
 
@@ -284,6 +306,137 @@ export interface Facade {
   shutter_colour?: string;
   members_colour?: string;
   plinth_colour?: string;
+  /**
+   * KB-I15: how Lisenen, bands, surrounds, sills and cornices are made. 'render' = painted render (material
+   * `render.member`, research/09 E7/M4); 'stone' = dressed sandstone (`stone.grey`, or `stone.red` for a red hex).
+   * Default by class in exterior palette(): FARM / FARM_GROUP / RIDE / STABLE 'stone', all others 'render'.
+   */
+  members_material?: 'render' | 'stone';
+  /**
+   * KB-I15: colour of the exposed sandstone dressings at portals, Durchfahrten and porticos (`stone.grey`); steps and
+   * plinths keep `plinth_colour`. Default: `members_colour`.
+   */
+  portal_colour?: string;
+  /**
+   * KB-I19: year the facade was finished (last limewash before 1789), from the dated building history (research/01
+   * §1.2, research/10 §b). Drives the limewash age: warm, weathered for 1778-82 work, cool and fresh for 1785-88
+   * (research/09 §1.3.6, M3, C2). Absent = undated (neutral render colour).
+   */
+  build_year?: number;
+  /** Evidence for `build_year`. */
+  build_year_tag?: TagNote;
+  /**
+   * KB-I24: a round temple pavilion (Tempelzimmer / Rotunde, research/10 §b.1 KB-B07). Only on a round footprint; read
+   * by `layout/rotunda.ts` (one layout for the 3D exterior and the plan sheets). Absent = the plain round facade.
+   */
+  rotunda?: RotundaSpec;
+  /**
+   * Wave-5 fix (KB-I36): a lean-to forcing house (solid N back wall, glazing sloped to the S, tiled strip over the back;
+   * GARDEN_DETAIL.glasshouse, exterior/glasshouse.ts). Only on a rect footprint with roof type `none`.
+   */
+  glasshouse?: { tag?: TagNote };
+  /**
+   * KB-I28: colour of the window and door joinery ('#RRGGBB'). Default: `wood.frame` #E9E6DE for frames and glazing
+   * bars, `wood.door` for door leaves. Orangerie: white-painted windows and doors (T5) #F2F0EA [N hue].
+   */
+  joinery_colour?: string;
+  /**
+   * KB-I28: storey indices (Building.storeys, plinth included) whose windows get no shutters although the building has
+   * `shutter_type` louvred / plank (Orangerie hall tier [I]).
+   */
+  shutters_omit_storeys?: number[];
+  /**
+   * KB-I21: rendered timber frame (Fachwerk) instead of rubble masonry: a 0.30 m wall and a 0.12-0.15 m reveal on the
+   * flagged storeys, same render outside (grammar FACHWERK, layout/fachwerk.ts; research/09 §2.3, G4, C1).
+   */
+  fachwerk?: FachwerkSpec;
+  /**
+   * KB-I29: menagerie animal houses drawn instead of the GARD enclosure wall (layout/menagerie.ts,
+   * exterior/menagerie.ts; research/10 §b.4).
+   */
+  menagerie?: MenagerieSpec;
+  /**
+   * KB-I31 / KB-I39 / KB-I30: a garden folly or a small structure drawn by `exterior/folly.ts` from `layout/folly.ts`
+   * instead of the facade and roof (the catalogue roof is `none`). Sizes come from grammar FOLLY [N]; every folly is a
+   * low-confidence hypothesis (placement 'hypothetical').
+   */
+  folly?: FollySpec;
+}
+
+/**
+ * KB-I31 / KB-I39 / KB-I30 follies (research/10 §b.1, §b.6; research/11 §0 item 5, S14):
+ * 'altan' = an upper-floor terrace on piers against a wall (footprint side `court` against the wall, `garden` the open
+ * front); 'chinese' = an open octagonal pavilion with a concave tent roof; 'tent' = a striped round Turkish tent;
+ * 'hay_wagon' = a full-size hay-wagon folly; 'aviary' = a small pavilion with two wire-cage wings; 'monopteros' = an
+ * open round temple (columns, entablature ring, shallow dome); 'apiary' = a timber bee shelter (Bienenhaus) with skeps
+ * on shelves under a lean-to roof, open to the S.
+ */
+export type FollyKind = 'altan' | 'chinese' | 'tent' | 'hay_wagon' | 'aviary' | 'monopteros' | 'apiary';
+export const FOLLY_KINDS: readonly FollyKind[] = ['altan', 'chinese', 'tent', 'hay_wagon', 'aviary', 'monopteros', 'apiary'];
+
+export interface FollySpec {
+  kind: FollyKind;
+  /** 'altan': the gate (Durchfahrt) under the deck that the piers keep clear (m, centred on the footprint). */
+  gate_width?: number;
+  tag?: TagNote;
+}
+
+/** KB-I21: which storeys of a building are rendered Fachwerk. */
+export interface FachwerkSpec {
+  /** Storey indices (plinth included). Absent = every storey above the plinth / basement. */
+  storeys?: number[];
+  tag: TagNote;
+}
+
+/**
+ * KB-I29: menagerie houses. 'ring' = `houses` square houses evenly on a circle (centre, radius of the house centres),
+ * fronts facing the centre, iron grilles between them and an optional larger loge on the axis `loge_azimuth`; 'rows' =
+ * straight rows of single-storey houses along `rows` (p0 -> p1, houses fronting to the left of p0 -> p1 seen from
+ * above, i.e. towards `front`), each with a fenced run in front under a net, and a water channel along `channel`.
+ * Sizes come from grammar MENAGERIE.
+ * Wave-6 review fix: 'island' = the square island in the ring's moat with a sandstone quay round the building footprint
+ * (the documented foundations, a low course) and the spiral stair; 'open_pavilion' = a hypothetical light open
+ * superstructure (posts and a beam under the catalogue roof) on a footprint. 'ring' yards are closed behind the houses
+ * and their radial grilles run in to the water edge inside `moat_radius`; 'rows' get terrace walls along the back lines
+ * and trampled ground in the runs.
+ */
+export interface MenagerieSpec {
+  kind: 'ring' | 'rows' | 'island' | 'open_pavilion';
+  ring?: { centre: EN; radius: number; houses: number; loge_azimuth?: number; roof: 'pyramid'; cover: RoofCover; moat_radius?: number };
+  /** 'island': side of the square island (m, centred on the footprint and aligned with it), quay top (abs. m). */
+  island?: { size: number; top_h: number; stair?: boolean };
+  rows?: { p0: EN; p1: EN; houses: number }[];
+  /** Grid azimuth (deg) the row fronts and runs face. */
+  front_azimuth?: number;
+  /** Run depth in front of each row (m), cut short by the next row; default grammar. */
+  run_depth?: number;
+  /** Centre line of the watercourse through the runs. */
+  channel?: EN[];
+  tag: TagNote;
+}
+
+/** One bay of a rotunda drum between two pilasters: glazed door, blind niche, or the opening to a linked colonnade. */
+export type RotundaBayKind = 'door' | 'niche' | 'link';
+
+/**
+ * KB-I24: round temple pavilion. Bays run counter-clockwise seen from above, bay 0 centred on the portico axis.
+ * The order's proportions (shaft diameters, entablature, steps) are period norms in `layout/grammar.ts` (ROTUNDA).
+ */
+export interface RotundaSpec {
+  order: 'ionic' | 'doric' | 'tuscan';
+  /** Grid azimuth (deg) of the portico axis, pointing out of the building (towards the garden). */
+  axis_azimuth: number;
+  /** One entry per bay (= pilaster count), bay 0 on the portico axis. */
+  bays: RotundaBayKind[];
+  /** Pedimented column portico on the axis, with steps down to the grade in front of it. */
+  portico?: { columns: number; width: number; depth: number; steps: number; pediment: boolean; tag?: TagNote };
+  /**
+   * Open colonnade from the bay opposite the portico to a neighbouring range (`to`, a building id): `length` from the
+   * drum face, `width` overall, its own floor (`floor_h`, steps up to the rotunda floor inside it) and entablature top
+   * (`eaves_h`), both m DHHN2016.
+   */
+  colonnade?: { length: number; width: number; columns_per_side: number; floor_h: number; eaves_h: number; to?: string; tag?: TagNote };
+  tag?: TagNote;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -295,6 +448,16 @@ export interface Finish {
   floor: string;
   walls: string;
   ceiling: string;
+  /**
+   * KB-I27: hue of a silk / damask wall ('#RRGGBB', N) where the room's name carries a colour (Gelber Salon, Grauer
+   * Salon …); tints the `walls` material and the upholstery. Absent = the material's own colour.
+   */
+  colour?: string;
+  /**
+   * KB-I26/I27: contrasting colour of the broad damask border inside the gilt Tapetenleisten ('#RRGGBB', N; Mannlich
+   * T1 p. 365: damask in three contrasting colours with broad borders). Absent = derived from the ground colour.
+   */
+  border?: string;
 }
 
 export interface Room {
@@ -361,6 +524,17 @@ export interface Stair {
 // Building
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Time span in which an object stood (KB-I03; research/11 §6.1): years, `to` inclusive, both optional (open ends).
+ * Absent = stood throughout the residence period (no restriction). The default scene year is 1789 (summer 1789,
+ * `SCENE_YEAR` in layout/epoch.ts); `inEpoch(epoch, year)` is the only test consumers use. Tag the dates in `epoch_tag`.
+ * Not the same as placement 'hypothetical' (= uncertain existence or position).
+ */
+export interface Epoch {
+  from?: number;
+  to?: number;
+}
+
 export interface GroundDtm {
   min: number;
   median: number;
@@ -404,6 +578,10 @@ export interface Building {
   rooms?: Room[];
   openings?: Opening[];
   stairs?: Stair[];
+  /** KB-I03: years in which the building stood; out of the scene year it is skipped by every consumer. */
+  epoch?: Epoch;
+  /** Evidence for `epoch` (tag + source). */
+  epoch_tag?: TagNote;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -425,7 +603,105 @@ export type TerrainKind =
   | 'well'
   | 'wall'
   | 'parterre'
-  | 'path';
+  | 'path'
+  /** KB-I12: open landscape lawn on the natural slope (no level), e.g. Petri's Herzogsgarten. */
+  | 'lawn'
+  /** KB-I12: a planted clump (Point + `radius`) or single trees (MultiPoint), composition in `mix`. */
+  | 'clump'
+  /** KB-I33: garden furniture (benches, sculpture) listed in `items` (geometry: MultiPoint of the item positions). */
+  | 'furniture'
+  /** KB-I36: kitchen / forcing garden beds in a Polygon, layout in `beds`. */
+  | 'beds'
+  /** KB-I68: a free-standing fence or barrier along a LineString, form in `fence_line`. */
+  | 'fence';
+
+/**
+ * KB-I68: form of a `fence` feature. 'post_rail' = posts with horizontal rails along the whole line (Le Clerc 1790);
+ * 'barriere' = a turnpike beam (Schlagbaum) on a pivot post across the middle of a 2-point line, the rest of the line
+ * closed by post-and-rail runs (PV 1791 l. 1). Sizes default to layout/grammar.ts FENCE.
+ */
+export interface FenceLine {
+  type: 'post_rail' | 'barriere';
+  /** post top / rail fence height above ground (m) */
+  height: number;
+  /** post spacing (m), default FENCE.postRail.spacing */
+  post_spacing?: number;
+  /** number of rails, default FENCE.postRail.rails */
+  rails?: number;
+  tag?: TagNote;
+}
+
+/** KB-I33: one piece of garden furniture at `at`, its front facing `facing` (grid azimuth, deg clockwise from grid N). */
+export interface GardenItem {
+  type: 'bench' | 'herm';
+  at: EN;
+  facing: number;
+  /** a bench on a slope stands on a small levelled gravel platform (GARDEN_DETAIL.bench.platform) */
+  platform?: boolean;
+  name_de?: string;
+  tag?: TagNote;
+}
+
+/** KB-I34: parterre layout of a `parterre` or `terrace` polygon (palace grid u, v). */
+export interface ParterreLayout {
+  type: 'angloise';
+  /** lawn panels along u and along v */
+  panels: [number, number];
+  /** width (m) of the centre walk(s) between the panels (default GARDEN_DETAIL.angloise.crossWalk) */
+  cross_walk?: number;
+  /** citrus tubs on the walk edges every GARDEN_DETAIL.tub.spacing m (summer) */
+  tubs?: boolean;
+  tag?: TagNote;
+}
+
+/** KB-I34: enclosure of a garden polygon (green treillage with arched portals at `portals`). */
+export interface GardenFence {
+  type: 'treillage';
+  height: number;
+  portal_height: number;
+  /** portal centres on the polygon edge (EN) */
+  portals: EN[];
+  /** polygon edges (index i = ring[i] -> ring[i+1]) that stand against a building and get no fence */
+  open_edges?: number[];
+  tag?: TagNote;
+}
+
+/** KB-I36: kitchen / forcing garden layout (beds in quarters along the palace grid u axis, frames, espaliers). */
+export interface BedsLayout {
+  /** quarters along the layout's own axes, divided by cross walks */
+  quarters: [number, number];
+  /** grid azimuth (deg) of the layout's first axis (default 80.5 = the palace grid u axis) */
+  axis_deg?: number;
+  /** rows of hotbed frames (Mistbeetkästen), each a 2-point line in EN; the lights face S */
+  frame_rows?: EN[][];
+  /** espaliered fruit trees on wall faces, each a 2-point line in EN (the side the trees stand on is the S side) */
+  espaliers?: EN[][];
+  tag?: TagNote;
+}
+
+/** KB-I12: one share of a clump / grove composition (`speciesFor` text, share 0..1, optional height range in m). */
+export interface PlantMix {
+  species: string;
+  share: number;
+  height?: [number, number];
+}
+
+/**
+ * KB-I13: kerb of a formal basin (pond with `coping`): width x height (m) and material. Wave-2 fix: a gravel `terrace`
+ * with a `coping` gets a stone kerb of that width round its free edges and a broad perron at its doors (GARDEN.terraceKerb).
+ */
+export interface BasinCoping {
+  width: number;
+  height: number;
+  material: string;
+}
+
+/** KB-I13: sculpture on a basin rim (e.g. two stag heads), facing a point or a feature / building id. */
+export interface BasinOrnaments {
+  kind: 'stag_head';
+  count: number;
+  facing?: EN | string;
+}
 
 export type GeoJsonGeometry =
   | { type: 'Polygon'; coordinates: EN[][] }
@@ -475,6 +751,35 @@ export interface TerrainFeature {
   /** v2: wall height for 'wall' / retaining wall for 'scarp'. */
   wall_height?: number;
   tag?: TagNote;
+  /** KB-I03: years in which the feature existed (e.g. the axial basin 1783–1790); see `Epoch`. */
+  epoch?: Epoch;
+  /** Evidence for `epoch` (tag + source). */
+  epoch_tag?: TagNote;
+  /**
+   * KB-I12: 'hypothetical' = existence or form doubtful (same rule as buildings: skipped only when
+   * `ctx.options.showHypothetical` is false; give it confidence 'low' so the viewer's low-confidence select hides it).
+   */
+  placement?: 'hypothetical';
+  /** KB-I12: clump radius (m) when the geometry is a Point. */
+  radius?: number;
+  /** KB-I12: clump / single-tree composition. */
+  mix?: PlantMix[];
+  /** KB-I13: fountain jet height (m) of a basin. */
+  fountain_h?: number;
+  /** KB-I13: a pond with a coping is a formal basin (stone kerb on the water edge). */
+  coping?: BasinCoping;
+  /** KB-I33: garden furniture of a `furniture` feature. */
+  items?: GardenItem[];
+  /** KB-I34: parterre à l'angloise layout of a `parterre` / `terrace` polygon. */
+  parterre?: ParterreLayout;
+  /** KB-I34: treillage round the polygon. */
+  fence?: GardenFence;
+  /** KB-I36: kitchen-garden layout of a `beds` polygon. */
+  beds?: BedsLayout;
+  /** KB-I13: rim sculpture of a basin. */
+  ornaments?: BasinOrnaments;
+  /** KB-I68: form of a `fence` feature. */
+  fence_line?: FenceLine;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -503,6 +808,32 @@ export interface SiteDefaults {
   [k: string]: unknown;
 }
 
+/** 1789 land cover classes (backlog KB-I09, research/11 S1); scripts/prepare-terrain.py maps them to ground classes. */
+export const LANDCOVER_COVERS = ['forest', 'meadow', 'hay', 'field', 'vineyard', 'kitchen_garden', 'lawn'] as const;
+export type LandcoverCover = (typeof LANDCOVER_COVERS)[number];
+
+/**
+ * One land cover polygon of the top-level `landcover` list (built by scripts/catalogue-v2/landcover.ts). Painted in
+ * array order (later wins) by scripts/prepare-terrain.py; terrain features and buildings are painted over it.
+ */
+export interface LandcoverArea {
+  /** LC-nn */
+  id: string;
+  cover: LandcoverCover;
+  name_de: string;
+  /** closed CCW ring in EPSG:25832 */
+  geometry: { type: 'Polygon'; coordinates: [RingEN] };
+  /** only cells at least this steep (rise / run on the smoothed 1789 DTM) take the cover (steep valley sides) */
+  min_slope?: number;
+  /** forest composition (shares sum to 1) [N/I]; read by viewer/src/forest.ts */
+  mix?: { species: string; share: number }[];
+  confidence: Confidence;
+  /** evidence tags (D, D->, I, N, U, HMS) and sources */
+  tag: string;
+  notes?: string;
+  epoch?: Epoch;
+}
+
 export interface SiteSpec {
   version: 1 | 2;
   status?: string;
@@ -515,6 +846,8 @@ export interface SiteSpec {
   buildings: Building[];
   terrain_features: TerrainFeature[];
   open_questions?: string[];
+  /** KB-I09: 1789 land cover polygons (paint order = array order) */
+  landcover?: LandcoverArea[];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -537,12 +870,4 @@ export function parseEvidenceTags(note: string | undefined): EvidenceTag[] {
 /** Buildings that have geometry (placed, with footprint or line, and base_h). */
 export function isPlaced(b: Building): boolean {
   return b.placement !== 'unplaced' && b.base_h !== null && (b.footprint !== null || (b.line?.length ?? 0) >= 2);
-}
-
-export function buildingById(spec: SiteSpec, id: string): Building | undefined {
-  return spec.buildings.find((b) => b.id === id);
-}
-
-export function featureById(spec: SiteSpec, id: string): TerrainFeature | undefined {
-  return spec.terrain_features.find((f) => f.id === id);
 }

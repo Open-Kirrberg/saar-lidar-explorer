@@ -20,8 +20,9 @@ from print3d import (  # noqa: E402
     keys_needed, key_mesh, label_lines, layout_blocks, list_series, load_line_extent, load_line_plate_max_y,
     load_series, merge_index, mesh_check, mesh_stats, parse_tile_id, patch_start_gcode, plate_placement,
     printer_meta, printer_preset, read_stl, recess_polygons, resample, resolve_datums, set_datum,
-    simplify_heightfield, source_box, stock_clearance, stock_max_tile_mm, stock_profile_problems, text_geometry,
-    tile_id, tiles_in_bbox, validate_index, vertex_coords, write_3mf, write_catalog, write_stl, z_from_h,
+    simplify_heightfield, slicer_from_config, slicer_meta, slicer_note_de, source_box, stock_clearance,
+    stock_max_tile_mm, stock_profile_problems, text_geometry, tile_filament, tile_id, tiles_in_bbox, validate_index,
+    vertex_coords, write_3mf, write_catalog, write_stl, z_from_h, STOCK_PROCESS, Slicer,
 )
 
 S8 = load_series("saarpfalz-9200")      # main series (name kept short: "the 2 km series")
@@ -461,8 +462,51 @@ def test_keys_needed():
 def test_filament_estimate():
     solid, typical = filament_g(1_000_000.0, 100_000.0, S8)        # 1 l, 10 dm²
     assert solid == pytest.approx(1240.0)
-    shell = 100_000.0 * 1.2
-    assert typical == pytest.approx((shell + 0.15 * (1_000_000 - shell)) * 1.24e-3)
+    shell = 100_000.0 * S8.shell_mm
+    assert typical == pytest.approx((shell + S8.infill * (1_000_000 - shell)) * 1.24e-3)
+    assert (S8.shell_mm, S8.infill) == (0.9, 0.155)                 # fitted to the stock-process slices
+
+
+
+def test_slicer_recommendation_config():
+    sl = S8.slicer
+    assert sl is not None and S2.slicer == sl                                  # [defaults.slicer] for both series
+    assert (sl.sparse_infill_pattern, sl.sparse_infill_density, sl.wall_loops, sl.top_shell_layers) == \
+        ("lightning", 0.10, 3, 6)
+    assert sl.top_shell_thickness_mm >= 1.0                  # ≥ 1 mm skin over lightning (pillowing)
+    assert 0 < sl.saving_pct[0] < sl.saving_pct[1] < 100 and 0 <= sl.infill < S8.infill
+    assert slicer_from_config({}) is None and slicer_from_config({"enabled": False, "wall_loops": 4}) is None
+    assert slicer_from_config({"wall_loops": 4, "saving_pct": [10, 20]}) == Slicer(wall_loops=4, saving_pct=(10, 20))
+    check_series(replace(S8, slicer=None))
+    for bad in (Slicer(sparse_infill_pattern="honeycomb"), Slicer(sparse_infill_density=0), Slicer(wall_loops=0)):
+        with pytest.raises(ValueError):
+            check_series(replace(S8, slicer=bad))
+
+
+def test_slicer_note_de_and_meta():
+    sl = Slicer()
+    note = slicer_note_de(sl)
+    for part in ("Füllmuster „Blitz“", "Fülldichte 10 %", "Wandlinien 3", "Obere Schalenschichten 6",
+                 "Dicke der oberen Schale 1,2 mm", f"≈ {sl.saving_pct[0]}–{sl.saving_pct[1]} %", "Prozess → Stärke",
+                 "Druckzeit etwa gleich bis ≈ 22 % kürzer"):
+        assert part in note, part
+    m = slicer_meta(replace(S8, slicer=sl))
+    assert m["base"] == STOCK_PROCESS and m["inFile"] is False and m["note_de"] == note
+    assert m["settings"] == {"sparse_infill_pattern": "lightning", "sparse_infill_density": "10%", "wall_loops": 3,
+                             "top_shell_layers": 6, "top_shell_thickness": 1.2}
+    assert slicer_meta(replace(S8, slicer=None)) is None
+    assert "≈ 5–20 % weniger Druckzeit" in slicer_note_de(Slicer(time_saving_pct=(5, 20)))
+
+
+def test_tile_filament_recommended():
+    f = tile_filament(1000.0, 1000.0, S8)                    # 1 l, 10 dm²
+    solid, typical = filament_g(1_000_000.0, 100_000.0, S8)
+    sl = S8.slicer
+    shell = 100_000.0 * sl.shell_mm
+    assert f == {"solid": round(solid), "typical": round(typical),
+                 "recommended": round((shell + sl.infill * (1_000_000 - shell)) * 1.24e-3)}
+    assert f["recommended"] < f["typical"] < f["solid"]
+    assert "recommended" not in tile_filament(1000.0, 1000.0, replace(S8, slicer=None))
 
 
 # ------------------------------------------------------------------------------------- files / index
@@ -599,6 +643,16 @@ def test_index_schema_and_merge():
     assert len(validate_index(bad)) == 2
     assert doc["printerProfile"]["mode"] == "stock" and doc["series"]["placement_mm"] == [19.3043, 19.3043]
     assert "setDatum_m" not in doc
+    # filament_g is recomputed from volume / surface for every entry (old ones too) and the slicer block is written
+    assert doc["slicer"] == slicer_meta(S8)
+    for t in doc2["tiles"]:
+        assert t["filament_g"] == tile_filament(t["volume_cm3"], t["surface_cm2"], S8)
+    plain = merge_index(None, replace(S8, slicer=None), [fake_entry("E380_N5460")], ["a"])
+    assert "slicer" not in plain and set(plain["tiles"][0]["filament_g"]) == {"solid", "typical"}
+    assert validate_index(plain) == []
+    odd = json.loads(json.dumps(doc))
+    odd["tiles"][0]["filament_g"]["lean"] = 1
+    assert validate_index(odd) == [f"{odd['tiles'][0]['id']}: filament_g"]
 
 
 def test_index_set_datums():
@@ -685,13 +739,14 @@ def test_generated_tiles_open_in_bambu_studio(idx):
     s = load_series(doc["series"]["key"])
     for t in doc["tiles"]:
         with zipfile.ZipFile(idx.parent / t["files"]["3mf"]) as zf:
-            model = zf.read("3D/3dmodel.model")
+            model, names = zf.read("3D/3dmodel.model"), zf.namelist()
         xy = np.array(re.findall(rb'<vertex x="([-\d.]+)" y="([-\d.]+)"', model), float)
         ntri = model.count(b"<triangle ")
         tr = [float(v) for v in re.search(rb'<item objectid="1" transform="([^"]+)"', model).group(1).split()]
         w, h = xy.max(0) - xy.min(0)
         assert (w, h) == pytest.approx((s.tile_mm, s.tile_mm), abs=1e-3) and xy.min() == 0
         assert ntri == t["triangles"] < 1_000_000 and len(xy) == t["vertices"]
+        assert not [n for n in names if n.startswith("Metadata/")], t["id"]   # plain 3MF: no settings (GUI centres)
         assert t["maxError_mm"] <= s.max_error_mm + 1e-9
         if s.printer == "stock":
             assert stock_clearance(*bambu_import_position(w), w, margin=STOCK_MARGIN_MM) == [], t["id"]

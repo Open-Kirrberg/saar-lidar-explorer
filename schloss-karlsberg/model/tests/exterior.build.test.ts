@@ -12,6 +12,7 @@ import { GeoBuilder } from '../src/exterior/builder.ts';
 import { halfProfile, rectRoof } from '../src/exterior/roof.ts';
 import { outlineWithRisalits } from '../src/exterior/facade.ts';
 import { signedArea } from '../src/layout/geom.ts';
+import { inEpoch } from '../src/layout/epoch.ts';
 import { buildFeatures } from '../src/site/features.ts';
 
 const raw = JSON.parse(readFileSync(resolve(import.meta.dirname, '../catalogue.json'), 'utf8'));
@@ -69,6 +70,11 @@ describe('buildExterior on the catalogue', () => {
         const g = buildExterior(b, ctx(lod));
         expect(g.name).toBe(`${b.id}/exterior`);
         const bb = bounds(g);
+        // KB-I03: buildings outside the scene year (1785 fair rotunda, Hymen temple) build nothing (epoch.test.ts)
+        if (!inEpoch(b.epoch, ctx(lod).options.year)) {
+          expect(bb.isEmpty()).toBe(true);
+          continue;
+        }
         const L = base.layout(b);
         // a wall that is entirely another building's face (KB-B14 = KB-B10 basement front) builds nothing
         if (b.cls === 'WALL' && wallSpansS(L, ctx(lod))?.length === 0) {

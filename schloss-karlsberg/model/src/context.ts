@@ -6,6 +6,7 @@
 import type * as THREE from 'three';
 import type { Vec3 } from './frame.ts';
 import { type BuildingLayout, type LayoutOptions, type RoofVariant, layoutBuilding } from './layout/building.ts';
+import { SCENE_YEAR } from './layout/epoch.ts';
 import type { Building, Confidence, SiteSpec } from './spec.ts';
 
 /** LOD0 massing (blocks + roof volumes) · LOD1 facades (openings, cornices, dormers) · LOD2 detail + interiors. */
@@ -22,6 +23,7 @@ export type TerrainSampler = (x: number, z: number) => number;
 export const MATERIAL_NAMES = [
   'render.lime', // court buildings, #ECE8DF
   'render.farm', // Nutzbauten, #E8DFC8
+  'render.member', // KB-I15: Lisenen, bands, surrounds, cornices as painted render (#B9B8B2), not ashlar
   'stone.red', // red Buntsandstein: plinths, surrounds, terrace walls
   'stone.grey', // grey-painted / grey members
   'stone.yellow', // yellow-grey Buntsandstein
@@ -47,6 +49,9 @@ export const MATERIAL_NAMES = [
   'wall.silk.crimson',
   'wall.silk.blue',
   'wall.silk.green',
+  'wall.silk.yellow', // KB-I27: Gelber Salon (research/09 §6.2 M8)
+  'wall.silk.grey', // KB-I27: Grauer Salon (research/10 §c.2)
+  'wall.granite', // KB-I70: painted faux granite of the Tempelzimmer (Granitsaal), materials/granite.ts
   'wall.limewash',
   'ceiling.stucco',
   'ground.gravel',
@@ -61,6 +66,7 @@ export type MaterialName = (typeof MATERIAL_NAMES)[number];
 export const MATERIAL_TEXTURE: Partial<Record<MaterialName, string>> = {
   'render.lime': 'lime_plaster',
   'render.farm': 'lime_plaster',
+  'render.member': 'lime_plaster',
   'wall.limewash': 'lime_plaster',
   'stone.red': 'sandstone_ashlar',
   'stone.grey': 'sandstone_ashlar',
@@ -78,6 +84,11 @@ export interface MaterialLibrary {
   get(name: MaterialName): THREE.Material;
   /** Same material with a different base colour (e.g. a facade colour from the catalogue). */
   tinted(name: MaterialName, colour: string): THREE.Material;
+  /**
+   * KB-I19/I20 (optional): variant of `get` / `tinted` that reads the per-vertex `aShade` attribute (albedo multiplier
+   * + baked AO, exterior/shade.ts). Used for geometry the exterior builder baked; libraries without it fall back.
+   */
+  baked?(name: MaterialName, colour?: string): THREE.Material;
 }
 
 export interface BuildOptions {
@@ -86,6 +97,11 @@ export interface BuildOptions {
   style: 'realistic' | 'evidence';
   /** Include placement 'hypothetical' buildings. */
   showHypothetical: boolean;
+  /**
+   * Scene year (KB-I03): buildings and terrain features whose `epoch` excludes it are skipped by every builder.
+   * Default SCENE_YEAR = 1789. Not the viewer's terrain switch (state.epoch '1789' | '2025').
+   */
+  year: number;
   /** Seed for jitter (trees, weathering). */
   seed: number;
 }
@@ -94,6 +110,7 @@ export const DEFAULT_BUILD_OPTIONS: BuildOptions = {
   roofVariant: 'catalogue',
   style: 'realistic',
   showHypothetical: true,
+  year: SCENE_YEAR,
   seed: 1789,
 };
 

@@ -3,6 +3,11 @@ import type { Poi } from '@model/context.ts';
 import type { Building } from '@model/spec.ts';
 import { parseEvidenceTags } from '@model/spec.ts';
 import type { Mode } from './controls.ts';
+import { footerParts } from './photoMath.ts';
+import { QUALITY, type QualityPreset } from './quality.ts';
+
+/** Display look: Dokumentation (Neutral tone mapping, catalogue colours as authored) or Kino (AgX). */
+export type Look = 'doku' | 'kino';
 
 export interface UiState {
   hour: number;
@@ -12,7 +17,32 @@ export interface UiState {
   roofs: boolean;
   interiors: boolean;
   epoch: '1789' | '2025';
+  quality: QualityPreset;
+  autoScale: boolean;
+  look: Look;
+  haze: boolean;
+  /** Chandeliers lit at night (a celebration; ordinary evenings light candelabra and sconces only). */
+  fest: boolean;
+  /**
+   * KB-I48 Festbeleuchtung: illumination lamps on cornices, sills, the Ehrenhof, parterres and the basin (the dense
+   * rotunda rings only on the 1785 fête rotunda in a 1785 scene),
+   * every window of the lit buildings candle-lit and the chandeliers burning (arrangement a hypothesis; night only).
+   */
+  festival: boolean;
 }
+
+/**
+ * Time-of-day presets for 15 Jul 1789 (KB-I08; skb-visual-wow look-and-period.md §3, sun from viewer/src/sun.ts):
+ * 07:00 sun 25° from 85° (garden front), 17:30 22° from 278° (court front, hero hour), 19:00 7.9°, 20:30 −4.4°
+ * (civil twilight), 22:00 −13.7°.
+ */
+export const TIME_PRESETS: { label_de: string; hour: number }[] = [
+  { label_de: 'Morgen', hour: 7 },
+  { label_de: 'Nachmittag', hour: 17.5 },
+  { label_de: 'Goldene Stunde', hour: 19 },
+  { label_de: 'Dämmerung', hour: 20.5 },
+  { label_de: 'Nacht', hour: 22 },
+];
 
 export interface UiOptions {
   pois: Poi[];
@@ -25,6 +55,16 @@ export interface UiOptions {
   /** Tooltip of the back button (says where it goes). */
   backTitle: string;
   attribution: string;
+  /** KB-I46: start the Rundflug. */
+  onTour?(): void;
+  /** KB-I47: take a still with the panel's photo options. */
+  onPhoto?(): void;
+}
+
+/** Photo options from the panel (KB-I47). */
+export interface PhotoUiOptions {
+  scale: number;
+  dof: boolean;
 }
 
 const CONF_DE: Record<string, string> = { high: 'hoch', med: 'mittel', low: 'niedrig' };
@@ -56,9 +96,21 @@ export function buildUi(o: UiOptions) {
       <select id="poi"><option value="">– Ort wählen –</option>${opts}</select>
     </label>
     <label class="block">Tageszeit <span id="hourv"></span>
-      <input id="hour" type="range" min="4.5" max="21" step="0.25" />
+      <input id="hour" type="range" min="4" max="23" step="0.25" />
     </label>
+    <div class="row presets">${TIME_PRESETS.map((t) => `<button type="button" data-hour="${t.hour}" title="${String(Math.floor(t.hour)).padStart(2, '0')}:${String(Math.round((t.hour % 1) * 60)).padStart(2, '0')} Uhr">${t.label_de}</button>`).join('')}</div>
+    <div class="row tourphoto">
+      <button id="tourBtn" type="button" title="Automatischer Flug in sechs Einstellungen (Rekonstruktion = Hypothese); Esc oder jede Eingabe beendet ihn">▶ Rundflug</button>
+      <button id="photoBtn" type="button" title="Standbild mit Kantenglättung, Quellenangabe und Hinweis „Rekonstruktion – Hypothese“ als PNG speichern (Taste P)" aria-keyshortcuts="P">Foto <kbd>P</kbd></button>
+    </div>
+    <div class="row photoopts">
+      <label title="Auflösung des Fotos gegenüber dem Bildschirm">Foto <select id="photoScale"><option value="2">2×</option><option value="3">3×</option></select></label>
+      <label title="Leichte Tiefenunschärfe, scharf in der Bildmitte"><input type="checkbox" id="photoDof" /> Tiefenunschärfe</label>
+    </div>
     <label><input type="checkbox" id="shadows" /> Schatten</label>
+    <label><input type="checkbox" id="haze" /> Dunst</label>
+    <label title="Abends brennen gewöhnlich nur Leuchter auf dem Kamin und Wandleuchter; Kronleuchter wurden zu Festen angezündet (Anlass Hypothese)"><input type="checkbox" id="fest" /> Fest: Kronleuchter brennen</label>
+    <label title="Illumination nach dem Muster der Hochzeit 1785 (Fürstenwärther 1786) auf den Bau von 1789 übertragen: Lampions auf Gesimsen und Fensterbänken, Feuertöpfe im Ehrenhof, Lichter an Parterres und Bassin; alle Fenster erleuchtet. Die dichten Lichterkränze der Festrotunde von 1785 gehören nur zum Festjahr 1785. Anordnung Hypothese. Nur bei Dunkelheit sichtbar."><input type="checkbox" id="festival" /> Festbeleuchtung (Muster 1785, auf 1789 übertragen; Hypothese)</label>
     <label><input type="checkbox" id="confidenceColours" /> Konfidenz-Farben</label>
     <label><input type="checkbox" id="roofs" /> Dächer zeigen</label>
     <label><input type="checkbox" id="interiors" /> Innenräume</label>
@@ -68,9 +120,18 @@ export function buildUi(o: UiOptions) {
     <label class="block">Gelände
       <select id="epoch"><option value="1789">1789 (Hypothese)</option><option value="2025">heute (LiDAR 2025)</option></select>
     </label>
+    <div class="row pair">
+      <label class="block">Qualität
+        <select id="quality">${(Object.keys(QUALITY) as QualityPreset[]).map((k) => `<option value="${k}">${QUALITY[k].label_de}</option>`).join('')}</select>
+      </label>
+      <label class="block">Darstellung
+        <select id="look"><option value="doku">Dokumentation</option><option value="kino">Kino</option></select>
+      </label>
+    </div>
+    <label title="Senkt die Auflösung, wenn die Grafikkarte das Bild nicht in 14 ms schafft"><input type="checkbox" id="autoScale" /> Auflösung automatisch anpassen</label>
     <div id="legend" class="legend"><span style="background:${CONF_COL.high}"></span>hoch <span style="background:${CONF_COL.med}"></span>mittel <span style="background:${CONF_COL.low}"></span>niedrig</div>
     <details class="help"><summary>Steuerung</summary>
-      WASD bewegen · Q/E runter/hoch · Umschalt schnell · Maus ziehen = umsehen · Doppelklick = Maus fangen (Esc löst) · Klick = Info · G Gehen · F Fliegen · Leertaste springen · M zurück zur Karte (Explorer, gleiche Stelle)
+      WASD bewegen · Q/E runter/hoch · Umschalt schnell · Maus ziehen = umsehen · Doppelklick = Maus fangen (Esc löst) · Klick = Info · G Gehen · F Fliegen · Leertaste springen · P Foto speichern · Rundflug: Esc oder jede Eingabe beendet ihn · M zurück zur Karte (Explorer, gleiche Stelle)
     </details>`;
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const sync = () => {
@@ -78,6 +139,13 @@ export function buildUi(o: UiOptions) {
     const hh = Math.floor(s.hour);
     $('hourv').textContent = `${hh}:${String(Math.round((s.hour - hh) * 60)).padStart(2, '0')} Uhr (15. Juli 1789)`;
     $<HTMLInputElement>('shadows').checked = s.shadows;
+    $<HTMLInputElement>('haze').checked = s.haze;
+    $<HTMLInputElement>('fest').checked = s.fest;
+    $<HTMLInputElement>('festival').checked = s.festival;
+    $<HTMLInputElement>('autoScale').checked = s.autoScale;
+    $<HTMLSelectElement>('quality').value = s.quality;
+    $<HTMLSelectElement>('look').value = s.look;
+    panel.querySelectorAll<HTMLButtonElement>('button[data-hour]').forEach((b) => b.classList.toggle('on', Number(b.dataset.hour) === s.hour));
     $<HTMLInputElement>('confidenceColours').checked = s.confidenceColours;
     $<HTMLInputElement>('roofs').checked = s.roofs;
     $<HTMLInputElement>('interiors').checked = s.interiors;
@@ -91,7 +159,25 @@ export function buildUi(o: UiOptions) {
     sync();
     o.onChange('hour');
   });
-  for (const k of ['shadows', 'confidenceColours', 'roofs', 'interiors'] as const) {
+  panel.querySelectorAll<HTMLButtonElement>('button[data-hour]').forEach((b) =>
+    b.addEventListener('click', () => {
+      s.hour = Number(b.dataset.hour);
+      sync();
+      o.onChange('hour');
+      b.blur();
+    }),
+  );
+  $<HTMLSelectElement>('quality').addEventListener('change', (e) => {
+    s.quality = (e.target as HTMLSelectElement).value as QualityPreset;
+    (e.target as HTMLSelectElement).blur();
+    o.onChange('quality');
+  });
+  $<HTMLSelectElement>('look').addEventListener('change', (e) => {
+    s.look = (e.target as HTMLSelectElement).value as Look;
+    (e.target as HTMLSelectElement).blur();
+    o.onChange('look');
+  });
+  for (const k of ['shadows', 'confidenceColours', 'roofs', 'interiors', 'haze', 'fest', 'festival', 'autoScale'] as const) {
     $<HTMLInputElement>(k).addEventListener('change', (e) => {
       s[k] = (e.target as HTMLInputElement).checked;
       sync();
@@ -112,6 +198,15 @@ export function buildUi(o: UiOptions) {
     (e.target as HTMLSelectElement).blur();
   });
   $<HTMLButtonElement>('back').addEventListener('click', () => o.onBack());
+  $<HTMLButtonElement>('tourBtn').addEventListener('click', (e) => {
+    (e.currentTarget as HTMLButtonElement).blur();
+    o.onTour?.();
+  });
+  $<HTMLButtonElement>('photoBtn').addEventListener('click', (e) => {
+    (e.currentTarget as HTMLButtonElement).blur();
+    o.onPhoto?.();
+  });
+  $<HTMLSelectElement>('photoScale').addEventListener('change', (e) => (e.target as HTMLSelectElement).blur());
   panel.querySelectorAll<HTMLButtonElement>('button[data-mode]').forEach((b) =>
     b.addEventListener('click', () => {
       o.onMode(b.dataset.mode as Mode);
@@ -160,12 +255,60 @@ export function buildUi(o: UiOptions) {
     info.querySelector('.close')?.addEventListener('click', () => (info.style.display = 'none'));
   };
 
-  $('attribution').innerHTML = `${esc(o.attribution)} · Texturen CC0 (Poly Haven, ambientCG) · Rekonstruktion: Hypothese nach research/01–08 (Teilprojekt Schloss Karlsberg) · <b>Schauen, nicht graben</b>`;
+  // the same credit line is burned into photos (photoMath.ts footerParts)
+  const credit = footerParts(o.attribution);
+  $('attribution').innerHTML = `${credit.slice(0, -1).map(esc).join(' · ')} · <b>${esc(credit[credit.length - 1])}</b>`;
   const stats = $('stats');
+
+  // ---------------------------------------------------------------- KB-I46 Rundflug overlay, KB-I47 photo toast
+  const cine = $('cine');
+  const cut = $('cut');
+  const cap = $('tourcap');
+  const capT = cap.querySelector<HTMLElement>('.t')!;
+  const capN = cap.querySelector<HTMLElement>('.n')!;
+  const toastEl = $('toast');
+  let panelDisplay = '';
+  /** Cinema mode: letterbox, caption and cut overlay on; the panel, info box and stats off. */
+  const setCinema = (on: boolean) => {
+    if (on && cine.style.display !== 'block') panelDisplay = panel.style.display;
+    document.body.classList.toggle('cinema', on);
+    cine.style.display = on ? 'block' : 'none';
+    cut.style.display = on ? 'block' : 'none';
+    cap.style.display = on ? 'block' : 'none';
+    panel.style.display = on ? 'none' : panelDisplay;
+    stats.style.visibility = on ? 'hidden' : '';
+    if (on) info.style.display = 'none';
+    if (!on) {
+      cut.style.opacity = '0';
+      cap.style.opacity = '0';
+    }
+  };
+  const setCaption = (title: string, note: string, alpha: number, fade: number) => {
+    if (capT.textContent !== title) capT.textContent = title;
+    if (capN.textContent !== note) capN.textContent = note;
+    cap.style.opacity = alpha.toFixed(3);
+    cut.style.opacity = fade.toFixed(3);
+  };
+  /** Small status line (photo progress); null hides it. */
+  const toast = (text: string | null) => {
+    toastEl.textContent = text ?? '';
+    toastEl.style.display = text ? 'block' : 'none';
+  };
+  const photoOptions = (): PhotoUiOptions => ({ scale: Number($<HTMLSelectElement>('photoScale').value) || 2, dof: $<HTMLInputElement>('photoDof').checked });
+  const setTourActive = (on: boolean) => {
+    const b = $<HTMLButtonElement>('tourBtn');
+    b.classList.toggle('on', on);
+    b.textContent = on ? '■ Rundflug beenden' : '▶ Rundflug';
+  };
   return {
     setMode,
     showInfo,
     sync,
     setStats: (t: string) => (stats.textContent = t),
+    setCinema,
+    setCaption,
+    setTourActive,
+    toast,
+    photoOptions,
   };
 }

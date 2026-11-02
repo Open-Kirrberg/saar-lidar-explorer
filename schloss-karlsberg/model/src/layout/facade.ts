@@ -11,12 +11,18 @@ import {
   CELLAR_WINDOW,
   DORMER,
   MIN_END_PIER,
+  BALCONY,
+  MAIN_PERRON,
+  PASSAGE_PORTICO,
   PORTAL,
+  PORTAL_FRAME,
   PORTE_FENETRE_HEIGHT,
   PORTICO,
   SILL_WINDOW,
+  MEMBERS,
   STAIR,
   WINDOW,
+  type WindowRow,
   windowClass,
 } from './grammar.ts';
 import { type BuildingFrame, sidePoint, stToEN } from './footprint.ts';
@@ -210,9 +216,95 @@ export interface FacadeOpening {
   steps?: number;
   /** Grade the steps start from (m DHHN2016); undefined = base_h. */
   grade_h?: number;
-  /** Columned portico in front (portal spec `portico`). */
-  portico?: { columns: number; balcony: boolean; depth: number; tag?: string };
+  /**
+   * Columned portico in front (portal spec `portico`). On a Durchfahrt (wave-8 review fix, KB-I72) the columns stand on
+   * the court and carry a balcony deck at `deck_h` (the floor of the storey above, PASSAGE_PORTICO).
+   */
+  portico?: { columns: number; balcony: boolean; depth: number; deck_h?: number; tag?: string };
+  /** Window row of the storey (glazing class, KB-I16); null for plinth / basement / kneewall openings. */
+  row?: WindowRow | null;
+  /** KB-I17: window cap (Verdachung): only CdL Beletage axes in the centre risalit [HMS; research/09 G7]. */
+  hood?: boolean;
+  /** KB-I17: iron balconet in front (catalogue porte-fenêtre on an upper storey; never a class default). */
+  balcony?: boolean;
+  /**
+   * Wave-8 review fix (KB-I72): continuous balcony (portal spec `balcony_run`, grammar BALCONY) from `a0` to `a1` along
+   * the side, `depth` m deep, its deck at this opening's bottom_h; set on the first porte-fenêtre of the run only.
+   */
+  balconyRun?: { a0: number; a1: number; depth: number; tag?: string };
   tag: string;
+}
+
+/** Freitreppe in front of an opening with steps (no portico): the shared numbers of exterior, court and plans. */
+export interface FreitreppePlan {
+  /** Main perron (MAIN_PERRON: portal without portico) or a plain stair (doors). */
+  main: boolean;
+  /** Half width of the flight between the cheek walls (m, from the opening axis). */
+  halfWidth: number;
+  tread: number;
+  /** Top landing depth (m). */
+  landing: number;
+  /** Total run from the wall face to the stair foot (m). */
+  depth: number;
+  cheek: number;
+  cheekAbove: number;
+  /** Foot pedestal [width, depth, height above grade] centred on each cheek; null = none. */
+  pedestal: readonly [number, number, number] | null;
+}
+
+/**
+ * Freitreppe numbers for an opening with steps and no portico. Main portals (wave-8 review fix, KB-I72) get the broad
+ * MAIN_PERRON (as wide as the PORTAL_FRAME plus `beyondFrame`, landing, stepped cheeks, pedestals); doors keep the
+ * plain stair (width + 1.2 m, 0.4 m treads, 0.3 m top step, 0.35 m cheeks).
+ */
+export function freitreppePlan(o: Pick<FacadeOpening, 'kind' | 'width' | 'steps' | 'portico'>): FreitreppePlan | null {
+  const n = o.steps ?? 0;
+  if (n <= 0 || o.portico) return null;
+  if (o.kind === 'portal') {
+    const P = MAIN_PERRON;
+    const halfWidth = o.width / 2 + ARTICULATION.surround.face + PORTAL_FRAME.pilaster + P.beyondFrame;
+    return { main: true, halfWidth, tread: P.tread, landing: P.landing, depth: P.landing + (n - 1) * P.tread, cheek: P.cheek, cheekAbove: P.cheekAbove, pedestal: P.pedestal };
+  }
+  return { main: false, halfWidth: (o.width + 1.2) / 2, tread: 0.4, landing: 0.3, depth: n * 0.4 + 0.3, cheek: 0.35, cheekAbove: 0.15, pedestal: null };
+}
+
+/**
+ * Wave-9 review fix (KB-I72): along-facade offsets (from the portal axis, signed: [left, right]) of the sentry pair at
+ * the foot of a main perron, snapped to the pier centres between the window bays of the portal storey, so the boxes
+ * stand on the piers beside the cheek pedestals and not in front of a window. `clear` is the half width the stair keeps
+ * (cheeks + pedestals), `box` the sentry box width, `gap` its gap to the stair. A pier is taken when the box still
+ * clears the stair (`clear` + 0.05) and the pier centre is within 1.5 m of the unsnapped place; otherwise that place
+ * is kept. Null for openings without a main perron.
+ */
+export function perronSentryAlong(
+  o: Pick<FacadeOpening, 'kind' | 'width' | 'steps' | 'portico' | 'side' | 'storey' | 'a'>,
+  openings: readonly Pick<FacadeOpening, 'side' | 'storey' | 'a' | 'width'>[],
+  clear: number,
+  box: number,
+  gap: number,
+): [number, number] | null {
+  if (!freitreppePlan(o)?.main) return null;
+  const want = clear + gap + box / 2;
+  const min = clear + 0.05 + box / 2;
+  const out: number[] = [];
+  for (const sg of [-1, 1]) {
+    // openings of the portal storey on this side of the axis, nearest first, as [near edge, far edge] offsets
+    const bays = openings
+      .filter((w) => w !== o && w.side === o.side && w.storey === o.storey && sg * (w.a - o.a) > 0.1)
+      .map((w) => [sg * (w.a - o.a) - w.width / 2, sg * (w.a - o.a) + w.width / 2] as const)
+      .sort((x, y) => x[0] - y[0]);
+    let best = want;
+    let dist = 1.5;
+    for (let i = 0; i + 1 < bays.length; i++) {
+      const c = (bays[i][1] + bays[i + 1][0]) / 2;
+      if (c >= min - 1e-9 && Math.abs(c - want) <= dist) {
+        best = c;
+        dist = Math.abs(c - want);
+      }
+    }
+    out.push(sg * best);
+  }
+  return [out[0], out[1]];
 }
 
 export interface FacadeOpeningInput {
@@ -223,6 +315,8 @@ export interface FacadeOpeningInput {
   portals?: PortalSpec[];
   /** Side window type (FacadeSideSpec.window_kind): 'window' turns class portes-fenêtres into sill windows. */
   windowKind?: 'window' | 'porte_fenetre';
+  /** FacadeSideSpec.window_kind_storeys: storeys `windowKind` applies to (absent = all main storeys). */
+  windowKindStoreys?: number[];
 }
 
 function fit(nominalH: number, level: Level, sill: number, lintel: number): number {
@@ -268,10 +362,21 @@ export function facadeOpenings(inp: FacadeOpeningInput): FacadeOpening[] {
     const a = (layout.bays[axes[0]].a + layout.bays[axes[axes.length - 1]].a) / 2;
     if (p.kind === 'porte_fenetre') {
       // one porte-fenetre per spanned axis
+      const run = p.balcony_run && storey > entrance;
+      const w = p.width ?? WINDOW[wc][level.row ?? 'ground'].width;
       for (const ax of axes) {
-        const w = WINDOW[wc][level.row ?? 'ground'].width;
         const h = Math.min(p.height ?? PORTE_FENETRE_HEIGHT, level.height - 0.6);
-        out.push(mk(side, storey, ax, 'porte_fenetre', layout.bays[ax].a, p.width ?? w, h, 0, level, 'straight', p.tag ?? PORTAL.porte_fenetre.tag));
+        const o = mk(side, storey, ax, 'porte_fenetre', layout.bays[ax].a, w, h, 0, level, 'straight', p.tag ?? PORTAL.porte_fenetre.tag);
+        // a catalogue porte-fenêtre above the entrance storey opens onto a balcony (the catalogue names it) [KB-I17]
+        if (storey > entrance && p.balconet !== false && !run) o.balcony = true; // not onto an Altan / terrace (wave-7 fix)
+        // wave-8 review fix (KB-I72): one continuous balcony across the run instead of a balconet per door
+        if (run && ax === axes[0]) {
+          const a0 = layout.bays[axes[0]].a - w / 2 - BALCONY.overhang;
+          const a1 = layout.bays[axes[axes.length - 1]].a + w / 2 + BALCONY.overhang;
+          o.balconyRun = { a0, a1, depth: p.balcony_run!.depth ?? BALCONY.depth, tag: typeof p.balcony_run!.tag === 'string' ? p.balcony_run!.tag : BALCONY.tag };
+        }
+        if (hooded(cls, level, layout.bays[ax])) o.hood = true;
+        out.push(o);
         take(storey, ax);
       }
       continue;
@@ -282,7 +387,11 @@ export function facadeOpenings(inp: FacadeOpeningInput): FacadeOpening[] {
       // passage from court level through the plinth into the ground floor
       const sill = -(level.floor_h - plinth.floor_h);
       const height = Math.min(p.height ?? base.height, level.top_h - plinth.floor_h - 0.5);
-      out.push(mk(side, storey, axes[0], 'durchfahrt', a, width, height, sill, level, base.head, p.tag ?? base.tag));
+      const o = mk(side, storey, axes[0], 'durchfahrt', a, width, height, sill, level, base.head, p.tag ?? base.tag);
+      // wave-8 review fix (KB-I72): columned porch in front of the passage, balcony deck at the floor above
+      const above = stack.levels.find((l) => l.index === storey + 1);
+      if (p.portico) o.portico = { columns: p.portico.columns, balcony: p.portico.balcony, depth: p.portico.depth ?? PASSAGE_PORTICO.depth, deck_h: above?.floor_h, tag: typeof p.portico.tag === 'string' ? p.portico.tag : undefined };
+      out.push(o);
       for (const ax of axes) take(plinth.index, ax);
     } else {
       const height = Math.min(p.height ?? base.height, level.height - 0.4);
@@ -294,6 +403,9 @@ export function facadeOpenings(inp: FacadeOpeningInput): FacadeOpening[] {
       if (p.portico) o.portico = { columns: p.portico.columns, balcony: p.portico.balcony, depth: p.portico.depth ?? PORTICO.depth, tag: p.portico.tag };
       out.push(o);
       if (plinth && storey === entrance && p.kind === 'portal') for (const ax of axes) take(plinth.index, ax);
+      // wave-8 review fix (KB-I72): the broad main perron covers the cellar windows of the neighbouring axes
+      const fp = freitreppePlan(o);
+      if (plinth && storey === entrance && fp?.main) for (const b of layout.bays) if (Math.abs(b.a - a) < fp.halfWidth + fp.cheek + CELLAR_WINDOW.width / 2 + 0.1) take(plinth.index, b.index);
     }
     for (const ax of axes) take(storey, ax);
   }
@@ -329,7 +441,7 @@ export function facadeOpenings(inp: FacadeOpeningInput): FacadeOpening[] {
       continue;
     }
     if (!level.row) continue;
-    const sillWindows = inp.windowKind === 'window' && WINDOW[wc][level.row].sill === 0;
+    const sillWindows = inp.windowKind === 'window' && WINDOW[wc][level.row].sill === 0 && (!inp.windowKindStoreys || inp.windowKindStoreys.includes(level.index));
     const w = sillWindows ? SILL_WINDOW[level.row] : WINDOW[wc][level.row];
     const kind: OpeningKind = cls === 'STABLE' && level.row === 'ground' ? 'stall_window' : w.sill === 0 ? 'porte_fenetre' : 'window';
     for (const b of layout.bays) {
@@ -337,10 +449,17 @@ export function facadeOpenings(inp: FacadeOpeningInput): FacadeOpening[] {
       const width = Math.min(w.width, layout.spacing - 0.8);
       const h = fit(w.height, level, w.sill, w.lintel);
       if (h <= 0.4 || width <= 0.3) continue;
-      out.push(mk(side, level.index, b.index, kind, b.a, width, h, w.sill, level, w.head, w.tag));
+      const o = mk(side, level.index, b.index, kind, b.a, width, h, w.sill, level, w.head, w.tag);
+      if (hooded(cls, level, b)) o.hood = true;
+      out.push(o);
     }
   }
   return out;
+}
+
+/** KB-I17: Verdachung only on the Beletage axes of a CdL centre risalit (MEMBERS.hoodedAxes) [HMS; research/09 G7]. */
+function hooded(cls: BuildingClass, level: Level, bay: Bay | undefined): boolean {
+  return MEMBERS.hoodedAxes.has(cls) && level.row === 'upper' && bay?.risalit?.kind === 'centre';
 }
 
 function mk(
@@ -357,7 +476,7 @@ function mk(
   tag: string,
 ): FacadeOpening {
   const bottom_h = level.floor_h + sill;
-  return { side, storey, axis, kind, a, width, height, sill, bottom_h, top_h: bottom_h + height, head, tag };
+  return { side, storey, axis, kind, a, width, height, sill, bottom_h, top_h: bottom_h + height, head, row: level.row, tag };
 }
 
 /**

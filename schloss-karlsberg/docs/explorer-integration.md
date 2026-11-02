@@ -1,6 +1,6 @@
 # Explorer integration: light reconstruction layer + camera handover
 
-Status 2026-11-01. This note is the castle side of the integration with the Saar LiDAR Explorer (`../app`). The
+Status 2026-11-01 (§2.5 updated 2026-11-02 after improvement wave 8: light-layer changes waiting for re-export). This note is the castle side of the integration with the Saar LiDAR Explorer (`../app`). The
 explorer shows a **light** model of the reconstructed residence (summer 1789, hypothesis) as a toggleable layer.
 Near the palace, "Schloss betreten" hands the camera to this viewer. "Zurück zur Karte" in the viewer hands it back.
 The explorer side (loader, layer toggle, button, attribution) is built against this note and documented in
@@ -40,9 +40,14 @@ The output dir `app/public/data/shared/karlsberg1789/` is git-ignored and AOI-in
 ### 2.1 Frame
 - Model frame = explorer karlsberg AOI frame: `x = E − 381000`, `y = h` (true m DHHN2016, **no exaggeration**),
   `z = −(N − 5465000)`.
-- Every node has an identity transform, and positions are float32 in that frame. Positions are deliberately not
-  quantised: quantised positions would need a dequantisation node transform, and they would lose about 3 cm over
-  the 2 km extent.
+- Up to the 2026-11-01 export every node has an identity transform and float32 positions in that frame. From the
+  wave-7 export on (KB-I62, §2.5) positions are **int16 on a global 1/64 m grid**: each node carries the
+  dequantisation transform `translation = offset` (a multiple of 1/64 m), `scale = (1/64, 1/64, 1/64)`, no
+  rotation, so `model = offset + q/64`. Max error 7.8 mm (half a step); coincident vertices of different nodes stay
+  identical because every node snaps to the same grid. A node whose extent exceeds the int16 range (± 512 m at
+  1/64 m) would stay float32 with an identity transform (none does today). The explorer bakes `matrixWorld` into
+  the vertices (`ReconLayer.prepareGeometry`), as `../docs/data-contract.md` allows ("a transform added by
+  quantization is tolerated"), so the format stays `sle-recon-v1`.
 - Explorer placement per AOI: `object.position.set(E0_model − E0_aoi, 0, −(N0_model − N0_aoi))`.
   - `karlsberg` AOI: (0, 0, 0)
   - `overall` AOI (378000/5460000): (3000, 0, −5000)
@@ -58,9 +63,9 @@ The output dir `app/public/data/shared/karlsberg1789/` is git-ignored and AOI-in
 
   | glTF | Storage | three.js attribute name | Meaning |
   |---|---|---|---|
-  | `POSITION` | float32 VEC3 | `position` | model frame, true heights |
+  | `POSITION` | int16 VEC3, not normalized (wave 7, KB-I62; float32 before) | `position` | model frame, true heights after the node's translation + uniform 1/64 scale |
   | `NORMAL` | int8 normalized VEC3 | `normal` | flat normals |
-  | `COLOR_0` | uint8 normalized VEC3 | `color` | **linear** RGB, baked from the material base colours (render `#ECE8DF`, red sandstone `#A65E4A`, slate `#4B5057`, catalogue tints …) |
+  | `COLOR_0` | uint8 normalized VEC3 | `color` | **linear** RGB, baked from the material base colours (render `#ECE8DF`, red sandstone `#A65E4A`, slate `#4B5057`, catalogue tints …). From the 2026-11-02 export on (§2.5) it also carries the generator's per-vertex `aShade`: albedo variation (limewash age, per-building luminance, roof and stone tints, KB-I19) and baked AO (reveals, passages, cornice undersides, wall foot, KB-I20) as `colour × rgb × mix(1, AO, EXPLORER_AO_STRENGTH)` with `EXPLORER_AO_STRENGTH` = 0.6 (`shadeColour()` in `model/src/exterior/shade.ts`). Format and attribute unchanged |
   | `_CONF` | uint8 SCALAR (not normalized) | **`_conf`** (GLTFLoader lower-cases custom attributes) | 0 = low, 1 = med, 2 = high |
 
   GLTFLoader turns on `vertexColors` by itself when `COLOR_0` is present. The viewer's confidence colours are
@@ -121,6 +126,114 @@ footprint; for WALL buildings it is the buffered centre line.
 - The Lageplan entry is required: some footprints derive from the CC BY-SA 2.0 DE plan (research/07).
 - No HMS frames, video or meshes are exported. The catalogue's derived numbers are only cited as "HMS/Matzerath
   2022 (nur Maße, ©)".
+
+### 2.5 Light-layer changes (re-export pending)
+The copy in `../app/public/data/shared/karlsberg1789/` is still the 2026-11-01 export (4.65 MB, 99 nodes), which
+§2.2 describes. The castle side has changed since; a temp export (`verify.sh export`, 2026-11-02, after wave 9 and
+all its owners' changes) gives:
+
+| | 2026-11-01 (deployed) | 2026-11-02 (pending) |
+|---|---|---|
+| `buildings.glb` | 4.65 MB, 99 nodes (91 buildings + 8 site) | **4.32 MB**, 117 nodes (103 buildings + 14 site) |
+| triangles / vertices | 340 087 / 624 855 | 422 389 / 723 845 |
+| `POSITION` | float32 | int16 on a 1/64 m grid, per-node translation + scale (max error 7.8 mm, KB-I62) |
+| dropped `wood.frame` / `metal.iron` | 294 208 / 16 080 triangles | 253 924 / 32 892 triangles |
+| `footprints.geojson` / `index.json` | 91 polygons / 91 entries | 103 / 103 |
+| `bboxEN` | S edge N 5464622 | [[381255.3, 5464643.2], [383159.4, 5467054.1]] |
+
+What changed (format `sle-recon-v1` unchanged; the explorer needs no code change):
+- `COLOR_0` now includes baked AO and the `aShade` albedo variation (KB-I19/I20, see the §2.2 table), and the
+  exterior palette (blue-grey shutters, bluer slate, painted render members, KB-I15), French casements and plain
+  wings (KB-I16/I17).
+- Only the summer-1789 state is exported (KB-I03 epoch): nodes `KB-B13` (Rotunde an der Orangerie) and `KL-B49`
+  (Hymenäostempel) are gone.
+- New or changed nodes: `site:HG-04` (basin coping and stag heads, KB-I13), `site:TF-09` (Herzogsgarten terrace
+  stone, 610 triangles), `site:TF-01` (Ehrenhof Prellsteine and flat sandstone gutters, 696 triangles, KB-I23),
+  `KB-B06a` (Bibliothekspavillon, hypothetical, low confidence, KB-I24) and `KB-B07`, now the round Tempelzimmer /
+  Rotunde with portico and colonnade (KB-I24). Gilt weather vanes and gate spear tips are included; lightning rods
+  and downpipes are iron and dropped (KB-I18/I22).
+- Wave 5 (garden) adds `KB-B87` (Rundpavillon im Herzogsgarten, 2.9 k triangles) and `KB-B88` (round pavilion above
+  the Hirschwürzloch, 2.7 k). Both are `placement: 'hypothetical'` with low confidence (`_CONF` 0), positioned ±30 m.
+  It also adds `site:HG-41`, the Flora herm (132 triangles, stone). The garden benches (wood) are not exported.
+- The garden walls (GARD) now step with the ground in bays, with piers and a saddle coping. The export uses the lean
+  LOD < 2 variant, with less than half the triangles of the viewer's near walls, to stay within budget. Against the
+  deployed layer, `KB-B27` (Holländische Gärtnerei) grows from 0.1 to 2.0 k triangles, `KB-B23` from 0.1 to 1.0 k
+  and `KL-B43` from 0.2 to 2.6 k.
+- The wave-5 interiors, parterres, kitchen-garden beds, grove, lanterns and lit windows are viewer-only; nothing
+  else reaches the layer.
+- Wave 6 adds one node and changes several (triangles against the deployed layer):
+  - **New `KB-B12a`** (Komödienhaus, annex on the S face of the Orangerie S wing; `placement: 'hypothetical'`, low
+    confidence, `_CONF` 0; 824 triangles). `footprints.geojson` and `index.json` gain its entry (93 / 93).
+  - `KL-B40` is now the menagerie ring of 19 slate-roofed houses and a loge (`name_de` "Amphitheater (Menagerie-Rund
+    mit 19 schiefergedeckten Tierhäusern und Loge, „Bärenzwinger“)", 768 → 504 triangles); `KL-B43` carries six
+    terrace rows of houses instead of the enclosure wall (182 → 1,664); `KL-B41` 790 → 978. Their grilles, net
+    posts and wires are iron and dropped.
+  - `site:HG-41` (Flora herm) is a lathed bust on a tapering shaft (132 → 572 triangles).
+  - The KB-I21 Fachwerk storeys (gallery KB-B06, Wachhäuser KB-B37/38/63/64, upper storeys of KB-B24/40/41) have
+    thinner walls and reveals (+0.1…1 k triangles each). On KB-B10/B11/B12/B12a the door leaves are now white
+    (`#F2F0EA`, `wood.door`, baked into `COLOR_0`); the white window frames are `wood.frame` and stay dropped. The
+    KB-B10 hall tier has no shutter leaves any more.
+  - Viewer-only, nothing in the layer: the post chain, water reflections, wet banks and spray, leaf cards, lantern
+    pools, chimneypieces, stoves and chandeliers, treillage and the garden plantings.
+- Budget: 5.90 of 6 MB left almost no headroom; wave 7 made room (KB-I62, below).
+- Wave 7 (architecture, 2026-11-02; the lead's temp export after all wave-7 changes gives the same numbers):
+  - **KB-I62:** `POSITION` is int16 on a 1/64 m grid with a per-node translation + scale (§2.1, §2.2). The wave-6
+    layer drops from 5.88 MB to **4.11 MB** with identical nodes and triangles (round trip OK).
+  - New nodes, all `placement: 'hypothetical'`, low confidence (`_CONF` 0), positioned ± 50-100 m from zone
+    descriptions: `KB-B02a` (Altan on piers over the S-wing garden Durchfahrt, KB-I31), `KB-B89` (Monopteros),
+    `KB-B90` (Bienenhaus), `KB-B91` (Wassermaschine), `KL-B50` (Chinesischer Pavillon), `KL-B51` (Türkisches Zelt),
+    `KL-B52` (Heuwagen), `KL-B53` (Volierenpavillon) (KB-I39/KB-I30). 140-630 triangles each; open follies (Altan,
+    tent, wagon, aviary, bee shelter) get no base skirt.
+  - Total: **4.17 MB**, 114 nodes (102 buildings + 12 site), 406 853 triangles, 696 797 vertices; `bboxEN` south
+    edge N 5464643.5. `footprints.geojson` / `index.json` gain the 8 entries.
+  - `KB-B54`/`KB-B56` (Treibhäuser) only change `name_de`/function (UP-06 Ananashaus merged).
+  - Also new against the deployed layer: `KL-B41a` (Inselpavillon der Menagerie – Aufbau, hypothetical, low; the
+    wave-6 review split of KL-B41, KB-I67). Its base skirt is the deepest in the layer (5.68 m below the plinth, since
+    it stands on the island quay in the moat); check how it reads in the explorer after the re-export.
+  - Viewer-only in wave 7, nothing in the layer: the 3D vines, forest crown relief and fringe, hedge bevels, Ehrenhof
+    wear, interior mapping (LOD2 panes with `aWin` / `aRoom` only), the indoor-look rule, interior shells and the sky
+    cube.
+- Wave-7 review fixes and wave 8 (2026-11-02; the lead's temp export after all wave-8 changes):
+  - **New nodes:** `KB-B28a` (Apsis des Pavillons zu Carlsberg: a round drum with a half-dome on the E wall of
+    `KB-B28`, `placement: 'hypothetical'`, low confidence, `_CONF` 0; 2.5 k triangles; KB-I32) and `site:KB-WB1`
+    (the well N of the Wassermaschine KB-B91, wave-7 review fix KB-I71; since wave 8 a flush kerb with a stone cover,
+    low confidence). `footprints.geojson` / `index.json` gain `KB-B28a` (103 / 103).
+  - **Changed nodes:** `KB-B28` is now Schneider's "Pavillon zu Carlsberg" (10 × 10 m, two storeys, pavilion roof,
+    W door; hypothetical / low; 0.8 → 2.8 k triangles); `KL-B50` Chinese pavilion with a double roof, up-swept hip
+    corners, lantern drum and bells (1.5 k); `KB-B07` Tempelzimmer doors fill the curved openings (KB-I70); `KB-B01`
+    a sandstone pilaster-and-entablature frame round the court portal; the seven follies (`KL-B50…53`, `KB-B89`,
+    `KB-B90`, `KB-B02a`) without shutters; `site:TF-41` / `site:TF-42` wells (Buntsandstein well-head with coping for
+    TF-41, flush kerbs with covers for the low-confidence TF-42 pits). Lightning-rod masts are now on the ridge high
+    points only; their iron is dropped as before.
+  - Not in the layer (viewer-only or not stone): the fences `KB-F1` / `KB-F2` (timber), the forecourt `KB-V1` and the
+    Felsenpfad `KB-W8` (terrain paint), the Festbeleuchtung lamps, the far shadow map, the Granitsaal walls and the
+    banquette (interior), the Ehrenhof wear and the lawn changes.
+  - The terrain under the castle changed too (`prepare-terrain.py`: TF-08 retaining-wall foot ramp, a level pad at the
+    KB-B02 W portico, KB-V1 gravel); the explorer uses its own 2025 DTM, so only the base skirts can differ.
+- Wave-8 review fixes and wave 9 (2026-11-02; the lead's temp export after all wave-9 changes, against the wave-8 lead
+  export above):
+  - **New node:** `site:KB-W8` (Felsenpfad: low Buntsandstein outcrops and loose edge stones, `stone.red`,
+    `placement` of the walk hypothetical, low confidence; 2,040 triangles). The trodden-earth path itself is terrain
+    paint and stays out. `footprints.geojson` / `index.json` keep 103 / 103 entries.
+  - **Changed nodes:** `KB-B01` (court perron across the three centre axes with sandstone treads, cheeks and
+    pedestals, the N-wing porch and balconies of the wave-8 review; 12,663 → 13,039 triangles); `KB-B28` / `KB-B28a`
+    (door and windows moved to the W front, blank E wall, flatter apse calotte; triangle counts unchanged); almost every
+    building with a lightning rod loses 28–192 triangles (smaller gilt heads; masts 1.2–3.0 m, 0.5 m points on the
+    guard houses; the iron stays dropped), and the `index.json` heights of those buildings drop with the masts (e.g.
+    367.65 → 367.25 m).
+  - Not in the layer (viewer-only): the grass blades, the fine leaf atlas, the Petri framing shrub groups TF-45…49
+    (trees), the room mirrors and interior grade, the night-sky fix, the Tempelzimmer's inner pilasters (interior),
+    the Ehrenhof wear and the graded pond shores with their water mesh.
+  - The 1789 terrain under the castle changed again (`prepare-terrain.py`: natural pond shores and the TF-21 island,
+    the KB-V1 forecourt low-pass); the explorer uses its own 2025 DTM, so only the base skirts can differ (deepest
+    still KL-B41a, 5.68 m).
+- The ten Ehrenhof sentry boxes and the cobbled lanes are not in the layer (the site export keeps `stone.*` only).
+  The gutters in `site:TF-01` are flat strips 3 cm above the lower of the 1789 and 2025 grounds, so they may z-fight
+  with or sink under the explorer's 2025 DTM; whether to drop them is open on the castle side.
+
+The re-export into `../app` (`pnpm run export:explorer`) **waits for the user's go**, because the explorer is being
+built concurrently in the parent repo. After it, update §2's file table and §2.2's dropped counts and site-node
+list to the "pending" column.
 
 ## 3. Camera handover
 

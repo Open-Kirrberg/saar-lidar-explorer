@@ -202,3 +202,27 @@ export function hashString(s: string): number {
   }
   return h >>> 0;
 }
+
+/** Clamp x to [a, b]. */
+export const clamp = (x: number, a: number, b: number): number => Math.min(b, Math.max(a, x));
+
+/** GLSL `smoothstep(a, b, x)`. */
+export function smoothstep(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+/** GLSL `fract(x)`. */
+export const fract = (x: number): number => x - Math.floor(x);
+
+/** CPU twin of the shaders' `hash12` (Dave Hoskins, no sin: stable in float32 on the GPU), in [0, 1). */
+export function hash12(x: number, y: number): number {
+  let p0 = fract(x * 0.1031);
+  let p1 = fract(y * 0.1031);
+  let p2 = fract(x * 0.1031);
+  const dd = p0 * (p1 + 33.33) + p1 * (p2 + 33.33) + p2 * (p0 + 33.33);
+  p0 += dd;
+  p1 += dd;
+  p2 += dd;
+  return fract((p0 + p1) * p2);
+}

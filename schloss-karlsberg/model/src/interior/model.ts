@@ -9,7 +9,7 @@
 import { stToLocal } from '../layout/footprint.ts';
 import type { BuildingLayout } from '../layout/building.ts';
 import { mulberry32, hashString } from '../layout/geom.ts';
-import { WALL_THICKNESS } from '../layout/grammar.ts';
+import { outerWall } from '../layout/fachwerk.ts';
 import type { Poi } from '../context.ts';
 import type { Building, Room, ST } from '../spec.ts';
 import { evidenceLetters, silkColour } from './evidence.ts';
@@ -85,7 +85,7 @@ export function generatedRooms(b: Building, layout: BuildingLayout): Room[] {
   const { frame, stack } = layout;
   const main = stack.floors.slice().sort((x, y) => y.height - x.height)[0];
   if (!main) return [];
-  const w = WALL_THICKNESS[b.cls];
+  const w = outerWall(b, main.index).thickness; // KB-I21: 0.30 m on Fachwerk storeys
   let polygon: ST[];
   if (frame.shape === 'round') {
     const r = frame.radius ?? frame.width / 2;
@@ -222,7 +222,7 @@ export function interiorModel(b: Building, layout: BuildingLayout, seed = 1789, 
     const walls = roomWalls(x.room, x.floor_h, top, openings, dims);
     const isRect = x.room.polygon.length === 4;
     const vault = isRect && (['kitchen', 'bakery', 'scullery', 'cellar'] as RoomType[]).includes(x.type) && x.ceiling_h - x.floor_h >= 3;
-    const colour = silkColour(x.room.finish?.walls);
+    const colour = silkColour(x.room.finish?.walls, x.room.finish?.colour);
     const items = furnishRoom({
       room: x.room,
       type: x.type,
@@ -234,6 +234,12 @@ export function interiorModel(b: Building, layout: BuildingLayout, seed = 1789, 
       rnd: mulberry32((hashString(x.room.id) ^ seed) >>> 0),
       keepOut: keepOut.get(x.room.id),
     });
+    // wall niches of the furnishing (stove niches, fix wave 4): the shell cuts them into the room face
+    for (const it of items) {
+      if (!it.niche) continue;
+      const { wall, ...niche } = it.niche;
+      if (walls[wall]) (walls[wall].niches ??= []).push(niche);
+    }
     return {
       room: x.room,
       type: x.type,

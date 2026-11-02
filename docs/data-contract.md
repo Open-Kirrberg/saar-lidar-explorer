@@ -536,7 +536,15 @@ Rebuilt from every `<series>/index.json` after each `print3d.py` run. Optional: 
     "placement_mm": [19.3043, 19.3043],        // tile lower-left corner on the plate (3MF build transform)
     "bedExcludeArea": ["0x0", "18x0", "18x28", "0x28"],   // sle-250: ["0x0", "256x0", "256x5", "0x5"]
     "loadLine": "…", "note_de": "…" },
-  "filament": { "material": "PLA", "density_g_cm3": 1.24, "shell_mm": 1.2, "infill": 0.15, "formula": "…" },
+  "filament": { "material": "PLA", "density_g_cm3": 1.24, "shell_mm": 0.9, "infill": 0.155, "formula": "…" },
+  "slicer": {                                  // optional (added 2026-11-02): recommended slicer process changes
+    "base": "0.20mm Standard @BBL X1C",        // the stock process they modify
+    "settings": { "sparse_infill_pattern": "lightning", "sparse_infill_density": "10%", "wall_loops": 3,
+                  "top_shell_layers": 6, "top_shell_thickness": 1.2 },   // Bambu Studio option keys / values
+    "savingPct": [24, 55], "timeSavingPct": [-3, 22],  // measured filament / time saving vs. "base" (min, max)
+    "estimate": { "shell_mm": 1.25, "infill": 0.02 },  // filament model for tiles[].filament_g.recommended
+    "inFile": false,                           // the 3MF does NOT carry these settings (plain 3MF, see below)
+    "note_de": "Filament sparen: in Bambu Studio unter Prozess → Stärke …" },   // display text for the planner
   "layout": "layout.png",                      // tiles of the series, one grid per edge-connected block (north up)
   "sets": { "explorer": ["E378_N5460", "…"] }, // named sets from print3d.toml (ids, may include ungenerated tiles)
   "setDatum_m": { "karlsberg": 274.0 },        // only for datumMode "set" (frozen per set)
@@ -557,7 +565,10 @@ Rebuilt from every `<series>/index.json` after each `print3d.py` run. Optional: 
       "clampedVertices": 0,                    // vertices with h < datum_m (raised to the datum)
       "baseAboveRecess_mm": 15.257,             // null without connectors
       "volume_cm3": 1982.4, "surface_cm2": 1510.5,
-      "filament_g": { "solid": 2458, "typical": 560 },   // typical = 15 % infill + shell, see filament.formula
+      "filament_g": { "solid": 2458, "typical": 560, "recommended": 300 },
+                                               // typical = stock process (15 % infill + shell, filament.formula);
+                                               // recommended (optional, with "slicer") = with slicer.settings;
+                                               // all three recomputed from volume/surface on every index write
       "triangles": 364344, "vertices": 182186, "watertight": true,
       "maxError_mm": 0.03,                     // added 2026-11-02: max |Δz| of the simplified top at any grid vertex
       "sources": { "sl": ["379_5459", "…"], "rlp": ["382_5459"], "rlpCells": 1, "rlpBiasMeasured_m": null },
@@ -566,7 +577,7 @@ Rebuilt from every `<series>/index.json` after each `print3d.py` run. Optional: 
 }
 ```
 
-Files are relative to `index.json` (plain names, no `..`). `<id>.png` is a 512 px north-up shaded relief (fixed tint 220–420 m). `<id>.3mf` is a 3MF core package (`unit="millimeter"`, one object, build item translated so the tile's lower-left corner is at `printerProfile.placement_mm` — for `stock` the plate centre, where the Bambu Studio GUI puts it anyway; the first 2026-11-02 files used X 19.4 / Y 17.1, files before that were centred). `<id>.stl` (binary) is optional and not written by default. Consumers must ignore unknown keys; a tile entry missing a required key is invalid (`print3d.validate_index`). Content is a terrain model, not a finding; keep the disclaimer when showing it.
+Files are relative to `index.json` (plain names, no `..`). `<id>.png` is a 512 px north-up shaded relief (fixed tint 220–420 m). `<id>.3mf` is a 3MF core package (`unit="millimeter"`, one object, build item translated so the tile's lower-left corner is at `printerProfile.placement_mm` — for `stock` the plate centre, where the Bambu Studio GUI puts it anyway; the first 2026-11-02 files used X 19.4 / Y 17.1, files before that were centred). `<id>.stl` (binary) is optional and not written by default. The 3MF stays a **plain** 3MF (no `Metadata/` part: no `project_settings.config`, no `model_settings.config`): the Bambu Studio GUI discards per-object settings of a 3MF without valid project settings and would stop centring a project file, so recommended slicer settings travel only as `slicer` (display). Consumers must ignore unknown keys; a tile entry missing a required key is invalid (`print3d.validate_index`). Content is a terrain model, not a finding; keep the disclaimer when showing it.
 
 ## Levels (v2, F9)
 

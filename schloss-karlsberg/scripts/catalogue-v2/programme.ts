@@ -15,7 +15,7 @@
  */
 import { buildingFrame } from '../../model/src/layout/footprint.ts';
 import { centroid } from '../../model/src/layout/geom.ts';
-import { INTERIOR_DOOR, PARTITION_WALL, STAIR } from '../../model/src/layout/grammar.ts';
+import { FACHWERK, INTERIOR_DOOR, PARTITION_WALL, STAIR } from '../../model/src/layout/grammar.ts';
 import { pileBands, rectST, type PileBand, type PileOptions } from '../../model/src/layout/rooms.ts';
 import { resolveCourtToward } from '../../model/src/layout/site.ts';
 import { stairRun, type StairClass } from '../../model/src/layout/stairs.ts';
@@ -33,6 +33,9 @@ const FIN = {
   crimson: { floor: 'floor.parquet', walls: 'wall.silk.crimson', ceiling: 'ceiling.stucco' },
   blue: { floor: 'floor.parquet', walls: 'wall.silk.blue', ceiling: 'ceiling.stucco' },
   green: { floor: 'floor.parquet', walls: 'wall.silk.green', ceiling: 'ceiling.stucco' },
+  // KB-I27: named room colours (research/10 §c.2; research/09 §6.2 M8, §6.5 C5)
+  yellow: { floor: 'floor.parquet', walls: 'wall.silk.yellow', ceiling: 'ceiling.stucco' },
+  grey: { floor: 'floor.parquet', walls: 'wall.silk.grey', ceiling: 'ceiling.stucco' },
   boiserie: { floor: 'floor.parquet', walls: 'wall.boiserie', ceiling: 'ceiling.stucco' },
   hall: { floor: 'floor.flags', walls: 'stone.grey', ceiling: 'ceiling.stucco' },
   stair: { floor: 'floor.flags', walls: 'wall.limewash', ceiling: 'ceiling.stucco' },
@@ -48,6 +51,8 @@ const FIN_TAG: Record<FinKey, string> = {
   crimson: 'D Lyon silks, gilding (05 §e); colour per room U; parquet N',
   blue: 'D Lyon silks (05 §e); colour per room U; parquet N',
   green: 'D silks; green for picture walls N; parquet N',
+  yellow: 'D silks; yellow damask for the Gelber Salon (hue I research/09 M8); parquet N',
+  grey: 'D silks; grey damask for the Grauer Salon (hue N research/10 §c.2); parquet N',
   boiserie: 'D Louis-Seize boiseries (Georges Jacob, 05 §e); Tafelparkett N',
   hall: 'D-> red and grey sandstone flags (05 §e.1); stucco N',
   stair: 'N sandstone steps and flags, limewash',
@@ -79,6 +84,11 @@ interface Zone {
   double?: boolean;
   /** Placeholder on an upper floor for a double room from below (id of that room zone). */
   voidOf?: string;
+  /** KB-I27: silk hue (#RRGGBB, N) of a room whose name carries a colour; `colourTag` says where the colour comes from. */
+  colour?: string;
+  /** KB-I26/I27: contrasting damask border (#RRGGBB, N; Mannlich T1 p. 365). */
+  border?: string;
+  colourTag?: string;
 }
 
 interface Floor {
@@ -121,7 +131,7 @@ interface Prog {
   end_b: number[] | 'blind';
   sideTag: string;
   /** Window type per side where the class default does not apply (fix round 1). */
-  windowKinds?: Partial<Record<SideName, { kind: 'window' | 'porte_fenetre'; tag: string }>>;
+  windowKinds?: Partial<Record<SideName, { kind: 'window' | 'porte_fenetre'; storeys?: number[]; tag: string }>>;
   portals?: (ax: AxisOf) => PortalSpec[];
   risalits?: (ax: AxisOf) => Risalit[];
   raised?: (ax: AxisOf) => RaisedRoofSection[];
@@ -146,6 +156,9 @@ function stairZone(k: [number, number], band: Band, id: string, name: string, ki
 }
 const voidZ = (k: [number, number], band: Band, of: string): Zone => ({ k, band, id: `${of}-void`, name: '', fin: 'stair', voidOf: of });
 
+/** KB-I27: R12 colour names of one OG suite, assigned to the Duke's N-wing apartment (research/10 §c.2). */
+const R12_DUKE = 'D R12 (Stand 2003) OG 11 D-14 G "Rotes Vorzimmer, Grauer Salon, Grünes Schlafzimmer, Kirschrotes Kabinett" (names of one suite); assigned to the Duke\'s N-wing apartment (same sequence) I';
+
 const CDL: Prog = {
   id: 'KB-B01',
   p: 2.65,
@@ -159,9 +172,18 @@ const CDL: Prog = {
   end_b: [-6.775, -4.125],
   sideTag: 'HMS 15 axes (4+7+4) on both fronts; spacing D-> 40.9 m / 15; end windows only on the free garden-pile part I',
   portals: (ax) => [
-    { side: 'court', axis: ax('court', 7), kind: 'portal', storey: 1, steps: 10, tag: 'D LC 1790 central portal + Freitreppe; 10 steps D-> 1.4 m Sockel / 0.145' },
+    { side: 'court', axis: ax('court', 7), kind: 'portal', storey: 1, steps: 10, tag: '10 steps D-> (1.4 m Sockel / 0.145); stair HMS short straight ~5 steps between sentries (secondary, step count conflicts); width N Blondel; sizes I; low' },
     { side: 'garden', axis: ax('garden', 7), kind: 'door', storey: 1, steps: 2, grade_h: 345.9, tag: 'I through-going vestibule (05 §e.1); garden door with a 2-step perron down to the parterre TF-09 (345.9) I (fix round 1)' },
-    { side: 'garden', axis: ax('garden', 6, 3), kind: 'porte_fenetre', span_axes: 3, storey: 2, tag: 'I 3 portes-fenêtres of the Festsaal to a balcony (05 §e.1)' },
+    {
+      side: 'garden',
+      axis: ax('garden', 6, 3),
+      kind: 'porte_fenetre',
+      span_axes: 3,
+      storey: 2,
+      // wave-8 review fix (KB-I72): one balcony across the three doors instead of three balconets
+      balcony_run: { depth: 1.2, tag: 'I 05 §e.1 Festsaal "3 portes-fenêtres to a balcony" read as one continuous balcony (N 09 §3.5 ironwork); depth 1.2 m I' },
+      tag: 'I 3 portes-fenêtres of the Festsaal to a balcony (05 §e.1)',
+    },
   ],
   risalits: (ax) => [
     { side: 'garden', first_axis: ax('garden', 4, 7), axis_count: 7, kind: 'centre', projection: 0.5, tag: 'D LC 1790 7-axis centre pavilion = Louisenhof core (D hib 7 axes); projection N' },
@@ -188,7 +210,7 @@ const CDL: Prog = {
       zones: [
         { k: [0, 1], band: 'garden', id: 'eg-kabinett', name: 'Schreibkabinett des Herzogs', fn: 'study', fin: 'boiserie', tag: 'D room guide "Schlafzimmer + Schreibkabinett" on the EG; position I' },
         { k: [2, 3], band: 'garden', id: 'eg-schlafzimmer', name: 'Schlafzimmer des Herzogs', fn: 'bedroom (private apartment)', fin: 'blue', tag: 'D room guide (EG); position I' },
-        { k: [4, 5], band: 'garden', id: 'eg-gelber-salon', name: 'Gelber Salon', fn: 'salon (private apartment)', fin: 'boiserie', tag: 'D room guide "Gelber Salon + Schreibkabinett" (EG); position I' },
+        { k: [4, 5], band: 'garden', id: 'eg-gelber-salon', name: 'Gelber Salon', fn: 'salon (private apartment): yellow damask in gilt Tapetenleisten', fin: 'yellow', border: '#EEE8D8', colourTag: 'D name "Gelber Salon" (room guide, R12 EG); yellow #C9A94E I research/09 M8 (alternative #D9B95B N research/10 §c.2); ivory border N (Mannlich T1 p. 365: contrasting broad borders D)', tag: 'D room guide "Gelber Salon + Schreibkabinett" (EG); position I' },
         { k: [6, 8], band: 'full', id: 'eg-vestibuel', name: 'Vestibül (Durchgang Hof – Garten)', fn: 'through vestibule on the axis, four pairs of columns', fin: 'hall', tag: 'I 05 §e.1 (axis passage Ehrenhof - east avenue); columns N' },
         stairZone([9, 13], 'full', 'eg-prunktreppe', 'Prunktreppenhaus (Kaiserstiege)', 'imperial', 'prunk', 2, [1, 0], 'I "42 [Fuß] staircase" (enwp) read as 42 Pariser Fuß = 13.6 m -> 5 axes 13.25 m (C8); imperial type N (Würzburg/Brühl)'),
         { k: [14, 14], band: 'garden', id: 'eg-garderobe-nord', name: 'Garderobe', fin: 'service', fn: 'garderobe' },
@@ -213,7 +235,7 @@ const CDL: Prog = {
         { k: [14, 14], band: 'garden', id: 'og-wintergarten', name: 'Durchgang / Wintergarten (?) zum Nordflügel', fn: 'link to the N arm', fin: 'boiserie', tag: 'D Wintergarten named in Weber ToC, location U' },
         voidZ([0, 1], 'court', 'eg-dienertreppe-sued'),
         { k: [2, 3], band: 'court', id: 'og-garderobe-sued', name: 'Garderobe', fin: 'service', fn: 'garderobe, jib doors' },
-        { k: [4, 5], band: 'court', id: 'og-antichambre', name: 'Antichambre', fn: 'antechamber of the state apartment', fin: 'boiserie' },
+        { k: [4, 5], band: 'court', id: 'og-antichambre', name: 'Antichambre (Nr. 8)', fn: 'antechamber no. 8 before the "Apparat du Souverain" (state apartment): 2 bergères and a seating set of the Jacob suite delivered 5 March 1782', fin: 'boiserie', tag: 'D Redding citing Langer 1995 no. 46: two bergères of the Jacob suite (5 March 1782) stood in "antichambre no. 8" before the "Apparat du Souverain" (research/09 §4.1, I6); identification with this room I' },
         { k: [6, 8], band: 'court', id: 'og-gardesaal', name: 'Garde- / Vorsaal', fn: 'guard hall above the vestibule', fin: 'boiserie', tag: 'I 05 §e.1' },
         { k: [14, 14], band: 'court', id: 'og-durchgang-nord', name: 'Durchgang zum Nordflügel', fin: 'service' },
       ],
@@ -242,7 +264,21 @@ const SUED: Prog = {
   sideTag: 'spacing 3.15 HMS; 23 axes on the terrace face, 20 on the open court face (grid aligned) I; W head 4 axes D LC 1790',
   portals: (ax) => [
     { side: 'court', axis: ax('court', 11, 2), kind: 'durchfahrt', span_axes: 2, storey: 1, tag: 'HMS round-arched Durchfahrt u -1.6..4.9 -> grid axes 11-12' },
+    // wave-8 review fix (KB-I72): PL draws a balcony in each wing centre (the porcelain plate is symmetrised; LC does not
+    // show this face): a balcony on consoles over the court Durchfahrt, the court face's centre [D PL existence, low; I]
+    {
+      side: 'court',
+      axis: ax('court', 11, 2),
+      kind: 'porte_fenetre',
+      span_axes: 2,
+      storey: 2,
+      balcony_run: { depth: 1.0, tag: 'D PL (porcelain plate, symmetrised) balcony in each wing centre (research/07 §1.1); over the court Durchfahrt I; slab on consoles, iron railing N; depth I; low' },
+      tag: 'I portes-fenêtres onto the wing-centre balcony (KB-I72; D PL, low)',
+    },
     { side: 'garden', axis: ax('garden', 11, 2), kind: 'durchfahrt', span_axes: 2, storey: 1, tag: 'HMS gate to the terrace garden (TF-08)' },
+    // wave-7 review fix (KB-I31): the Altan KB-B02a over the gate is entered from the Beletage through two-leaf
+    // portes-fenêtres on the two gate axes (no iron balconet: the Altan's stone balustrade guards them)
+    { side: 'garden', axis: ax('garden', 11, 2), kind: 'porte_fenetre', span_axes: 2, storey: 2, balconet: false, tag: 'I portes-fenêtres onto the Altan KB-B02a (D existence T5 Abb. 11; an Altan at Beletage level opens from the rooms through portes-fenêtres N); axes follow the Altan hypothesis I' },
     {
       side: 'end_a',
       axis: 1,
@@ -263,15 +299,20 @@ const SUED: Prog = {
       courtPileClear: 5.6,
       enfilade: 'garden',
       zones: [
-        { k: [0, 1], band: 'full', id: 'eg-kopfvestibuel', name: 'Vestibül im Kopfpavillon', fn: 'entrance hall behind the portico', fin: 'hall', tag: 'D LC 1790 portico; hall I' },
-        stairZone([2, 3], 'full', 'eg-treppe-west', 'Treppenhaus West', 'dogleg', 'secondary', 2, [0, 1], 'N secondary stair of the wing'),
-        { k: [4, 5], band: 'garden', id: 'eg-silberkammer', name: 'Silberkammer', fn: 'silver chamber', fin: 'service', tag: 'HMS caption "Silberkammer"; on the EG I' },
-        { k: [6, 10], band: 'garden', id: 'eg-speisesaal', name: 'Großer Speisesaal', fn: 'dining room', fin: 'boiserie', tag: 'HMS "Speisesäle" (10 x 15 m); EG I (LP06: OG = Duchess)' },
-        { k: [4, 6], band: 'court', id: 'eg-silberdiener', name: 'Silberdiener', fn: 'silver servants', fin: 'service' },
-        { k: [7, 10], band: 'court', id: 'eg-anrichte', name: 'Buffet / Anrichte', fn: 'serving room (kitchen via the court)', fin: 'service', tag: 'HMS Anrichte; I' },
-        { k: [11, 12], band: 'full', id: 'eg-durchfahrt', name: 'Durchfahrt zum Terrassengarten', fn: 'carriage passage', fin: 'passage', tag: 'HMS' },
-        { k: [13, 16], band: 'garden', id: 'eg-kleiner-speisesaal', name: 'Kleiner Speisesaal', fn: 'smaller dining room', fin: 'boiserie', tag: 'HMS "Speisesäle"; I' },
-        { k: [17, 19], band: 'garden', id: 'eg-offiziere', name: 'Offizierszimmer', fin: 'service', tag: 'I 05 §e.2' },
+        // KB-I25 (research/10 §0.4, §b.1 KB-B02; history-check H05): the S wing EG held guest apartments, a vestibule
+        // with the stair and the Durchfahrt (R12 "Appartements im Südflügel", "Vestibül und Treppe", "Durchfahrt");
+        // the silver chamber belongs to the N wing (T5) and the Großer Speisesaal to the kitchen wing OG (T1 p. 338)
+        { k: [0, 1], band: 'full', id: 'eg-kopfvestibuel', name: 'Vestibül im Kopfpavillon', fn: 'entrance hall behind the portico; with the stair beside it R12 "Vestibül und Treppe"', fin: 'hall', tag: 'D LC 1790 portico; D R12 (Stand 2003) "Vestibül und Treppe" in the S wing (name); position at the W head I' },
+        stairZone([2, 3], 'full', 'eg-treppe-west', 'Treppenhaus West', 'dogleg', 'secondary', 2, [0, 1], 'D R12 "Vestibül und Treppe" (S wing, name); dogleg type and position N/I'),
+        { k: [4, 5], band: 'garden', id: 'eg-gast1-antichambre', name: 'Antichambre (Gästeappartement I)', fn: 'antechamber of a guest apartment', fin: 'boiserie', tag: 'D R12 "Appartements im Südflügel" (name); rooms and positions I; T5: the wing long a carcass, finish in 1789 partly U' },
+        { k: [6, 8], band: 'garden', id: 'eg-gast1-schlafzimmer', name: 'Schlafzimmer (Gästeappartement I)', fn: 'bedroom of a guest apartment', fin: 'blue', tag: 'D R12 "Appartements im Südflügel" (name); room I' },
+        { k: [9, 10], band: 'garden', id: 'eg-gast1-kabinett', name: 'Kabinett (Gästeappartement I)', fn: 'cabinet of a guest apartment', fin: 'boiserie', tag: 'D R12 (name); room I' },
+        { k: [4, 6], band: 'court', id: 'eg-gast1-garderobe', name: 'Garderobe (Gästeappartement I)', fn: 'garderobe', fin: 'service' },
+        { k: [7, 10], band: 'court', id: 'eg-gast1-diener', name: 'Dienerzimmer (Gästeappartement I)', fn: 'servants of the guest apartment', fin: 'service' },
+        { k: [11, 12], band: 'full', id: 'eg-durchfahrt', name: 'Durchfahrt zum Terrassengarten', fn: 'carriage passage', fin: 'passage', tag: 'HMS; D R12 "Durchfahrt" (S wing)' },
+        { k: [13, 14], band: 'garden', id: 'eg-gast2-antichambre', name: 'Antichambre (Gästeappartement II)', fn: 'antechamber of a guest apartment', fin: 'boiserie', tag: 'D R12 "Appartements im Südflügel" (name); rooms and positions I' },
+        { k: [15, 17], band: 'garden', id: 'eg-gast2-schlafzimmer', name: 'Schlafzimmer (Gästeappartement II)', fn: 'bedroom of a guest apartment', fin: 'green', tag: 'D R12 (name); room I' },
+        { k: [18, 19], band: 'garden', id: 'eg-gast2-kabinett', name: 'Kabinett (Gästeappartement II)', fn: 'cabinet of a guest apartment', fin: 'boiserie', tag: 'D R12 (name); room I' },
         { k: [20, 22], band: 'garden', id: 'eg-wartezimmer', name: 'Wartezimmer', fin: 'boiserie' },
         { k: [13, 16], band: 'court', id: 'eg-korridor', name: 'Korridor', fin: 'service' },
         { k: [17, 19], band: 'court', id: 'eg-garderobe', name: 'Garderobe', fin: 'service' },
@@ -285,15 +326,18 @@ const SUED: Prog = {
       courtPileClear: 5.6,
       enfilade: 'garden',
       zones: [
-        { k: [0, 1], band: 'full', id: 'og-kopfsalon', name: 'Salon im Kopfpavillon (Balkon über dem Portikus)', fin: 'blue', tag: 'D LC 1790 balcony over the portico; room I' },
+        // KB-I25: R12 OG "Vestibül und Salon im Südflügel" and "Appartement des Pfalzgrafen Max Joseph" beside the
+        // Duchess's rooms (LP06 legend 3) [D names; I positions: the Pfalzgraf in the W half, the Duchess towards the CdL]
+        { k: [0, 1], band: 'full', id: 'og-kopfsalon', name: 'Salon im Südflügel (Balkon über dem Portikus)', fin: 'blue', tag: 'D R12 "Vestibül und Salon im Südflügel" (name); D LC 1790 balcony over the portico; room I' },
         voidZ([2, 3], 'full', 'eg-treppe-west'),
-        { k: [4, 5], band: 'garden', id: 'og-garderobe-herzogin', name: 'Garderobe der Herzogin', fin: 'service' },
-        { k: [6, 7], band: 'garden', id: 'og-kabinett-herzogin', name: 'Kabinett der Herzogin', fin: 'boiserie' },
-        { k: [8, 10], band: 'garden', id: 'og-schlafzimmer-herzogin', name: 'Schlafzimmer der Herzogin', fin: 'blue', tag: 'D LP06 legend 3 "Flügel der Herzogin"; rooms I' },
-        { k: [11, 12], band: 'garden', id: 'og-audienz-herzogin', name: 'Audienzzimmer der Herzogin', fin: 'crimson' },
-        { k: [13, 16], band: 'garden', id: 'og-salon-herzogin', name: 'Salon der Herzogin', fin: 'green' },
-        { k: [17, 19], band: 'garden', id: 'og-antichambre2', name: 'Zweite Antichambre', fin: 'boiserie' },
-        { k: [20, 22], band: 'garden', id: 'og-antichambre1', name: 'Erste Antichambre', fin: 'boiserie' },
+        { k: [4, 5], band: 'garden', id: 'og-antichambre-pfalzgraf', name: 'Antichambre des Pfalzgrafen', fn: 'antechamber, apartment of Pfalzgraf Max Joseph', fin: 'boiserie', tag: 'D R12 "Appartement des Pfalzgrafen Max Joseph" (name); rooms and position (W half of the S wing OG) I' },
+        { k: [6, 8], band: 'garden', id: 'og-schlafzimmer-pfalzgraf', name: 'Schlafzimmer des Pfalzgrafen Max Joseph', fn: 'bedroom of the apartment of Pfalzgraf Max Joseph', fin: 'blue', tag: 'D R12 (name); room I' },
+        { k: [9, 10], band: 'garden', id: 'og-kabinett-pfalzgraf', name: 'Kabinett des Pfalzgrafen', fin: 'boiserie', tag: 'D R12 (name); room I' },
+        { k: [11, 12], band: 'garden', id: 'og-kabinett-herzogin', name: 'Kabinett der Herzogin', fn: 'private cabinet of the Duchess; two portes-fenêtres onto the Altan KB-B02a over the garden gate (hypothesis)', fin: 'boiserie', tag: 'D LP06 legend 3 "Flügel der Herzogin"; rooms I; Altan access I (wave-7 review fix)' },
+        { k: [13, 15], band: 'garden', id: 'og-schlafzimmer-herzogin', name: 'Schlafzimmer der Herzogin', fin: 'blue', tag: 'D LP06 legend 3 "Flügel der Herzogin"; rooms I' },
+        { k: [16, 17], band: 'garden', id: 'og-salon-herzogin', name: 'Roter Salon der Herzogin', fin: 'crimson', colour: '#A33A35', border: '#E6DCC0', colourTag: 'D R12 (Stand 2003) "Roter Salon der Herzogin" (name); in her LP06 wing I; red #A33A35 N research/10 §c.2; ivory border N', tag: 'D LP06 legend 3 "Flügel der Herzogin"; D R12 room name; position I' },
+        { k: [18, 19], band: 'garden', id: 'og-audienz-herzogin', name: 'Audienzzimmer der Herzogin', fin: 'crimson' },
+        { k: [20, 22], band: 'garden', id: 'og-antichambre1', name: 'Antichambre der Herzogin', fin: 'boiserie' },
         { k: [4, 7], band: 'court', id: 'og-dienerzimmer-west', name: 'Garderobe und Dienerzimmer', fin: 'service' },
         { k: [8, 10], band: 'court', id: 'og-alkovenkammer', name: 'Garderobe (hinter dem Alkoven)', fin: 'service' },
         { k: [11, 12], band: 'court', id: 'og-kammer', name: 'Kammer', fin: 'service' },
@@ -304,7 +348,7 @@ const SUED: Prog = {
     },
   ],
   passages: [{ id: 'sued-cdl', storeys: [1, 2], side: 'court', at: 30.5, atByStorey: { 2: 32.3 }, to: 'KB-B01', tag: 'I link to the CdL court pile (Dienertreppe Süd); OG 1.8 m further E, in line with the CdL landing door (fix round 1)' }],
-  interiorTag: 'LP06 "Flügel der Herzogin" (Duchess on the OG, D) + HMS dining rooms / Silberkammer on the EG (I); double pile N',
+  interiorTag: 'KB-I25 (research/10 §0.4, §b.1): EG guest apartments, vestibule with stair, Durchfahrt; OG Salon im Südflügel, apartment of Pfalzgraf Max Joseph, Duchess towards the CdL (R12 names D, LP06 "Flügel der Herzogin" D; positions I); the HMS dining-room / Silberkammer caption is retired (T5, T1 p. 338); double pile N',
 };
 
 const NORD: Prog = {
@@ -319,7 +363,17 @@ const NORD: Prog = {
   end_b: [-5.395, -0.395, 4.605],
   sideTag: 'spacing 3.15 HMS; 19 court axes on the open Ehrenhof face, 13 Küchenhof axes between the Sammlungsflügel and the Küchenbau I; ends 3 axes on the pile centres I',
   portals: (ax) => [
-    { side: 'court', axis: ax('court', 8, 2), kind: 'durchfahrt', span_axes: 2, storey: 1, tag: 'HMS Durchfahrt to the Küchenhof u -6.1..-0.4 -> grid axes 8-9' },
+    {
+      side: 'court',
+      axis: ax('court', 8, 2),
+      kind: 'durchfahrt',
+      span_axes: 2,
+      storey: 1,
+      // wave-8 review fix (KB-I72): LC 1790 shows a columned porch in the N wing centre, PL a balcony in each wing centre
+      portico: { columns: 4, balcony: true, depth: 3.0, tag: 'D LC 1790 columned porch in the N wing centre + D PL balcony in each wing centre (research/07 §1.1); placed on the court Durchfahrt (the centre of the court face) I; grouped Tuscan columns N (HMS junction portico, 06); 4 columns, depth 3.0 m N/I; low' },
+      tag: 'HMS Durchfahrt to the Küchenhof u -6.1..-0.4 -> grid axes 8-9',
+    },
+    { side: 'court', axis: ax('court', 8, 2), kind: 'porte_fenetre', span_axes: 2, storey: 2, balconet: false, tag: 'I portes-fenêtres onto the porch balcony (KB-I72; D LC porch, D PL wing-centre balcony; doors N)' },
     { side: 'garden', axis: ax('garden', 8, 2), kind: 'durchfahrt', span_axes: 2, storey: 1, tag: 'HMS' },
   ],
   floors: [
@@ -335,8 +389,10 @@ const NORD: Prog = {
         { k: [3, 4], band: 'court', id: 'eg-offiziere', name: 'Offizierszimmer der Wache', fin: 'service' },
         { k: [5, 7], band: 'court', id: 'eg-kavaliere-1', name: 'Kavalierszimmer', fn: 'courtiers\' rooms', fin: 'boiserie', tag: 'I 05 §e.2 (Kavaliere)' },
         { k: [0, 7], band: 'corridor', id: 'eg-korridor-ost', name: 'Korridor', fin: 'service', tag: 'N double pile with corridor (02 §2.11)' },
-        { k: [0, 1], band: 'garden', id: 'eg-kammer-1', name: 'Kammer', fin: 'service' },
-        { k: [2, 4], band: 'garden', id: 'eg-gesindestube', name: 'Gesindestube', fin: 'service' },
+        // KB-I25 (research/10 §b.1 KB-B03; history-check H08): the Silberkammer is in the N wing (T5), on the EG at the
+        // Küchenhof access next to the kitchen link (R12 EG 6 "Porzellan- und Silberkammern") [D wing; I position]
+        { k: [0, 1], band: 'garden', id: 'eg-silberdiener', name: 'Silberdiener', fn: 'silver servants next to the kitchen link', fin: 'service', tag: 'I (moved from the S wing with the silver chamber, KB-I25)' },
+        { k: [2, 4], band: 'garden', id: 'eg-silberkammer', name: 'Silberkammer (Porzellan- und Silberkammern)', fn: 'silver and porcelain chamber at the Küchenhof access', fin: 'service', tag: 'D T5 Silberkammer in the N wing; D R12 EG 6 "Porzellan- und Silberkammern" with the kitchen rooms (name); EG and position I' },
         { k: [5, 7], band: 'garden', id: 'eg-kammer-2', name: 'Kammer', fin: 'service' },
         { k: [8, 9], band: 'full', id: 'eg-durchfahrt', name: 'Durchfahrt zum Küchenhof', fn: 'carriage passage', fin: 'passage', tag: 'HMS' },
         { k: [10, 12], band: 'court', id: 'eg-kavaliere-2', name: 'Kavalierszimmer', fin: 'boiserie' },
@@ -356,18 +412,19 @@ const NORD: Prog = {
       enfilade: 'court',
       zones: [
         voidZ([-4, -1], 'full', 'eg-treppe-ost'),
-        { k: [0, 2], band: 'court', id: 'og-antichambre', name: 'Antichambre des Herzogs', fin: 'boiserie', tag: 'D LP06 legend 2 "Flügel des Herzogs"; rooms I' },
+        { k: [0, 2], band: 'court', id: 'og-antichambre', name: 'Antichambre des Herzogs (Rotes Vorzimmer)', fin: 'crimson', colour: '#9B2D2A', border: '#D8C690', colourTag: `${R12_DUKE}; red #9B2D2A N research/10 §c.2; straw border N`, tag: 'D LP06 legend 2 "Flügel des Herzogs"; rooms I' },
         { k: [3, 5], band: 'court', id: 'og-audienz', name: 'Audienzzimmer des Herzogs', fin: 'crimson' },
-        { k: [6, 9], band: 'court', id: 'og-salon', name: 'Salon des Herzogs', fin: 'boiserie' },
-        { k: [10, 12], band: 'court', id: 'og-schlafzimmer', name: 'Schlafzimmer des Herzogs', fin: 'blue' },
-        { k: [13, 13], band: 'court', id: 'og-kabinett', name: 'Kabinett', fin: 'boiserie' },
-        { k: [14, 15], band: 'court', id: 'og-bibliothek', name: 'Bibliothek des Herzogs (Handbibliothek)', fin: 'boiserie', tag: 'I (the main library is in the Sammlungsflügel)' },
+        { k: [6, 9], band: 'court', id: 'og-salon', name: 'Salon des Herzogs (Grauer Salon)', fin: 'grey', colour: '#A7A9A4', border: '#5E6B7C', colourTag: `${R12_DUKE}; grey #A7A9A4 N research/10 §c.2; blue-grey border N` },
+        { k: [10, 12], band: 'court', id: 'og-schlafzimmer', name: 'Schlafzimmer des Herzogs (Grünes Schlafzimmer)', fin: 'green', colour: '#5E7F5B', border: '#E4DAC0', colourTag: `${R12_DUKE}; green #5E7F5B N research/10 §c.2; ivory border N` },
+        { k: [13, 13], band: 'court', id: 'og-kabinett', name: 'Kabinett (Kirschrotes Kabinett)', fin: 'crimson', colour: '#8E2F3A', border: '#D8C690', colourTag: `${R12_DUKE}; cherry #8E2F3A N research/10 §c.2; straw border N` },
+        { k: [14, 15], band: 'court', id: 'og-salon-mannlich', name: 'Salon Mannlich', fn: 'dining salon next to the Duke\'s rooms: tiered flowers and trees between the windows, a round table with a copper fountain basin (T1 pp. 392 f.)', fin: 'boiserie', tag: 'D T5 nn. 42-44 "Salon Mannlich" next to the Duke\'s room (name, neighbourhood); D T1 pp. 392 f. (furnishing); position I' },
         { k: [0, 15], band: 'corridor', id: 'og-korridor', name: 'Korridor', fin: 'service' },
+        // KB-I25 (research/10 §0.4, §b.1 KB-B03; history-check H08): "kleiner und großer Bildersaal im ersten
+        // Obergeschoss" and a Tanzsaal in the N wing (T5); the Küchenhof side gives the north light for the hang [I]
         { k: [0, 1], band: 'garden', id: 'og-garderobe-1', name: 'Garderobe', fin: 'service' },
-        { k: [2, 4], band: 'garden', id: 'og-garderobe-2', name: 'Garderobe', fin: 'service' },
-        { k: [5, 9], band: 'garden', id: 'og-dienerzimmer', name: 'Dienerzimmer', fin: 'service' },
-        { k: [10, 12], band: 'garden', id: 'og-garderobe-3', name: 'Garderobe', fin: 'service' },
-        { k: [13, 15], band: 'garden', id: 'og-kammer', name: 'Kammer', fin: 'service' },
+        { k: [2, 6], band: 'garden', id: 'og-grosser-bildersaal', name: 'Großer Bildersaal', fn: 'picture room hung so densely that a chair-height rail protected the pictures ("Obacht auf die Bilder!")', fin: 'green', tag: 'D T5 "kleiner und großer Bildersaal im ersten Obergeschoss" (accounts); 60 Schuh (≈ 19.5 m D->) of chair rails in the Duke\'s wing (LA Speyer B3 2584 Bl. 143 via T5); position on the Küchenhof side I; green ground N' },
+        { k: [7, 9], band: 'garden', id: 'og-kleiner-bildersaal', name: 'Kleiner Bildersaal', fn: 'smaller picture room', fin: 'green', tag: 'D T5 (accounts, name and floor); position I' },
+        { k: [10, 15], band: 'garden', id: 'og-tanzsaal', name: 'Tanzsaal', fn: 'dance hall of the N wing', fin: 'boiserie', tag: 'D T5 Tanzsaal in the N wing (name); floor and position U (here OG beside the Bildersäle I); also UP-18 "Ballhaus" (research/10 §b.6)' },
         voidZ([16, 18], 'full', 'eg-treppe-west'),
       ],
     },
@@ -377,7 +434,7 @@ const NORD: Prog = {
     { id: 'nord-sammlung', storeys: [1, 2], side: 'garden', at: 29.95, to: 'KB-B04', tag: 'I link to the Sammlungsflügel' },
     { id: 'nord-kueche', storeys: [1], side: 'garden', at: -27.8, to: 'KB-B05', tag: 'I service link to the Küchenbau (Anrichte)' },
   ],
-  interiorTag: 'LP06 "Flügel des Herzogs" (Duke on the OG, D); EG guard / courtiers (HMS, I); double pile with corridor on the 20 m LiDAR depth N',
+  interiorTag: 'LP06 "Flügel des Herzogs" (Duke on the OG, D); KB-I25: OG Bildersäle, Tanzsaal and Salon Mannlich (T5, D names; positions I), EG Silberkammer at the Küchenhof access (T5, R12; I); EG guard / courtiers (HMS, I); double pile with corridor on the 20 m LiDAR depth N',
 };
 
 const SAMMLUNG: Prog = {
@@ -402,10 +459,14 @@ const SAMMLUNG: Prog = {
       outerWall: 0.7,
       zones: [
         stairZone([0, 1], 'full', 'eg-treppe-nord', 'Treppenhaus Nord', 'dogleg', 'secondary', 2, [0, 1], 'I half landing 348.8 = gallery floor (KB-B06)'),
-        { k: [2, 7], band: 'full', id: 'eg-waffensammlung', name: 'Waffensammlung', fn: 'armoury (collection)', fin: 'hall', tag: 'D Waffensammlung (05 §e.2); position I' },
-        { k: [8, 10], band: 'full', id: 'eg-buechsenmacherei', name: 'Büchsenmacherei', fn: 'gunsmith', fin: 'service', tag: 'D Büchsenmacherei (05 §e.2); position I' },
-        { k: [11, 13], band: 'full', id: 'eg-kanzlei', name: 'Kanzlei der Sammlungen', fin: 'service', tag: 'I' },
-        { k: [14, 15], band: 'full', id: 'eg-wachstube', name: 'Wachstube am Tor', fin: 'service', tag: 'HMS sentry boxes at the gate; I' },
+        // KB-I25 (research/10 §0.5, §b.1 KB-B04; history-check H07): EG = Wachtstube + the Hofbibliothek in four rooms in
+        // a row "160 Schuh" long (≈ 52 m) left of it [D T5 accounts + T7 no. 2; T5 > R12 2003]. Here 4 x 3 axes
+        // (≈ 36 m): the 57 m LiDAR wing also holds the N stair (gallery landing), the guard room and the HMS gate [I].
+        { k: [2, 4], band: 'full', id: 'eg-bibliothek', name: 'Hofbibliothek', fn: 'court library, first of four rooms in a row: oak cases floor to ceiling, Greek-key frieze; the one room with brass-wire doors on crimson taffeta (T5)', fin: 'boiserie', tag: 'D T5 "Hofbibliothek in vier hintereinanderliegenden Räumen", 160 Schuh ≈ 52 m (here 36 m I); oak cases, frieze "a la greece" D T5 (KB-I27); brass-wire doors on crimson taffeta in one room D T5, which room U: the first (at the N stair) I; position N end I' },
+        { k: [5, 7], band: 'full', id: 'eg-bibliothek-2', name: 'Hofbibliothek II', fn: 'court library, second room: oak cases floor to ceiling, Greek-key frieze', fin: 'boiserie', tag: 'D T5 (four rooms; oak cases and frieze for the library); I' },
+        { k: [8, 10], band: 'full', id: 'eg-bibliothek-3', name: 'Hofbibliothek III', fn: 'court library, third room: oak cases floor to ceiling, Greek-key frieze', fin: 'boiserie', tag: 'D T5 (four rooms; oak cases and frieze for the library); I' },
+        { k: [11, 13], band: 'full', id: 'eg-bibliothek-4', name: 'Hofbibliothek IV', fn: 'court library, fourth room: oak cases floor to ceiling, Greek-key frieze', fin: 'boiserie', tag: 'D T5 (four rooms, left of the Wachtstube; oak cases and frieze for the library); I' },
+        { k: [14, 15], band: 'full', id: 'eg-wachstube', name: 'Wachtstube am Tor', fin: 'service', tag: 'D T5 Wachtstube on the EG; HMS sentry boxes at the gate; I' },
         { k: [16, 17], band: 'full', id: 'eg-durchfahrt', name: 'Durchfahrt (Tor zur Paradestraße)', fin: 'passage', tag: 'HMS' },
         stairZone([18, 18], 'full', 'eg-treppe-sued', 'Treppenhaus Süd', 'dogleg', 'service', 2, [0, 1], 'N; link to the N arm'),
       ],
@@ -416,9 +477,10 @@ const SAMMLUNG: Prog = {
       outerWall: 0.7,
       zones: [
         voidZ([0, 1], 'full', 'eg-treppe-nord'),
-        { k: [2, 9], band: 'full', id: 'og-bibliothek', name: 'Bibliothek', fn: 'court library, wall cases with a gallery at 2.8 m', fin: 'boiserie', tag: 'D library -> Bamberg (05 §e.2); 24 x 11.6 m I (05: ≈ 10 x 25 m)' },
-        { k: [10, 12], band: 'full', id: 'og-naturalienkabinett', name: 'Naturalienkabinett', fin: 'boiserie', tag: 'D Naturalienkabinett; position I' },
-        { k: [13, 14], band: 'full', id: 'og-physik', name: 'Physikalisches Kabinett', fin: 'boiserie', tag: 'D physikalisches Kabinett; position I' },
+        // KB-I25: 1st OG = Naturalienkabinett with the Waffensammlung rooms adjoining [D T5 (T7 no. 2; LA Speyer B3 2609)]
+        { k: [2, 7], band: 'full', id: 'og-naturalienkabinett', name: 'Naturalienkabinett', fn: 'natural-history cabinet: white-painted glass cabinets, display tables', fin: 'boiserie', tag: 'D T5 Naturalienkabinett on the 1st OG; white glass cabinets D T5 (KB-I27); position in the wing I' },
+        { k: [8, 12], band: 'full', id: 'og-waffensammlung', name: 'Waffensammlung', fn: 'armoury collection: white panelling, three large mirror doors, gun racks, inlaid table with green cloth', fin: 'boiserie', tag: 'D T5 Waffensammlung adjoining the Naturalienkabinett on the 1st OG; white wooden panelling D T5 (boiserie); position I' },
+        { k: [13, 14], band: 'full', id: 'og-physik', name: 'Physikalisches Kabinett', fin: 'boiserie', tag: 'D physikalisches Kabinett (05 §e.2); 1st OG I (research/10 §b.1); position I' },
         { k: [15, 17], band: 'full', id: 'og-kupferstich', name: 'Kupferstichkabinett (?)', fin: 'boiserie', tag: 'U (05 §e.2 "probably")' },
         voidZ([18, 18], 'full', 'eg-treppe-sued'),
       ],
@@ -426,9 +488,14 @@ const SAMMLUNG: Prog = {
   ],
   passages: [
     { id: 'sammlung-galerie', storeys: [1], side: 'court', at: -26.7, to: 'KB-B06', sill: 2.6, height: 2.4, tag: 'I door from the N stair half landing (348.8) into the gallery' },
-    { id: 'sammlung-nord', storeys: [1, 2], side: 'end_b', at: 0, to: 'KB-B03', tag: 'I link to the N arm' },
+    // KB-I52 (review-1 #18): the OG door onto the upper gallery of the Treppenhaus Süd (the half landing lies on the
+    // hall's middle, t 0 ± 0.5 m, 2.5 m below the Beletage floor), so the OG link sits 3 m off the middle [I]
+    { id: 'sammlung-nord', storeys: [1, 2], side: 'end_b', at: 0, atByStorey: { 2: 3.0 }, to: 'KB-B03', tag: 'I link to the N arm; OG door on the upper gallery of the Treppenhaus Süd (KB-I52)' },
   ],
-  interiorTag: 'collections named in Weber ToC / BuS 2012 (D), positions I; single pile on the 13 m LiDAR depth',
+  // KB-I52: the Kupferstichkabinett is entered from the Physikalisches Kabinett (enfilade); its door onto the stair
+  // would open over the half landing [I]
+  skipDoors: ['door-B04.2.og-kupferstich-B04.1.eg-treppe-sued'],
+  interiorTag: 'KB-I25 (research/10 §0.5, §b.1): EG Wachtstube + Hofbibliothek in four rooms, 1st OG Naturalienkabinett, Waffensammlung, physical cabinet [D T5 > R12 2003; positions I]; the gunsmith is KB-B40 (trapdoor from the gallery, T5 n. 62); single pile on the 13 m LiDAR depth',
 };
 
 const KUECHE: Prog = {
@@ -444,7 +511,7 @@ const KUECHE: Prog = {
   sideTag: 'spacing 3.2 HMS -> 14 axes on 45.9 m I; S end against the N arm blind',
   portals: (ax) => [
     { side: 'court', axis: ax('court', 7), kind: 'door', storey: 1, tag: 'I kitchen door to the Küchenhof' },
-    { side: 'court', axis: ax('court', 11), kind: 'door', storey: 1, tag: 'I scullery door' },
+    { side: 'court', axis: ax('court', 12), kind: 'door', storey: 1, tag: 'I scullery door (axis 12 since the two-axis Küchenbautreppe, KB-I52)' },
   ],
   floors: [
     {
@@ -455,9 +522,11 @@ const KUECHE: Prog = {
         { k: [0, 1], band: 'full', id: 'eg-anrichte', name: 'Anrichte (Durchgang zum Nordflügel)', fn: 'serving room', fin: 'kitchen', tag: 'I serving link to the palace' },
         { k: [2, 4], band: 'full', id: 'eg-konditorei', name: 'Konditorei', fin: 'kitchen', tag: 'D Konditorei (05 §e.2); position I' },
         { k: [5, 9], band: 'full', id: 'eg-hofkueche', name: 'Hofküche', fn: 'vaulted court kitchen, open hearth and Potager ranges', fin: 'kitchen', tag: 'D Hofküche 1779/80-84 (KB-06 block); 16 x 11.7 m I (05: 12 x 16 m); S wall on the line of the KB-06 S wall D LiDAR' },
-        stairZone([10, 10], 'full', 'eg-treppe', 'Treppenhaus', 'dogleg', 'service', 2, [0, 1], 'N'),
-        { k: [11, 11], band: 'full', id: 'eg-spuelkueche', name: 'Spülküche', fin: 'kitchen', tag: 'D Spülküche (05 §e.2); position I' },
-        { k: [12, 13], band: 'full', id: 'eg-baeckerei', name: 'Bäckerei', fin: 'kitchen', tag: 'D Bäckerei (05 §e.2); position I' },
+        // KB-I52 (review-1 #18): the Küchenbautreppe takes two axes, so its first flight leaves the Hofküche door free
+        // (a 3.2 m hall forced a three-flight stair whose first flight ran past that door) [I]
+        stairZone([10, 11], 'full', 'eg-treppe', 'Küchenbautreppe', 'dogleg', 'service', 2, [0, 1], 'D R12 OG 25 "Küchenbautreppe" (name); N; two axes I (KB-I52)'),
+        { k: [12, 12], band: 'full', id: 'eg-spuelkueche', name: 'Spülküche', fin: 'kitchen', tag: 'D Spülküche (05 §e.2); position I' },
+        { k: [13, 13], band: 'full', id: 'eg-baeckerei', name: 'Bäckerei', fin: 'kitchen', tag: 'D Bäckerei (05 §e.2); position I' },
       ],
     },
     {
@@ -465,18 +534,21 @@ const KUECHE: Prog = {
       layout: 'single',
       outerWall: 0.7,
       zones: [
-        { k: [0, 1], band: 'full', id: 'og-mundkoch', name: 'Wohnung des Mundkochs', fin: 'service', tag: 'I cooks\' rooms (05 §e.2)' },
-        { k: [2, 3], band: 'full', id: 'og-kammer-1', name: 'Kammer', fin: 'service' },
-        { k: [4, 5], band: 'full', id: 'og-kammer-2', name: 'Kammer', fin: 'service' },
-        { k: [6, 7], band: 'full', id: 'og-kammer-3', name: 'Kammer', fin: 'service' },
-        { k: [8, 9], band: 'full', id: 'og-kuechenschreiber', name: 'Küchenschreiberei', fin: 'service' },
-        voidZ([10, 10], 'full', 'eg-treppe'),
-        { k: [11, 13], band: 'full', id: 'og-kammer-4', name: 'Kammer', fin: 'service' },
+        // KB-I25 (research/10 §0.4, §b.1 KB-B05; history-check H06): "einen großen, schönen Speisesaal im ersten
+        // Stockwerk" of the kitchen wing, with two niches for the O4 stoves [D T1 pp. 338, 341; R12 OG 24]; S part
+        // next to the N wing I; cooks' lodgings in the mansard I
+        // fix wave 4 (review): 7 axes with a centre axis (k 3), and the vestibule between the hall and the stair landing
+        // (k 7-9 next to the stair void k 10), so guests come up the Küchenbautreppe into the vestibule [I]
+        { k: [0, 6], band: 'full', id: 'og-speisesaal', name: 'Großer Speisesaal', fn: 'state dining hall with two stove niches (altar-shaped enamelled-copper stoves crowned by bronze Ceres and Diana/Hebe, O4)', fin: 'boiserie', tag: 'D T1 p. 338 (Mannlich 1910) + R12 OG 24 "Großer Speisesaal" (name, floor); two stove niches D T1 p. 341, T26 (O4); position in the S part and 7 axes I; finish N' },
+        { k: [7, 9], band: 'full', id: 'og-vestibuel', name: 'Vestibül des Küchenflügels', fn: 'vestibule between the Küchenbautreppe and the dining hall', fin: 'stair', tag: 'D R12 OG 28 "Vestibül des Küchenflügels" (name); position at the stair landing I' },
+        voidZ([10, 11], 'full', 'eg-treppe'),
+        { k: [12, 12], band: 'full', id: 'og-kuechenschreiber', name: 'Küchenschreiberei', fin: 'service', tag: 'N kitchen office of a court kitchen (name and position I; not in the sources)' },
+        { k: [13, 13], band: 'full', id: 'og-mundkoch', name: 'Wohnung des Mundkochs', fin: 'service', tag: 'I cooks\' rooms (05 §e.2); most cooks in the mansard I (research/10 §b.1)' },
       ],
     },
   ],
   passages: [{ id: 'kueche-nord', storeys: [1], side: 'end_a', at: -3.0, to: 'KB-B03', tag: 'I serving link to the N arm' }],
-  interiorTag: 'kitchen rooms named in research/05 §e.2 (D/I), positions I; single pile',
+  interiorTag: 'kitchen rooms named in research/05 §e.2 (D/I), positions I; KB-I25: Großer Speisesaal on the OG (T1 pp. 338, 341; R12 OG 24-28, D); single pile',
 };
 
 const GALERIE: Prog = {
@@ -485,28 +557,34 @@ const GALERIE: Prog = {
   s0: () => -(21 * 3.9) / 2 + 1.95,
   kmin: 0,
   kmax: 20,
-  garden: 'blind',
+  // KB-I24: one glass door in the N hanging wall to the Bibliothekspavillon KB-B06a (axis 14) and a glazed door at the
+  // E end into the colonnade of the Tempelzimmer KB-B07 (research/10 §b.1)
+  garden: [14, 14],
   court: [0, 20],
-  end_a: 'blind',
+  end_a: [0],
   end_b: 'blind',
   sideTag: 'S-lit gallery, N hanging wall closed N 02; 21 axes at 3.9 I',
+  portals: (ax) => [
+    { side: 'garden', axis: ax('garden', 14), kind: 'porte_fenetre', storey: 1, tag: 'D T1/T5 glass door from the middle of the gallery to the Bibliothekspavillon (KB-B06a); N side and axis I (research/10 §b.1)' },
+    { side: 'end_a', axis: 0, kind: 'porte_fenetre', storey: 1, tag: 'I glazed door from the gallery into the colonnade to the Tempelzimmer (KB-B07; D T1 p. 375, R12 sequence)' },
+  ],
   floors: [
     {
       storey: 1,
       layout: 'single',
-      outerWall: 0.65,
+      // KB-I21: the gallery is rendered Fachwerk (catalogue facade.fachwerk): a 0.30 m outer wall (grammar FACHWERK)
+      outerWall: FACHWERK.wall,
       zones: [
-        { k: [0, 1], band: 'full', id: 'kabinett-ost', name: 'Kabinett am Ostende', fn: 'small picture cabinet', fin: 'green' },
-        { k: [2, 18], band: 'full', id: 'bildergalerie', name: 'Bildergalerie', fn: 'picture gallery, hanging wall N, light from the S', fin: 'green', tag: 'D picture gallery (collection -> Alte Pinakothek); 66 x 6.7 m I; parquet D (05 §e.2)' },
+        { k: [0, 1], band: 'full', id: 'kabinett-ost', name: 'Kabinett am Ostende (Vorraum zur Kolonnade)', fn: 'small picture cabinet; glazed door to the colonnade and the Tempelzimmer', fin: 'green', tag: 'I (KB-I24: the gallery runs into the colonnade and the Tempelzimmer, research/10 §b.1)' },
+        { k: [2, 18], band: 'full', id: 'bildergalerie', name: 'Bildergalerie', fn: 'picture gallery, hanging wall N, light from the S; glass door to the Bibliothekspavillon; walls boarded and hung with green damask with arabesques (Lyon), 20 crystal chandeliers, gilt-bronze side tables with six-arm candelabra on the piers, 104 gilt curule armchairs in the same damask with gold fringes', fin: 'green', colour: '#4E6B4F', colourTag: 'D T1 pp. 374 f. / T5 green damask with arabesques (Lyon); hue #4E6B4F N research/10 §c.3', tag: 'D picture gallery (collection -> Alte Pinakothek); 66 x 6.7 m I; parquet D (05 §e.2, T1 p. 394); green damask D T1 pp. 374 f.' },
         { k: [19, 20], band: 'full', id: 'vorraum-west', name: 'Vorraum (vom Sammlungsflügel)', fin: 'boiserie' },
       ],
     },
   ],
   passages: [
     { id: 'galerie-sammlung', storeys: [1], side: 'end_b', at: 2.0, to: 'KB-B04', tag: 'I door from the Sammlungsflügel stair landing' },
-    { id: 'galerie-pavillon', storeys: [1], side: 'end_a', at: 0, to: 'KB-B07', tag: 'I door to the end pavilion (LP06 6)' },
   ],
-  interiorTag: 'one long hall (05 §e.2) on the v2 8 m range',
+  interiorTag: 'one long hall (05 §e.2) on the v2 8 m range; KB-I24: colonnade and Tempelzimmer at the E end, Bibliothekspavillon off the N wall (research/10 §b.1)',
 };
 
 const ORANGERIE: Prog = {
@@ -520,7 +598,14 @@ const ORANGERIE: Prog = {
   end_a: [-1.65, 1.65],
   end_b: [-1.65, 1.65],
   sideTag: '25 ± 1 axes HMS at 3.3 m on the 84 m LiDAR length; parterre face only between the wings KB-B11/B12 (grid aligned) I',
-  windowKinds: { garden: { kind: 'window', tag: 'W front: two tiers of sill windows above the high basement (HMS research/08 §4; facade.windows), portes-fenêtres only on the parterre (E) side' } },
+  windowKinds: {
+    garden: { kind: 'window', tag: 'W front: two tiers of sill windows above the high basement (HMS research/08 §4; facade.windows), portes-fenêtres only on the parterre (E) side' },
+    // wave-6 review fix: floor-length portes-fenêtres only where the Saalgeschoss opens onto the parterre; the courtiers'
+    // upper tier (Logis der Kavaliere) has sill windows on every front, like the HMS upper W tier [I]
+    court: { kind: 'window', storeys: [2], tag: 'upper tier (courtiers\' lodgings): sill windows as on the W front (HMS upper W tier) I; portes-fenêtres only on the Saalgeschoss' },
+    end_a: { kind: 'window', storeys: [2], tag: 'upper tier: sill windows I' },
+    end_b: { kind: 'window', storeys: [2], tag: 'upper tier: sill windows I' },
+  },
   portals: (ax) => [{ side: 'garden', axis: ax('garden', 12), kind: 'door', storey: 0, tag: 'I basement door on the W bench (TF-07), Sommellerie access' }],
   risalits: (ax) => [
     { side: 'garden', first_axis: ax('garden', 11, 3), axis_count: 3, kind: 'centre', projection: 0.5, pediment: true, tag: 'HMS 3-axis pedimented centre (W front)' },
@@ -569,7 +654,42 @@ const ORANGERIE: Prog = {
   interiorTag: 'PV 1791 b. (orangery + courtiers + Sommellerie, D); layout I',
 };
 
-export const PROGRAMMES: Prog[] = [CDL, SUED, NORD, SAMMLUNG, KUECHE, GALERIE, ORANGERIE];
+/**
+ * KB-I28: Orangerie N wing. "Im Erdgeschoss eines Seitenflügels" the court gunsmith and clockmaker had their workshops
+ * [D Schwan 2010 p. 317 via T5]; drawn here at the W end next to the main range, because the S wing carries the
+ * Komödienhaus [I]. The rest of the wing is a plant hall [D orangery wings 1780-83, 01 §1.2]. 9 axes at 3.9 m as the
+ * catalogue facade; +s runs W (the W end adjoins KB-B10 and stays blind).
+ */
+const WERKSTATT_TAG = 'D Schwan 2010 p. 317 via T5 (research/10 §b.2): workshops of the court gunsmith and clockmaker in the EG of an Orangerie side wing; this wing and position I';
+const ORANGERIE_NORD: Prog = {
+  id: 'KB-B11',
+  p: 3.9,
+  s0: () => -(9 * 3.9) / 2 + 1.95,
+  kmin: 0,
+  kmax: 8,
+  garden: [0, 8],
+  court: [0, 8],
+  end_a: [-1.95, 1.95],
+  end_b: 'blind',
+  sideTag: '9 axes at 3.9 m (catalogue); W end against the main range KB-B10 I',
+  portals: (ax) => [{ side: 'court', axis: ax('court', 7), kind: 'door', storey: 1, tag: 'I workshop door from the Orangerie court' }],
+  floors: [
+    {
+      storey: 1,
+      layout: 'single',
+      outerWall: 1.0,
+      zones: [
+        { k: [0, 4], band: 'full', id: 'n-pflanzenhalle', name: 'Pflanzenhalle (Orangerie, Nordflügel)', fn: 'citrus and plant overwintering', fin: 'orangery', tag: 'D orangery wings 1780-83 (01 §1.2); I' },
+        { k: [5, 6], band: 'full', id: 'n-werkstatt-uhrmacher', name: 'Werkstatt des Hofuhrmachers', fn: 'clockmaker\'s workshop', fin: 'service', tag: WERKSTATT_TAG },
+        { k: [7, 8], band: 'full', id: 'n-werkstatt-buechsenmacher', name: 'Werkstatt des Büchsenmachers', fn: 'gunsmith\'s workshop', fin: 'service', tag: WERKSTATT_TAG },
+      ],
+    },
+  ],
+  passages: [],
+  interiorTag: 'KB-I28: plant hall + two workshops (D Schwan 2010 p. 317 via T5; wing and layout I)',
+};
+
+export const PROGRAMMES: Prog[] = [CDL, SUED, NORD, SAMMLUNG, KUECHE, GALERIE, ORANGERIE, ORANGERIE_NORD];
 
 // ---------------------------------------------------------------------------------------------
 // Engine
@@ -654,9 +774,9 @@ export function buildProgramme(prog: Prog, b: Building, spec: SiteSpec): Program
     end_a: endFromT(W, 'end_a', prog.end_a, prog.sideTag),
     end_b: endFromT(W, 'end_b', prog.end_b, prog.sideTag),
   };
-  for (const [side, wk] of Object.entries(prog.windowKinds ?? {}) as [SideName, { kind: 'window' | 'porte_fenetre'; tag: string }][]) {
+  for (const [side, wk] of Object.entries(prog.windowKinds ?? {}) as [SideName, { kind: 'window' | 'porte_fenetre'; storeys?: number[]; tag: string }][]) {
     const sd = sides[side];
-    if (sd) sides[side] = { ...sd, window_kind: wk.kind, tag: `${sd.tag ?? ''}; ${wk.tag}` };
+    if (sd) sides[side] = { ...sd, window_kind: wk.kind, ...(wk.storeys ? { window_kind_storeys: wk.storeys } : {}), tag: `${sd.tag ?? ''}; ${wk.tag}` };
   }
 
   // ---- rooms
@@ -705,8 +825,8 @@ export function buildProgramme(prog: Prog, b: Building, spec: SiteSpec): Program
         polygon: rectST(r3(p.sL), r3(p.sR), r3(p.t0), r3(p.t1)),
         floor_h: r2(level.floor_h),
         ceiling_h: r2(ceiling),
-        finish: { ...FIN[z.fin] },
-        tag: [z.tag ?? TAG_I, `finish ${FIN_TAG[z.fin]}`].join('; '),
+        finish: { ...FIN[z.fin], ...(z.colour ? { colour: z.colour } : {}), ...(z.border ? { border: z.border } : {}) },
+        tag: [z.tag ?? TAG_I, `finish ${FIN_TAG[z.fin]}`, ...(z.colourTag ? [`colour ${z.colourTag}`] : [])].join('; '),
       });
       if (z.stair) {
         const st = z.stair;

@@ -8,7 +8,7 @@ import { isPlaced, parseEvidenceTags } from '../src/spec.ts';
 import { validateSite } from '../src/validate.ts';
 import { readCatalogue, readCatalogueV1 } from './helpers.ts';
 
-const DETAILED = ['KB-B01', 'KB-B02', 'KB-B03', 'KB-B04', 'KB-B05', 'KB-B06', 'KB-B10'];
+const DETAILED = ['KB-B01', 'KB-B02', 'KB-B03', 'KB-B04', 'KB-B05', 'KB-B06', 'KB-B10', 'KB-B11'];
 
 describe('catalogue v2 (model/catalogue.json)', () => {
   it('is version 2 and valid in strict v2 mode without warnings', () => {

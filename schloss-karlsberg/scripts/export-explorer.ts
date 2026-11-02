@@ -6,7 +6,8 @@
  *
  * Writes buildings.glb (one node + mesh per building, node.name = building id, plus one `site:<featureId>` node per stone site feature; identity
  * transforms; positions in the explorer local frame x = E − 381000, y = h true DHHN2016, z = −(N − 5465000);
- * LOD1 exteriors without window frames / ironwork; vertex colours COLOR_0 (linear) baked from the material colours,
+ * LOD1 exteriors without window frames / ironwork; vertex colours COLOR_0 (linear) baked from the material colours
+ * times the builder's per-vertex aShade (albedo variation + AO at EXPLORER_AO_STRENGTH, KB-I19/I20),
  * NORMAL, per-vertex u8 `_CONF` (0 low, 1 med, 2 high); EXT_meshopt_compression + KHR_mesh_quantization for
  * normals/colours, float positions), footprints.geojson (EPSG:25832) and index.json.
  *
@@ -28,7 +29,9 @@ import { loadSite } from '../model/src/index.ts';
 import { type BuildContext, DEFAULT_BUILD_OPTIONS, makeLayoutFn } from '../model/src/context.ts';
 import { createMaterials } from '../model/src/materials/index.ts';
 import { buildExterior, offsetRing, palette } from '../model/src/exterior/index.ts';
+import { decodeShade, SHADE_ATTRIBUTE, shadeColour } from '../model/src/exterior/shade.ts';
 import { siteBuildings } from '../model/src/site/index.ts';
+import { siteFeatures } from '../model/src/site/access.ts';
 import { buildFeatures } from '../model/src/site/features.ts';
 import { stToLocal } from '../model/src/layout/footprint.ts';
 import type { BuildingLayout } from '../model/src/layout/building.ts';
@@ -41,6 +44,9 @@ import {
   gridSampler,
   minSampler,
   minUnderRing,
+  POSITION_MAX_ERROR,
+  POSITION_STEP,
+  quantisePositions,
   round,
   shortSources,
   skirtBottom,
@@ -62,6 +68,8 @@ const DROP_MATERIALS = new Set(['wood.frame', 'metal.iron']);
 /** How far the skirt reaches up into the plinth (hidden behind the 0.08 m plinth projection). */
 const SKIRT_OVERLAP = 0.3;
 const SKIRT_INSET = 0.06;
+/** Follies whose plinth fills the footprint (base skirt kept); every other folly is open (no skirt). */
+const SOLID_FOLLIES = new Set<string>(['chinese', 'monopteros']);
 
 // ---------------------------------------------------------------- catalogue + terrain
 const { spec } = loadSite(JSON.parse(readFileSync(resolve(ROOT, 'model/catalogue.json'), 'utf8')) as unknown);
@@ -97,15 +105,18 @@ class Buf {
   get vertices(): number {
     return this.pos.length / 3;
   }
-  add(position: ArrayLike<number>, normal: ArrayLike<number>, index: ArrayLike<number> | null, colour: THREE.Color, conf: number): void {
+  /** `shade`: the exterior builder's per-vertex aShade (KB-I19/I20), baked into COLOR_0 (format unchanged). */
+  add(position: ArrayLike<number>, normal: ArrayLike<number>, index: ArrayLike<number> | null, colour: THREE.Color, conf: number, shade?: ArrayLike<number>): void {
     const v0 = this.vertices;
     const n = position.length / 3;
     for (let i = 0; i < n * 3; i++) {
       this.pos.push(position[i]);
       this.nrm.push(normal[i]);
     }
+    const c: [number, number, number] = [colour.r, colour.g, colour.b];
     for (let i = 0; i < n; i++) {
-      this.col.push(colour.r, colour.g, colour.b);
+      if (shade) this.col.push(...shadeColour(c, decodeShade(shade, i * 4)).map((x) => Math.min(1, x)));
+      else this.col.push(c[0], c[1], c[2]);
       this.conf.push(conf);
     }
     if (index) for (let i = 0; i < index.length; i++) this.idx.push(v0 + index[i]);
@@ -126,7 +137,8 @@ class Buf {
       v.fromBufferAttribute(nAttr, i).applyMatrix3(nm).normalize();
       nrm.set([v.x, v.y, v.z], i * 3);
     }
-    this.add(pos, nrm, g.index ? g.index.array : null, colour, conf);
+    const sh = g.attributes[SHADE_ATTRIBUTE] as THREE.BufferAttribute | undefined;
+    this.add(pos, nrm, g.index ? g.index.array : null, colour, conf, sh && sh.array instanceof Uint16Array ? sh.array : undefined);
   }
   box(): [[number, number, number], [number, number, number]] {
     const lo = [Infinity, Infinity, Infinity];
@@ -172,7 +184,7 @@ function outlineST(L: BuildingLayout): ST[] {
 
 // ---------------------------------------------------------------- build
 const buildings = siteBuildings(spec, base);
-console.log(`[export:explorer] catalogue v${spec.version}: ${buildings.length} buildings -> ${OUT}`);
+console.log(`[export:explorer] catalogue v${spec.version}, scene year ${base.options.year}: ${buildings.length} buildings -> ${OUT}`);
 const nodes: { name: string; buf: Buf; extras: Record<string, string> }[] = [];
 const entries: ReconBuildingEntry[] = [];
 const footprints: Parameters<typeof footprintsGeoJson>[0] = [];
@@ -220,7 +232,12 @@ for (const b of buildings) {
     bottom = skirtBottom(minUnderRing(L.ring, t1789));
     notes.push(`${b.id}: no 2025 DTM under the footprint, skirt to the 1789 terrain`);
   }
-  if (Number.isFinite(bottom) && bottom < plinthBottom) {
+  // KB-I31 / KB-I39: open follies (Altan on piers, tent, wagon, cages, bee shelter) get no closed skirt ring round their
+  // footprint (it would draw a wall where the structure is open); the Chinese pavilion and the Monopteros stand on a
+  // solid plinth / stylobate that fills the footprint, so they keep theirs.
+  const openFolly = !!b.facade.folly && !SOLID_FOLLIES.has(b.facade.folly.kind);
+  if (openFolly) notes.push(`${b.id}: open folly (${b.facade.folly!.kind}), no base skirt`);
+  if (!openFolly && Number.isFinite(bottom) && bottom < plinthBottom) {
     const ring = offsetRing(outlineST(L), -SKIRT_INSET).map(([s, t]): [number, number] => {
       const p = stToLocal(L.frame, s, t, 0);
       return [p.x, p.z];
@@ -250,7 +267,7 @@ for (const b of buildings) {
 // the feature's own confidence) so the explorer can hide features that lie past its AOI edge (e.g. Karlslust).
 {
   const siteCtx = ctx(1, minSampler(t1789, t2025));
-  for (const f of spec.terrain_features) {
+  for (const f of siteFeatures(spec, base.options.year)) {
     const feat = buildFeatures({ ...spec, terrain_features: [f] }, siteCtx);
     feat.group.updateMatrixWorld(true);
     const buf = new Buf();
@@ -276,29 +293,38 @@ const buffer = doc.createBuffer();
 const scene = doc.createScene('karlsberg1789');
 doc.getRoot().setDefaultScene(scene);
 const material = doc.createMaterial('karlsberg1789/vertex-colour').setBaseColorFactor([1, 1, 1, 1]).setRoughnessFactor(0.9).setMetallicFactor(0);
-const acc = (name: string, type: 'SCALAR' | 'VEC3', array: Float32Array<ArrayBuffer> | Uint8Array<ArrayBuffer> | Uint32Array<ArrayBuffer>): Accessor => doc.createAccessor(name).setType(type).setArray(array).setBuffer(buffer);
+const acc = (name: string, type: 'SCALAR' | 'VEC3', array: Float32Array<ArrayBuffer> | Int16Array<ArrayBuffer> | Uint8Array<ArrayBuffer> | Uint32Array<ArrayBuffer>): Accessor => doc.createAccessor(name).setType(type).setArray(array).setBuffer(buffer);
 let trianglesIn = 0;
+let quantErr = 0;
+const floatNodes: string[] = [];
 for (const { name, buf, extras } of nodes) {
   trianglesIn += buf.idx.length / 3;
+  // KB-I62: int16 positions on one global 1/64 m grid; the node carries translation + uniform scale (the explorer
+  // bakes node transforms into the vertices, ../docs/data-contract.md). A node too large for int16 stays float32.
+  const qp = quantisePositions(buf.pos);
+  if (qp) quantErr = Math.max(quantErr, qp.maxError);
+  else floatNodes.push(name);
   const prim = doc
     .createPrimitive()
     .setMaterial(material)
-    .setAttribute('POSITION', acc(`${name}/position`, 'VEC3', Float32Array.from(buf.pos)))
+    .setAttribute('POSITION', qp ? acc(`${name}/position`, 'VEC3', qp.q as Int16Array<ArrayBuffer>) : acc(`${name}/position`, 'VEC3', Float32Array.from(buf.pos)))
     .setAttribute('NORMAL', acc(`${name}/normal`, 'VEC3', Float32Array.from(buf.nrm)))
     .setAttribute('COLOR_0', acc(`${name}/color`, 'VEC3', Float32Array.from(buf.col)))
     .setAttribute('_CONF', acc(`${name}/conf`, 'SCALAR', Uint8Array.from(buf.conf)))
     .setIndices(acc(`${name}/indices`, 'SCALAR', Uint32Array.from(buf.idx)));
   const mesh = doc.createMesh(name).addPrimitive(prim);
   // three.js strips ":" from node names (PropertyBinding.sanitizeNodeName): the id is also in extras -> userData
-  scene.addChild(doc.createNode(name).setMesh(mesh).setExtras(extras));
+  const node = doc.createNode(name).setMesh(mesh).setExtras(extras);
+  if (qp) node.setTranslation(qp.offset).setScale([qp.step, qp.step, qp.step]);
+  scene.addChild(node);
 }
 await doc.transform(
   weld(),
   reorder({ encoder: MeshoptEncoder, target: 'size' }),
-  // positions stay float32 so node transforms stay identity and heights exact (no dequantisation matrix)
+  // POSITION is already int16 (above); quantize() only packs normals and colours to 8 bit
   quantize({ pattern: /^(NORMAL|COLOR_0)$/, quantizeNormal: 8, quantizeColor: 8 }),
 );
-// normalized int8 NORMAL needs KHR_mesh_quantization (quantize() only declares it when POSITION is quantized)
+// int16 POSITION and normalized int8 NORMAL need KHR_mesh_quantization
 doc.createExtension(KHRMeshQuantization).setRequired(true);
 doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
 const io = new NodeIO().registerExtensions([EXTMeshoptCompression, KHRMeshQuantization]).registerDependencies({ 'meshopt.encoder': MeshoptEncoder, 'meshopt.decoder': MeshoptDecoder });
@@ -320,9 +346,10 @@ gltf.scene.traverse((o) => {
   for (let q: THREE.Object3D | null = m; q && !id; q = q.parent) id = q.userData.id as string | undefined;
   if (!id) throw new Error(`round trip: ${m.name} has no userData.id`);
   byName.set(id, m);
+  // node transforms: identity, or the quantisation translation + uniform scale (never a rotation)
   for (let q: THREE.Object3D | null = m; q && q !== gltf.scene; q = q.parent) {
-    if (!q.position.equals(new THREE.Vector3()) || !q.scale.equals(new THREE.Vector3(1, 1, 1)) || Math.abs(q.quaternion.w) !== 1)
-      throw new Error(`round trip: ${q.name} has a non-identity transform`);
+    if (Math.abs(q.quaternion.w) !== 1 || q.scale.x !== q.scale.y || q.scale.x !== q.scale.z || !(q.scale.x > 0))
+      throw new Error(`round trip: ${q.name} has a rotation or non-uniform scale`);
   }
   const g = m.geometry;
   for (const a of ['position', 'normal', 'color', '_conf']) if (!g.attributes[a]) throw new Error(`round trip: ${m.name} lacks ${a}`);
@@ -333,10 +360,10 @@ for (const { name, buf } of nodes) {
   const m = byName.get(name);
   if (m && m.name !== THREE.PropertyBinding.sanitizeNodeName(name) && m.parent?.name !== THREE.PropertyBinding.sanitizeNodeName(name)) throw new Error(`round trip: ${name} named ${m.name}`);
   if (!m) throw new Error(`round trip: node ${name} missing (three names: ${[...byName.keys()].slice(0, 5).join(', ')} …)`);
-  const bb = new THREE.Box3().setFromBufferAttribute(m.geometry.attributes.position as THREE.BufferAttribute);
+  const bb = new THREE.Box3().setFromBufferAttribute(m.geometry.attributes.position as THREE.BufferAttribute).applyMatrix4(m.matrixWorld);
   const want = buf.box();
   const err = Math.max(...[bb.min.x - want[0][0], bb.min.y - want[0][1], bb.min.z - want[0][2], bb.max.x - want[1][0], bb.max.y - want[1][1], bb.max.z - want[1][2]].map(Math.abs));
-  if (err > 0.011) throw new Error(`round trip: ${name} bbox differs by ${err.toFixed(3)} m`);
+  if (err > 0.005 + POSITION_MAX_ERROR + 0.001) throw new Error(`round trip: ${name} bbox differs by ${err.toFixed(3)} m`);
   const conf = m.geometry.attributes._conf;
   const want0 = buf.conf[0];
   if (conf.getX(0) !== want0) throw new Error(`round trip: ${name} _CONF ${conf.getX(0)} != ${want0}`);
@@ -364,6 +391,7 @@ writeFileSync(resolve(OUT, 'index.json'), JSON.stringify(index, null, 1));
 
 const mb = (f: string) => (statSync(resolve(OUT, f)).size / 1e6).toFixed(2);
 console.log(`  nodes ${nodes.length} (${entries.length} buildings + ${nodes.length - entries.length} site), triangles ${trianglesOut}, vertices ${vertsOut}`);
+console.log(`  positions int16 on a 1/${Math.round(1 / POSITION_STEP)} m grid, max error ${(quantErr * 1000).toFixed(1)} mm${floatNodes.length ? `; float32: ${floatNodes.join(', ')}` : ''}`);
 console.log(`  skirts ${skirtCount}, deepest ${skirtDeepest.id} ${skirtDeepest.depth.toFixed(2)} m below the plinth`);
 console.log(`  dropped: ${[...dropped].map(([k, v]) => `${k} ${v} tris`).join(', ') || '-'}`);
 for (const n of notes) console.log(`  note: ${n}`);

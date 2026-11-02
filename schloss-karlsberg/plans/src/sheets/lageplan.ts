@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { BuildingLayout } from '../../../model/src/layout/building.ts';
 import { stToEN } from '../../../model/src/layout/footprint.ts';
+import { rotundaLayout } from '../../../model/src/layout/rotunda.ts';
 import type { Building, EN, SiteSpec, TerrainFeature } from '../../../model/src/spec.ts';
 import { CONF_FILL, FUNCTION_DE, FUNCTION_FILL, type FunctionGroup, confidenceLegend, evidenceNote, functionGroup, placementClass, sourcesNote, sw } from '../evidence.ts';
 import { buildingRoof } from '../geom/roof3d.ts';
@@ -21,6 +22,7 @@ import { type LegendItem, Sheet, type SheetSize, legendHeight, northArrow } from
 import { type P2, circle, de, el, g, line, path, rect, text, textWidth } from '../svg.ts';
 import { DTM_ATTRIBUTION, loadContours, loadUnderlay } from '../terrain.ts';
 import { placedBuildings } from './common.ts';
+import { inScene } from '../../../model/src/layout/epoch.ts';
 
 export interface LageplanReq {
   sheetNo: string;
@@ -150,8 +152,12 @@ export function lageplanSheet(spec: SiteSpec, layoutOf: (b: Building) => Buildin
   }
   if (r.contours) layers.push(contours(c));
 
-  // terrain features
-  for (const f of spec.terrain_features) layers.push(feature(c, f, labels));
+  // terrain features (KB-I12: lawns underneath, then platforms, the rest, water on top; stable within a rank)
+  const rank = (k: TerrainFeature['kind']) => (k === 'lawn' ? 0 : k === 'rondell' ? 1 : k === 'pond' ? 3 : 2);
+  const feats = inScene(spec.terrain_features)
+    .map((f, i) => ({ f, i }))
+    .sort((a, b) => rank(a.f.kind) - rank(b.f.kind) || a.i - b.i);
+  for (const { f } of feats) layers.push(feature(c, f, labels));
 
   // buildings
   for (const L of Ls) layers.push(building(c, L));
@@ -279,6 +285,10 @@ const POLY_STYLE: Partial<Record<TerrainFeature['kind'], { fill: string; cls: st
   well: { fill: '#bcd8ee', cls: 'pen-s blue', op: 1 },
   enclosure: { fill: 'none', cls: 'pen-s hid', op: 1 },
   wall: { fill: '#555', cls: 'pen-s', op: 1 },
+  // KB-I12: Petri's open lawn (Herzogsgarten), drawn under the walks and clumps
+  lawn: { fill: '#dcebc8', cls: 'pen-xs hid', op: 0.7 },
+  // wave 5 (KB-I36): kitchen beds of the Holländische Gärtnerei, a pale soil tint
+  beds: { fill: '#e8dcc0', cls: 'pen-xs', op: 0.7 },
 };
 
 function feature(c: Ctx, f: TerrainFeature, _labels: string[]): string {
@@ -319,6 +329,29 @@ function feature(c: Ctx, f: TerrainFeature, _labels: string[]): string {
     } else if (f.kind === 'path') {
       parts.push(path(pts, false, { class: 'pen-s hid', style: 'stroke:#6b4a2a' }));
     } else parts.push(path(pts, false, { class: 'pen-s' }));
+  } else if (f.kind === 'clump') {
+    // KB-I12: clump (Point + radius) as a scalloped group outline, single trees (MultiPoint) as crowns
+    if (befund) return '';
+    const st = { fill: '#9cc47e', class: 'pen-xs', style: 'stroke:#3f6a2a;fill-opacity:.8' };
+    if (geo.type === 'Point' && f.radius) parts.push(circle(c.P(geo.coordinates), Math.max(0.8, f.radius * c.k), st));
+    else if (geo.type === 'MultiPoint') for (const e of geo.coordinates as EN[]) parts.push(circle(c.P(e), Math.max(0.4, 2.5 * c.k), st));
+  } else if (f.kind === 'furniture') {
+    // wave 5 (KB-I33): benches as small dark-green bars across their facing, sculpture as a filled dot
+    if (befund) return '';
+    for (const it of f.items ?? []) {
+      const p = c.P(it.at);
+      if (!inMap(c, p, 2)) continue;
+      if (it.type === 'herm') {
+        parts.push(circle(p, Math.max(0.5, 0.8 * c.k), { fill: '#8a7a55', class: 'pen-xs' }));
+        continue;
+      }
+      // bar along the bench (perpendicular to its facing), at least 0.6 sheet units long
+      const a = (it.facing * Math.PI) / 180;
+      const half = Math.max(1.0, 0.6 / c.k);
+      const e0: EN = [it.at[0] - Math.cos(a) * half, it.at[1] + Math.sin(a) * half];
+      const e1: EN = [it.at[0] + Math.cos(a) * half, it.at[1] - Math.sin(a) * half];
+      parts.push(path([c.P(e0), c.P(e1)], false, { class: 'pen-m', style: 'stroke:#3f5a3a' }));
+    }
   } else if (geo.type === 'MultiPoint') {
     for (const e of geo.coordinates as EN[]) parts.push(circle(c.P(e), Math.max(0.6, 1.5 * c.k), { fill: '#bcd8ee', class: 'pen-s blue' }));
   }
@@ -351,7 +384,10 @@ function building(c: Ctx, L: BuildingLayout): string {
   if (c.r.colour === 'befund') return path(pts, true, { class: 'pen-l', style: 'stroke:#c0261b' });
   const fill = c.r.colour === 'function' ? FUNCTION_FILL[functionGroup(b)] : CONF_FILL[b.confidence];
   const op = c.r.roofs ? 0.55 : 0.95;
-  return path(pts, true, { fill, class: `pen-m ${pc}`, style: `fill-opacity:${op}` });
+  // KB-I24: a rotunda's portico (podium + steps) and colonnade outside the drum, from the same layout as the 3D
+  const R = rotundaLayout(L);
+  const extra = R ? [R.colonnade?.outline, R.portico?.outline].filter((o): o is NonNullable<typeof o> => !!o).map((o) => path(o.map((q) => c.P(stToEN(L.frame, q))), true, { fill, class: `pen-s ${pc}`, style: `fill-opacity:${op}` })) : [];
+  return extra.join('') + path(pts, true, { fill, class: `pen-m ${pc}`, style: `fill-opacity:${op}` });
 }
 
 /** Roof plan: edges of all roof faces (ridges, hips, breaks), raised parts on top, lanterns. */
@@ -400,7 +436,7 @@ function buildingLabel(c: Ctx, L: BuildingLayout): string {
 
 function featureLabels(c: Ctx): string {
   const parts: string[] = [];
-  for (const f of c.spec.terrain_features) {
+  for (const f of inScene(c.spec.terrain_features)) {
     const geo = f.geometry;
     const nm = (f.name ?? f.id).replace(/\s*\(.*?\)/g, '').split(/[;/]/)[0].trim();
     const size = c.r.scale >= 5000 ? 1.4 : c.r.scale >= 2000 ? 1.6 : 2.0;

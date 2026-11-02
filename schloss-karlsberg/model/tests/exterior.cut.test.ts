@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { archCurve, archRise, archSpandrels, area, glazingGrid, signedArea2, wallPieces } from '../src/exterior/cut.ts';
+import { archCurve, archRise, archSpandrels, area, signedArea2, wallPieces } from '../src/exterior/cut.ts';
+import { CASEMENT, GLAZING, glazingClass, glazingLayout } from '../src/layout/grammar.ts';
 
 const band = { a0: 0, a1: 20, h0: 346, h1: 351 };
 
@@ -79,10 +80,58 @@ describe('arches', () => {
   });
 });
 
-describe('glazingGrid', () => {
-  it('gives an even number of columns for casement pairs and ~0.48 m rows', () => {
-    const g = glazingGrid(1.3, 2.6);
-    expect(g.cols % 2).toBe(0);
-    expect(g.rows).toBe(5);
+describe('glazingLayout (KB-I16 French casements)', () => {
+  const paneW = (w: number, cols: number) => (w - 2 * CASEMENT.frame) / cols;
+  it('maps classes and rows to glazing rules', () => {
+    expect(glazingClass('CDL', 'upper')).toBe('state');
+    expect(glazingClass('CDL', 'ground')).toBe('court');
+    expect(glazingClass('WING2', 'upper')).toBe('court');
+    expect(glazingClass('ORANG', 'ground')).toBe('court');
+    expect(glazingClass('STABLE', 'ground')).toBe('farm');
+    expect(glazingClass('FARM', null)).toBe('farm');
+  });
+  it('CdL state floor: two leaves, one pane per leaf, panes about 0.55 m tall', () => {
+    const g = glazingLayout('CDL', 'upper', 1.3, 2.4);
+    expect(g.leaves).toBe(2);
+    expect(g.cols).toBe(2);
+    expect(g.transom).toBeNull();
+    expect(2.4 / g.rowsLow).toBeGreaterThan(0.45);
+    expect(2.4 / g.rowsLow).toBeLessThan(0.65);
+  });
+  it('wings, CdL ground, Orangerie: two panes per leaf of about 0.25 x 0.33 m', () => {
+    for (const cls of ['WING2', 'RANGE1', 'ORANG'] as const) {
+      const g = glazingLayout(cls, 'ground', 1.2, 2.3);
+      expect(g.cols).toBe(4);
+      expect(paneW(1.2, g.cols)).toBeCloseTo(0.265, 2);
+      const ph = 2.3 / g.rowsLow;
+      expect(ph).toBeGreaterThan(0.3);
+      expect(ph).toBeLessThan(0.4);
+      expect(g.bar).toBe(0.03);
+    }
+    expect(glazingLayout('CDL', 'ground', 1.2, 2.3).cols).toBe(4);
+  });
+  it('stables and farm buildings: two per leaf in 3-4 rows', () => {
+    for (const h of [0.8, 1.4, 3.0]) {
+      const g = glazingLayout('STABLE', 'ground', 1.0, h);
+      expect(g.cols).toBe(4);
+      expect(g.rowsLow).toBeGreaterThanOrEqual(3);
+      expect(g.rowsLow).toBeLessThanOrEqual(4);
+    }
+  });
+  it('a transom only on windows of 2.6 m or more, at 3/4 of the height', () => {
+    expect(glazingLayout('WING2', 'ground', 1.2, 2.5).transom).toBeNull();
+    const g = glazingLayout('WING2', 'ground', 1.2, 2.8);
+    expect(g.transom).toBeCloseTo(2.1, 6);
+    expect(g.rowsTop).toBeGreaterThanOrEqual(1);
+    // arched heads: the springer is the transom when the whole opening reaches 2.6 m
+    const a = glazingLayout('ORANG', 'ground', 1.5, 2.8, 0.75);
+    expect(a.transom).toBe(2.8);
+    expect(a.rowsTop).toBe(0);
+    expect(glazingLayout('ORANG', 'ground', 1.5, 1.8, 0.3).transom).toBeNull();
+  });
+  it('narrow windows have a single leaf', () => {
+    const g = glazingLayout('WING2', 'mezz', 0.6, 0.9);
+    expect(g.leaves).toBe(1);
+    expect(g.cols).toBe(GLAZING.court.perLeaf);
   });
 });

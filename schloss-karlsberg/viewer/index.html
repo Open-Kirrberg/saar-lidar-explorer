@@ -20,6 +20,11 @@
       .modes { display: flex; gap: 6px; }
       .modes button { flex: 1; background: #2b3036; color: inherit; border: 1px solid #444; border-radius: 4px; padding: 5px; cursor: pointer; }
       .modes button.on { background: #c7a35a; color: #1d2126; border-color: #c7a35a; font-weight: 600; }
+      .presets { display: flex; flex-wrap: wrap; gap: 4px; }
+      .presets button { flex: 1 1 auto; background: #2b3036; color: inherit; border: 1px solid #444; border-radius: 4px; padding: 3px 5px; cursor: pointer; font: inherit; font-size: 11px; }
+      .presets button.on { background: #c7a35a; color: #1d2126; border-color: #c7a35a; }
+      .row.pair { display: flex; gap: 6px; }
+      .row.pair label.block { flex: 1; min-width: 0; }
       #panel .back { background: #2b3036; color: inherit; border: 1px solid #c7a35a; border-radius: 4px; padding: 5px 8px; cursor: pointer; text-align: left; font: inherit; }
       #panel .back:hover, #panel .back:focus-visible { background: #c7a35a; color: #1d2126; }
       #panel .back kbd { float: right; font: 11px ui-monospace, monospace; opacity: 0.75; border: 1px solid currentColor; border-radius: 3px; padding: 0 4px; }
@@ -43,6 +48,23 @@
       #stats { opacity: 0.7; text-shadow: 0 1px 2px #000; white-space: nowrap; }
       #status { position: fixed; left: 50%; top: 45%; transform: translate(-50%, -50%); font-size: 16px; }
       #crosshair { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px; border-radius: 50%; background: rgba(255,255,255,0.6); display: none; pointer-events: none; }
+      /* KB-I46 Rundflug / KB-I47 photo mode: hidden unless active */
+      .tourphoto { display: flex; gap: 6px; }
+      .tourphoto button { flex: 1; background: #2b3036; color: inherit; border: 1px solid #c7a35a; border-radius: 4px; padding: 5px; cursor: pointer; font: inherit; }
+      .tourphoto button:hover, .tourphoto button:focus-visible, .tourphoto button.on { background: #c7a35a; color: #1d2126; }
+      .tourphoto kbd { font: 10px ui-monospace, monospace; opacity: 0.75; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; }
+      .photoopts { display: flex; gap: 10px; align-items: center; font-size: 12px; }
+      .photoopts select { width: auto !important; }
+      #cine { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+      body.cinema #footer { z-index: 3; }
+      #cine .bar { position: absolute; left: 0; right: 0; height: max(0px, calc((100vh - 100vw / 2.2) / 2)); background: #000; }
+      #cine .top { top: 0; }
+      #cine .bottom { bottom: 0; }
+      #cut { display: none; position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 2; }
+      #tourcap { display: none; position: fixed; left: 0; right: 0; bottom: max(30px, calc((100vh - 100vw / 2.2) / 2 - 58px)); text-align: center; opacity: 0; pointer-events: none; text-shadow: 0 1px 3px #000; z-index: 3; }
+      #tourcap .t { font: 400 24px/1.25 Georgia, serif; letter-spacing: 0.02em; color: #f4efe6; }
+      #tourcap .n { margin-top: 4px; font-size: 12px; color: #e7c27a; }
+      #toast { display: none; z-index: 4; position: fixed; left: 50%; top: 18px; transform: translateX(-50%); padding: 6px 12px; font-size: 12px; pointer-events: none; }
     </style>
   </head>
   <body>
@@ -52,6 +74,10 @@
     <div id="footer"><div id="attribution"></div><div id="stats"></div></div>
     <div id="status">Lade …</div>
     <div id="crosshair"></div>
+    <div id="cine" aria-hidden="true"><div class="bar top"></div><div class="bar bottom"></div></div>
+    <div id="cut" aria-hidden="true"></div>
+    <div id="tourcap" role="status" aria-live="polite"><div class="t"></div><div class="n"></div></div>
+    <div id="toast" class="glass" role="status" aria-live="polite"></div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

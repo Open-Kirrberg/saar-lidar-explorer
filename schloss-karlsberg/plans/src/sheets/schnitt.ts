@@ -8,8 +8,10 @@
 import type { BuildingLayout } from '../../../model/src/layout/building.ts';
 import { sidePoint, stToEN } from '../../../model/src/layout/footprint.ts';
 import { FLOOR_BUILD_UP, WALL_THICKNESS } from '../../../model/src/layout/grammar.ts';
+import { outerWall } from '../../../model/src/layout/fachwerk.ts';
 import { pointInPolygon } from '../../../model/src/layout/geom.ts';
 import { builtAvenueTrees } from '../geom/trees.ts';
+import { inScene } from '../../../model/src/layout/epoch.ts';
 import { WALK_KINDS, collectOpenings } from '../../../model/src/interior/openings.ts';
 import { flightGoing } from '../../../model/src/interior/stairPlan.ts';
 import type { Building, EN, SiteSpec, ST } from '../../../model/src/spec.ts';
@@ -20,7 +22,7 @@ import { buildingRoof } from '../geom/roof3d.ts';
 import { type Flight, stairPlans } from '../geom/stairs.ts';
 import { type ElevView, elevView } from '../geom/transform.ts';
 import { type SectionDef, sectionDefs } from '../sections.ts';
-import { type LegendItem, MARGIN, SHEET_MM, Sheet, type SheetSize, scaleBar } from '../sheet.ts';
+import { type LegendItem, MARGIN, SHEET_MM, Sheet, type SheetSize, scaleBar, wrap } from '../sheet.ts';
 import { type P2, de, g, line, path, rect, rel, text, textWidth } from '../svg.ts';
 import { DTM_ATTRIBUTION, type Dtm, loadDtm } from '../terrain.ts';
 import { roofDe, shortName } from './ansicht.ts';
@@ -41,7 +43,7 @@ export interface SchnittReq {
 export function schnittRequests(): SchnittReq[] {
   return [
     { sheetNo: 'SC-01', slug: 'Laengsschnitt_A-A', title: 'Längsschnitt A–A (Hauptachse)', section: 'A', size: 'A2' },
-    { sheetNo: 'SC-02', slug: 'Querschnitt_B-B_Prunktreppe', title: 'Querschnitt B–B (Prunktreppe)', section: 'B', size: 'A3' },
+    { sheetNo: 'SC-02', slug: 'Querschnitt_B-B_Prunktreppe', title: 'Schnitt B–B quer zur Hofachse (Prunktreppe)', section: 'B', size: 'A3' },
   ];
 }
 
@@ -254,17 +256,18 @@ function cutBuilding(c: Cut, b: Building, L: BuildingLayout): { svg: string; dim
   const roomLevels = levels.filter((l) => l.kind !== 'plinth');
   for (const lv of roomLevels) {
     const si = lv.index;
+    const wT = outerWall(b, si).thickness; // KB-I21: 0.30 m on Fachwerk storeys
     const { rects } = spacesOf(b, si);
     const hasRooms = rects.length > 0;
-    const cells = planCells(outline, rects, { outerThickness: wallT + 0.25, outerWall: wallT });
+    const cells = planCells(outline, rects, { outerThickness: wT + 0.25, outerWall: wT });
     const top = lv.top_h;
     const ceil = top - slab;
     const outer = coverAlong(cells.walls.filter((w) => w.outer), axis, d.at);
     const inner = coverAlong(cells.walls.filter((w) => !w.outer), axis, d.at);
     const voids = coverAlong(cells.voids, axis, d.at);
     if (!hasRooms) {
-      parts.push(box(oR[0], oR[0] + wallT, lv.floor_h, top, { class: 'poche-d' }));
-      parts.push(box(oR[1] - wallT, oR[1], lv.floor_h, top, { class: 'poche-d' }));
+      parts.push(box(oR[0], oR[0] + wT, lv.floor_h, top, { class: 'poche-d' }));
+      parts.push(box(oR[1] - wT, oR[1], lv.floor_h, top, { class: 'poche-d' }));
     }
     for (const [a, bb] of outer) {
       parts.push(box(a, bb, lv.floor_h, top, { class: 'poche-d' }));
@@ -291,7 +294,7 @@ function cutBuilding(c: Cut, b: Building, L: BuildingLayout): { svg: string; dim
       const perpIn = d.along === 't' ? hq.s0 < d.at && hq.s1 > d.at : hq.t0 < d.at && hq.t1 > d.at;
       if (perpIn) holes.push(d.along === 't' ? [hq.t0, hq.t1] : [hq.s0, hq.s1]);
     }
-    for (const [a, bb] of gaps(holes.sort((x, y) => x[0] - y[0]), oR[0] + wallT, oR[1] - wallT)) {
+    for (const [a, bb] of gaps(holes.sort((x, y) => x[0] - y[0]), oR[0] + wT, oR[1] - wT)) {
       parts.push(box(a, bb, ceil, top, { class: 'poche-i' }));
       parts.push(box(a, bb, ceil, top, { class: 'pen-s' }));
     }
@@ -419,18 +422,7 @@ function clampH(h: number, lo: number, hi: number): number {
 }
 
 function wrapWords(s: string, widthMm: number, size: number): string[] {
-  const words = s.split(/\s+/);
-  const out: string[] = [];
-  let cur = '';
-  for (const w of words) {
-    const next = cur ? `${cur} ${w}` : w;
-    if (cur && textWidth(next, size) > widthMm) {
-      out.push(cur);
-      cur = w;
-    } else cur = next;
-  }
-  if (cur) out.push(cur);
-  return out.slice(0, 3);
+  return wrap(s, widthMm, size).slice(0, 3);
 }
 
 /** Stairs: flights crossed by the cut as poché, flights beyond as views (dashed if hidden). */
@@ -569,7 +561,7 @@ function trees(spec: SiteSpec, c: Cut, r0: number, r1: number, g89: (E: number, 
   const out: { x: number; dpt: number; h: number; g: number }[] = [];
   const lo = Math.min(c.X(r0), c.X(r1));
   const hi = Math.max(c.X(r0), c.X(r1));
-  for (const f of spec.terrain_features) {
+  for (const f of inScene(spec.terrain_features)) {
     if (f.kind !== 'avenue' || !f.trees || f.geometry.type !== 'LineString') continue;
     for (const t of builtAvenueTrees(spec, f)) {
       const dpt = c.v.depthOf(t.E, t.N);

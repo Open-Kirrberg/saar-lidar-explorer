@@ -41,8 +41,9 @@ max_height_mm = 250.0        # warn above this (P1S printable_height 250 mm; mus
 text = true                  # engrave id/series/scale/N-arrow into the bottom face
 engrave_mm = 0.6
 material_density_g_cm3 = 1.24   # PLA
-shell_mm = 1.2               # filament estimate: ≈ 3 walls × 0.4 mm (also used for top/bottom skins)
-infill = 0.15
+shell_mm = 0.9               # filament estimate for the stock process (grid 15 %, 2 walls): ρ·(S + infill·(V − S)),
+infill = 0.155               #   S = A·shell_mm — least-squares fit to the 19 sliced tiles, max error 2 % (was 1.2 / 0.15:
+                             #   6–14 % too high)
 max_error_mm = 0.03          # top surface simplified: every sampled vertex within 0.03 mm (≈ 1/7 of a 0.2 mm layer)
 max_triangles = 500000       # top-surface triangle budget (Bambu Studio warns above 1 M per object)
 
@@ -55,6 +56,21 @@ waist_mm = 8.0               # width at the tile edge (narrow neck)
 end_mm = 14.0                # width at the inner end (dovetail undercut)
 clearance_mm = 0.15          # key outline offset inwards per side; key thickness = depth − clearance
 min_base_mm = 2.0            # material required above a recess (checked per tile)
+
+# Recommended Bambu Studio process changes against the stock "0.20mm Standard @BBL X1C" (grid 15 %, 2 walls, 5 top
+# layers / 1.0 mm). Display only: a plain 3MF cannot carry process settings into the GUI (README "Filament"), so the
+# app planner and index.json `slicer` show them. Measured with the Bambu Studio 02.08.02.61 CLI on all 19 tiles
+# (stock P1S 0.4 + Bambu PLA Basic); not a geometry parameter — changing it never breaks joins.
+[defaults.slicer]
+sparse_infill_pattern = "lightning"   # supports only the (terrain) top surface — the block below it stays hollow
+sparse_infill_density = 0.10
+wall_loops = 3               # the hollow block's side walls and the key-recess walls get no infill backing
+top_shell_layers = 6         # 1.2 mm skin over the sparse lightning branches (against pillowing)
+top_shell_thickness_mm = 1.2
+saving_pct = [24, 55]        # filament saved vs. the stock process (min/max over the 19 tiles; thick tiles save most)
+time_saving_pct = [-3, 22]   # print time saved (Bambu estimate; thin detail tiles up to 3 % slower)
+shell_mm = 1.25              # filament estimate for these settings: ρ·(S + infill·(V − S)), S = A·shell_mm
+infill = 0.02                #   (least-squares fit to the 19 sliced tiles, max error 6 %)
 
 # Main series: stock P1S profile, tile centred on the plate (X/Y 19.30–236.70 mm).
 [series.saarpfalz-9200]

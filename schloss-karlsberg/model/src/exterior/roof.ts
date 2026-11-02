@@ -7,8 +7,20 @@
  * walls following the profile). Mansards (with or without deck), hip, gable, pavilion and flat roofs all fall
  * out of this; round footprints revolve the same half profile (dome, cone).
  */
+import * as THREE from 'three';
 import type { RoofSection } from '../layout/roof.ts';
+import { ROOF_COVER } from '../layout/grammar.ts';
 import type { GeoBuilder, MatKey, P3 } from './builder.ts';
+
+/**
+ * KB-I18: a mansard whose upper slope (Terrasson) is flatter than ROOF_COVER.leadDeckMaxPitch is a lead flat
+ * (Plattform), not slate or tile [HMS flat light deck; research/09 §2.6, E9]. True for the profile segment starting at
+ * distance `d0` from the eaves line.
+ */
+export function isLeadDeckSegment(section: RoofSection, d0: number): boolean {
+  if (section.type !== 'mansard' || section.break_inset === undefined) return false;
+  return section.pitch_upper < ROOF_COVER.leadDeckMaxPitch && d0 >= section.break_inset - 1e-6;
+}
 
 /** First half of the section profile as [d, h] with d = distance from the eaves line (0 … ≤ depth/2). */
 export function halfProfile(section: RoofSection, overhang = 0): [number, number][] {
@@ -53,10 +65,10 @@ export function rectRoof(g: GeoBuilder, section: RoofSection, o: RectRoofOptions
   const D2 = o.depth / 2;
   const Ls = (d: number) => (o.hipped ? Math.max(0, L2 - d) : L2 + ov);
   const Dt = (d: number) => Math.max(0, D2 - d);
-  const k = o.roofKey;
   for (let i = 1; i < prof.length; i++) {
     const [d0, h0] = prof[i - 1];
     const [d1, h1] = prof[i];
+    const k = isLeadDeckSegment(section, d0) ? (o.deckKey ?? o.roofKey) : o.roofKey;
     const a0 = Ls(d0);
     const a1 = Ls(d1);
     const b0 = Dt(d0);
@@ -80,7 +92,7 @@ export function rectRoof(g: GeoBuilder, section: RoofSection, o: RectRoofOptions
   const bt = Dt(dTop);
   if (bt > 0.01 && at > 0.01) {
     const P = (s: number, t: number): P3 => [sm + s, t, hTop];
-    g.quad(o.deckKey ?? k, P(-at, -bt), P(at, -bt), P(at, bt), P(-at, bt));
+    g.quad(o.deckKey ?? o.roofKey, P(-at, -bt), P(at, -bt), P(at, bt), P(-at, bt));
   }
   if (!o.hipped) {
     // gable walls (profile without the overhang), facing ±s
@@ -101,9 +113,30 @@ export function rectRoof(g: GeoBuilder, section: RoofSection, o: RectRoofOptions
   return hTop;
 }
 
-/** Revolved roof (dome, cone, round pavilion) over a circle of `radius` at (sc, tc). */
-export function roundRoof(g: GeoBuilder, section: RoofSection, radius: number, key: MatKey, sc = 0, tc = 0, segments = 32): void {
+/**
+ * Revolved roof (dome, cone, round pavilion) over a circle of `radius` at (sc, tc). Normals are smooth round the
+ * circle (wave-4 review: the faceted lead dome read as polished metal) and, for domes (`smoothProfile`), also along the
+ * profile; a cone keeps its straight slope normal.
+ */
+export function roundRoof(g: GeoBuilder, section: RoofSection, radius: number, key: MatKey, sc = 0, tc = 0, segments = 32, smoothProfile = section.type === 'dome'): void {
   const prof = halfProfile(section).map(([d, h]): [number, number] => [radius * (1 - d / (section.depth / 2)), h]);
+  // outward profile normals (radial, vertical) per segment, then per ring
+  const segN = prof.slice(1).map(([r1, h1], i): [number, number] => {
+    const [r0, h0] = prof[i];
+    const l = Math.hypot(r1 - r0, h1 - h0) || 1;
+    return [(h1 - h0) / l, -(r1 - r0) / l];
+  });
+  const ringN = (i: number, seg: number): [number, number] => {
+    if (!smoothProfile) return segN[seg];
+    const a = segN[Math.max(0, i - 1)];
+    const b = segN[Math.min(segN.length - 1, i)];
+    // a sharp corner (stepped dome: cornice, ledge, lantern) keeps the segment's own normal [wave-5 fix]
+    if (a[0] * b[0] + a[1] * b[1] < 0.8) return segN[seg];
+    const n: [number, number] = [a[0] + b[0], a[1] + b[1]];
+    const l = Math.hypot(n[0], n[1]) || 1;
+    return [n[0] / l, n[1] / l];
+  };
+  const nrm = (n: [number, number], c: number, s: number) => new THREE.Vector3(n[0] * c, n[1], -n[0] * s); // object (s, h, −t)
   for (let j = 0; j < segments; j++) {
     const a0 = (j / segments) * Math.PI * 2;
     const a1 = ((j + 1) / segments) * Math.PI * 2;
@@ -115,15 +148,23 @@ export function roundRoof(g: GeoBuilder, section: RoofSection, radius: number, k
       const [r0, h0] = prof[i - 1];
       const [r1, h1] = prof[i];
       const P = (r: number, c: number, s: number, h: number): P3 => [sc + r * c, tc + r * s, h];
+      const nb = ringN(i - 1, i - 1);
+      const nt = ringN(i, i - 1);
       // CCW seen from outside: going around counter-clockwise in plan
-      g.quad(key, P(r0, c0, s0, h0), P(r0, c1, s1, h0), P(r1, c1, s1, h1), P(r1, c0, s0, h1));
+      const p00 = P(r0, c0, s0, h0);
+      const p10 = P(r0, c1, s1, h0);
+      const p11 = P(r1, c1, s1, h1);
+      const p01 = P(r1, c0, s0, h1);
+      g.tri(key, p00, p10, p11, [nrm(nb, c0, s0), nrm(nb, c1, s1), nrm(nt, c1, s1)]);
+      g.tri(key, p00, p11, p01, [nrm(nb, c0, s0), nrm(nt, c1, s1), nrm(nt, c0, s0)]);
     }
   }
 }
 
 /** A smooth dome profile (for domes the section profile is a polyline; give it more points). */
 export function domeSection(section: RoofSection, steps = 8): RoofSection {
-  if (section.type !== 'dome') return section;
+  // a stepped dome's profile is final (layout/roof.ts steppedDomeSection)
+  if (section.type !== 'dome' || (section.tiers ?? 1) >= 2) return section;
   const half = section.depth / 2;
   const prof: [number, number][] = [];
   for (let i = 0; i <= steps; i++) {

@@ -8,6 +8,7 @@
  */
 import * as THREE from 'three';
 import type { MaterialLibrary, MaterialName } from '../context.ts';
+import { AO, SHADE_ATTRIBUTE, type Shade, encodeShade } from './shade.ts';
 
 export type P3 = [number, number, number]; // [s, t, h]
 
@@ -18,17 +19,30 @@ export function matKey(name: MaterialName, colour?: string | null): MatKey {
   return colour ? (`${name}|${colour}` as MatKey) : name;
 }
 
-export function resolveMaterial(lib: MaterialLibrary, key: MatKey): THREE.Material {
+export function resolveMaterial(lib: MaterialLibrary, key: MatKey, baked = false): THREE.Material {
   const i = key.indexOf('|');
-  if (i < 0) return lib.get(key as MaterialName);
-  return lib.tinted(key.slice(0, i) as MaterialName, key.slice(i + 1));
+  const name = (i < 0 ? key : key.slice(0, i)) as MaterialName;
+  const colour = i < 0 ? undefined : key.slice(i + 1);
+  // KB-I19/I20: geometry with a baked vertex shade uses the library's shade-reading variant (if it has one)
+  if (baked && lib.baked) return lib.baked(name, colour);
+  return colour === undefined ? lib.get(name) : lib.tinted(name, colour);
 }
 
 class Bucket {
   pos: number[] = [];
   nor: number[] = [];
   uv: number[] = [];
+  /** Raw per-vertex shade (rgb albedo multiplier + AO), 4 per vertex; only when the builder bakes. */
+  shade: number[] = [];
 }
+
+/**
+ * Per-vertex shade provider for the following primitives (KB-I19/I20): writes the vertex shade into `out` (already
+ * filled with the default: white, AO = soffit rule). `ny` is the face normal's height component (object space).
+ */
+export type ShadeFn = (p: P3, ny: number, out: Shade) => void;
+
+const _shade: Shade = [1, 1, 1, 1];
 
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
@@ -39,6 +53,27 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 export class GeoBuilder {
   buckets = new Map<MatKey, Bucket>();
+  /** Write a per-vertex shade attribute (KB-I19/I20) and use the library's `baked()` materials. */
+  readonly bake: boolean;
+  /** Current per-vertex shade provider (null: default = AO soffit rule, no tint). */
+  shadeFn: ShadeFn | null = null;
+  /** Albedo multiplier per material name (per-building limewash / roof jitter), applied on top of `shadeFn`. */
+  tints = new Map<string, [number, number, number]>();
+
+  constructor(opts: { bake?: boolean } = {}) {
+    this.bake = opts.bake ?? false;
+  }
+
+  /** Run `draw` with `fn` as the shade provider (restores the previous one). */
+  withShade(fn: ShadeFn | null, draw: () => void): void {
+    const prev = this.shadeFn;
+    this.shadeFn = fn;
+    try {
+      draw();
+    } finally {
+      this.shadeFn = prev;
+    }
+  }
 
   private bucket(k: MatKey): Bucket {
     let b = this.buckets.get(k);
@@ -49,8 +84,11 @@ export class GeoBuilder {
     return b;
   }
 
-  /** Triangle in [s,t,h]; counter-clockwise seen from the front (outside). Optional smooth normals (object space). */
-  tri(k: MatKey, p0: P3, p1: P3, p2: P3, normals?: [THREE.Vector3, THREE.Vector3, THREE.Vector3]): void {
+  /**
+   * Triangle in [s,t,h]; counter-clockwise seen from the front (outside). Optional smooth normals (object space) and
+   * an explicit ambient occlusion per vertex (overrides the shade provider's AO).
+   */
+  tri(k: MatKey, p0: P3, p1: P3, p2: P3, normals?: [THREE.Vector3, THREE.Vector3, THREE.Vector3] | null, ao?: readonly [number, number, number]): void {
     const q0 = [p0[0], p0[2], -p0[1]];
     const q1 = [p1[0], p1[2], -p1[1]];
     const q2 = [p2[0], p2[2], -p2[1]];
@@ -79,16 +117,34 @@ export class GeoBuilder {
       const v = q[0] * _v.x + q[1] * _v.y + q[2] * _v.z;
       b.uv.push(u, v);
     }
+    if (this.bake) {
+      const ny = _n.y;
+      const tint = this.tints.get(k.split('|')[0]);
+      for (let i = 0; i < 3; i++) {
+        _shade[0] = 1;
+        _shade[1] = 1;
+        _shade[2] = 1;
+        _shade[3] = ny < -0.5 ? AO.soffit : 1;
+        if (this.shadeFn) this.shadeFn(i === 0 ? p0 : i === 1 ? p1 : p2, ny, _shade);
+        if (ao) _shade[3] = ao[i];
+        if (tint) {
+          _shade[0] *= tint[0];
+          _shade[1] *= tint[1];
+          _shade[2] *= tint[2];
+        }
+        b.shade.push(_shade[0], _shade[1], _shade[2], _shade[3]);
+      }
+    }
   }
 
-  /** Quad p0 p1 p2 p3 (counter-clockwise from the front). */
-  quad(k: MatKey, p0: P3, p1: P3, p2: P3, p3: P3): void {
-    this.tri(k, p0, p1, p2);
-    this.tri(k, p0, p2, p3);
+  /** Quad p0 p1 p2 p3 (counter-clockwise from the front), optional AO per corner. */
+  quad(k: MatKey, p0: P3, p1: P3, p2: P3, p3: P3, ao?: readonly [number, number, number, number]): void {
+    this.tri(k, p0, p1, p2, null, ao ? [ao[0], ao[1], ao[2]] : undefined);
+    this.tri(k, p0, p2, p3, null, ao ? [ao[0], ao[2], ao[3]] : undefined);
   }
 
-  /** Quad whose front faces `dir` ([s, t, h]); the winding is flipped if needed. */
-  quadFacing(k: MatKey, p0: P3, p1: P3, p2: P3, p3: P3, dir: P3): void {
+  /** Quad whose front faces `dir` ([s, t, h]); the winding is flipped if needed (AO per corner follows the corners). */
+  quadFacing(k: MatKey, p0: P3, p1: P3, p2: P3, p3: P3, dir: P3, ao?: readonly [number, number, number, number]): void {
     const ux = p1[0] - p0[0];
     const uy = p1[1] - p0[1];
     const uz = p1[2] - p0[2];
@@ -98,8 +154,8 @@ export class GeoBuilder {
     const nx = uy * vz - uz * vy;
     const ny = uz * vx - ux * vz;
     const nz = ux * vy - uy * vx;
-    if (nx * dir[0] + ny * dir[1] + nz * dir[2] >= 0) this.quad(k, p0, p1, p2, p3);
-    else this.quad(k, p3, p2, p1, p0);
+    if (nx * dir[0] + ny * dir[1] + nz * dir[2] >= 0) this.quad(k, p0, p1, p2, p3, ao);
+    else this.quad(k, p3, p2, p1, p0, ao ? [ao[3], ao[2], ao[1], ao[0]] : undefined);
   }
 
   /** Planar polygon (any orientation), triangulated in its own plane; `flip` reverses the facing. */
@@ -172,17 +228,21 @@ export class GeoBuilder {
    * Box oriented along a facade: `o` = point on the wall plane [s,t], `tan` = unit tangent, `nrm` = outward normal.
    * a0..a1 along tan, d0..d1 along nrm (outwards positive), h0..h1.
    */
-  orientedBox(k: MatKey, o: [number, number], tan: [number, number], nrm: [number, number], a0: number, a1: number, d0: number, d1: number, h0: number, h1: number, skipBack = false): void {
+  orientedBox(k: MatKey, o: [number, number], tan: [number, number], nrm: [number, number], a0: number, a1: number, d0: number, d1: number, h0: number, h1: number, skipBack = false, skip: 'none' | 'ends' | 'caps' = 'none'): void {
     const P = (a: number, d: number, h: number): P3 => [o[0] + tan[0] * a + nrm[0] * d, o[1] + tan[1] * a + nrm[1] * d, h];
     // front (outward)
     this.quad(k, P(a0, d1, h0), P(a1, d1, h0), P(a1, d1, h1), P(a0, d1, h1));
     if (!skipBack) this.quad(k, P(a1, d0, h0), P(a0, d0, h0), P(a0, d0, h1), P(a1, d0, h1));
-    // ends
-    this.quad(k, P(a1, d1, h0), P(a1, d0, h0), P(a1, d0, h1), P(a1, d1, h1));
-    this.quad(k, P(a0, d0, h0), P(a0, d1, h0), P(a0, d1, h1), P(a0, d0, h1));
-    // top + bottom
-    this.quad(k, P(a0, d1, h1), P(a1, d1, h1), P(a1, d0, h1), P(a0, d0, h1));
-    this.quad(k, P(a0, d0, h0), P(a1, d0, h0), P(a1, d1, h0), P(a0, d1, h0));
+    // ends (skip 'ends': hidden in a frame, e.g. horizontal glazing bars)
+    if (skip !== 'ends') {
+      this.quad(k, P(a1, d1, h0), P(a1, d0, h0), P(a1, d0, h1), P(a1, d1, h1));
+      this.quad(k, P(a0, d0, h0), P(a0, d1, h0), P(a0, d1, h1), P(a0, d0, h1));
+    }
+    // top + bottom (skip 'caps': vertical glazing bars)
+    if (skip !== 'caps') {
+      this.quad(k, P(a0, d1, h1), P(a1, d1, h1), P(a1, d0, h1), P(a0, d0, h1));
+      this.quad(k, P(a0, d0, h0), P(a1, d0, h0), P(a1, d1, h0), P(a0, d1, h0));
+    }
   }
 
   triangleCount(): number {
@@ -200,9 +260,14 @@ export class GeoBuilder {
       g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
       g.setAttribute('normal', new THREE.Float32BufferAttribute(b.nor, 3));
       g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
+      if (this.bake && b.shade.length === b.pos.length / 3 * 4) {
+        const sh = new Uint16Array(b.shade.length);
+        encodeShade(b.shade, sh);
+        g.setAttribute(SHADE_ATTRIBUTE, new THREE.BufferAttribute(sh, 4, true));
+      }
       g.computeBoundingBox();
       g.computeBoundingSphere();
-      const mat = resolveMaterial(lib, k);
+      const mat = resolveMaterial(lib, k, this.bake && !!g.attributes[SHADE_ATTRIBUTE]);
       const m = new THREE.Mesh(g, mat);
       const mname = k.split('|')[0];
       m.name = `${prefix}/${mname}`;

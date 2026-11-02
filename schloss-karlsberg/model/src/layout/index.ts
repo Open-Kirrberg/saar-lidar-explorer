@@ -10,3 +10,6 @@ export * from './stairs.ts';
 export * from './site.ts';
 export * from './building.ts';
 export * from './walls.ts';
+export * from './epoch.ts';
+export * from './garden.ts';
+export * from './rotunda.ts';

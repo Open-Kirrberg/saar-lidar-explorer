@@ -12,7 +12,7 @@
  * pitched: pitch) and `adjusted` + `notes` say so.
  */
 import type { RoofType } from '../spec.ts';
-import { ROOF } from './grammar.ts';
+import { GARDEN_DETAIL, ROOF } from './grammar.ts';
 
 const DEG = Math.PI / 180;
 
@@ -24,6 +24,8 @@ export interface RoofSectionInput {
   pitch_upper?: number;
   break_ratio?: number;
   dome_rise_ratio?: number;
+  /** Dome only: 2 = double-stepped dome with cornice and lantern (GARDEN_DETAIL.steppedDome); default 1. */
+  dome_tiers?: number;
   /** Target ridge (m DHHN2016). */
   ridge_h?: number;
   /** Solve the section to hit ridge_h (default true). */
@@ -47,6 +49,8 @@ export interface RoofSection {
   ridge_inset: number;
   /** Section outline [t, h] from t = −depth/2 (eaves) over the top to t = +depth/2 (eaves). */
   profile: [number, number][];
+  /** Dome only: number of tiers (2 = stepped dome; the profile is final, revolve it as is). */
+  tiers?: number;
   adjusted: boolean;
   notes: string[];
 }
@@ -89,6 +93,7 @@ export function roofSection(inp: RoofSectionInput): RoofSection {
       return flatResult(target ?? 0, 'mound');
     case 'dome': {
       const ratio = inp.dome_rise_ratio ?? ROOF.domeRiseRatio;
+      if ((inp.dome_tiers ?? 1) >= 2) return steppedDomeSection(d, e, ratio * d);
       let rise = ratio * d;
       if (target !== undefined && Math.abs(target - rise) > 0.05) {
         notes.push(`dome rise ${rise.toFixed(2)} m replaced by catalogue ridge (${target.toFixed(2)} m)`);
@@ -269,4 +274,72 @@ export function roofHeightAtInset(section: RoofSection, inset: number): number {
     if (t >= t0 && t <= t1 && t1 > t0) return h0 + ((t - t0) / (t1 - t0)) * (h1 - h0);
   }
   return section.ridge_h;
+}
+
+/**
+ * Double-stepped dome (GARDEN_DETAIL.steppedDome, KB-B87): drum-head cornice, lower tier, set-back ledge and riser,
+ * upper tier, lantern with a cap and a pointed spire. `rise` (ratio x diameter) scales the two tiers; the cornice and
+ * the lantern come on top. The profile runs from the eaves (t = −depth/2, the cornice projects beyond it) over the apex
+ * to +depth/2 and is final (no re-sampling); corners between tiers stay sharp in the revolved mesh.
+ */
+export function steppedDomeSection(d: number, e: number, rise: number): RoofSection {
+  const S = GARDEN_DETAIL.steppedDome;
+  const R = d / 2;
+  const left: [number, number][] = [];
+  const P = (r: number, h: number) => left.push([-r, h]);
+  // cornice: soffit out, fascia up, top back in
+  P(R, e);
+  P(R + S.cornice.overhang, e);
+  P(R + S.cornice.overhang, e + S.cornice.height);
+  const r1 = R - 0.04;
+  let z = e + S.cornice.height;
+  P(r1, z);
+  // lower tier: part of a quarter ellipse from r1 to endRadius · r1
+  const ellipse = (r0: number, rEnd: number, h: number, steps: number) => {
+    const t1 = Math.acos(Math.min(1, rEnd / r0));
+    const a = h / Math.sin(t1);
+    const z0 = z;
+    for (let i = 1; i <= steps; i++) {
+      const t = (i / steps) * t1;
+      P(r0 * Math.cos(t), z0 + a * Math.sin(t));
+    }
+    z = z0 + h;
+  };
+  ellipse(r1, S.tier1.endRadius * r1, S.tier1.rise * rise, 6);
+  // ledge and riser
+  const r2 = S.ledgeRadius * R;
+  P(r2, z);
+  z += S.riser * rise;
+  P(r2, z);
+  // upper tier up to the lantern
+  const rl = S.lantern.radius * R;
+  ellipse(r2, rl, S.tier2.rise * rise, 8);
+  // lantern, cap, spire
+  z += S.lantern.height;
+  P(rl, z);
+  P(rl + S.lantern.capOverhang, z);
+  z += S.lantern.capRise;
+  P(rl + S.lantern.capOverhang, z);
+  z += S.lantern.spire;
+  left.push([0, z]);
+  const right = left
+    .slice(0, -1)
+    .reverse()
+    .map(([t, h]): [number, number] => [-t, h]);
+  const total = z - e;
+  return {
+    type: 'dome',
+    depth: d,
+    eaves_h: e,
+    ridge_h: z,
+    rise: total,
+    pitch_lower: 90,
+    pitch_upper: 0,
+    deck_width: 0,
+    ridge_inset: R,
+    profile: [...left, ...right],
+    tiers: 2,
+    adjusted: false,
+    notes: [],
+  };
 }

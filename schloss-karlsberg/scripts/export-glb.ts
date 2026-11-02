@@ -129,7 +129,7 @@ async function writeGlb(obj: THREE.Object3D, file: string): Promise<{ bytes: num
 // ---------------------------------------------------------------- main
 const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const buildings = siteBuildings(spec, base).filter((b) => !only.length || only.includes(b.id));
-console.log(`[export] catalogue v${spec.version}: ${spec.buildings.filter(isPlaced).length} placed, exporting ${buildings.length}`);
+console.log(`[export] catalogue v${spec.version}: ${spec.buildings.filter(isPlaced).length} placed, scene year ${base.options.year} (epoch filter), exporting ${buildings.length}`);
 
 interface IndexEntry {
   id: string;

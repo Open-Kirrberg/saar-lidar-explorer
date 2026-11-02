@@ -313,3 +313,54 @@ export function footprintsGeoJson(items: { id: string; name_de: string; confiden
     }),
   };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Position quantisation (KB-I62): int16 positions on one global grid + a node-local translation/scale
+// ---------------------------------------------------------------------------------------------
+
+/** Grid step of the quantised light-layer positions (m): 1/64 m → max rounding error 7.8 mm (≤ 1 cm). */
+export const POSITION_STEP = 1 / 64;
+/** Largest error a quantised position may have (m); nodes that cannot meet it stay float32. */
+export const POSITION_MAX_ERROR = 0.01;
+
+export interface QuantisedPositions {
+  /** Non-normalised int16 VEC3 (KHR_mesh_quantization `SHORT`); world = offset + step · q. */
+  q: Int16Array;
+  /** Node translation (a multiple of `step`, so every node snaps to the same global grid). */
+  offset: [number, number, number];
+  /** Uniform node scale = grid step (m). */
+  step: number;
+  /** Largest |world − original| over all components (m). */
+  maxError: number;
+}
+
+/**
+ * Quantise local-frame positions to int16 on the grid `k · step` (k integer, shared by all nodes, so vertices that
+ * coincide before export still coincide after it and abutting nodes cannot crack apart). The node offset is the
+ * grid point nearest the bbox centre. Returns null when the node is too large for int16 at `step` (± 32767 steps)
+ * or the error would exceed `maxError`; such a node keeps float32 positions.
+ */
+export function quantisePositions(pos: ArrayLike<number>, step = POSITION_STEP, maxError = POSITION_MAX_ERROR): QuantisedPositions | null {
+  const n = pos.length / 3;
+  if (!n) return null;
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < pos.length; i += 3)
+    for (let k = 0; k < 3; k++) {
+      lo[k] = Math.min(lo[k], pos[i + k]);
+      hi[k] = Math.max(hi[k], pos[i + k]);
+    }
+  const offset = [0, 1, 2].map((k) => Math.round((lo[k] + hi[k]) / 2 / step) * step) as [number, number, number];
+  const q = new Int16Array(n * 3);
+  let err = 0;
+  for (let i = 0; i < pos.length; i += 3)
+    for (let k = 0; k < 3; k++) {
+      const v = Math.round((pos[i + k] - offset[k]) / step);
+      if (v < -32767 || v > 32767) return null;
+      q[i + k] = v;
+      err = Math.max(err, Math.abs(offset[k] + v * step - pos[i + k]));
+    }
+  // float32 storage of the decoded value (three keeps positions in float32) adds < 0.1 mm at |x| < 3 km
+  if (err > maxError) return null;
+  return { q, offset, step, maxError: err };
+}

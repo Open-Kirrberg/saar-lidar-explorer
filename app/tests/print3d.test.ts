@@ -180,6 +180,25 @@ describe('parsePrintIndex', () => {
   });
 });
 
+describe('slicer recommendation', () => {
+  it('parses the optional slicer block and recommended grams; totals only when every tile has one', () => {
+    const rec = (id: string, g: number) => ({ ...tile(id), filament_g: { solid: 1600, typical: 400, recommended: g } });
+    const slicer = { note_de: 'Filament sparen: Füllmuster „Blitz“ …', savingPct: [27, 55], settings: { wall_loops: 3 } };
+    const { value } = parsePrintIndex(index({ slicer }, [rec('E380_N5460', 250), rec('E378_N5462', 200)]));
+    expect(value.slicer).toEqual({ note_de: slicer.note_de, savingPct: [27, 55] });
+    expect(value.tiles.map((t) => t.filament_g.recommended)).toEqual([200, 250]);
+    const tt = printTotals(value.series, value.tiles);
+    expect([tt.gramsTypical, tt.gramsRecommended]).toEqual([800, 450]);
+    const mixed = parsePrintIndex(index({}, [rec('E380_N5460', 250), tile('E378_N5462')])).value;
+    expect(mixed.slicer).toBeUndefined();
+    expect(printTotals(mixed.series, mixed.tiles).gramsRecommended).toBeNull();
+    expect(printTotals(mixed.series, []).gramsRecommended).toBeNull();
+    for (const bad of [{ note_de: '' }, { note_de: 3 }, 'x', { savingPct: [1, 2] }])
+      expect(parsePrintIndex(index({ slicer: bad })).value.slicer).toBeUndefined();
+    expect(parsePrintIndex(index({ slicer: { note_de: 'n', savingPct: [1] } })).value.slicer).toEqual({ note_de: 'n' });
+  });
+});
+
 describe('safeRelPath', () => {
   it('allows plain relative paths only', () => {
     for (const ok of ['a.3mf', 'keys/bowtie_key.stl', 'printer/sle-p1s-0.4-250mm.json', 'E382.5_N5465.5.png']) expect(safeRelPath(ok)).toBe(true);

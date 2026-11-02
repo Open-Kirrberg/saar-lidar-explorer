@@ -8,10 +8,12 @@ import { upgradeBuilding, upgradeV1 } from '../../model/src/catalogue.ts';
 import { gridFrame } from '../../model/src/frame.ts';
 import { centroid, openRing } from '../../model/src/layout/geom.ts';
 import type { Building, EN, SiteSpec } from '../../model/src/spec.ts';
-import { applyEdits, carlsbergerHofRanges, grilleBuilding, newBuildings, REMOVED_V1, type BuildCtx } from './buildings.ts';
+import { applyEdits, REMOVED_V1, type BuildCtx } from './buildings.ts';
+import { carlsbergerHofRanges, grilleBuilding, newBuildings, newUnplaced } from './newBuildings.ts';
 import { loadDtmSamples, loadLidarFeatures, loadLp06, r2, ringArea, ringHash, ROOT, type DtmSample } from './common.ts';
 import { applyProgrammes } from './programme.ts';
 import { applyTerrain, LEVEL_FROM_DTM } from './terrain.ts';
+import { landcoverAreas } from './landcover.ts';
 
 /** Buildings whose base_h is the DTM median under the (new) footprint. */
 const BASE_FROM_DTM = new Set(['KB-B23', 'KB-B24', 'KB-B25', 'KB-B26', 'KB-B30', 'KB-B30b', 'KB-B30c', 'KB-B30d']);
@@ -25,6 +27,9 @@ export interface PrepareResult {
 export function readV1(): SiteSpec {
   return JSON.parse(readFileSync(resolve(ROOT, 'model/catalogue.v1.json'), 'utf8')) as SiteSpec;
 }
+
+/** v1 buildings whose v2 edit writes facade sides/portals itself (KB-I32: KB-B28 redrawn as the Pavillon zu Carlsberg). */
+const V2_FACADE = new Set(['KB-B28']);
 
 /** Remove the fields upgradeV1 derives from free text so they are re-derived from the v2 text. */
 function resetDerived(b: Building): void {
@@ -49,7 +54,7 @@ export function buildV2(opts: { dtm?: Map<string, DtmSample> } = {}): PrepareRes
   const ctx: BuildCtx = { grid, lp06, b10c: centroid(openRing(b10.footprint!)) as EN };
   const v1Ids = new Set(spec.buildings.map((b) => b.id));
   let buildings = applyEdits(spec.buildings, ctx);
-  buildings.push(grilleBuilding(ctx), ...newBuildings(ctx), ...carlsbergerHofRanges(ctx));
+  buildings.push(grilleBuilding(ctx), ...newBuildings(ctx), ...carlsbergerHofRanges(ctx), ...newUnplaced());
   const order = (id: string) => (id.startsWith('KB') ? 0 : id.startsWith('KL') ? 1 : 2);
   buildings.sort((a, b) => order(a.id) - order(b.id) || a.id.localeCompare(b.id, 'en', { numeric: true }));
   spec.buildings = buildings;
@@ -57,7 +62,7 @@ export function buildV2(opts: { dtm?: Map<string, DtmSample> } = {}): PrepareRes
   // re-derive v2 structure from the (edited) v1 fields
   buildings = buildings.map((b) => {
     if (b.placement === 'unplaced') return b;
-    if (v1Ids.has(b.id)) resetDerived(b);
+    if (v1Ids.has(b.id) && !V2_FACADE.has(b.id)) resetDerived(b);
     return upgradeBuilding(b, spec);
   });
   spec.buildings = buildings;
@@ -110,9 +115,17 @@ export function buildV2(opts: { dtm?: Map<string, DtmSample> } = {}): PrepareRes
     ...spec.defaults,
     time_slice: 'summer 1789',
     roofs: 'palace group slate-blue (slate), service buildings red tile [D PV 1791]',
+    // KB-I15 palette (research/09 §3.7): slate D PV "blue"; members painted render D-> Koblenz; shutters D-> Baunetz + HMS / N
+    members: '#B9B8B2',
+    slate: '#4A525C',
+    shutters: '#5F6F7A',
+    shutters_note: 'court buildings and court-town ranges blue-grey #5F6F7A [D-> Baunetz; HMS]; farm buildings green #3F5A3A, stables oxblood #6E2E26 [N] (per building in facade.shutter_colour)',
+    iron: '#2E3439',
     eaves_palace: 356.0,
   };
   spec.open_questions = OPEN_QUESTIONS;
+  // KB-I09: 1789 land cover polygons (top-level `landcover`, read by scripts/prepare-terrain.py)
+  Object.assign(spec, { landcover: landcoverAreas(grid) });
   return { spec, dtmUsed, dtmMissing };
 }
 
@@ -135,8 +148,9 @@ export const OPEN_QUESTIONS = [
   'Gallery level and form (P10): 8 m range on the KB-07 scarp at 347.6 with a square end pavilion (LP06) vs a low HMS range ending in a rotunda.',
   'Mansard on the Sammlungsflügel and Küchenbau (not depicted in LC/PL) and the CdL centre pavilion height (HMS 366.2 + lantern).',
   'Ehrenhof grille position (court mouth u -34 or nearer the CdL) and the forecourt (LDA 2006 report).',
-  'Orangerie upper tier: courtiers\' rooms (PV b.) over the end bays vs a fully double-height hall; KB-B13 rotunda not in LP06 (temporary 1785?).',
-  'Unplaced: Bienenhaus, Ananashaus, Chinoiserie, Lusthaus des Prinzen, Lustgarten der Herzogin, Monbijou, Kirchturm, Kapelle/Ballhaus/Apotheke; the chestnut avenue (PV u.).',
+  'Orangerie upper tier: courtiers\' rooms (PV b.) over the end bays vs a fully double-height hall; KB-B13 rotunda = the Dec 1785 timber fair building (D T1/T5/T6), epoch 1785 only (KB-I03); what the LiDAR rings KB-34 are (its footprint or a later stone start) is open.',
+  'Unplaced: Bienenhaus, Ananashaus, Chinoiserie, Lusthaus des Prinzen (candidate: Petri Pavilion 3), Lustgarten der Herzogin (candidate: TF-08), Kapelle/Apotheke (Ballhaus = KB-B03 Tanzsaal and/or Komödienhaus floor I); the chestnut avenue (PV u.).',
+  'Removed from the site list (KB-I02, research/10 §b.6): UP-11 Schlösschen Monbijou is a separate estate (1797 damage inventory T8); UP-12 Kirchturm is the tower of the Protestant parish church in Homburg (Weber 1954). Neither stood on the Karlsberg.',
   'Großes/Kleines Bassin = KL-13/KL-11 (low); Carlsbergweiher larger in LP06 than today.',
   'Karlslust lies S of N 5465000, outside the explorer karlsberg AOI: extend the AOI south to ~5464550 (the cascade geometry is kept regardless).',
 ];

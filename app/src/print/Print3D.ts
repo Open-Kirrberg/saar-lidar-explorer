@@ -177,11 +177,12 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
     </div>
     <p class="sle-print-totals" data-k="totals" aria-live="polite"></p>
     <div class="sle-print-tablewrap"><table class="sle-print-table">
-      <thead><tr><th scope="col"><span class="sle-sr">Vorschau</span></th><th scope="col">Kachel</th><th scope="col" title="Modellhöhe über der Druckplatte">Höhe mm</th><th scope="col" title="geschätztes Filament (typisch, ±25 %)">≈ g</th><th scope="col">Datei</th></tr></thead>
+      <thead><tr><th scope="col"><span class="sle-sr">Vorschau</span></th><th scope="col">Kachel</th><th scope="col" title="Modellhöhe über der Druckplatte">Höhe mm</th><th scope="col" title="geschätztes Filament (mit den empfohlenen Slicer-Einstellungen, falls angegeben; ±10 %)">≈ g</th><th scope="col">Datei</th></tr></thead>
       <tbody data-k="rows"></tbody>
     </table></div>
     <div class="sle-print-detail" data-k="detail" hidden></div>
     <div class="sle-print-files" data-k="files"></div>
+    <p class="sle-small sle-print-slicer" data-k="slicer" hidden></p>
     <p class="sle-dim sle-small" data-k="printer"></p>
     <p class="sle-dim sle-small" data-k="attr"></p>`;
   const q = <T extends HTMLElement = HTMLElement>(sel: string) => sec.body.querySelector<T>(sel)!;
@@ -377,8 +378,12 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
       (s.datumMode === 'set' || s.datum_m === null ? `Bezugshöhe je Set + ${formatNum(s.base_mm, 0)} mm` : `Basis ${formatNum(s.datum_m, 0)} m NHN + ${formatNum(s.base_mm, 0)} mm`);
     const tt = printTotals(s, current.tiles);
     const totals = q('[data-k=totals]');
+    const mat = current.filament?.material ?? 'PLA';
     totals.textContent = tt.tiles
-      ? `${tt.tiles} Kachel${tt.tiles === 1 ? '' : 'n'} · ≈ ${formatGrams(tt.gramsTypical)} Filament (${current.filament?.material ?? 'PLA'}, typisch ±25 %) · ` +
+      ? `${tt.tiles} Kachel${tt.tiles === 1 ? '' : 'n'} · ` +
+        (tt.gramsRecommended !== null
+          ? `≈ ${formatGrams(tt.gramsRecommended)} Filament (${mat}, empfohlene Einstellungen; Standardprozess ≈ ${formatGrams(tt.gramsTypical)}; ±10 %) · `
+          : `≈ ${formatGrams(tt.gramsTypical)} Filament (${mat}, typisch ±10 %) · `) +
         `zusammengesetzt ${formatNum(tt.widthCm)} × ${formatNum(tt.heightCm)} cm${tt.blocks > 1 ? ` (umschließendes Rechteck, ${tt.blocks} Teile)` : ''}` +
         (tt.datums.length > 1 ? ` · ${tt.datums.length} Bezugshöhen (${tt.datums.map((d) => formatNum(d, 0)).join(', ')} m) – passen nur innerhalb gleicher Höhe zusammen` : '') +
         (s.connectors.enabled ? ` · ${tt.keys} Verbinder` : '')
@@ -422,6 +427,9 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
           .join(' · ')}`,
       ).classList.add('sle-dim');
     }
+    const slicer = q('[data-k=slicer]');
+    slicer.textContent = current.slicer?.note_de ?? '';
+    slicer.hidden = !current.slicer;
     q('[data-k=printer]').textContent = [current.printer ? `Drucker: ${current.printer}.` : '', current.printerProfile?.note_de ?? ''].filter(Boolean).join(' ');
     q('[data-k=attr]').textContent = current.attribution ? `Quellen: ${current.attribution.split(';').map((x) => x.trim()).filter(Boolean).join(' · ')}` : '';
 
@@ -458,8 +466,8 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
     if (t.h_m) tdZ.title = `Gelände ${formatNum(t.h_m.min)}–${formatNum(t.h_m.max)} m NHN`;
     const tdG = document.createElement('td');
     tdG.className = 'num';
-    tdG.textContent = Math.round(t.filament_g.typical).toLocaleString('de-DE');
-    tdG.title = `typisch ${formatGrams(t.filament_g.typical)}, massiv ${formatGrams(t.filament_g.solid)}`;
+    tdG.textContent = Math.round(t.filament_g.recommended ?? t.filament_g.typical).toLocaleString('de-DE');
+    tdG.title = filamentText(t);
     const tdF = document.createElement('td');
     tdF.className = 'sle-print-dl';
     const pl = current.printerProfile?.placement_mm;
@@ -476,6 +484,13 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
     return tr;
   }
 
+  function filamentText(t: PrintTile): string {
+    const f = t.filament_g;
+    return f.recommended !== undefined
+      ? `≈ ${formatGrams(f.recommended)} mit empfohlenen Einstellungen (Standardprozess ≈ ${formatGrams(f.typical)}, massiv ${formatGrams(f.solid)})`
+      : `≈ ${formatGrams(f.typical)} (massiv ${formatGrams(f.solid)})`;
+  }
+
   function renderDetail(): void {
     for (const tr of rows.querySelectorAll<HTMLElement>('tr[data-id]')) tr.classList.toggle('on', tr.dataset.id === selected);
     const c = cells.find((x) => x.id === selected) ?? null;
@@ -490,7 +505,7 @@ function setup(ctx: AppContext, series: Map<string, PrintIndex>, root: string, s
         `${t.id}: Modell ${formatNum(t.z_mm.min)}–${formatNum(t.z_mm.max)} mm hoch` +
         (t.h_m ? `, Gelände ${formatNum(t.h_m.min, 0)}–${formatNum(t.h_m.max, 0)} m NHN` : '') +
         (tileDatum(current.series, t) !== null ? `, Bezugshöhe ${formatNum(tileDatum(current.series, t)!, 0)} m` : '') +
-        `, ≈ ${formatGrams(t.filament_g.typical)} (massiv ${formatGrams(t.filament_g.solid)})` +
+        `, ${filamentText(t)}` +
         (t.clampedVertices ? `, ${t.clampedVertices} Punkte unter der Basis angehoben` : '') +
         (t.watertight === false ? ' – Achtung: Netz nicht geschlossen' : '');
       detail.appendChild(p);
