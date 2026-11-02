@@ -1,0 +1,15 @@
+{
+  "note": "Measurement boxes in the palace grid (u east along the Ehrenhof axis, v north; origin E 382226 / N 5466120, catalogue.json palace_grid), read from work/renders/<run>_uv_*.png. axis = long axis of the building. ground: 'court' (344.8 m) or a number (m DHHN2016) or 'fit'. roof: mansard | hip. cross = band along the long axis used for the median cross-profile; long = band across the axis for the long profile.",
+  "buildings": {
+    "Suedfluegel": {"catalogue": "KB-B02", "box": [-35, 40, -44, -15], "axis": "u", "cross": [-25, 18], "long": [-34, -26], "ground": "court", "roof": "mansard"},
+    "Nordfluegel": {"catalogue": "KB-B03", "box": [-35, 40, 18, 46], "axis": "u", "cross": [-25, 18], "long": [28, 36], "ground": "court", "roof": "mansard"},
+    "Corps de logis (Seitenteile)": {"catalogue": "KB-B01", "box": [20, 52, -20, 23], "axis": "v", "cross": [-19, -9], "cross2": [12, 21], "long": [29, 37], "ground": "court", "roof": "mansard"},
+    "Corps de logis (Mittelbau)": {"catalogue": "KB-B01", "box": [20, 52, -9, 11], "axis": "v", "cross": [-5, 7], "long": [29, 37], "ground": "court", "roof": "mansard", "spire": true},
+    "Sammlungsfluegel": {"catalogue": "KB-B04", "box": [-40, -8, 41, 108], "axis": "v", "cross": [52, 95], "long": [-31, -24], "ground": "court", "roof": "mansard"},
+    "Kuechenbau": {"catalogue": "KB-B05", "box": [14, 40, 42, 92], "axis": "v", "cross": [52, 80], "long": [22, 27], "ground": "court", "roof": "mansard"},
+    "Galerie": {"catalogue": "KB-B06", "box": [-16, 26, 84, 104], "axis": "u", "cross": [-10, 15], "long": [91, 96], "ground": "fit", "roof": "hip"},
+    "Orangerie (Hauptfluegel)": {"catalogue": "KB-B10", "box": [-24, 8, -200, -106], "axis": "v", "cross": [-178, -128], "long": [-13, -7], "ground": 340.8, "roof": "hip", "spire": true},
+    "Orangerie (Nordfluegel)": {"catalogue": "KB-B11", "box": [-6, 36, -128, -104], "axis": "u", "cross": [5, 25], "long": [-119, -114], "ground": 340.8, "roof": "hip"},
+    "Orangerie (Suedfluegel)": {"catalogue": "KB-B12", "box": [-6, 30, -200, -178], "axis": "u", "cross": [0, 12], "long": [-192, -187], "ground": 340.8, "roof": "hip"}
+  }
+}

@@ -1,0 +1,21 @@
+/* F15 Verdachtsflächen card + 3D pin */
+.sle-cand-warn { margin: 4px 0 6px; padding: 4px 6px; font-size: 11px; line-height: 1.35; background: rgba(255, 176, 0, 0.12); border-left: 3px solid #ffb000; }
+.sle-cand-chips { display: flex; flex-wrap: wrap; gap: 3px 10px; margin: 4px 0; }
+.sle-cand-chip { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+.sle-cand-chip i, .sle-cand-head i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #111; }
+.sle-cand-score input[type=range] { flex: 1; min-width: 80px; }
+.sle-cand-score [data-k=minv] { width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+.sle-cand-detail { margin: 6px 0; padding: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 3px; }
+.sle-cand-head { display: flex; align-items: center; gap: 6px; }
+.sle-cand-reasons { margin: 4px 0; font-size: 11px; }
+.sle-cand-review .sle-btn.on { background: var(--ui-accent); color: #222; }
+.sle-cand-list { max-height: 26vh; }
+.sle-cand-row { display: flex; align-items: center; gap: 6px; width: 100%; }
+.sle-cand-st { font-size: 10px; color: var(--ui-dim); }
+.sle-cand-st.confirmed { color: #7ddc8a; }
+.sle-cand-st.rejected { color: #ff8f80; }
+.sle-cand-st.unsure { color: #ffd27a; }
+.sle-pin.cand .sle-pin-txt { background: rgba(20, 20, 24, 0.85); }
+#sle-candidates kbd { font: inherit; background: rgba(255, 255, 255, 0.15); border-radius: 3px; padding: 0 4px; }
+.sle-cand-offer { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding: 4px 6px; font-size: 11px; border-left: 3px solid #ff8f80; background: rgba(255, 143, 128, 0.1); }
+.sle-cand-offer .sle-btn.danger { border-color: #ff8f80; color: #ffb4a8; }

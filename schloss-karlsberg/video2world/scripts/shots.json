@@ -1,0 +1,28 @@
+{
+  "note": "Frame extraction plan for Object Capture. Times = source PTS (s). masks = boxes painted mid-grey before reconstruction, in normalised image coords [x0,y0,x1,y1] (0..1, origin top-left), active for source times [t0,t1]. Derived from frame_selection.json + visual check of 1-fps contact sheets.",
+  "video": "input/karlsberg_1789_hms_2160p.webm",
+  "shots": {
+    "S04": {"t": [18.6, 28.9], "fps": 5, "masks": [
+      {"t": [18.9, 23.0], "box": [0.18, 0.60, 0.84, 0.84], "what": "centre title 'Zerstoert durch ... 1793'"},
+      {"t": [25.2, 28.95], "box": [0.34, 0.06, 0.66, 0.22], "what": "label 'Kuechenbau' (leader line left)"}
+    ]},
+    "S06": {"t": [34.15, 36.95], "fps": 20, "masks": [
+      {"t": [34.0, 37.0], "box": [0.0, 0.755, 0.88, 1.0], "what": "label 'Sammlungsfluegel ...'"}
+    ]},
+    "S08": {"t": [39.6, 42.2], "fps": 8, "masks": [
+      {"t": [39.5, 42.3], "box": [0.0, 0.0, 1.0, 0.06], "what": "sky/horizon"}
+    ]},
+    "S09": {"t": [42.3, 47.5], "fps": 6, "masks": [
+      {"t": [42.2, 47.6], "box": [0.0, 0.77, 0.67, 1.0], "what": "label 'Orangerie ...'"},
+      {"t": [42.2, 47.6], "box": [0.0, 0.0, 1.0, 0.05], "what": "sky/horizon"}
+    ]},
+    "S23": {"t": [100.9, 116.5], "fps": 3, "masks": [
+      {"t": [100.6, 108.2], "box": [0.0, 0.0, 1.0, 0.37], "what": "sun/sky + label 'Bildergalerie ...'"},
+      {"t": [108.2, 113.5], "box": [0.0, 0.0, 1.0, 0.24], "what": "label 'Blick in den Englischen Garten ...' + haze"},
+      {"t": [113.5, 116.7], "box": [0.0, 0.0, 1.0, 0.12], "what": "haze band"}
+    ]}
+  },
+  "combined": {
+    "CORE_DAY": ["S04", "S06", "S08", "S09"]
+  }
+}

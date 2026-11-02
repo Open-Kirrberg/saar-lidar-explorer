@@ -1,0 +1,350 @@
+{
+  "version": 1,
+  "generated": "2026-11-01",
+  "source": "Poly Haven (https://polyhaven.com), API https://api.polyhaven.com/files/<asset>",
+  "licence": "CC0 1.0 Universal (public domain dedication), see https://polyhaven.com/license",
+  "resolution": "2k",
+  "format": "jpg",
+  "dir": "viewer/public/textures/<name>/ (git-ignored; run scripts/fetch-textures.sh)",
+  "sets": [
+    {
+      "name": "lime_plaster",
+      "asset": "painted_plaster_wall",
+      "page": "https://polyhaven.com/a/painted_plaster_wall",
+      "title": "Painted Plaster Wall",
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "licence": "CC0",
+      "real_size_m": [
+        2.0,
+        2.0
+      ],
+      "use": "Lime render (Kalkputz), walls; tint to #ECE8DF / #E8DFC8 in the material",
+      "files": [
+        {
+          "map": "diff",
+          "role": "color (sRGB)",
+          "file": "diff.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/painted_plaster_wall/painted_plaster_wall_diff_2k.jpg",
+          "md5": "32f4f4e5ded7d20e55e337004d0d9691",
+          "bytes": 3132937
+        },
+        {
+          "map": "nor_gl",
+          "role": "normal (OpenGL, +Y up; three.js convention)",
+          "file": "nor_gl.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/painted_plaster_wall/painted_plaster_wall_nor_gl_2k.jpg",
+          "md5": "18faf9f7949aefdb3ae7cef7195cba04",
+          "bytes": 4048392
+        },
+        {
+          "map": "arm",
+          "role": "packed AO (R) / roughness (G) / metalness (B), linear",
+          "file": "arm.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/painted_plaster_wall/painted_plaster_wall_arm_2k.jpg",
+          "md5": "b66f912016257faa7e71a1530e387545",
+          "bytes": 2159906
+        }
+      ],
+      "bytes": 9341235
+    },
+    {
+      "name": "slate_roof",
+      "asset": "roof_slates_03",
+      "page": "https://polyhaven.com/a/roof_slates_03",
+      "title": "Roof Slates 03",
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "licence": "CC0",
+      "real_size_m": [
+        3.0,
+        3.0
+      ],
+      "use": "Slate roof (Schiefer), rectangular cover: palace roofs",
+      "files": [
+        {
+          "map": "diff",
+          "role": "color (sRGB)",
+          "file": "diff.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_03/roof_slates_03_diff_2k.jpg",
+          "md5": "ac4940aeb369dd8c8919d3233cb42023",
+          "bytes": 2083015
+        },
+        {
+          "map": "nor_gl",
+          "role": "normal (OpenGL, +Y up; three.js convention)",
+          "file": "nor_gl.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_03/roof_slates_03_nor_gl_2k.jpg",
+          "md5": "3d52d34312b0e44096ce0db7ad9ee3d2",
+          "bytes": 2741713
+        },
+        {
+          "map": "arm",
+          "role": "packed AO (R) / roughness (G) / metalness (B), linear",
+          "file": "arm.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/roof_slates_03/roof_slates_03_arm_2k.jpg",
+          "md5": "bd5ccc76e0a5be82e53d7fb371128395",
+          "bytes": 3128318
+        }
+      ],
+      "bytes": 7953046
+    },
+    {
+      "name": "clay_tile_roof",
+      "asset": "ceramic_roof_01",
+      "page": "https://polyhaven.com/a/ceramic_roof_01",
+      "title": "Ceramic Roof 01",
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "licence": "CC0",
+      "real_size_m": [
+        3.5,
+        3.5
+      ],
+      "use": "Clay plain tiles with rounded tails (Biberschwanz type): Nutzbauten, stables, farm",
+      "files": [
+        {
+          "map": "diff",
+          "role": "color (sRGB)",
+          "file": "diff.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/ceramic_roof_01/ceramic_roof_01_diff_2k.jpg",
+          "md5": "9daaf218184c01744fa73f47d0ee1b80",
+          "bytes": 1718697
+        },
+        {
+          "map": "nor_gl",
+          "role": "normal (OpenGL, +Y up; three.js convention)",
+          "file": "nor_gl.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/ceramic_roof_01/ceramic_roof_01_nor_gl_2k.jpg",
+          "md5": "01190556c4f09d7a49fe89317b11458d",
+          "bytes": 2357322
+        },
+        {
+          "map": "arm",
+          "role": "packed AO (R) / roughness (G) / metalness (B), linear",
+          "file": "arm.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/ceramic_roof_01/ceramic_roof_01_arm_2k.jpg",
+          "md5": "ea9afca0981a21f32a29e1717d3bace5",
+          "bytes": 584982
+        }
+      ],
+      "bytes": 4661001
+    },
+    {
+      "name": "sandstone_ashlar",
+      "asset": "sandstone_blocks_08",
+      "page": "https://polyhaven.com/a/sandstone_blocks_08",
+      "title": "Sandstone Blocks 08",
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "licence": "CC0",
+      "real_size_m": [
+        3.0,
+        3.0
+      ],
+      "use": "Sandstone ashlar (Quader): plinths, dressings, terrace walls; tint red #A65E4A or grey #BDBAB2",
+      "files": [
+        {
+          "map": "diff",
+          "role": "color (sRGB)",
+          "file": "diff.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/sandstone_blocks_08/sandstone_blocks_08_diff_2k.jpg",
+          "md5": "2bd2a87974f1870fad58e25da35ed706",
+          "bytes": 1129500
+        },
+        {
+          "map": "nor_gl",
+          "role": "normal (OpenGL, +Y up; three.js convention)",
+          "file": "nor_gl.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/sandstone_blocks_08/sandstone_blocks_08_nor_gl_2k.jpg",
+          "md5": "5156759065d1550ef60475c46611b89b",
+          "bytes": 954422
+        },
+        {
+          "map": "arm",
+          "role": "packed AO (R) / roughness (G) / metalness (B), linear",
+          "file": "arm.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/sandstone_blocks_08/sandstone_blocks_08_arm_2k.jpg",
+          "md5": "a8eb587e6eea805266bc5e23401b5d7c",
+          "bytes": 310135
+        }
+      ],
+      "bytes": 2394057
+    },
+    {
+      "name": "sandstone_flags",
+      "asset": "red_sandstone_pavement",
+      "page": "https://polyhaven.com/a/red_sandstone_pavement",
+      "title": "Red Sandstone Pavement",
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "licence": "CC0",
+      "real_size_m": [
+        2.15,
+        2.15
+      ],
+      "use": "Red sandstone floor flags: vestibule, stair hall, passages",
+      "files": [
+        {
+          "map": "diff",
+          "role": "color (sRGB)",
+          "file": "diff.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/red_sandstone_pavement/red_sandstone_pavement_diff_2k.jpg",
+          "md5": "a1259b901bce5c5b428ca1fdbb5c8ac7",
+          "bytes": 2722687
+        },
+        {
+          "map": "nor_gl",
+          "role": "normal (OpenGL, +Y up; three.js convention)",
+          "file": "nor_gl.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/red_sandstone_pavement/red_sandstone_pavement_nor_gl_2k.jpg",
+          "md5": "331f734509e5354c74012364d1c19faa",
+          "bytes": 3573918
+        },
+        {
+          "map": "arm",
+          "role": "packed AO (R) / roughness (G) / metalness (B), linear",
+          "file": "arm.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/red_sandstone_pavement/red_sandstone_pavement_arm_2k.jpg",
+          "md5": "39b7314228c5066f0b9342502d69b769",
+          "bytes": 2354240
+        }
+      ],
+      "bytes": 8650845
+    },
+    {
+      "name": "parquet",
+      "asset": "diagonal_parquet",
+      "page": "https://polyhaven.com/a/diagonal_parquet",
+      "title": "Diagonal Parquet",
+      "authors": {
+        "Jenelle van Heerden": "Processing",
+        "Sergej Majboroda": "Photography"
+      },
+      "licence": "CC0",
+      "real_size_m": [
+        2.36,
+        2.36
+      ],
+      "use": "Oak parquet laid diagonally (stand-in for Tafelparkett): state rooms",
+      "files": [
+        {
+          "map": "diff",
+          "role": "color (sRGB)",
+          "file": "diff.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/diagonal_parquet/diagonal_parquet_diff_2k.jpg",
+          "md5": "0a44a53351e723c02ca82baf511e83fa",
+          "bytes": 2948939
+        },
+        {
+          "map": "nor_gl",
+          "role": "normal (OpenGL, +Y up; three.js convention)",
+          "file": "nor_gl.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/diagonal_parquet/diagonal_parquet_nor_gl_2k.jpg",
+          "md5": "ed709034735ad9ff367e3fa939df4b90",
+          "bytes": 2392214
+        },
+        {
+          "map": "arm",
+          "role": "packed AO (R) / roughness (G) / metalness (B), linear",
+          "file": "arm.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/diagonal_parquet/diagonal_parquet_arm_2k.jpg",
+          "md5": "822107fb32947cbbe9980d28ca45fa5a",
+          "bytes": 1327302
+        }
+      ],
+      "bytes": 6668455
+    },
+    {
+      "name": "gravel",
+      "asset": "gravel_floor_02",
+      "page": "https://polyhaven.com/a/gravel_floor_02",
+      "title": "Gravel Floor 02",
+      "authors": {
+        "Jenelle van Heerden": "Processing",
+        "Dimitrios Savva": "Photography"
+      },
+      "licence": "CC0",
+      "real_size_m": [
+        2.0,
+        2.0
+      ],
+      "use": "Gravel / sandstone grit: courts, paths, avenues; tint warm #C8BFAE",
+      "files": [
+        {
+          "map": "diff",
+          "role": "color (sRGB)",
+          "file": "diff.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/gravel_floor_02/gravel_floor_02_diff_2k.jpg",
+          "md5": "db7865191e53523b2b9eabc85a7f73c3",
+          "bytes": 4698557
+        },
+        {
+          "map": "nor_gl",
+          "role": "normal (OpenGL, +Y up; three.js convention)",
+          "file": "nor_gl.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/gravel_floor_02/gravel_floor_02_nor_gl_2k.jpg",
+          "md5": "6d1c9823f61e798fe15388e99668be7a",
+          "bytes": 5894173
+        },
+        {
+          "map": "arm",
+          "role": "packed AO (R) / roughness (G) / metalness (B), linear",
+          "file": "arm.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/gravel_floor_02/gravel_floor_02_arm_2k.jpg",
+          "md5": "864559719eba2c5784390aae97f88233",
+          "bytes": 4204438
+        }
+      ],
+      "bytes": 14797168
+    },
+    {
+      "name": "grass",
+      "asset": "leafy_grass",
+      "page": "https://polyhaven.com/a/leafy_grass",
+      "title": "Leafy Grass",
+      "authors": {
+        "Charlotte Baglioni": "All"
+      },
+      "licence": "CC0",
+      "real_size_m": [
+        2.0,
+        2.0
+      ],
+      "use": "Grass: lawns, parterre, meadows",
+      "files": [
+        {
+          "map": "diff",
+          "role": "color (sRGB)",
+          "file": "diff.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_diff_2k.jpg",
+          "md5": "8014f4dace676a62ed71b3dd76119dae",
+          "bytes": 4766204
+        },
+        {
+          "map": "nor_gl",
+          "role": "normal (OpenGL, +Y up; three.js convention)",
+          "file": "nor_gl.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_nor_gl_2k.jpg",
+          "md5": "ea5e91abe01dc5e5d7028c68c3bc9194",
+          "bytes": 6047262
+        },
+        {
+          "map": "arm",
+          "role": "packed AO (R) / roughness (G) / metalness (B), linear",
+          "file": "arm.jpg",
+          "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_arm_2k.jpg",
+          "md5": "64f2eb364e806301df19edc7a67d65bb",
+          "bytes": 4116600
+        }
+      ],
+      "bytes": 14930066
+    }
+  ],
+  "total_bytes": 69395873
+}

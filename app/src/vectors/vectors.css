@@ -1,0 +1,23 @@
+/* F10/F12 vector layers: panel legend + Flurnummer labels */
+.sle-vec-legend { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 11px; margin: -2px 0 4px 18px; }
+.sle-vec-key { display: inline-flex; align-items: center; gap: 4px; }
+.sle-vec-key i { display: inline-block; width: 14px; height: 4px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.sle-vec-status { font-size: 11px; }
+#sle-vectors kbd { font: inherit; background: rgba(255, 255, 255, 0.15); border-radius: 3px; padding: 0 4px; }
+
+.sle-parcel-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.sle-parcel-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font: 600 11px/1 system-ui, sans-serif;
+  color: #fff6c8;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: rgba(20, 20, 24, 0.55);
+  text-shadow: 0 0 2px #000;
+  white-space: nowrap;
+  will-change: transform;
+  transition: opacity 0.15s;
+}
+.sle-parcel-label.occluded { opacity: 0.25 !important; }

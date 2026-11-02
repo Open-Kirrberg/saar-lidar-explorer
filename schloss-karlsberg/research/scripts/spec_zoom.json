@@ -1,0 +1,10 @@
+[
+ {"name": "02_core_300m_combo", "e0": 382050, "n0": 5465980, "w": 300, "h": 300, "layer": "combo", "grid": 25, "lim": 0.5, "title": "Palace core 300 x 300 m"},
+ {"name": "02_core_300m_slrm5", "e0": 382050, "n0": 5465980, "w": 300, "h": 300, "layer": "slrm5", "grid": 25, "lim": 0.3, "title": "Palace core 300 x 300 m"},
+ {"name": "02_core_300m_hs", "e0": 382050, "n0": 5465980, "w": 300, "h": 300, "layer": "hs", "grid": 25, "title": "Palace core 300 x 300 m, multi-hillshade"},
+ {"name": "02_core_300m_dtm", "e0": 382050, "n0": 5465980, "w": 300, "h": 300, "layer": "dtm", "grid": 25, "title": "Palace core 300 x 300 m, DTM"},
+ {"name": "03_north_300m_combo", "e0": 382080, "n0": 5466280, "w": 300, "h": 300, "layer": "combo", "grid": 25, "lim": 0.5, "title": "North of palace 300 x 300 m"},
+ {"name": "03_north_300m_dtm", "e0": 382080, "n0": 5466280, "w": 300, "h": 300, "layer": "dtm", "grid": 25, "title": "North of palace 300 x 300 m, DTM"},
+ {"name": "04_orangerie_300m_combo", "e0": 382100, "n0": 5465800, "w": 300, "h": 300, "layer": "combo", "grid": 25, "lim": 0.5, "title": "Orangerie area 300 x 300 m"},
+ {"name": "04_orangerie_300m_dtm", "e0": 382100, "n0": 5465800, "w": 300, "h": 300, "layer": "dtm", "grid": 25, "title": "Orangerie area 300 x 300 m, DTM"}
+]

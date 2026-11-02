@@ -1,0 +1,20 @@
+/* F16 Punktwolke card */
+.sle-pts-status { font-size: 11px; }
+.sle-pts-areas { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 6px; }
+.sle-pts-area {
+  display: flex; justify-content: space-between; gap: 8px; width: 100%; padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.05); border: 0; border-radius: 3px; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.sle-pts-area:hover { background: rgba(255, 255, 255, 0.12); }
+.sle-pts-area .sle-dim { font-size: 11px; white-space: nowrap; }
+.sle-pts-modes { gap: 4px; }
+.sle-pts-modes > span { margin-right: 4px; }
+.sle-pts-modes .sle-btn { padding: 2px 6px; }
+.sle-pts-legend { margin-top: 0; }
+.sle-pts-chips { display: flex; flex-wrap: wrap; gap: 3px 10px; margin: 4px 0; }
+.sle-pts-chip { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+.sle-pts-chip i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1px solid #111; }
+.sle-pts-slider input[type=range] { flex: 1; min-width: 80px; }
+.sle-pts-slider label { min-width: 78px; }
+.sle-pts-slider span { width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+#sle-pointcloud kbd { font: inherit; background: rgba(255, 255, 255, 0.15); border-radius: 3px; padding: 0 4px; }

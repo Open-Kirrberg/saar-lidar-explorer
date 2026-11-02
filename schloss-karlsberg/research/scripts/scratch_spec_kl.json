@@ -1,0 +1,5 @@
+[
+ {"name": "z_kl_s5", "e0": 382680, "n0": 5464580, "w": 460, "h": 420, "layer": "slrm5", "grid": 20, "lim": 0.5, "scalebar": 50},
+ {"name": "z_kl_dtm", "e0": 382680, "n0": 5464580, "w": 460, "h": 420, "layer": "dtm", "grid": 20, "scalebar": 50},
+ {"name": "z_kl_chm", "e0": 382680, "n0": 5464580, "w": 460, "h": 420, "layer": "chm", "grid": 20, "scalebar": 50}
+]

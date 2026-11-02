@@ -1,0 +1,220 @@
+{
+ "run": "S23_full",
+ "level_args": "--zclip 0.12",
+ "note": "Golden-hour orbit S23 (separate lighting, independent reconstruction). Levelled frame: +x = north, +y = west. No Orangerie in the mesh -> scale from the palace only (cf. CORE_DAY variant D_palace_only). Picked on view_-0.78_-0.62.png (nDSM). Nordfluegel N face is smeared in this shot (edge spread 2.4 m) -> check only.",
+ "init": {
+  "mesh": [
+   [
+    -0.726,
+    -0.09
+   ],
+   [
+    -0.36,
+    -0.065
+   ]
+  ],
+  "en": [
+   [
+    382196.6,
+    5466077.8
+   ],
+   [
+    382185.9,
+    5466154.6
+   ]
+  ]
+ },
+ "ground": [
+  [
+   -0.64,
+   -0.47,
+   -0.35,
+   -0.15
+  ]
+ ],
+ "search": 0.012,
+ "lines": [
+  {
+   "name": "Suedfluegel outer (S) face",
+   "mesh": [
+    [
+     -0.726,
+     -0.13
+    ],
+    [
+     -0.717,
+     -0.4
+    ]
+   ],
+   "lidar": [
+    "KB-02",
+    3,
+    0
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Nordfluegel court (S) face",
+   "mesh": [
+    [
+     -0.425,
+     -0.12
+    ],
+    [
+     -0.418,
+     -0.36
+    ]
+   ],
+   "lidar": [
+    "KB-03",
+    3,
+    0
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Nordfluegel W end",
+   "mesh": [
+    [
+     -0.415,
+     -0.066
+    ],
+    [
+     -0.37,
+     -0.064
+    ]
+   ],
+   "lidar": [
+    "KB-03",
+    2,
+    3
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Suedfluegel W end",
+   "mesh": [
+    [
+     -0.72,
+     -0.09
+    ],
+    [
+     -0.675,
+     -0.088
+    ]
+   ],
+   "lidar": [
+    "KB-02",
+    2,
+    3
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Nordfluegel N face",
+   "mesh": [
+    [
+     -0.36,
+     -0.12
+    ],
+    [
+     -0.355,
+     -0.33
+    ]
+   ],
+   "lidar": [
+    "KB-03",
+    1,
+    2
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Sammlungsfluegel W face",
+   "mesh": [
+    [
+     -0.33,
+     -0.062
+    ],
+    [
+     -0.08,
+     -0.058
+    ]
+   ],
+   "lidar": [
+    "KB-05",
+    0,
+    3
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Kuechenbau E face",
+   "mesh": [
+    [
+     -0.27,
+     -0.405
+    ],
+    [
+     -0.08,
+     -0.398
+    ]
+   ],
+   "lidar": [
+    "KB-06",
+    1,
+    2
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Suedfluegel court (N) face",
+   "mesh": [
+    [
+     -0.665,
+     -0.13
+    ],
+    [
+     -0.66,
+     -0.4
+    ]
+   ],
+   "lidar": [
+    "KB-02",
+    1,
+    2
+   ],
+   "role": "check",
+   "search": 0.02
+  }
+ ],
+ "ridge_boxes": {
+  "Suedfluegel": [
+   "u",
+   -30,
+   22,
+   -34,
+   -24
+  ],
+  "Nordfluegel": [
+   "u",
+   -28,
+   22,
+   24,
+   36
+  ]
+ },
+ "ridge_pairs": [
+  [
+   "Suedfluegel",
+   "Nordfluegel"
+  ]
+ ],
+ "variants": {
+  "B_with_Nordfluegel_N_face": {
+   "add": [
+    "Nordfluegel N face"
+   ]
+  }
+ }
+}

@@ -1,0 +1,31 @@
+# Paths removed from the public code export (globs relative to the repo root, bash extglob/globstar).
+# Licence audit 2026-11-02 (see RELEASING.md and _release/AUDIT.md): every tracked image is an own
+# screenshot/render of open data (dl-de/by-2-0, ODbL/CC BY-SA tiles), a CC BY-SA 2.0 DE derivative
+# (Lageplan 2006) or a public-domain derivative (1805 map) — all publishable with NOTICE.md.
+# Copyrighted inputs (HMS 2022 video, frames, meshes, downloaded period sources) are git-ignored and
+# therefore never in `git archive`. The entries below are defensive (must never ship even if committed).
+.claude/settings.local.json
+.claude/settings.json
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+data
+app/public/data
+app/dist
+schloss-karlsberg/dist
+schloss-karlsberg/sources
+schloss-karlsberg/video2world/input
+schloss-karlsberg/video2world/frames
+schloss-karlsberg/video2world/work
+schloss-karlsberg/video2world/output
+schloss-karlsberg/video2world/repo
+schloss-karlsberg/viewer/public
+schloss-karlsberg/model/out
+schloss-karlsberg/plans/out
+schloss-karlsberg/plans/data
+**/*.mp4
+**/*.webm
+**/*.mkv
+**/*.laz
+**/*.tif

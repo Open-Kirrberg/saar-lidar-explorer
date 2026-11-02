@@ -1,0 +1,31 @@
+/* F17 Messen */
+.sle-measure-modes { gap: 4px; }
+.sle-measure-modes .sle-btn { flex: 1; padding: 4px 4px; }
+.sle-measure-modes .sle-btn.sel:not(.on) { box-shadow: inset 0 0 0 1px var(--ui-accent); }
+.sle-measure-title { font-weight: 600; margin-top: 4px; }
+.sle-measure-warn { color: #ffb4a8; }
+.sle-measure-warn[hidden], .sle-measure-chart[hidden] { display: none; }
+.sle-measure-chart { margin-top: 4px; }
+.sle-measure-chart canvas { display: block; width: 100%; border-radius: 3px; background: rgba(0, 0, 0, 0.28); cursor: crosshair; }
+.sle-measure-readout { min-height: 1.3em; margin-top: 2px; }
+.sle-conf.c-measure { background: #38d9ff; }
+.sle-measure-hint { background: rgba(10, 120, 150, 0.92); }
+#app.measure-mode #viewport canvas { cursor: crosshair; }
+
+/* 3D vertex dots / value tags (Labels3D: anchor = bottom centre of the element) */
+.sle-mdot { position: relative; width: 10px; height: 5px; pointer-events: none; }
+.sle-mdot::after {
+  content: ''; position: absolute; left: 0; top: 0; width: 10px; height: 10px; box-sizing: border-box;
+  border-radius: 50%; background: #38d9ff; border: 2px solid rgba(10, 12, 16, 0.85);
+}
+.sle-mdot.sel::after { background: #ffe14a; }
+.sle-mdot.draft::after { background: #fff; }
+.sle-mdot.probe::after { background: #ffe14a; width: 12px; height: 12px; left: -1px; top: -1px; border-color: #000; }
+.sle-mdot.occluded { opacity: 0.45; }
+.sle-mtag { padding-bottom: 9px; pointer-events: none; }
+.sle-mtag span {
+  display: block; white-space: nowrap; font: 11px var(--ui-font); color: #e8fbff; background: rgba(8, 40, 52, 0.82);
+  padding: 1px 5px; border-radius: 3px; border: 1px solid rgba(56, 217, 255, 0.55);
+}
+.sle-mtag.strong span { color: #222; background: rgba(255, 225, 74, 0.92); border-color: rgba(0, 0, 0, 0.4); }
+.sle-mtag.occluded { opacity: 0.5; }

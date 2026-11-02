@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saar LiDAR Explorer – Daten</title>
+<style>
+:root { --bg: #f6f5f1; --fg: #1d2125; --dim: #5b636b; --accent: #2f6b4f; --card: #fff; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14181c; --fg: #e7e9eb; --dim: #9aa3ab; --accent: #7fc6a0; --card: #1d2227; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+a { color: var(--accent); }
+.cta { display: inline-block; margin: 8px 0 20px; padding: 10px 18px; border-radius: 8px; background: var(--accent); color: var(--bg); text-decoration: none; font-weight: 600; }
+.note { background: var(--card); border-left: 4px solid #c8452f; padding: 10px 14px; border-radius: 6px; }
+small, li { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>Saar LiDAR Explorer – Daten</h1>
+<p>Statische Daten (Teil 1) für den Saar LiDAR Explorer: Gelände, Reliefs, Luftbild, historische Karten, Gebäude, Wege, Flurstücke, Punktwolken und Verdachtsflächen im Gebiet {{AOI_NAME}}.</p>
+<a class="cta" href="{{APP_URL}}">Explorer öffnen</a>
+<p class="note"><b>Schauen, nicht graben.</b> Die Verdachtsflächen sind ungeprüfte Hypothesen eines automatischen Verfahrens, keine Fundstellen. Bodendenkmäler sind geschützt (SDschG Saarland, DSchG RLP) – nicht graben, keine Sondengänge.</p>
+<p>Teil 2 (Kartenkacheln, 3D-Druck): <a href="{{DATA2_URL}}">{{DATA2_URL}}</a> · Code: <a href="https://github.com/{{ORG}}/saar-lidar-explorer">github.com/{{ORG}}/saar-lidar-explorer</a> · <a href="README.md">README</a></p>
+<h2>Quellen und Lizenzen</h2>
+<ul>
+{{ATTRIBUTION_HTML_1}}
+</ul>
+<small>Code: MIT. Daten: dl-de/by-2-0 (Geobasisdaten SL/RLP), ODbL (OpenStreetMap), CC BY-SA 2.0 DE (Grundrisse nach Lageplan 2006, schloss-carlsberg.de).</small>
+</main>
+</body>
+</html>

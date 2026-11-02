@@ -1,0 +1,18 @@
+/* F19 Rekonstruktion 1789 card + toolbar "Schloss betreten" */
+#sle-reconstruction kbd, .sle-recon-enter kbd { font: inherit; background: rgba(255, 255, 255, 0.15); border-radius: 3px; padding: 0 4px; }
+.sle-recon-warn { margin: 4px 0 6px; padding: 4px 6px; font-size: 11px; line-height: 1.35; background: rgba(230, 159, 0, 0.12); border-left: 3px solid #e69f00; }
+.sle-recon-status { font-size: 11px; }
+.sle-recon-key { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; white-space: nowrap; }
+.sle-recon-key i, .sle-recon-head i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px solid #111; flex: none; }
+.sle-recon-slider input[type=range] { flex: 1; min-width: 80px; }
+.sle-recon-slider [data-k=opv] { width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+#sle-reconstruction .sle-btn.on { background: var(--ui-accent); color: #222; }
+#sle-reconstruction .sle-btn:disabled { opacity: 0.45; cursor: default; }
+.sle-recon-detail { margin: 6px 0; padding: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 3px; }
+.sle-recon-head { display: flex; align-items: center; gap: 6px; }
+.sle-recon-head .sle-btn { padding: 0 6px; }
+.sle-recon-sources { margin: 4px 0; padding-left: 16px; font-size: 11px; }
+.sle-recon-flash { color: #ffd27a; }
+.sle-recon-enter { display: inline-flex; gap: 6px; }
+.sle-recon-enter[hidden] { display: none; }
+.sle-recon-enter button[data-act=enter] { border: 1px solid #e69f00; }

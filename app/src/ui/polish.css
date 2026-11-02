@@ -1,0 +1,71 @@
+/* Final polish: settings card, introduction overlay, tour box, share toast, focus outlines. */
+
+/* ---- settings card ---------------------------------------------------------------------------- */
+.sle-section-label { margin: 2px 0 4px; font-size: 11px; color: var(--ui-dim); }
+.sle-seg { display: flex; gap: 2px; }
+.sle-seg button {
+  flex: 1; font: 12px var(--ui-font); color: #ebebeb; background: #2c2c2c; border: 1px solid #3a3a3a;
+  border-radius: 3px; padding: 4px 6px; cursor: pointer;
+}
+.sle-seg button:hover { background: #383838; }
+.sle-seg button.on { background: var(--ui-accent); border-color: var(--ui-accent); color: #1c1c1c; }
+.sle-btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 8px; }
+.sle-btn-grid button[hidden] { display: none; }
+.sle-btn-grid kbd { font: inherit; background: rgba(255, 255, 255, 0.15); border-radius: 3px; padding: 0 4px; }
+#sle-toolbar button[hidden] { display: none; }
+
+/* ---- introduction overlay ---------------------------------------------------------------------- */
+.sle-overlay {
+  position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 12, 14, 0.5); padding: 16px;
+}
+.sle-intro { max-width: 680px; max-height: calc(100vh - 32px); overflow-y: auto; }
+.sle-intro h3 { margin: 4px 0 4px; font-size: 13px; color: var(--ui-fg); }
+.sle-intro-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
+@media (max-width: 620px) { .sle-intro-cols { grid-template-columns: 1fr; } }
+.sle-intro-list { margin: 0 0 8px; padding-left: 16px; font-size: 12.5px; }
+.sle-intro-list li { margin: 2px 0; }
+.sle-intro kbd, #sle-tour kbd {
+  font: 600 11.5px var(--ui-font); color: var(--ui-fg); background: rgba(255, 255, 255, 0.14);
+  border-radius: 3px; padding: 0 4px;
+}
+.sle-intro-all { margin: 4px 0 6px; font-size: 12.5px; }
+.sle-intro-all summary { cursor: pointer; color: var(--ui-accent); }
+.sle-keys { columns: 2 240px; column-gap: 18px; margin-top: 6px; }
+.sle-keys-group { break-after: avoid; margin: 6px 0 2px; font-weight: 600; color: var(--ui-accent); }
+.sle-keys-row { break-inside: avoid; margin: 1px 0; }
+
+/* ---- HUD help (rendered from the shortcut table) ---------------------------------------------- */
+#hud .help .help-dim { opacity: 0.85; }
+#hud .help-rows { display: grid; grid-template-columns: auto auto; gap: 0 12px; margin-top: 2px; }
+#hud .help-rows .sle-keys-row { white-space: nowrap; }
+
+/* ---- tour ---------------------------------------------------------------------------------------- */
+#sle-tour {
+  position: absolute; left: 50%; bottom: calc(var(--above-footer) + 40px); transform: translateX(-50%); z-index: 6;
+  width: min(420px, calc(100vw - 20px)); padding: 10px 14px 12px; border-radius: 8px;
+  background: #1f2326; color: var(--ui-fg); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); font-size: 13px; line-height: 1.45;
+}
+#sle-tour[hidden] { display: none; }
+.sle-tour-head { display: flex; align-items: center; justify-content: space-between; font-size: 11.5px; color: var(--ui-dim); }
+.sle-tour-title { margin: 2px 0 4px; font-size: 15px; color: var(--ui-accent); }
+.sle-tour-text { margin: 0 0 4px; }
+.sle-tour-preset { margin: 0; font-size: 11.5px; }
+#sle-tour .sle-actions { margin-top: 8px; }
+#sle-tour button:disabled { opacity: 0.45; cursor: default; }
+
+/* ---- toast ---------------------------------------------------------------------------------------- */
+.sle-polish-toast { bottom: calc(var(--above-footer) + 46px); max-width: min(560px, calc(100vw - 24px)); text-align: center; }
+.sle-polish-toast[hidden] { display: none; }
+/* Fallback share link: selectable for manual copying. */
+.sle-polish-toast.selectable { pointer-events: auto; user-select: text; overflow-wrap: anywhere; }
+
+/* ---- accessibility: visible keyboard focus everywhere ---------------------------------------- */
+:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 1px; }
+#viewport canvas:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+.lil-gui button:focus-visible, .lil-gui input:focus-visible, .lil-gui select:focus-visible,
+.lil-gui .lil-title:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  #minimap.sle-minimap { transition: none; }
+  .rl-toast { transition: none; }
+}

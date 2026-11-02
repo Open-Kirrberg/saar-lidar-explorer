@@ -1,0 +1,11 @@
+[
+ {"name": "10_overview_features", "e0": 381300, "n0": 5464400, "w": 2300, "h": 2600, "layer": "combo", "grid": 250, "scalebar": 250, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "Residence Karlsberg: digitised LiDAR features (id = lidar_features.geojson)"},
+ {"name": "11_palace_1km_features", "e0": 381700, "n0": 5465600, "w": 1000, "h": 1000, "layer": "combo", "grid": 100, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "Palace area 1 x 1 km with features"},
+ {"name": "12_core_features", "e0": 382140, "n0": 5466050, "w": 170, "h": 190, "layer": "hs", "grid": 10, "scalebar": 20, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "Palace core: slope-hillshade with digitised footprints"},
+ {"name": "13_north_terrace_features", "e0": 382080, "n0": 5466200, "w": 300, "h": 420, "layer": "dtm", "grid": 25, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "Palace core + north terrace, DTM with features"},
+ {"name": "14_orangerie_features", "e0": 382170, "n0": 5465880, "w": 170, "h": 150, "layer": "slrm5", "lim": 0.5, "grid": 10, "scalebar": 20, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "Orangerie with features"},
+ {"name": "15_karlslust_features", "e0": 382300, "n0": 5464400, "w": 1000, "h": 900, "layer": "combo", "grid": 50, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "Karlslust valley with features"},
+ {"name": "16_karlslust_zoom_hs", "e0": 382760, "n0": 5464620, "w": 380, "h": 340, "layer": "hs", "grid": 20, "scalebar": 50, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "Karlslust: cascade axis, Tosbecken, Schwanenweiher, Baerenzwinger, terraced strips"},
+ {"name": "17_karlsbergweiher_features", "e0": 381650, "n0": 5465700, "w": 450, "h": 350, "layer": "combo", "grid": 25, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "Karlsbergweiher with features"},
+ {"name": "18_forsthaus_eiskeller_features", "e0": 382100, "n0": 5466250, "w": 600, "h": 600, "layer": "combo", "grid": 50, "features": "schloss-karlsberg/research/lidar_features.geojson", "title": "N-S avenue, Forsthaus area, well and Eiskeller"}
+]

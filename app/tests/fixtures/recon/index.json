@@ -1,0 +1,27 @@
+{
+  "format": "sle-recon-v1",
+  "id": "karlsberg1789",
+  "label_de": "Rekonstruktion 1789 (Hypothese)",
+  "name_de": "Schloss Karlsberg – Rekonstruktion Sommer 1789",
+  "crs": "EPSG:25832",
+  "heightDatum": "DHHN2016",
+  "origin": { "E0": 381000, "N0": 5465000 },
+  "anchor": { "E": 381500, "N": 5466200, "enterRadius_m": 300 },
+  "bboxEN": [[381300, 5466000], [381700, 5466400]],
+  "files": { "model": "buildings.glb", "footprints": "footprints.geojson" },
+  "viewer": { "url": "http://localhost:5260/" },
+  "attribution": "Synthetische Testdaten; Grundriss nach Plan 1790 (Test)",
+  "disclaimer_de": "Hypothetische Rekonstruktion, kein Befund. Schauen, nicht graben.",
+  "generated": "2026-11-01T12:00:00Z",
+  "catalogueVersion": 2,
+  "futureKey": { "ignored": true },
+  "buildings": [
+    { "id": "KB-B01", "name_de": "Hauptschloss", "cls": "CDL", "confidence": "high", "eaves_h": 356.0, "ridge_h": 362.7,
+      "bbox_local": [[500, 340, -1210], [560, 362.7, -1190]], "sources_de": ["Plan 1790", "Mannlich", "Befund 1990er", "vierte Quelle"], "extra": 1 },
+    { "id": "KB-B02", "name_de": "Marstall", "cls": "STB", "confidence": "med", "sources_de": [] },
+    { "id": "KB-B03", "confidence": "maybe" },
+    { "name_de": "ohne id" },
+    { "id": "KB-B01", "name_de": "Duplikat" },
+    "kaputt"
+  ]
+}

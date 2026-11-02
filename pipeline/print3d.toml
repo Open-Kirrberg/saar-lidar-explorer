@@ -1,0 +1,90 @@
+# F21 3D-Druck — print series for print3d.py (contract: docs/data-contract.md "3D print tiles").
+#
+# A *series* is a set of square tiles on a GLOBAL grid in EPSG:25832 that all share scale, exaggeration,
+# datum rule and base, so any two tiles of the same series (and the same datum) join seamlessly (identical edge
+# heights) — also tiles generated later anywhere else ("other parts"). Never change scale/tile_m/exag/datum/base_mm/
+# origin/vertices of a series that already has printed tiles: create a new series key instead. Name a series after its
+# scale (saarpfalz-8500 = 1:8500) so the key never lies about the print.
+#
+#   tile edge in print   = tile_m / scale · 1000 mm          (derived; an explicit tile_mm must match)
+#   grid                 = tile lower-left corner E, N ≡ origin (mod tile_m)
+#   tile id              = "E{E/1000}_N{N/1000}" (km, decimals only when needed: E382.5_N5466)
+#   vertex grid          = `vertices` × `vertices` incl. both edges, cell = tile_m / (vertices − 1)
+#   z_mm                 = base_mm + (max(h, datum) − datum) / scale · 1000 · exag
+#   datum_mode "series"  → datum = datum_m for every tile
+#   datum_mode "set"     → datum per named set = floor(min h of the set) − datum_margin_m, recorded in index.json
+#                          (setDatum_m) and frozen; tiles of an overlapping / nested set adopt it
+#
+# Printer: Bambu Lab P1S 0.4, plate 256 × 256 mm, printable height 250 mm. printer = "stock" (default) must slice
+# with the UNMODIFIED profile: its front-left exclusion area (18 × 28 mm) and the start-G-code load line leave a
+# square of at most 238.0 mm (X 18–256) — 2 km at 1:8400 (238.095 mm) is 0.095 mm too wide and is refused by the
+# slicer at every position (checked with the Bambu Studio CLI), hence 1:8500 (235.29 mm) and 1:2125 for 500 m.
+# printer = "sle-250" (only for 250 mm tiles) needs the user printer preset print3d.py writes (see README).
+
+[defaults]
+vertices = 1001              # per edge, incl. both edges (1000 cells)
+exag = 2.0
+datum_mode = "series"
+datum_m = 180.0              # m NHN (DHHN2016); identical for every tile of a "series"-datum series
+datum_margin_m = 5.0         # "set" datum: whole metres below the lowest vertex of the set, minus this
+base_mm = 4.0                # plate thickness below the datum level
+origin = [0, 0]              # grid origin E, N (m)
+printer = "stock"            # "stock" | "sle-250"
+role = "main"                # catalog hint for the app: "main" | "detail"
+rlp_offset_m = -0.07         # added to RLP 2022 heights where SL 2025 has no data (README "Data notes"); a
+                             # constant, never measured per tile, so neighbours stay bit-identical
+counties = ["SPK"]           # LVGL county ZIPs tried first; other Saarland counties are tried automatically
+                             # only for 1 km tiles that neither these ZIPs nor RLP cover
+max_height_mm = 250.0        # warn above this (P1S printable_height 250 mm; must not exceed it)
+text = true                  # engrave id/series/scale/N-arrow into the bottom face
+engrave_mm = 0.6
+material_density_g_cm3 = 1.24   # PLA
+shell_mm = 1.2               # filament estimate: ≈ 3 walls × 0.4 mm (also used for top/bottom skins)
+infill = 0.15
+
+[defaults.connectors]
+enabled = true               # bowtie (double dovetail) key recesses on the bottom face
+positions = [0.25, 0.75]     # along every edge, fraction of the edge length
+depth_mm = 2.0               # recess depth into the bottom (each half)
+length_mm = 10.0             # half-key length into the tile (perpendicular to the edge)
+waist_mm = 8.0               # width at the tile edge (narrow neck)
+end_mm = 14.0                # width at the inner end (dovetail undercut)
+clearance_mm = 0.15          # key outline offset inwards per side; key thickness = depth − clearance
+min_base_mm = 2.0            # material required above a recess (checked per tile)
+
+# Main series: stock P1S profile, tile at plate X 19.4–254.7, Y 17.1–252.4 mm.
+[series.saarpfalz-8500]
+name_de = "Saarpfalz 1:8500"
+scale = 8500
+tile_m = 2000                # 2 km → 235.29 mm; overall explorer area = 3 × 4 tiles ≈ 70.6 × 94.1 cm
+
+[series.saarpfalz-8500.sets]
+explorer = { bbox = [378000, 5460000, 384000, 5468000] }   # = aois.toml [overall]
+extension-west = ["E376_N5462"]                            # first "other part": west of Homburg (Bexbach/Kirkel)
+
+# Detail series: 500 m tiles, exactly 4 × the main scale (same 235.29 mm tile, same plate placement), local datum per
+# set so a showpiece is ≈ 30–70 mm tall instead of 100–190 mm with datum 180 m.
+[series.detail-2125]
+name_de = "Detail 1:2125"
+role = "detail"
+scale = 2125
+tile_m = 500                 # 500 m → 235.29 mm, cell 0.5 m (1 m DGM, area mean = bilinear at 0.5 m)
+exag = 1.5
+datum_mode = "set"
+
+[series.detail-2125.sets]
+karlsberg = ["E382_N5465.5", "E382_N5466"]                 # Hauptschloss 382195/5466095 + Orangerie 382229/5465983 at the shared edge
+merburg = ["E381.5_N5463", "E382_N5463", "E381.5_N5463.5", "E382_N5463.5"]   # Merburg 381964/5463453 near the common corner
+
+# OPTIONAL, not generated: the former 250 mm / 1:8000 main series. A 250 mm tile does NOT fit the stock P1S profile;
+# printer = "sle-250" writes a user printer preset that moves the exclusion area to a 5 mm front strip and frees the
+# 18 × 28 mm front-left corner — Bambu does not document why that corner is excluded, so this is at your own risk
+# (print a small test tile first). Tiles of this series do not join 1:8500 tiles.
+# [series.saarpfalz-8000-custom-preset]
+# name_de = "Saarpfalz 1:8000 (eigenes Druckerprofil)"
+# scale = 8000
+# tile_m = 2000
+# printer = "sle-250"
+#
+# [series.saarpfalz-8000-custom-preset.sets]
+# explorer = { bbox = [378000, 5460000, 384000, 5468000] }

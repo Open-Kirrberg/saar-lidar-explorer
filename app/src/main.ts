@@ -1,0 +1,323 @@
+import { PerspectiveCamera, Raycaster, Scene, Timer, Vector2, WebGLRenderer } from 'three';
+import type { Vector3 } from 'three';
+import { DroneController } from './controls/DroneController';
+import type { FlyToOptions } from './controls/DroneController';
+import { TouchController } from './controls/TouchController';
+import type { NavigationMode } from './controls/TouchController';
+import { bindLongPressContext } from './controls/touchContext';
+import { DecodePool } from './data/DecodePool';
+import { loadManifest } from './data/manifest';
+import type { Manifest } from './data/manifest';
+import { utmToWorld, worldToUtm } from './geo';
+import { getLocate, initLocate } from './locate';
+import { bindHash, createStore, hashDisplayPatch, normDeg, parseHash } from './state';
+import type { AppState, Store } from './state';
+import { createSky } from './terrain/Sky';
+import { Terrain } from './terrain/Terrain';
+import type { StreamStats } from './terrain/Terrain';
+import { createAoiSwitcher, resolveStartAoi } from './ui/aoiSwitcher';
+import { bindDisplayState } from './ui/displayState';
+import { createRefinedFlyTo } from './ui/flyTo';
+import { createGui } from './ui/gui';
+import { initFeatures } from './ui/features';
+import { createHud } from './ui/hud';
+import { createSettingsRuntime, featureChecker, initPolish } from './ui/polish';
+import { createReliefPanel } from './ui/reliefPanel';
+import { browserStorage, loadSettings, saveSettings, settingsStatePatch } from './ui/settings';
+import { progressPending, terrainPending } from './ui/streaming';
+import type { LoadProgressLike } from './ui/streaming';
+import './ui/style.css';
+
+/** Everything other modules (minimap, markers, POIs) need. Also exposed as `window.sle`. */
+export interface AppContext {
+  manifest: Manifest;
+  store: Store<AppState>;
+  terrain: Terrain;
+  controller: DroneController;
+  camera: PerspectiveCamera;
+  scene: Scene;
+  renderer: WebGLRenderer;
+  /** Fly the camera to UTM E/N (see DroneController.flyTo). */
+  flyTo(E: number, N: number, opts?: FlyToOptions): Promise<boolean>;
+  /** Terrain hit under a client (CSS px) position, with UTM + true height. */
+  pickAt(clientX: number, clientY: number): { point: Vector3; E: number; N: number; h: number } | null;
+  /**
+   * Debug/verification: advance `frames` frames of `dt` seconds synchronously (controller, LOD,
+   * render, store sync). Lets automated checks render while the tab is hidden and rAF is paused.
+   */
+  step(frames?: number, dt?: number): void;
+  /** F9 streaming stats: chunks per level (resident/drawn), est. GPU MiB, queue, in flight. */
+  terrainStats(): StreamStats;
+  /** F20 touch navigation (map gestures for touch pointers; long-press context action). */
+  touch: TouchController;
+  /** F20: 'touch' = map gestures for fingers (default), 'drone' = fingers drag-look like the mouse. */
+  setNavigationMode(mode: NavigationMode): void;
+}
+
+declare global {
+  interface Window {
+    sle?: AppContext;
+  }
+}
+
+const START_AGL = 150;
+const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
+
+async function main(): Promise<void> {
+  const loading = $('#loading');
+  let loaded;
+  try {
+    loaded = await loadManifest(await resolveStartAoi()); // F9: 'overall' if present, ?aoi= wins
+  } catch (err) {
+    loading.textContent = String(err instanceof Error ? err.message : err);
+    loading.classList.add('error');
+    return;
+  }
+  const { manifest, baseUrl, fellBack } = loaded;
+  const origin = manifest.origin;
+
+  // ---- renderer / scene -------------------------------------------------------------------
+  const viewport = $('#viewport');
+  const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  viewport.appendChild(renderer.domElement);
+  renderer.domElement.tabIndex = 0;
+
+  const camera = new PerspectiveCamera(60, 1, 0.5, 40000);
+  const scene = new Scene();
+  const sky = createSky(30000);
+  scene.add(sky);
+
+  const pool = new DecodePool();
+  const terrain = new Terrain(manifest, baseUrl, pool);
+  scene.add(terrain);
+
+  const store = createStore({ layer: terrain.defaultDisplay() });
+  // collisionGround = DTM, or max(DTM, DSM) with "Kollision mit Baumkronen".
+  const controller = new DroneController(camera, renderer.domElement, terrain.collisionGround, origin, {
+    fallbackGround: manifest.heightRange.min,
+  });
+
+  const resize = () => {
+    const w = viewport.clientWidth;
+    const h = viewport.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / Math.max(h, 1);
+    camera.updateProjectionMatrix();
+  };
+  new ResizeObserver(resize).observe(viewport);
+  resize();
+
+  // ---- store → terrain ----------------------------------------------------------------------
+  const deg = Math.PI / 180;
+  const applyRender = (s: Readonly<AppState>) => {
+    terrain.setDisplay(s.layer, s.colormap);
+    terrain.uniforms.uSunAz.value = s.sunAzimuth * deg;
+    terrain.uniforms.uSunEl.value = s.sunElevation * deg;
+    terrain.uniforms.uSunDirs.value = Math.round(s.sunDirections);
+  };
+  store.subscribe(applyRender, ['layer', 'colormap', 'sunAzimuth', 'sunElevation', 'sunDirections']);
+  store.subscribe(
+    (s) => {
+      // Keep the camera's true height when the exaggeration changes.
+      const trueH = terrain.fromDisplayY(camera.position.y);
+      terrain.uniforms.uExag.value = s.exaggeration;
+      controller.setPose({ y: terrain.toDisplayY(trueH) });
+    },
+    ['exaggeration'],
+  );
+
+  // ---- initial pose: URL hash or AOI centre ----------------------------------------------------
+  const cx = manifest.size.width / 2;
+  const cz = -manifest.size.height / 2;
+  const fromHash = parseHash(location.hash);
+  // Overlay/forest live in Terrain; mirror them into the store (URL hash) and back (R0.6).
+  bindDisplayState(store, terrain);
+  const isValidLayer = (key: string) => terrain.isValidDisplay(key);
+  // Saved settings (final polish) are the start-up defaults; the URL hash wins over them.
+  const kv = browserStorage();
+  const settings = createSettingsRuntime(kv, loadSettings(kv), saveSettings);
+  store.set(settingsStatePatch(settings.get(), isValidLayer), 'settings');
+  if (settings.get().baseSpeed !== undefined) controller.opts.baseSpeed = settings.get().baseSpeed!;
+  if (settings.get().minClearance !== undefined) controller.opts.minClearance = settings.get().minClearance!;
+  if (fromHash) store.set(hashDisplayPatch(fromHash, { isValidLayer }), 'hash');
+  applyRender(store.get());
+
+  const applyHashPose = (p: { E: number; N: number; h: number; heading: number; pitch: number }) => {
+    const w = utmToWorld(p.E, p.N, origin);
+    controller.setPose({ x: w.x, z: w.z, y: terrain.toDisplayY(p.h), heading: p.heading, pitch: p.pitch });
+  };
+  // Provisional pose until heights are known.
+  if (fromHash) applyHashPose(fromHash);
+  else controller.setPose({ x: cx, z: cz, y: manifest.heightRange.max + START_AGL, heading: 0, pitch: -25 });
+
+  store.subscribe(
+    (s, _changed, source) => {
+      if (source === 'hash') applyHashPose(s);
+    },
+    ['E', 'N', 'h', 'heading', 'pitch'],
+  );
+
+  // ---- UI -----------------------------------------------------------------------------------
+  const attribution = $('#attribution');
+  attribution.textContent =
+    `${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''} · ${manifest.attribution}`;
+  // The footer wraps to 2–3 lines on normal desktops (long dl-de/ODbL credits): publish its height
+  // so the toolbar, minimap and panel sit above it instead of covering it (--footer-h in CSS).
+  const syncFooterH = () =>
+    document.documentElement.style.setProperty('--footer-h', `${Math.ceil(attribution.getBoundingClientRect().height)}px`);
+  new ResizeObserver(syncFooterH).observe(attribution);
+  syncFooterH();
+
+  const debug = { showFps: false };
+  const checkFeature = featureChecker({ manifest });
+  let fps = 0;
+  // F9: loading never blocks once the first terrain is drawable; the rest shows in the HUD.
+  let loadProgress: LoadProgressLike | null = null;
+  let loadDone = false;
+  createHud($('#hud'), store, {
+    speedMultiplier: () => controller.speedMultiplier,
+    fps: () => fps,
+    showFps: () => debug.showFps,
+    pending: () => Math.max(progressPending(loadProgress, loadDone), terrainPending(terrain) ?? 0),
+    hasFeature: checkFeature,
+    helpVisible: settings.get().hudHelp,
+    onHelpToggle: (v) => settings.patch({ hudHelp: v }),
+  });
+  createGui({ container: $('#panel'), store, terrain, controller, renderer, debug, onFlightChange: (p) => settings.patch(p) });
+  const relief = createReliefPanel({ container: $('#panel'), hud: $('#hud'), store, terrain, renderer, camera });
+
+  const lockHint = $('#lock-hint');
+  const crosshair = document.createElement('div');
+  crosshair.id = 'crosshair';
+  crosshair.hidden = true;
+  $('#app').appendChild(crosshair);
+  controller.onLockChange((locked) => {
+    lockHint.hidden = !locked;
+    crosshair.hidden = !locked;
+  });
+
+  // ---- picking --------------------------------------------------------------------------------
+  const raycaster = new Raycaster();
+  const ndc = new Vector2();
+  const pickAt: AppContext['pickAt'] = (clientX, clientY) => {
+    const r = renderer.domElement.getBoundingClientRect();
+    ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    raycaster.setFromCamera(ndc, camera);
+    const point = terrain.intersectRay(raycaster.ray);
+    if (!point) return null;
+    const { E, N } = worldToUtm(point.x, point.z, origin);
+    return { point, E, N, h: terrain.heightAt(point.x, point.z) };
+  };
+
+  // F20: touch gestures drive the same controller pose (exaggeration-aware picks via pickAt).
+  const touch = new TouchController(controller, renderer.domElement, (x, y) => pickAt(x, y)?.point ?? null, terrain);
+
+  const ctx: AppContext = {
+    manifest,
+    store,
+    terrain,
+    controller,
+    camera,
+    scene,
+    renderer,
+    pickAt,
+    terrainStats: () => terrain.streamStats(),
+    touch,
+    setNavigationMode: (mode) => touch.setNavigationMode(mode),
+    flyTo: createRefinedFlyTo(controller, terrain, origin), // re-aims when finer terrain arrives (F9)
+    step: (frames = 1, dt = 1 / 60) => {
+      for (let i = 0; i < frames; i++) frame(dt);
+      window.dispatchEvent(new Event('sle:step')); // rAF-driven overlays (Labels3D) refresh too
+    },
+  };
+  window.sle = ctx;
+  const features = initFeatures(ctx); // minimap, POIs, Fundmarker, disclaimer (src/map, src/pois, src/markers)
+  bindLongPressContext(touch, { markers: features.markers, measure: () => window.sleMeasure }); // F20 long-press
+  initLocate(ctx, $('#panel'), { minimap: features.minimap, labels: features.labels }); // F20 "Mein Standort" (getLocate())
+  void createAoiSwitcher(ctx, $('#panel')); // "Gebiet" card (F9)
+  // Final polish: settings card, quality presets, share, introduction, tour, a11y helpers.
+  initPolish(ctx, { settings, kv, labels: features.labels, applyPreset: (id) => relief.applyPresetById(id), resize, minimap: features.minimap, relief }); // F20: + simple (mobile) layout
+
+  // ---- frame loop -----------------------------------------------------------------------------
+  const timer = new Timer();
+  timer.connect(document);
+  let fpsFrames = 0;
+  let fpsT0 = performance.now();
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+
+  const syncStore = () => {
+    const p = camera.position;
+    const { E, N } = worldToUtm(p.x, p.z, origin);
+    const exag = terrain.uniforms.uExag.value;
+    store.set(
+      {
+        E: r1(E),
+        N: r1(N),
+        h: r1(terrain.fromDisplayY(p.y)),
+        agl: r1(controller.agl / exag),
+        heading: r1(normDeg(controller.heading)),
+        pitch: r1(controller.pitch),
+        speed: r1(controller.speed),
+      },
+      'camera',
+    );
+  };
+
+  function frame(dt: number): void {
+    touch.update(dt); // F20: touch inertia / double-tap zoom (before terrain following)
+    controller.update(dt);
+    sky.position.copy(camera.position);
+    terrain.update(camera);
+    renderer.render(scene, camera);
+    syncStore();
+  }
+
+  renderer.setAnimationLoop((t) => {
+    timer.update(t);
+    frame(timer.getDelta());
+    fpsFrames++;
+    const now = performance.now();
+    if (now - fpsT0 > 500) {
+      fps = (fpsFrames * 1000) / (now - fpsT0);
+      fpsFrames = 0;
+      fpsT0 = now;
+    }
+  });
+
+  // ---- load terrain ---------------------------------------------------------------------------
+  const startXZ = fromHash ? utmToWorld(fromHash.E, fromHash.N, origin) : { x: cx, z: cz };
+  // Start as soon as the ground under the start point is known and a first batch is in (or load()
+  // resolved); further chunks keep streaming with the HUD's "Lade Details … n".
+  const FIRST_BATCH = 9;
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    loading.hidden = true;
+    if (!fromHash) {
+      const g = terrain.surfaceY(cx, cz);
+      controller.setPose({ x: cx, z: cz, y: g + START_AGL, heading: 0, pitch: -25 });
+    }
+    // Seed the store's pose before the hash binds: in a hidden tab rAF may not have run yet, and a
+    // display write (overlay/forest/layer) would otherwise serialise the default pose (#0,0,0,…).
+    syncStore();
+    bindHash(store, { isValidLayer, suspend: (s) => getLocate()?.revealsPosition(s) ?? false }); // F20 privacy
+    window.dispatchEvent(new CustomEvent('sle:ready', { detail: ctx }));
+  };
+  const result = await terrain.load(startXZ.x, startXZ.z, (pr) => {
+    loadProgress = { ...pr };
+    if (started) return;
+    loading.textContent = `Lade Gelände … ${pr.loaded}/${pr.total}${pr.failed ? ` (${pr.failed} fehlgeschlagen)` : ''}`;
+    if (pr.loaded >= Math.min(pr.total, FIRST_BATCH) && Number.isFinite(terrain.heightAt(startXZ.x, startXZ.z))) start();
+  });
+  loadDone = true;
+  if (result.loaded === 0 && !started) {
+    loading.textContent = 'Keine Geländekacheln geladen – siehe Konsole.';
+    loading.classList.add('error');
+    return;
+  }
+  start();
+}
+
+void main();

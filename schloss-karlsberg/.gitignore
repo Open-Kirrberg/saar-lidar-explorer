@@ -1,0 +1,19 @@
+# Copyrighted reference video + everything derived from it (HMS 2022) — local only
+/video2world/input/
+/video2world/frames/
+/video2world/output/
+/video2world/repo/
+/video2world/work/
+*.mp4
+*.webm
+*.mkv
+# Downloaded sources (licences logged in research/07) and textures (viewer/textures.json)
+/sources/
+/viewer/public/textures/
+# Generated (reproducible: scripts/prepare-terrain.py, plans/scripts/terrain.py, pnpm run plans/export/build)
+/viewer/public/terrain/
+/plans/data/
+/plans/out/
+/model/out/
+/dist/
+/node_modules/

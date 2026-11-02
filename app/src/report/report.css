@@ -1,0 +1,15 @@
+/* F18 "Meldung erstellen" dialog (the report itself carries its own inline CSS). */
+#sle-report {
+  position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 12, 14, 0.55); padding: 16px;
+}
+#sle-report .sle-report-modal { max-width: 480px; }
+#sle-report .sle-report-modal label { margin: 8px 0; }
+#sle-report .sle-report-row select { flex: 1; min-width: 0; }
+#sle-report .sle-report-status { min-height: 1.4em; margin: 6px 0 0; color: var(--ui-accent); font-size: 12.5px; }
+/* While building: let the user watch the fly-to; only a small status card stays. */
+#sle-report.working { inset: auto 16px 80px auto; background: none; padding: 0; pointer-events: none; }
+#sle-report.working .sle-report-modal > :not(.sle-report-status):not(h2) { display: none; }
+#sle-report.working .sle-report-modal { padding: 10px 14px; }
+#sle-report.working h2 { font-size: 14px; margin: 0; }
+.sle-marker-row [data-act=report] { font-size: 12px; }

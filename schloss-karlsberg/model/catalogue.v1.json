@@ -1,0 +1,4951 @@
+{
+ "version": 1,
+ "status": "draft 2026-11-01 - reconciled from research/01-04; see research/05-synthesis.md",
+ "crs": "EPSG:25832",
+ "height_datum": "DHHN2016",
+ "origin": {
+  "E0": 381000,
+  "N0": 5465000,
+  "local_frame": "x = E - E0, y = h, z = -(N - N0) (docs/data-contract.md)"
+ },
+ "palace_grid": {
+  "origin_EN": [
+   382226.0,
+   5466120.0
+  ],
+  "u_azimuth_grid_deg": 80.5,
+  "u_azimuth_true_deg": 79.3,
+  "grid_convergence_deg": -1.23,
+  "note": "u = along the Ehrenhof axis (towards E avenue KB-12), v = towards N (az 350.5). E = E0+u*0.98629-v*0.16505; N = N0+u*0.16505+v*0.98629"
+ },
+ "conventions": {
+  "footprint": "closed ring [[E,N],...], CCW, EPSG:25832; null = documented but unplaced",
+  "base_h": "floor/terrace level the storey stack starts from (m DHHN2016); ground_dtm gives today's terrain under the footprint (min/median/max) so the generator can extend plinths",
+  "storeys": "bottom-up incl. plinth; eaves_h = base_h + sum(storeys); ridge_h computed from roof type + depth",
+  "confidence": "high = position+form evidenced; med = position evidenced, form from comparables/HMS; low = hypothesis",
+  "placement": "lidar | lidar+hms | map+lidar | existing | relative | hypothetical | unplaced",
+  "tags": "D documented, D-> derived, I inferred, N period norm, U unknown; HMS = secondary (copyrighted reconstruction, interpretation only)",
+  "classes": "CDL, WING2, RANGE1, PAV, STABLE, RIDE, ORANG, FARM, GARD, WALL - templates in research/02 section 2"
+ },
+ "defaults": {
+  "unit": {
+   "name": "pied du roi",
+   "m": 0.3248
+  },
+  "eaves_continuous": true,
+  "lightning_rods": true,
+  "render": "#ECE8DF",
+  "members": "#BDBAB2",
+  "plinth": "#A65E4A",
+  "slate": "#4B5057",
+  "tile": "#9C4A30-#B5653F",
+  "shutters": "#7D8A78 (or pale grey)",
+  "time_slice": "summer 1789-90"
+ },
+ "buildings": [
+  {
+   "id": "KB-B01",
+   "name_de": "Corps de logis (Hauptpalais; Kern = Louisenhof-Herrenhaus 1760/61)",
+   "cls": "CDL",
+   "function": "ducal residence; vestibule, Prunktreppe, state apartments on the Beletage",
+   "built": "core 1760/61; refurbished/enlarged 1778-82; mansard",
+   "priority": 1,
+   "confidence": "med",
+   "placement": "lidar+hms",
+   "footprint": [
+    [
+     382259.97,
+     5466087.87
+    ],
+    [
+     382277.72,
+     5466090.84
+    ],
+    [
+     382264.87,
+     5466167.67
+    ],
+    [
+     382247.11,
+     5466164.7
+    ],
+    [
+     382259.97,
+     5466087.87
+    ]
+   ],
+   "base_h": 344.8,
+   "storeys": [
+    {
+     "name": "Sockel / Souterrain (cellar windows)",
+     "height": 1.2,
+     "tag": "N; HMS shows plinth with cellar windows + Freitreppe"
+    },
+    {
+     "name": "Erdgeschoss (rez-de-chaussee)",
+     "height": 4.8,
+     "tag": "N (4.5-5.5)"
+    },
+    {
+     "name": "Beletage (state rooms)",
+     "height": 5.6,
+     "tag": "D state rooms upstairs (enwp); height N"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 70,
+    "pitch_upper": 30,
+    "ridge_h": 364.44,
+    "material": "slate (rectangular French cover)",
+    "centre": "7-axis centre block raised as a steep hipped mansard with Dachreiter (bell turret/spire)",
+    "tags": "mansard D (enwp: only Corps de logis had mansard); pitches N; slate U (HMS slate; Benrath D)",
+    "eaves_h": 356.4,
+    "depth_m": 18.0
+   },
+   "facade": {
+    "axes_garden_east": 19,
+    "axes_court_west": 9,
+    "axis_spacing": 4.1,
+    "rhythm": "6 + 7 (centre risalit = Louisenhof core) + 6",
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "grey-painted / yellow-grey Buntsandstein members #BDBAB2-#C8B38C, red Buntsandstein plinth #A65E4A",
+    "tags": "render colour: D (Orangerie 'hell verputzt', schloss-karlsberg.de), D-> Koblenz/Wilhelmshoehe, secondary HMS 2022 (white-grey); members: N/U",
+    "portal": "court side: central door with Freitreppe (5-7 steps); garden side: 3 portes-fenetres in centre risalit; axis passage on v=0 to east avenue KB-12",
+    "shutters": "inside shutters on state floor; louvred on EG (HMS shows shutters)",
+    "lightning_rods": true,
+    "axis_tags": "7 centre axes D (Louisenhof 7x4 axes, hib); 4.1 m D-> (Saarbruecken 4.36); 19 total I"
+   },
+   "interior": "detailed",
+   "lidar_ids": [
+    "KB-01 (E edge)",
+    "KB-04",
+    "KB-02/KB-03 east ends"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "http://nhp-2000.de/homburg-im-bild/html/body_-_chronologie_schloss_karlsber.html",
+    "https://en.wikipedia.org/wiki/Karlsberg_Castle",
+    "research/01-history-and-sources.md",
+    "research/02-comparable-palaces-design-grammar.md",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04"
+   ],
+   "notes": "Footprint = east closing range between the inner ends of KB-02 and KB-03 (u 28.2-46.2, v -37.3..40.6 in palace grid), 78 x 18 m; depth 18 m D-> Saarbruecken 18.26 m and Louisenhof 4 axes deep. Court face is 40.9 m wide = 9-10 axes; HMS shows a 7-axis raised centre with two side bays. East half stands on rising ground (see ground_dtm max) -> garden side floor ~1-2 m above grade on the west only. '42 m staircase' (enwp) interpreted as 42 Pariser Fuss = 13.6 m stair hall (I).",
+   "alternatives": [
+    "CdL inside the terrace at u 10-28 (court only 46 m long) if the E edge of KB-01 is the building's rear wall",
+    "roof: high hipped roof on whole range (Louisenhof 'probably Walmdach', hib)"
+   ],
+   "ground_dtm": {
+    "min": 343.95,
+    "median": 345.27,
+    "max": 345.98,
+    "n_cells": 1515
+   },
+   "footprint_area_m2": 1402.3
+  },
+  {
+   "id": "KB-B02",
+   "name_de": "Suedfluegel (herzoglicher Wohnfluegel mit Speisesaelen und Silberkammer?)",
+   "cls": "WING2",
+   "function": "ducal living wing, dining rooms, silver chamber (after HMS caption); vaulted cellars",
+   "built": "1780-85",
+   "priority": 2,
+   "confidence": "high",
+   "placement": "lidar",
+   "footprint": [
+    [
+     382196.65,
+     5466077.27
+    ],
+    [
+     382259.97,
+     5466087.87
+    ],
+    [
+     382257.16,
+     5466104.63
+    ],
+    [
+     382193.84,
+     5466094.04
+    ],
+    [
+     382196.65,
+     5466077.27
+    ]
+   ],
+   "base_h": 344.8,
+   "storeys": [
+    {
+     "name": "Sockel (cellar windows)",
+     "height": 1.2,
+     "tag": "N; KB-02 cellars 2 m below court (LiDAR D)"
+    },
+    {
+     "name": "Erdgeschoss",
+     "height": 4.4,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 4.6,
+     "tag": "N; eaves kept equal to CdL (continuous cornice, D enwp)"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 70,
+    "pitch_upper": 30,
+    "ridge_h": 362.59,
+    "material": "slate",
+    "tags": "mansard after HMS (secondary); conflicts with enwp 'gabled roofs except CdL' -> alternative gable 45 deg",
+    "eaves_h": 355.0,
+    "depth_m": 17.0
+   },
+   "facade": {
+    "axes": 17,
+    "axis_spacing": 3.75,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "grey-painted / yellow-grey Buntsandstein members #BDBAB2-#C8B38C, red Buntsandstein plinth #A65E4A",
+    "tags": "render colour: D (Orangerie 'hell verputzt', schloss-karlsberg.de), D-> Koblenz/Wilhelmshoehe, secondary HMS 2022 (white-grey); members: N/U",
+    "portal": "central Durchfahrt (round-arched gate passage, rusticated surround) per HMS",
+    "shutters": "louvred Jalousielaeden, pale grey #BDBAB2 or grey-blue",
+    "lightning_rods": true
+   },
+   "interior": "simple",
+   "lidar_ids": [
+    "KB-02"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "research/01-history-and-sources.md",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/02-comparable-palaces-design-grammar.md"
+   ],
+   "notes": "64 x 17 m; sunken rooms ~2 m below court = vaulted cellars (LiDAR). South face overlooks a terrace garden (HMS) on the slope. Cellar possibly the documented 'Keller des Kavaliersgebaeude' ('Raeuberhoehle') -> alternative identity Kavaliersbau.",
+   "alternatives": [
+    "= Kavaliersbau 1779-85 (cellar 'Raeuberhoehle')",
+    "roof gable 45 deg, slate or Biberschwanz (enwp)"
+   ],
+   "ground_dtm": {
+    "min": 340.08,
+    "median": 343.46,
+    "max": 345.73,
+    "n_cells": 1181
+   },
+   "footprint_area_m2": 1091.3
+  },
+  {
+   "id": "KB-B03",
+   "name_de": "Nordfluegel",
+   "cls": "WING2",
+   "function": "apartments (court), passage to Kuechenhof; link to collections",
+   "built": "from 1779",
+   "priority": 2,
+   "confidence": "high",
+   "placement": "lidar",
+   "footprint": [
+    [
+     382189.16,
+     5466134.72
+    ],
+    [
+     382250.41,
+     5466144.97
+    ],
+    [
+     382247.11,
+     5466164.7
+    ],
+    [
+     382185.86,
+     5466154.45
+    ],
+    [
+     382189.16,
+     5466134.72
+    ]
+   ],
+   "base_h": 344.8,
+   "storeys": [
+    {
+     "name": "Sockel (cellar windows)",
+     "height": 1.2,
+     "tag": "N; KB-02 cellars 2 m below court (LiDAR D)"
+    },
+    {
+     "name": "Erdgeschoss",
+     "height": 4.4,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 4.6,
+     "tag": "N; eaves kept equal to CdL (continuous cornice, D enwp)"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 70,
+    "pitch_upper": 30,
+    "ridge_h": 363.93,
+    "material": "slate",
+    "tags": "as KB-B02",
+    "eaves_h": 355.0,
+    "depth_m": 20.0
+   },
+   "facade": {
+    "axes": 17,
+    "axis_spacing": 3.65,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "grey-painted / yellow-grey Buntsandstein members #BDBAB2-#C8B38C, red Buntsandstein plinth #A65E4A",
+    "tags": "render colour: D (Orangerie 'hell verputzt', schloss-karlsberg.de), D-> Koblenz/Wilhelmshoehe, secondary HMS 2022 (white-grey); members: N/U",
+    "portal": "Durchfahrt to the Kuechenhof (HMS)",
+    "shutters": "louvred",
+    "lightning_rods": true
+   },
+   "interior": "simple",
+   "lidar_ids": [
+    "KB-03",
+    "KB-04"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "research/01-history-and-sources.md",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04"
+   ],
+   "notes": "LiDAR band 78 x 20 m (robbed-wall trench pairs). East 16 m (u 28-44) belong to the CdL corner. 20 m depth may include robbing trenches; a 16 m double-pile wing inside the band is equally possible. en.wikipedia '1779-1794' = typo.",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 343.76,
+    "median": 344.81,
+    "max": 345.89,
+    "n_cells": 1336
+   },
+   "footprint_area_m2": 1242.3
+  },
+  {
+   "id": "KB-B10",
+   "name_de": "Orangerie, Hauptfluegel (aus der Schweizerei 1780)",
+   "cls": "ORANG",
+   "function": "orangery (citrus overwintering) and summer festival hall; Pfeilersaal",
+   "built": "1780 (conversion of the Schweizerei)",
+   "priority": 2,
+   "confidence": "med",
+   "placement": "lidar",
+   "footprint": [
+    [
+     382237.82,
+     5466009.17
+    ],
+    [
+     382228.05,
+     5466007.04
+    ],
+    [
+     382245.95,
+     5465924.96
+    ],
+    [
+     382255.72,
+     5465927.09
+    ],
+    [
+     382237.82,
+     5466009.17
+    ]
+   ],
+   "base_h": 335.3,
+   "storeys": [
+    {
+     "name": "hohes Kellergeschoss (exposed on the W, buried on the E by the parterre)",
+     "height": 5.5,
+     "tag": "D high basement (skb) = D LiDAR 5.3-5.6 m drop KB-30"
+    },
+    {
+     "name": "Saalgeschoss (Pfeilersaal, floor-length windows)",
+     "height": 7.0,
+     "tag": "D form (skb); height N (6-8 m)"
+    }
+   ],
+   "roof": {
+    "type": "hip",
+    "pitch_lower": 40,
+    "ridge_h": 352.0,
+    "material": "slate (U; HMS shows dark roof with Dachreiter)",
+    "tags": "form I/N",
+    "eaves_h": 347.8,
+    "depth_m": 10.0
+   },
+   "facade": {
+    "axes": 21,
+    "axis_spacing": 3.9,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "red Buntsandstein (ruin masonry is reddish sandstone, Commons photos)",
+    "windows": "floor-length (portes-fenetres) on the parterre (E) side and W upper side",
+    "portal": "central risalit with pediment towards the parterre (I)",
+    "lightning_rods": true,
+    "tags": "'hell verputzt' D (skb); three wings D; axes N"
+   },
+   "interior": "simple",
+   "lidar_ids": [
+    "KB-30",
+    "KB-31",
+    "KB-32",
+    "KB-33"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "https://schloss-karlsberg.de/schloss-karlsberg/",
+    "research/01-history-and-sources.md",
+    "https://de.wikipedia.org/wiki/Schloss_Karlsberg"
+   ],
+   "notes": "Standing ruin. base_h = lower bench 335.2 (W); floor of the hall = 340.8 (parterre). Building depth 8-10 m from a parallel inner line (I). Weber notes a stylistic difference from the Hauptpalais (richer/more classical, I).",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 335.63,
+    "median": 340.75,
+    "max": 342.18,
+    "n_cells": 951
+   },
+   "footprint_area_m2": 840.0
+  },
+  {
+   "id": "KB-B14",
+   "name_de": "Orangerie-Stuetzmauer (Terrassenmauer West)",
+   "cls": "WALL",
+   "function": "retaining wall / W basement front",
+   "built": "1780",
+   "priority": 2,
+   "confidence": "high",
+   "placement": "lidar",
+   "footprint": null,
+   "line": [
+    [
+     382228.3,
+     5466005.8
+    ],
+    [
+     382245.6,
+     5465926.7
+    ]
+   ],
+   "base_h": 335.1,
+   "storeys": [],
+   "roof": {
+    "type": "none"
+   },
+   "facade": {
+    "material": "red Buntsandstein rubble with ashlar coping",
+    "height_m": 5.6
+   },
+   "lidar_ids": [
+    "KB-30"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)"
+   ],
+   "notes": "Standing; 81 m, az 167.7 grid; top 340.8, foot 335.1.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": null
+  },
+  {
+   "id": "KB-B04",
+   "name_de": "Sammlungsfluegel / Westfluegel (Bibliothek, Naturalienkabinett, Waffensammlung)",
+   "cls": "WING2",
+   "function": "library, natural-history and physics cabinets, armoury (HMS caption; BuS 2012 'collection wing to the north')",
+   "built": "from 1782 (west wing)",
+   "priority": 3,
+   "confidence": "med",
+   "placement": "lidar+hms",
+   "footprint": [
+    [
+     382185.86,
+     5466154.45
+    ],
+    [
+     382198.69,
+     5466156.59
+    ],
+    [
+     382189.21,
+     5466213.21
+    ],
+    [
+     382176.39,
+     5466211.06
+    ],
+    [
+     382185.86,
+     5466154.45
+    ]
+   ],
+   "base_h": 344.8,
+   "storeys": [
+    {
+     "name": "Sockel (cellar windows)",
+     "height": 1.2,
+     "tag": "N; KB-02 cellars 2 m below court (LiDAR D)"
+    },
+    {
+     "name": "Erdgeschoss",
+     "height": 4.4,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 4.6,
+     "tag": "N; eaves kept equal to CdL (continuous cornice, D enwp)"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 70,
+    "pitch_upper": 30,
+    "ridge_h": 360.81,
+    "material": "slate",
+    "tags": "HMS (secondary)",
+    "eaves_h": 355.0,
+    "depth_m": 13.0
+   },
+   "facade": {
+    "axes": 15,
+    "axis_spacing": 3.8,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "grey-painted / yellow-grey Buntsandstein members #BDBAB2-#C8B38C, red Buntsandstein plinth #A65E4A",
+    "tags": "render colour: D (Orangerie 'hell verputzt', schloss-karlsberg.de), D-> Koblenz/Wilhelmshoehe, secondary HMS 2022 (white-grey); members: N/U",
+    "portal": "gate on the west (Paradestrasse) side (HMS)",
+    "shutters": "louvred",
+    "lightning_rods": true
+   },
+   "interior": "simple",
+   "lidar_ids": [
+    "KB-05"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "Schwan, Burgen und Schloesser 4/2012 (snippet only)",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Snapped to palace grid (LiDAR min-rect is 174 deg, 3.5 deg off) and joined to the N arm (LiDAR shows a 5 m gap at v 40-46, robbed). Identity: documented 'west wing from 1782' = BuS 'collection wing' = HMS 'Sammlungsfluegel' (I, med).",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 344.0,
+    "median": 344.84,
+    "max": 345.9,
+    "n_cells": 830
+   },
+   "footprint_area_m2": 746.4
+  },
+  {
+   "id": "KB-B05",
+   "name_de": "Kuechenbau",
+   "cls": "WING2",
+   "function": "court kitchen (detached, cf. Woerlitz detached kitchen)",
+   "built": "1779/80-84",
+   "priority": 3,
+   "confidence": "med",
+   "placement": "lidar+hms",
+   "footprint": [
+    [
+     382236.88,
+     5466181.03
+    ],
+    [
+     382249.8,
+     5466183.19
+    ],
+    [
+     382245.16,
+     5466210.91
+    ],
+    [
+     382232.24,
+     5466208.75
+    ],
+    [
+     382236.88,
+     5466181.03
+    ]
+   ],
+   "base_h": 344.8,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.8,
+     "tag": "N"
+    },
+    {
+     "name": "Erdgeschoss (kitchen, vaulted)",
+     "height": 5.0,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 4.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 70,
+    "pitch_upper": 30,
+    "ridge_h": 360.41,
+    "material": "slate",
+    "chimneys": "2-3 large kitchen stacks 1.2 x 1.6 m, 2-3 m above roof",
+    "tags": "HMS mansard (secondary); stacks N",
+    "eaves_h": 354.6,
+    "depth_m": 13.0
+   },
+   "facade": {
+    "axes": 7,
+    "axis_spacing": 4.0,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "grey-painted / yellow-grey Buntsandstein members #BDBAB2-#C8B38C, red Buntsandstein plinth #A65E4A",
+    "tags": "render colour: D (Orangerie 'hell verputzt', schloss-karlsberg.de), D-> Koblenz/Wilhelmshoehe, secondary HMS 2022 (white-grey); members: N/U",
+    "portal": "doors to Kuechenhof",
+    "shutters": "louvred",
+    "lightning_rods": true
+   },
+   "interior": "simple",
+   "lidar_ids": [
+    "KB-06"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "28 x 13 m closed rectangle of robbed-wall trenches around a rubble core; HMS caption 'KUECHENBAU' points at a detached block in exactly this position.",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 344.79,
+    "median": 346.26,
+    "max": 347.78,
+    "n_cells": 412
+   },
+   "footprint_area_m2": 368.2
+  },
+  {
+   "id": "KB-B06",
+   "name_de": "Galeriefluegel (Bildergalerie)",
+   "cls": "RANGE1",
+   "function": "picture gallery (collection -> Alte Pinakothek)",
+   "built": "1788",
+   "priority": 3,
+   "confidence": "low",
+   "placement": "lidar+hms",
+   "footprint": [
+    [
+     382191.03,
+     5466202.36
+    ],
+    [
+     382252.08,
+     5466212.57
+    ],
+    [
+     382250.18,
+     5466223.92
+    ],
+    [
+     382189.13,
+     5466213.7
+    ],
+    [
+     382191.03,
+     5466202.36
+    ]
+   ],
+   "base_h": 344.8,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.6,
+     "tag": "N"
+    },
+    {
+     "name": "Galeriegeschoss",
+     "height": 6.5,
+     "tag": "N (6-8 m)"
+    }
+   ],
+   "roof": {
+    "type": "hip",
+    "pitch_lower": 35,
+    "ridge_h": 355.93,
+    "material": "slate",
+    "tags": "one-storey range per HMS (secondary); low hipped roof I",
+    "eaves_h": 351.9,
+    "depth_m": 11.5
+   },
+   "facade": {
+    "axes": 16,
+    "axis_spacing": 3.85,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "grey-painted / yellow-grey Buntsandstein members #BDBAB2-#C8B38C, red Buntsandstein plinth #A65E4A",
+    "tags": "render colour: D (Orangerie 'hell verputzt', schloss-karlsberg.de), D-> Koblenz/Wilhelmshoehe, secondary HMS 2022 (white-grey); members: N/U",
+    "windows": "tall windows on the court (south) side only; north wall closed (hanging wall)",
+    "portal": "doors from Sammlungsfluegel and Kuechenhof",
+    "shutters": "louvred",
+    "lightning_rods": true
+   },
+   "interior": "detailed",
+   "lidar_ids": [
+    "KB-07 (north scarp = robbed back wall?)"
+   ],
+   "sources": [
+    "Schwan, Burgen und Schloesser 4/2012 (snippet only)",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/01-history-and-sources.md",
+    "research/02-comparable-palaces-design-grammar.md"
+   ],
+   "notes": "Placed along the north scarp KB-07 closing the Kuechenhof (HMS: one-storey range opposite the Durchfahrt, continuing east to a domed rotunda). 62 m within the cut terrace; HMS continues it ~30 m further east onto the upper level (347.6 m). Length U; 'wheelchair race' anecdote implies long.",
+   "alternatives": [
+    "gallery = upper floor of the Sammlungsfluegel",
+    "gallery continues east to KB-B07 rotunda (HMS)"
+   ],
+   "ground_dtm": {
+    "min": 344.47,
+    "median": 345.06,
+    "max": 347.47,
+    "n_cells": 798
+   },
+   "footprint_area_m2": 712.0
+  },
+  {
+   "id": "KB-B29",
+   "name_de": "Baumagazin (heute Karlsberger Hof)",
+   "cls": "FARM",
+   "function": "building-materials store of the Bauamt; later brewery/sugar factory, forester's house, brewery villa",
+   "built": "1780s (U)",
+   "priority": 3,
+   "confidence": "med",
+   "placement": "existing",
+   "footprint": [
+    [
+     381503.5,
+     5465834.5
+    ],
+    [
+     381507.3,
+     5465822.7
+    ],
+    [
+     381515.2,
+     5465798.5
+    ],
+    [
+     381525.6,
+     5465801.9
+    ],
+    [
+     381517.7,
+     5465826.1
+    ],
+    [
+     381513.8,
+     5465838.0
+    ],
+    [
+     381503.5,
+     5465834.5
+    ]
+   ],
+   "base_h": 256.3,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.4,
+     "tag": "N"
+    },
+    {
+     "name": "Erdgeschoss",
+     "height": 3.6,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 3.2,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "gable",
+    "pitch_lower": 48,
+    "ridge_h": 269.61,
+    "material": "red Biberschwanz tile",
+    "tags": "1793 roof differed (dewp D); form N",
+    "eaves_h": 263.5,
+    "depth_m": 11.0
+   },
+   "facade": {
+    "axes": 12,
+    "axis_spacing": 3.4,
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)",
+    "lightning_rods": true
+   },
+   "lidar_ids": [
+    "LoD2 DESLT9866A103F47 + DESLT9866A104DD3"
+   ],
+   "sources": [
+    "https://de.wikipedia.org/wiki/Schloss_Karlsberg",
+    "https://schloss-karlsberg.de/schloss-karlsberg/",
+    "LoD2 SL tile LoD2_32_381_5465 (data/raw/lod2), dl-de/by-2-0",
+    "https://commons.wikimedia.org/wiki/File:Karlsberger_Hof.jpg"
+   ],
+   "notes": "Only surviving building. Identified with the LoD2 building 40 x 11 m (az ~162 deg) 15-40 m from the Commons photo GPS (381488/5465847), at the end of the street 'Karlsberger Hof'; today 9.6/13.4 m high (one end raised by a later storey, matching dewp). 1793 state: LONGER and lower with another roof -> length U (model today's length + optional extension).",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 256.05,
+    "median": 256.38,
+    "max": 256.5,
+    "n_cells": 477
+   },
+   "footprint_area_m2": 414.5
+  },
+  {
+   "id": "KL-B40",
+   "name_de": "Menagerie ('Baerenzwinger'): Ring aus 19 halbrunden Kaefigen + Loge",
+   "cls": "GARD",
+   "function": "aviary/menagerie ring around a moat with a square island (modelled on amphitheatres)",
+   "built": "1778/79-86",
+   "priority": 3,
+   "confidence": "med",
+   "placement": "lidar",
+   "footprint": [
+    [
+     382962.0,
+     5464913.0
+    ],
+    [
+     382961.67,
+     5464917.22
+    ],
+    [
+     382960.68,
+     5464921.34
+    ],
+    [
+     382959.06,
+     5464925.26
+    ],
+    [
+     382956.84,
+     5464928.87
+    ],
+    [
+     382954.09,
+     5464932.09
+    ],
+    [
+     382950.87,
+     5464934.84
+    ],
+    [
+     382947.26,
+     5464937.06
+    ],
+    [
+     382943.34,
+     5464938.68
+    ],
+    [
+     382939.22,
+     5464939.67
+    ],
+    [
+     382935.0,
+     5464940.0
+    ],
+    [
+     382930.78,
+     5464939.67
+    ],
+    [
+     382926.66,
+     5464938.68
+    ],
+    [
+     382922.74,
+     5464937.06
+    ],
+    [
+     382919.13,
+     5464934.84
+    ],
+    [
+     382915.91,
+     5464932.09
+    ],
+    [
+     382913.16,
+     5464928.87
+    ],
+    [
+     382910.94,
+     5464925.26
+    ],
+    [
+     382909.32,
+     5464921.34
+    ],
+    [
+     382908.33,
+     5464917.22
+    ],
+    [
+     382908.0,
+     5464913.0
+    ],
+    [
+     382908.33,
+     5464908.78
+    ],
+    [
+     382909.32,
+     5464904.66
+    ],
+    [
+     382910.94,
+     5464900.74
+    ],
+    [
+     382913.16,
+     5464897.13
+    ],
+    [
+     382915.91,
+     5464893.91
+    ],
+    [
+     382919.13,
+     5464891.16
+    ],
+    [
+     382922.74,
+     5464888.94
+    ],
+    [
+     382926.66,
+     5464887.32
+    ],
+    [
+     382930.78,
+     5464886.33
+    ],
+    [
+     382935.0,
+     5464886.0
+    ],
+    [
+     382939.22,
+     5464886.33
+    ],
+    [
+     382943.34,
+     5464887.32
+    ],
+    [
+     382947.26,
+     5464888.94
+    ],
+    [
+     382950.87,
+     5464891.16
+    ],
+    [
+     382954.09,
+     5464893.91
+    ],
+    [
+     382956.84,
+     5464897.13
+    ],
+    [
+     382959.06,
+     5464900.74
+    ],
+    [
+     382960.68,
+     5464904.66
+    ],
+    [
+     382961.67,
+     5464908.78
+    ],
+    [
+     382962.0,
+     5464913.0
+    ]
+   ],
+   "base_h": 298.5,
+   "storeys": [
+    {
+     "name": "Kaefigmauer",
+     "height": 3.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "none (iron grilles / net domes)",
+    "eaves_h": 301.5
+   },
+   "facade": {
+    "material": "Buntsandstein rubble, rendered",
+    "content": "19 half-round cages (r ~2.5 m) + 1 loge on a ring r 22-27 m, facing the moat"
+   },
+   "lidar_ids": [
+    "KL-01"
+   ],
+   "sources": [
+    "https://de.wikipedia.org/wiki/Schloss_Karlsberg",
+    "https://schloss-karlsberg.de/schloss-karlsberg/",
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "https://commons.wikimedia.org/wiki/Category:B%C3%A4renzwinger_(Karlsberg)"
+   ],
+   "notes": "Count 19 + loge D; ring radius I from the 44 m moat (LiDAR). Standing ring walls -> check against Commons photos.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 297.64,
+    "median": 298.5,
+    "max": 303.1,
+    "n_cells": 2377
+   },
+   "footprint_area_m2": 2280.9,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KB-B11",
+   "name_de": "Orangerie, Nordfluegel (Komoedienhaus/Theatersaal 1783?)",
+   "cls": "ORANG",
+   "function": "wing of the three-wing orangery; theatre hall 1783 location U",
+   "built": "1780-83",
+   "priority": 4,
+   "confidence": "low",
+   "placement": "relative",
+   "footprint": [
+    [
+     382269.69,
+     5466003.83
+    ],
+    [
+     382267.13,
+     5466015.56
+    ],
+    [
+     382237.82,
+     5466009.17
+    ],
+    [
+     382240.38,
+     5465997.44
+    ],
+    [
+     382269.69,
+     5466003.83
+    ]
+   ],
+   "base_h": 340.8,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.6,
+     "tag": "N"
+    },
+    {
+     "name": "Saal",
+     "height": 7.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "hip",
+    "pitch_lower": 40,
+    "ridge_h": 353.43,
+    "material": "slate",
+    "tags": "N",
+    "eaves_h": 348.4,
+    "depth_m": 12.0
+   },
+   "facade": {
+    "axes": 7,
+    "axis_spacing": 3.9,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "red Buntsandstein",
+    "lightning_rods": true
+   },
+   "lidar_ids": [
+    "KB-31 N end (curved structure)"
+   ],
+   "sources": [
+    "https://schloss-karlsberg.de/schloss-karlsberg/",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "'Three wings' D; wing lengths U. Placed at the N end turning east onto the parterre.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 338.67,
+    "median": 341.33,
+    "max": 342.76,
+    "n_cells": 411
+   },
+   "footprint_area_m2": 360.2
+  },
+  {
+   "id": "KB-B12",
+   "name_de": "Orangerie, Suedfluegel",
+   "cls": "ORANG",
+   "function": "wing of the three-wing orangery",
+   "built": "1780-83",
+   "priority": 4,
+   "confidence": "low",
+   "placement": "relative",
+   "footprint": [
+    [
+     382285.03,
+     5465933.49
+    ],
+    [
+     382282.47,
+     5465945.21
+    ],
+    [
+     382253.16,
+     5465938.82
+    ],
+    [
+     382255.72,
+     5465927.09
+    ],
+    [
+     382285.03,
+     5465933.49
+    ]
+   ],
+   "base_h": 340.8,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.6,
+     "tag": "N"
+    },
+    {
+     "name": "Saal",
+     "height": 7.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "hip",
+    "pitch_lower": 40,
+    "ridge_h": 353.43,
+    "material": "slate",
+    "tags": "N",
+    "eaves_h": 348.4,
+    "depth_m": 12.0
+   },
+   "facade": {
+    "axes": 7,
+    "axis_spacing": 3.9,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "red Buntsandstein",
+    "lightning_rods": true
+   },
+   "lidar_ids": [
+    "rectangle E of KB-31 S end (img/14, ~382245-382260 / 5465925-5465945)"
+   ],
+   "sources": [
+    "https://schloss-karlsberg.de/schloss-karlsberg/",
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)"
+   ],
+   "notes": "SLRM shows a rectangular structure turning east at the S end.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 340.65,
+    "median": 341.15,
+    "max": 341.92,
+    "n_cells": 411
+   },
+   "footprint_area_m2": 360.0
+  },
+  {
+   "id": "KB-B13",
+   "name_de": "Rotunde / Rundbau an der Orangerie (1785)",
+   "cls": "PAV",
+   "function": "festival rotunda for the 1785 wedding of Pfalzgraf Max Joseph",
+   "built": "1785",
+   "priority": 4,
+   "confidence": "low",
+   "placement": "lidar",
+   "footprint": [
+    [
+     382277.0,
+     5465972.0
+    ],
+    [
+     382276.73,
+     5465974.73
+    ],
+    [
+     382275.93,
+     5465977.36
+    ],
+    [
+     382274.64,
+     5465979.78
+    ],
+    [
+     382272.9,
+     5465981.9
+    ],
+    [
+     382270.78,
+     5465983.64
+    ],
+    [
+     382268.36,
+     5465984.93
+    ],
+    [
+     382265.73,
+     5465985.73
+    ],
+    [
+     382263.0,
+     5465986.0
+    ],
+    [
+     382260.27,
+     5465985.73
+    ],
+    [
+     382257.64,
+     5465984.93
+    ],
+    [
+     382255.22,
+     5465983.64
+    ],
+    [
+     382253.1,
+     5465981.9
+    ],
+    [
+     382251.36,
+     5465979.78
+    ],
+    [
+     382250.07,
+     5465977.36
+    ],
+    [
+     382249.27,
+     5465974.73
+    ],
+    [
+     382249.0,
+     5465972.0
+    ],
+    [
+     382249.27,
+     5465969.27
+    ],
+    [
+     382250.07,
+     5465966.64
+    ],
+    [
+     382251.36,
+     5465964.22
+    ],
+    [
+     382253.1,
+     5465962.1
+    ],
+    [
+     382255.22,
+     5465960.36
+    ],
+    [
+     382257.64,
+     5465959.07
+    ],
+    [
+     382260.27,
+     5465958.27
+    ],
+    [
+     382263.0,
+     5465958.0
+    ],
+    [
+     382265.73,
+     5465958.27
+    ],
+    [
+     382268.36,
+     5465959.07
+    ],
+    [
+     382270.78,
+     5465960.36
+    ],
+    [
+     382272.9,
+     5465962.1
+    ],
+    [
+     382274.64,
+     5465964.22
+    ],
+    [
+     382275.93,
+     5465966.64
+    ],
+    [
+     382276.73,
+     5465969.27
+    ],
+    [
+     382277.0,
+     5465972.0
+    ]
+   ],
+   "base_h": 340.8,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.5,
+     "tag": "N"
+    },
+    {
+     "name": "Rundsaal",
+     "height": 9.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "dome",
+    "ridge_h": 358.7,
+    "material": "slate or lead; lantern",
+    "tags": "U; Weber has plan, section, elevations (not seen)",
+    "eaves_h": 350.3,
+    "depth_m": 28.0
+   },
+   "facade": {
+    "axes": 16,
+    "axis_spacing": 5.5,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "sandstone pilasters (I)",
+    "lightning_rods": true
+   },
+   "interior": "simple",
+   "lidar_ids": [
+    "KB-34 (two concentric rings D 34/28 m)"
+   ],
+   "sources": [
+    "research/01-history-and-sources.md",
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "Fuerstenwaerther 1786 (dilibri, PD)"
+   ],
+   "notes": "Documented at the Orangerie (Weber chapter 'Der Grundriss - Schnitt und Ansichten'); KB-34 rings touch the hall's E face (gap ~3 m) = 'attached'. Ring could also be a basin or modern (03 marks low). Inner ring D 28 m used as wall line.",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 340.43,
+    "median": 340.75,
+    "max": 341.38,
+    "n_cells": 665
+   },
+   "footprint_area_m2": 611.7
+  },
+  {
+   "id": "KB-B20",
+   "name_de": "Marstall (Westbau)",
+   "cls": "STABLE",
+   "function": "ducal stables ('stable for 1000 horses' = legend), tack rooms, grooms",
+   "built": "1778-85",
+   "priority": 4,
+   "confidence": "low",
+   "placement": "hypothetical",
+   "footprint": [
+    [
+     382182.22,
+     5466380.14
+    ],
+    [
+     382194.22,
+     5466379.89
+    ],
+    [
+     382197.78,
+     5466549.86
+    ],
+    [
+     382185.78,
+     5466550.11
+    ],
+    [
+     382182.22,
+     5466380.14
+    ]
+   ],
+   "base_h": 344.1,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.3,
+     "tag": "N"
+    },
+    {
+     "name": "Stallgeschoss (vaulted)",
+     "height": 4.5,
+     "tag": "N"
+    },
+    {
+     "name": "Heuboden / Kniestock",
+     "height": 1.2,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 65,
+    "pitch_upper": 30,
+    "ridge_h": 355.32,
+    "material": "red Biberschwanz tile",
+    "tags": "red mansard/hipped roofs on Nutzbauten per HMS (secondary); tile N",
+    "eaves_h": 350.1,
+    "depth_m": 12.0
+   },
+   "facade": {
+    "axes": 45,
+    "axis_spacing": 3.6,
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)",
+    "windows": "high stall windows, sill 1.8 m, segmental",
+    "portal": "central and end portals with pediments",
+    "lightning_rods": true
+   },
+   "lidar_ids": [
+    "KB-20 (W edge)"
+   ],
+   "sources": [
+    "research/01-history-and-sources.md",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/02-comparable-palaces-design-grammar.md",
+    "Commons 'Rampe am ehem. Marstall' (CC BY 2.5)"
+   ],
+   "notes": "Position: HMS groups Marstall+Reithaus+Hundezwinger in the utility row N of the palace along the N-S road; KB-20 is the only large levelled platform there (90 x 190 m, cut 3-4.4 m). Exact plan U. 1000 horses at 1.7 m/stall would need ~850 m of stalls -> exaggeration (D->).",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 343.31,
+    "median": 344.09,
+    "max": 344.81,
+    "n_cells": 2221
+   },
+   "footprint_area_m2": 2040.5
+  },
+  {
+   "id": "KB-B22",
+   "name_de": "Reithaus (Reithalle)",
+   "cls": "RIDE",
+   "function": "covered riding hall",
+   "built": "1778-85 (with Marstall)",
+   "priority": 4,
+   "confidence": "low",
+   "placement": "hypothetical",
+   "footprint": [
+    [
+     382218.44,
+     5466443.19
+    ],
+    [
+     382236.43,
+     5466442.82
+    ],
+    [
+     382237.56,
+     5466496.81
+    ],
+    [
+     382219.57,
+     5466497.18
+    ],
+    [
+     382218.44,
+     5466443.19
+    ]
+   ],
+   "base_h": 344.1,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.5,
+     "tag": "N"
+    },
+    {
+     "name": "Halle",
+     "height": 9.5,
+     "tag": "N (eaves 8-12 m)"
+    }
+   ],
+   "roof": {
+    "type": "hip",
+    "pitch_lower": 38,
+    "ridge_h": 361.13,
+    "material": "red Biberschwanz tile",
+    "tags": "N",
+    "eaves_h": 354.1,
+    "depth_m": 18.0
+   },
+   "facade": {
+    "axes": 13,
+    "axis_spacing": 4.2,
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)",
+    "windows": "high windows, sill > 3 m",
+    "portal": "round-arched end portal 3.8 x 4.4 m",
+    "lightning_rods": true
+   },
+   "interior": "simple",
+   "lidar_ids": [
+    "KB-20"
+   ],
+   "sources": [
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/02-comparable-palaces-design-grammar.md",
+    "Spanish Riding School 55 x 18 m (upper bound)"
+   ],
+   "notes": "Commons photo of the Marstall ramp is filed as 'Reithalle'; size U.",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 343.43,
+    "median": 344.12,
+    "max": 344.48,
+    "n_cells": 1036
+   },
+   "footprint_area_m2": 971.7
+  },
+  {
+   "id": "KB-B24",
+   "name_de": "Jaegerhaus / Jaegermeisterei (ab 1791 Kaserne; spaeter Forsthaus?)",
+   "cls": "WING2",
+   "function": "hunt administration; barracks from 1791",
+   "built": "1780-84",
+   "priority": 4,
+   "confidence": "low",
+   "placement": "map+lidar",
+   "footprint": [
+    [
+     382196.0,
+     5466600.0
+    ],
+    [
+     382210.0,
+     5466600.0
+    ],
+    [
+     382210.0,
+     5466700.0
+    ],
+    [
+     382196.0,
+     5466700.0
+    ],
+    [
+     382196.0,
+     5466600.0
+    ]
+   ],
+   "base_h": 344.4,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.4,
+     "tag": "N"
+    },
+    {
+     "name": "Erdgeschoss",
+     "height": 3.6,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 3.4,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "hip",
+    "pitch_lower": 45,
+    "ridge_h": 358.8,
+    "material": "red Biberschwanz tile",
+    "tags": "HMS red roofs (secondary); N",
+    "depth_m": 14.0,
+    "eaves_h": 351.8
+   },
+   "facade": {
+    "axes": 27,
+    "axis_spacing": 3.6,
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)",
+    "shutters": "plank or louvred, dark green",
+    "lightning_rods": true
+   },
+   "lidar_ids": [
+    "KB-52"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "research/01-history-and-sources.md",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04"
+   ],
+   "notes": "KB-52 platform (100 x 16 m) under the red masonry marks of the 1836-41 'Forsthaus' group (after -50 m E map correction). Continuity Jaegermeisterei -> Forsthaus is plausible (I); en.wikipedia says most service buildings survived 1793.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 342.15,
+    "median": 344.4,
+    "max": 345.36,
+    "n_cells": 1400
+   },
+   "footprint_area_m2": 1400.0,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KL-B42",
+   "name_de": "Tschifflik-Pavillon (Ruine 'Tschifflik'/'Kapelle'; Identitaet strittig)",
+   "cls": "PAV",
+   "function": "Turkish-style garden pavilion, largest of four pavilions",
+   "built": "1779-80",
+   "priority": 4,
+   "confidence": "low",
+   "placement": "lidar",
+   "footprint": [
+    [
+     382611.0,
+     5464763.0
+    ],
+    [
+     382625.0,
+     5464763.0
+    ],
+    [
+     382625.0,
+     5464777.0
+    ],
+    [
+     382611.0,
+     5464777.0
+    ],
+    [
+     382611.0,
+     5464763.0
+    ]
+   ],
+   "base_h": 325.97,
+   "storeys": [
+    {
+     "name": "Kellersockel",
+     "height": 1.0,
+     "tag": "D cellar pit"
+    },
+    {
+     "name": "Saal",
+     "height": 6.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "dome",
+    "ridge_h": 337.17,
+    "material": "copper/lead (oriental onion or tent roof U)",
+    "tags": "cf. Schwetzingen Moschee 1778-85",
+    "depth_m": 14.0,
+    "eaves_h": 332.97
+   },
+   "facade": {
+    "material": "lime render, coloured",
+    "colour": "#ECE8DF",
+    "dressings": "oriental arcades (I)"
+   },
+   "lidar_ids": [
+    "KL-10"
+   ],
+   "sources": [
+    "https://de.wikipedia.org/wiki/Schloss_Karlsberg",
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "research/02-comparable-palaces-design-grammar.md"
+   ],
+   "notes": "1950s excavation: the ruin called 'Tschifflik' may be another building 'on a terrace opposite the cascade' -> alternative KL-09 rondell.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 325.16,
+    "median": 325.97,
+    "max": 327.73,
+    "n_cells": 196
+   },
+   "footprint_area_m2": 196.0,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KB-B21",
+   "name_de": "Marstall (Ostbau)",
+   "cls": "STABLE",
+   "function": "stables / Remisen",
+   "built": "1778-85",
+   "priority": 5,
+   "confidence": "low",
+   "placement": "hypothetical",
+   "footprint": [
+    [
+     382254.09,
+     5466380.63
+    ],
+    [
+     382266.06,
+     5466379.79
+    ],
+    [
+     382277.91,
+     5466549.37
+    ],
+    [
+     382265.94,
+     5466550.21
+    ],
+    [
+     382254.09,
+     5466380.63
+    ]
+   ],
+   "base_h": 344.1,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.3,
+     "tag": "N"
+    },
+    {
+     "name": "Stallgeschoss",
+     "height": 4.5,
+     "tag": "N"
+    },
+    {
+     "name": "Kniestock",
+     "height": 1.2,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 65,
+    "pitch_upper": 30,
+    "ridge_h": 355.32,
+    "material": "red Biberschwanz tile",
+    "tags": "N/HMS",
+    "eaves_h": 350.1,
+    "depth_m": 12.0
+   },
+   "facade": {
+    "axes": 45,
+    "axis_spacing": 3.6,
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)",
+    "lightning_rods": true
+   },
+   "lidar_ids": [
+    "KB-20 (E edge, under scarp KB-21)"
+   ],
+   "sources": [
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/02-comparable-palaces-design-grammar.md"
+   ],
+   "notes": "Mirror of KB-B20 framing the riding court; pure layout hypothesis.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 342.35,
+    "median": 344.16,
+    "max": 347.28,
+    "n_cells": 2228
+   },
+   "footprint_area_m2": 2039.8
+  },
+  {
+   "id": "KB-B23",
+   "name_de": "Hundezwinger",
+   "cls": "STABLE",
+   "function": "kennels for hunting dogs (walled yard with kennel house)",
+   "built": "1780-83 (?)",
+   "priority": 5,
+   "confidence": "low",
+   "placement": "hypothetical",
+   "footprint": [
+    [
+     382214.59,
+     5466570.42
+    ],
+    [
+     382254.58,
+     5466569.59
+    ],
+    [
+     382255.41,
+     5466609.58
+    ],
+    [
+     382215.42,
+     5466610.41
+    ],
+    [
+     382214.59,
+     5466570.42
+    ]
+   ],
+   "base_h": 343.75,
+   "storeys": [
+    {
+     "name": "Hofmauer",
+     "height": 2.5,
+     "tag": "D-> Tschifflik wall 2.5 m"
+    }
+   ],
+   "roof": {
+    "type": "none"
+   },
+   "facade": {
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)",
+    "content": "central kennel house 8 x 12 m, 1 storey, hipped tile roof (HMS walled square with a central building)"
+   },
+   "lidar_ids": [],
+   "sources": [
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "'Zwinger 1780-83' is ambiguous (kennel vs Baerenzwinger). base_h from DTM median.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 342.89,
+    "median": 343.75,
+    "max": 344.2,
+    "n_cells": 1684
+   },
+   "footprint_area_m2": 1599.9,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KB-B25",
+   "name_de": "Nutzbau: Lazarett",
+   "cls": "WING2",
+   "function": "hospital (HMS caption)",
+   "built": "1778-85",
+   "priority": 5,
+   "confidence": "low",
+   "placement": "hypothetical",
+   "footprint": [
+    [
+     382197.58,
+     5466715.15
+    ],
+    [
+     382211.58,
+     5466714.86
+    ],
+    [
+     382212.42,
+     5466754.85
+    ],
+    [
+     382198.42,
+     5466755.14
+    ],
+    [
+     382197.58,
+     5466715.15
+    ]
+   ],
+   "base_h": 344.37,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.4,
+     "tag": "N"
+    },
+    {
+     "name": "Erdgeschoss",
+     "height": 3.6,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 3.4,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 65,
+    "pitch_upper": 30,
+    "ridge_h": 357.86,
+    "material": "red Biberschwanz tile",
+    "tags": "HMS (secondary)",
+    "depth_m": 14.0,
+    "eaves_h": 351.77
+   },
+   "facade": {
+    "axes": 11,
+    "axis_spacing": 3.6,
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)",
+    "lightning_rods": true
+   },
+   "lidar_ids": [
+    "KB-11 (road)"
+   ],
+   "sources": [
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "HMS: 'Nutzbauten fuer das Schloss: Lazarett, Kasernen und Brauerei' along the N-S road north of the palace. Exact position U; placed E of KB-11.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 342.81,
+    "median": 344.37,
+    "max": 345.11,
+    "n_cells": 610
+   },
+   "footprint_area_m2": 560.1,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KB-B26",
+   "name_de": "Nutzbau: Brauerei",
+   "cls": "WING2",
+   "function": "brewery 1778-82 (D date; location HMS)",
+   "built": "1778-85",
+   "priority": 5,
+   "confidence": "low",
+   "placement": "hypothetical",
+   "footprint": [
+    [
+     382197.58,
+     5466770.15
+    ],
+    [
+     382211.58,
+     5466769.86
+    ],
+    [
+     382212.42,
+     5466809.85
+    ],
+    [
+     382198.42,
+     5466810.14
+    ],
+    [
+     382197.58,
+     5466770.15
+    ]
+   ],
+   "base_h": 344.76,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.4,
+     "tag": "N"
+    },
+    {
+     "name": "Erdgeschoss",
+     "height": 3.6,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 3.4,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "mansard",
+    "pitch_lower": 65,
+    "pitch_upper": 30,
+    "ridge_h": 358.25,
+    "material": "red Biberschwanz tile",
+    "tags": "HMS (secondary)",
+    "depth_m": 14.0,
+    "eaves_h": 352.16
+   },
+   "facade": {
+    "axes": 11,
+    "axis_spacing": 3.6,
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)",
+    "lightning_rods": true
+   },
+   "lidar_ids": [
+    "KB-11 (road)"
+   ],
+   "sources": [
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "HMS: 'Nutzbauten fuer das Schloss: Lazarett, Kasernen und Brauerei' along the N-S road north of the palace. Exact position U; placed E of KB-11.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 343.74,
+    "median": 344.76,
+    "max": 345.32,
+    "n_cells": 610
+   },
+   "footprint_area_m2": 560.1,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KB-B27",
+   "name_de": "Hofgaertnerei: ummauerter Garten mit Treibhaeusern",
+   "cls": "GARD",
+   "function": "court nursery / Dutch garden with greenhouses (HMS: 'Treibhaeuser des Hofgaertners Ludwig Reichard')",
+   "built": "1779-83",
+   "priority": 5,
+   "confidence": "low",
+   "placement": "lidar+hms",
+   "footprint": [
+    [
+     382180.0,
+     5466230.0
+    ],
+    [
+     382262.0,
+     5466226.0
+    ],
+    [
+     382263.0,
+     5466365.0
+    ],
+    [
+     382180.0,
+     5466366.0
+    ],
+    [
+     382180.0,
+     5466230.0
+    ]
+   ],
+   "base_h": 347.6,
+   "storeys": [
+    {
+     "name": "Gartenmauer",
+     "height": 2.5,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "none",
+    "eaves_h": 350.1
+   },
+   "facade": {
+    "material": "rendered rubble wall with sandstone coping",
+    "colour": "#E8DFC8",
+    "content": "glasshouse range 60 x 8 m on the N side (lean-to, glazed S slope 30 deg, solid N wall 4 m); quartered beds"
+   },
+   "lidar_ids": [
+    "KB-23"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "KB-23 upper block 139 x 83 m at 347.6 m between the palace and the N terrace; HMS shows a walled garden here (NE of the Kuechenhof).",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 344.14,
+    "median": 347.59,
+    "max": 349.37,
+    "n_cells": 11501
+   },
+   "footprint_area_m2": 11345.0
+  },
+  {
+   "id": "KB-B28",
+   "name_de": "Eiskeller",
+   "cls": "GARD",
+   "function": "ice cellar",
+   "built": "U (1780s)",
+   "priority": 5,
+   "confidence": "high",
+   "placement": "lidar",
+   "footprint": [
+    [
+     382513.0,
+     5466296.0
+    ],
+    [
+     382512.83,
+     5466297.29
+    ],
+    [
+     382512.33,
+     5466298.5
+    ],
+    [
+     382511.54,
+     5466299.54
+    ],
+    [
+     382510.5,
+     5466300.33
+    ],
+    [
+     382509.29,
+     5466300.83
+    ],
+    [
+     382508.0,
+     5466301.0
+    ],
+    [
+     382506.71,
+     5466300.83
+    ],
+    [
+     382505.5,
+     5466300.33
+    ],
+    [
+     382504.46,
+     5466299.54
+    ],
+    [
+     382503.67,
+     5466298.5
+    ],
+    [
+     382503.17,
+     5466297.29
+    ],
+    [
+     382503.0,
+     5466296.0
+    ],
+    [
+     382503.17,
+     5466294.71
+    ],
+    [
+     382503.67,
+     5466293.5
+    ],
+    [
+     382504.46,
+     5466292.46
+    ],
+    [
+     382505.5,
+     5466291.67
+    ],
+    [
+     382506.71,
+     5466291.17
+    ],
+    [
+     382508.0,
+     5466291.0
+    ],
+    [
+     382509.29,
+     5466291.17
+    ],
+    [
+     382510.5,
+     5466291.67
+    ],
+    [
+     382511.54,
+     5466292.46
+    ],
+    [
+     382512.33,
+     5466293.5
+    ],
+    [
+     382512.83,
+     5466294.71
+    ],
+    [
+     382513.0,
+     5466296.0
+    ]
+   ],
+   "base_h": 354.0,
+   "storeys": [
+    {
+     "name": "Erdhuegel ueber Gewoelbe",
+     "height": 2.5,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "earth mound",
+    "eaves_h": 356.5
+   },
+   "facade": {
+    "material": "earth-covered vault, sandstone entrance with 2 doors"
+   },
+   "lidar_ids": [
+    "KB-50"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Collapsed pit D 10 m, 1.8 m deep, ring bank.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 354.02,
+    "median": 355.67,
+    "max": 356.54,
+    "n_cells": 89
+   },
+   "footprint_area_m2": 77.7
+  },
+  {
+   "id": "KL-B41",
+   "name_de": "Pavillon auf der Menagerie-Insel",
+   "cls": "PAV",
+   "function": "pavilion on the square island",
+   "built": "1778/79-86",
+   "priority": 5,
+   "confidence": "low",
+   "placement": "lidar",
+   "footprint": [
+    [
+     382931.0,
+     5464909.0
+    ],
+    [
+     382939.0,
+     5464909.0
+    ],
+    [
+     382939.0,
+     5464917.0
+    ],
+    [
+     382931.0,
+     5464917.0
+    ],
+    [
+     382931.0,
+     5464909.0
+    ]
+   ],
+   "base_h": 298.46,
+   "storeys": [
+    {
+     "name": "Pavillon",
+     "height": 4.5,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "hip",
+    "pitch_lower": 35,
+    "ridge_h": 305.76,
+    "material": "slate (U)",
+    "depth_m": 8.0,
+    "eaves_h": 302.96
+   },
+   "facade": {
+    "material": "lime render",
+    "colour": "#ECE8DF"
+   },
+   "lidar_ids": [
+    "KL-01 (10 m square)"
+   ],
+   "sources": [
+    "https://de.wikipedia.org/wiki/Schloss_Karlsberg",
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)"
+   ],
+   "notes": "Island 10 m square D (LiDAR); pavilion form U.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 298.31,
+    "median": 298.46,
+    "max": 298.49,
+    "n_cells": 64
+   },
+   "footprint_area_m2": 64.0,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KL-B43",
+   "name_de": "Herzogsterrassen mit eisernen Baeren-Kaesten",
+   "cls": "GARD",
+   "function": "bear enclosures on terraces (1786)",
+   "built": "1786",
+   "priority": 5,
+   "confidence": "low",
+   "placement": "lidar",
+   "footprint": [
+    [
+     383020.0,
+     5464950.0
+    ],
+    [
+     382962.0,
+     5464862.0
+    ],
+    [
+     382985.0,
+     5464822.0
+    ],
+    [
+     383023.0,
+     5464722.0
+    ],
+    [
+     383063.0,
+     5464741.0
+    ],
+    [
+     383112.0,
+     5464765.0
+    ],
+    [
+     383070.6,
+     5464858.3
+    ],
+    [
+     383020.0,
+     5464950.0
+    ]
+   ],
+   "base_h": 297.27,
+   "storeys": [
+    {
+     "name": "Terrassenmauern",
+     "height": 1.0,
+     "tag": "D LiDAR ~1 m steps"
+    }
+   ],
+   "roof": {
+    "type": "none"
+   },
+   "facade": {
+    "material": "sandstone terrace walls; iron cage boxes (Baeren-Kaesten)"
+   },
+   "lidar_ids": [
+    "KL-02"
+   ],
+   "sources": [
+    "https://www.urlaub.saarland/attraktion/baerenzwinger-1986e52928",
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)"
+   ],
+   "notes": "7-9 cross-banks az ~75, 15-20 m apart, above the Schwanenweiher and E of the menagerie = documented location; identity I (alternatives: kennels, nursery).",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 287.16,
+    "median": 297.27,
+    "max": 305.07,
+    "n_cells": 17422
+   },
+   "footprint_area_m2": 17041.3,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KB-B07",
+   "name_de": "Rundbau am Galerieende (nach HMS)",
+   "cls": "PAV",
+   "function": "domed pavilion terminating the gallery / garden wall corner (HMS 'Bildergalerie mit anschliessender Rotunde')",
+   "built": "? (1785-88)",
+   "priority": 6,
+   "confidence": "low",
+   "placement": "hypothetical",
+   "footprint": [
+    [
+     382263.99,
+     5466219.65
+    ],
+    [
+     382263.79,
+     5466221.2
+    ],
+    [
+     382263.19,
+     5466222.65
+    ],
+    [
+     382262.23,
+     5466223.89
+    ],
+    [
+     382260.99,
+     5466224.85
+    ],
+    [
+     382259.54,
+     5466225.45
+    ],
+    [
+     382257.99,
+     5466225.65
+    ],
+    [
+     382256.44,
+     5466225.45
+    ],
+    [
+     382254.99,
+     5466224.85
+    ],
+    [
+     382253.75,
+     5466223.89
+    ],
+    [
+     382252.79,
+     5466222.65
+    ],
+    [
+     382252.19,
+     5466221.2
+    ],
+    [
+     382251.99,
+     5466219.65
+    ],
+    [
+     382252.19,
+     5466218.1
+    ],
+    [
+     382252.79,
+     5466216.65
+    ],
+    [
+     382253.75,
+     5466215.41
+    ],
+    [
+     382254.99,
+     5466214.45
+    ],
+    [
+     382256.44,
+     5466213.85
+    ],
+    [
+     382257.99,
+     5466213.65
+    ],
+    [
+     382259.54,
+     5466213.85
+    ],
+    [
+     382260.99,
+     5466214.45
+    ],
+    [
+     382262.23,
+     5466215.41
+    ],
+    [
+     382263.19,
+     5466216.65
+    ],
+    [
+     382263.79,
+     5466218.1
+    ],
+    [
+     382263.99,
+     5466219.65
+    ]
+   ],
+   "base_h": 347.6,
+   "storeys": [
+    {
+     "name": "Sockel",
+     "height": 0.6,
+     "tag": "N"
+    },
+    {
+     "name": "Saal",
+     "height": 6.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "dome",
+    "ridge_h": 357.8,
+    "material": "slate or lead",
+    "tags": "HMS (secondary)",
+    "eaves_h": 354.2,
+    "depth_m": 12.0
+   },
+   "facade": {
+    "axes": 8,
+    "axis_spacing": 4.7,
+    "material": "lime render",
+    "colour": "#ECE8DF",
+    "dressings": "grey-painted / yellow-grey Buntsandstein members #BDBAB2-#C8B38C, red Buntsandstein plinth #A65E4A",
+    "tags": "render colour: D (Orangerie 'hell verputzt', schloss-karlsberg.de), D-> Koblenz/Wilhelmshoehe, secondary HMS 2022 (white-grey); members: N/U",
+    "portal": "door from gallery",
+    "lightning_rods": true
+   },
+   "lidar_ids": [],
+   "sources": [
+    "HMS/Matzerath 2022 video kfnE6HdXmVo (secondary, (c), massing reference only) — research/04",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Conflict: the documented 1785 Rotunde stood at the ORANGERIE (Weber ToC; brochure 'Orangerie Rotunde') -> KB-B13. Keep this only as a toggle.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 346.44,
+    "median": 347.88,
+    "max": 348.3,
+    "n_cells": 133
+   },
+   "footprint_area_m2": 111.9
+  },
+  {
+   "id": "KB-B30",
+   "name_de": "Hofgut im Tal ('Carlsbergerhof' 1836-41; Wirtshaus/Oekonomie?)",
+   "cls": "FARM_GROUP",
+   "function": "farm/inn group at the valley entrance (identity U)",
+   "built": "U",
+   "priority": 6,
+   "confidence": "low",
+   "placement": "map+lidar",
+   "footprint": [
+    [
+     381508.0,
+     5465945.0
+    ],
+    [
+     381560.0,
+     5465945.0
+    ],
+    [
+     381560.0,
+     5466025.0
+    ],
+    [
+     381520.0,
+     5466025.0
+    ],
+    [
+     381508.0,
+     5465970.0
+    ],
+    [
+     381508.0,
+     5465945.0
+    ]
+   ],
+   "base_h": 259.16,
+   "storeys": [
+    {
+     "name": "Erdgeschoss",
+     "height": 3.4,
+     "tag": "N"
+    },
+    {
+     "name": "Obergeschoss",
+     "height": 3.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "none",
+    "note": "envelope only - generator places 3 farm ranges (Dreifluegelhof) inside or skips",
+    "material": "red Biberschwanz tile"
+   },
+   "facade": {
+    "material": "lime-washed render on rubble",
+    "colour": "#E8DFC8",
+    "dressings": "sandstone door and window frames",
+    "tags": "N (period norm); red tile per HMS 2022 (secondary)"
+   },
+   "lidar_ids": [
+    "KB-60"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)",
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Envelope of today's building group; NOT a single building. Use only as a placeholder block group (Dreiflueegelhof) or skip.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 256.59,
+    "median": 259.16,
+    "max": 262.05,
+    "n_cells": 3863
+   },
+   "footprint_area_m2": 3830.0,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KL-B44",
+   "name_de": "Eremitage (?)",
+   "cls": "PAV",
+   "function": "garden hermitage (OSM point)",
+   "built": "U",
+   "priority": 6,
+   "confidence": "low",
+   "placement": "lidar",
+   "footprint": [
+    [
+     383159.0,
+     5464658.0
+    ],
+    [
+     383158.7,
+     5464659.53
+    ],
+    [
+     383157.83,
+     5464660.83
+    ],
+    [
+     383156.53,
+     5464661.7
+    ],
+    [
+     383155.0,
+     5464662.0
+    ],
+    [
+     383153.47,
+     5464661.7
+    ],
+    [
+     383152.17,
+     5464660.83
+    ],
+    [
+     383151.3,
+     5464659.53
+    ],
+    [
+     383151.0,
+     5464658.0
+    ],
+    [
+     383151.3,
+     5464656.47
+    ],
+    [
+     383152.17,
+     5464655.17
+    ],
+    [
+     383153.47,
+     5464654.3
+    ],
+    [
+     383155.0,
+     5464654.0
+    ],
+    [
+     383156.53,
+     5464654.3
+    ],
+    [
+     383157.83,
+     5464655.17
+    ],
+    [
+     383158.7,
+     5464656.47
+    ],
+    [
+     383159.0,
+     5464658.0
+    ]
+   ],
+   "base_h": 287.44,
+   "storeys": [
+    {
+     "name": "Huette",
+     "height": 3.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "hip",
+    "pitch_lower": 45,
+    "ridge_h": 294.44,
+    "material": "bark/thatch (N)",
+    "depth_m": 8.0,
+    "eaves_h": 290.44
+   },
+   "facade": {
+    "material": "rustic bark render / rubble"
+   },
+   "lidar_ids": [
+    "KL-12"
+   ],
+   "sources": [
+    "research/03-lidar-site-analysis.md + lidar_features.geojson (DGM1 SL 2025)"
+   ],
+   "notes": "Ring mound D 16 m.",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 286.42,
+    "median": 287.44,
+    "max": 287.56,
+    "n_cells": 62
+   },
+   "footprint_area_m2": 49.0,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "KL-B45",
+   "name_de": "Kuenstliche Ruine mit Muschelnische (Tumulus am Schwanenweiher)",
+   "cls": "GARD",
+   "function": "sham ruin on a tumulus with a shell grotto niche, end of the Schwanenweiher",
+   "built": "1780s",
+   "priority": 6,
+   "confidence": "low",
+   "placement": "relative",
+   "footprint": [
+    [
+     382936.0,
+     5464715.0
+    ],
+    [
+     382935.71,
+     5464716.85
+    ],
+    [
+     382934.85,
+     5464718.53
+    ],
+    [
+     382933.53,
+     5464719.85
+    ],
+    [
+     382931.85,
+     5464720.71
+    ],
+    [
+     382930.0,
+     5464721.0
+    ],
+    [
+     382928.15,
+     5464720.71
+    ],
+    [
+     382926.47,
+     5464719.85
+    ],
+    [
+     382925.15,
+     5464718.53
+    ],
+    [
+     382924.29,
+     5464716.85
+    ],
+    [
+     382924.0,
+     5464715.0
+    ],
+    [
+     382924.29,
+     5464713.15
+    ],
+    [
+     382925.15,
+     5464711.47
+    ],
+    [
+     382926.47,
+     5464710.15
+    ],
+    [
+     382928.15,
+     5464709.29
+    ],
+    [
+     382930.0,
+     5464709.0
+    ],
+    [
+     382931.85,
+     5464709.29
+    ],
+    [
+     382933.53,
+     5464710.15
+    ],
+    [
+     382934.85,
+     5464711.47
+    ],
+    [
+     382935.71,
+     5464713.15
+    ],
+    [
+     382936.0,
+     5464715.0
+    ]
+   ],
+   "base_h": 276.11,
+   "storeys": [
+    {
+     "name": "Ruinenmauer",
+     "height": 5.0,
+     "tag": "N"
+    }
+   ],
+   "roof": {
+    "type": "none"
+   },
+   "facade": {
+    "material": "rubble, tuff; shell-lined niche"
+   },
+   "lidar_ids": [
+    "mound E of KL-06 (img/15)"
+   ],
+   "sources": [
+    "https://de.wikipedia.org/wiki/Schloss_Karlsberg",
+    "research/02-comparable-palaces-design-grammar.md"
+   ],
+   "notes": "Parallel: Schwetzingen Wasserkastell 1779 (de.wikipedia names it).",
+   "interior": "none",
+   "alternatives": [],
+   "ground_dtm": {
+    "min": 273.29,
+    "median": 276.11,
+    "max": 278.71,
+    "n_cells": 133
+   },
+   "footprint_area_m2": 111.3,
+   "base_h_note": "from DTM median (no terrace evidence); generator extends the plinth down to ground_dtm.min"
+  },
+  {
+   "id": "UP-01",
+   "name_de": "Kavaliersbau (mit eigenem Vorhof)",
+   "cls": "?",
+   "function": "lodging for courtiers; cellar 'Raeuberhoehle' survives (Commons)",
+   "built": "1779-85",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. candidate: = Suedfluegel KB-B02 (cellars) or a separate block on the approach",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-02",
+   "name_de": "Remisen und Depots",
+   "cls": "?",
+   "function": "coach houses",
+   "built": "1782-85",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. Commons 'Standort der Remisen' has no coordinates; typically beside the Marstall (KB-20)",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-03",
+   "name_de": "Wirtshaus",
+   "cls": "?",
+   "function": "inn",
+   "built": "1778-82",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. possibly at the valley entrance (KB-B30) - U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-04",
+   "name_de": "Taubenhaus",
+   "cls": "?",
+   "function": "dovecote (tower 4-6 m square, 8-10 m high, N)",
+   "built": "1779-82",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-05",
+   "name_de": "Bienenhaus",
+   "cls": "?",
+   "function": "apiary",
+   "built": "1783",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-06",
+   "name_de": "Ananashaus / Grosses Treib- und Gewaechshaus",
+   "cls": "?",
+   "function": "pineapple and forcing houses",
+   "built": "1781 / 1779-83",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. probably in KB-B27 garden",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-07",
+   "name_de": "Amphitheater",
+   "cls": "?",
+   "function": "garden theatre",
+   "built": "1782",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-08",
+   "name_de": "Chinoiserie (Pavillon und chinesischer Tempel)",
+   "cls": "?",
+   "function": "garden pavilion",
+   "built": "1780-83",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. palace garden, U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-09",
+   "name_de": "Lusthaus des Prinzen",
+   "cls": "?",
+   "function": "pleasure pavilion",
+   "built": "1783-84",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-10",
+   "name_de": "Lustgarten der Herzogin",
+   "cls": "?",
+   "function": "garden",
+   "built": "1784",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-11",
+   "name_de": "Schloesschen Monbijou",
+   "cls": "?",
+   "function": "small pleasure house",
+   "built": "U",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. U (Weber chapter)",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-12",
+   "name_de": "Kirchturm aus der Karlsbergzeit",
+   "cls": "?",
+   "function": "church tower",
+   "built": "U",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-13",
+   "name_de": "Oekonomiegebaeude / 'Le Petit Hameau' / Fasanerie der Herzogin",
+   "cls": "?",
+   "function": "ferme ornee below the plateau",
+   "built": "U",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. 'below the plateau' (Weber chapter title)",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-14",
+   "name_de": "Fasanerie (Karlslust)",
+   "cls": "?",
+   "function": "pheasantry",
+   "built": "1780-81",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. Karlslust, U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-15",
+   "name_de": "Karlsluster Torhaus",
+   "cls": "?",
+   "function": "gatehouse; fountain at the entrance survives (Commons)",
+   "built": "1782",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. Karlslust entrance, U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-16",
+   "name_de": "Trilagen-Pavillon und Terrassen",
+   "cls": "?",
+   "function": "garden pavilion",
+   "built": "U",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. Karlslust; terraces visible (Commons) - position U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-17",
+   "name_de": "Hirschwuerzloch Brunnenhaus / Hirschbrunnen",
+   "cls": "?",
+   "function": "fountain house",
+   "built": "1783",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. Hirschwuerzloch, U",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  },
+  {
+   "id": "UP-18",
+   "name_de": "Wache / Hauptwache, Kapelle, Ballhaus, Apotheke",
+   "cls": "?",
+   "function": "expected residence functions",
+   "built": "U",
+   "priority": 9,
+   "confidence": "low",
+   "placement": "unplaced",
+   "footprint": null,
+   "base_h": null,
+   "storeys": [],
+   "roof": {},
+   "facade": {},
+   "interior": "none",
+   "sources": [
+    "research/01-history-and-sources.md"
+   ],
+   "notes": "Documented, but no position evidence. not documented anywhere (U)",
+   "alternatives": [],
+   "ground_dtm": null,
+   "lidar_ids": []
+  }
+ ],
+ "terrain_features": [
+  {
+   "id": "TF-01",
+   "kind": "court",
+   "name": "Ehrenhof (cour d'honneur), paved",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382193.84,
+       5466094.04
+      ],
+      [
+       382257.16,
+       5466104.63
+      ],
+      [
+       382250.41,
+       5466144.97
+      ],
+      [
+       382187.09,
+       5466134.38
+      ],
+      [
+       382193.84,
+       5466094.04
+      ]
+     ]
+    ]
+   },
+   "level": 344.8,
+   "surface": "cobbles (HMS) / sandstone-grit gravel",
+   "confidence": "high",
+   "lidar_ids": [
+    "KB-01"
+   ],
+   "notes": "Clear 64 x 41 m, open to the W onto the N-S road (Paradestrasse?)."
+  },
+  {
+   "id": "TF-02",
+   "kind": "court",
+   "name": "Kuechenhof",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382198.69,
+       5466156.59
+      ],
+      [
+       382239.81,
+       5466163.48
+      ],
+      [
+       382232.16,
+       5466209.24
+      ],
+      [
+       382191.03,
+       5466202.36
+      ],
+      [
+       382198.69,
+       5466156.59
+      ]
+     ]
+    ]
+   },
+   "level": 344.8,
+   "surface": "cobbles",
+   "confidence": "med",
+   "lidar_ids": [
+    "KB-01"
+   ]
+  },
+  {
+   "id": "TF-03",
+   "kind": "terrace",
+   "name": "Schlossterrasse (cut-and-fill platform)",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382192.0,
+       5466088.0
+      ],
+      [
+       382262.0,
+       5466098.0
+      ],
+      [
+       382258.0,
+       5466214.0
+      ],
+      [
+       382215.0,
+       5466217.0
+      ],
+      [
+       382186.0,
+       5466212.0
+      ],
+      [
+       382192.0,
+       5466088.0
+      ]
+     ]
+    ]
+   },
+   "level": 344.8,
+   "confidence": "high",
+   "lidar_ids": [
+    "KB-01"
+   ]
+  },
+  {
+   "id": "TF-04",
+   "kind": "scarp",
+   "name": "Nordboeschung Kuechenhof",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      382215.0,
+      5466217.6
+     ],
+     [
+      382244.5,
+      5466223.6
+     ],
+     [
+      382251.0,
+      5466222.0
+     ],
+     [
+      382253.0,
+      5466170.0
+     ]
+    ]
+   },
+   "top": 347.6,
+   "foot": 344.8,
+   "confidence": "high",
+   "lidar_ids": [
+    "KB-07"
+   ],
+   "notes": "Model as retaining wall (sandstone) 2.0-2.9 m."
+  },
+  {
+   "id": "TF-05",
+   "kind": "terrace",
+   "name": "Nordterrasse (Marstall-/Reitplatz?)",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382178.0,
+       5466369.0
+      ],
+      [
+       382263.0,
+       5466368.0
+      ],
+      [
+       382275.4,
+       5466469.5
+      ],
+      [
+       382278.0,
+       5466560.0
+      ],
+      [
+       382182.0,
+       5466560.0
+      ],
+      [
+       382178.0,
+       5466369.0
+      ]
+     ]
+    ]
+   },
+   "level": 344.1,
+   "confidence": "high",
+   "lidar_ids": [
+    "KB-20",
+    "KB-21",
+    "KB-22"
+   ],
+   "notes": "Scarps 3.0 m (S) and 4.4 m (E). Aligned to the N-S family, not the palace grid."
+  },
+  {
+   "id": "TF-06",
+   "kind": "terrace",
+   "name": "Orangerie-Parterre",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382246.0,
+       5466004.0
+      ],
+      [
+       382249.0,
+       5465924.0
+      ],
+      [
+       382283.0,
+       5465916.0
+      ],
+      [
+       382309.0,
+       5465930.0
+      ],
+      [
+       382281.0,
+       5465981.0
+      ],
+      [
+       382246.0,
+       5466004.0
+      ]
+     ]
+    ]
+   },
+   "level": 340.8,
+   "confidence": "med",
+   "lidar_ids": [
+    "KB-33"
+   ]
+  },
+  {
+   "id": "TF-07",
+   "kind": "terrace",
+   "name": "Orangerie untere Terrasse (W)",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382227.1,
+       5465923.9
+      ],
+      [
+       382240.8,
+       5465926.9
+      ],
+      [
+       382224.9,
+       5466000.1
+      ],
+      [
+       382211.2,
+       5465997.1
+      ],
+      [
+       382227.1,
+       5465923.9
+      ]
+     ]
+    ]
+   },
+   "level": 335.2,
+   "confidence": "med",
+   "lidar_ids": [
+    "KB-32"
+   ]
+  },
+  {
+   "id": "TF-10",
+   "kind": "avenue",
+   "name": "Paradestrasse? / N-S Allee (Hohlweg + Weg zum Forsthaus)",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      382168.5,
+      5466114.0
+     ],
+     [
+      382175.7,
+      5466362.9
+     ],
+     [
+      382179.7,
+      5466380.0
+     ],
+     [
+      382182.0,
+      5466848.0
+     ]
+    ]
+   },
+   "width": 10,
+   "trees": {
+    "species": "Tilia (N)",
+    "rows": 2,
+    "spacing": 7,
+    "row_distance": 14,
+    "age_1793": "5-15 y"
+   },
+   "confidence": "med",
+   "lidar_ids": [
+    "KB-10",
+    "KB-11"
+   ],
+   "notes": "717 m, az 0.3-1.7 grid. HMS shows a tree-lined avenue W of the palace running N to the utility row. 'Paradestrasse along the palace front' (Commons) assigned here (I)."
+  },
+  {
+   "id": "TF-11",
+   "kind": "avenue",
+   "name": "Ostachse / Schlossallee (Fortsetzung der Hofachse)",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      382199.2,
+      5466116.8
+     ],
+     [
+      382778.3,
+      5466218.5
+     ]
+    ]
+   },
+   "width": 12,
+   "trees": {
+    "species": "Tilia (N)",
+    "rows": 2,
+    "spacing": 7,
+    "row_distance": 16
+   },
+   "confidence": "high",
+   "lidar_ids": [
+    "KB-12"
+   ],
+   "notes": "588 m, az 80.0 grid, on the Ehrenhof centre line within 1 deg; ends at path star KB-15."
+  },
+  {
+   "id": "TF-12",
+   "kind": "avenue",
+   "name": "Ostachse, Fortsetzung",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      382788.7,
+      5466224.6
+     ],
+     [
+      383379.2,
+      5466290.7
+     ]
+    ]
+   },
+   "width": 10,
+   "confidence": "low",
+   "lidar_ids": [
+    "KB-13"
+   ]
+  },
+  {
+   "id": "TF-13",
+   "kind": "rondell",
+   "name": "Wegestern am Ende der Ostachse",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382797.0,
+       5466215.0
+      ],
+      [
+       382796.9,
+       5466216.8
+      ],
+      [
+       382796.1,
+       5466219.6
+      ],
+      [
+       382794.6,
+       5466222.1
+      ],
+      [
+       382792.6,
+       5466224.3
+      ],
+      [
+       382790.1,
+       5466225.8
+      ],
+      [
+       382787.3,
+       5466226.8
+      ],
+      [
+       382784.4,
+       5466227.0
+      ],
+      [
+       382781.5,
+       5466226.5
+      ],
+      [
+       382778.8,
+       5466225.3
+      ],
+      [
+       382776.5,
+       5466223.5
+      ],
+      [
+       382774.7,
+       5466221.2
+      ],
+      [
+       382773.5,
+       5466218.5
+      ],
+      [
+       382773.0,
+       5466215.6
+      ],
+      [
+       382773.2,
+       5466212.7
+      ],
+      [
+       382774.2,
+       5466209.9
+      ],
+      [
+       382775.7,
+       5466207.4
+      ],
+      [
+       382777.9,
+       5466205.4
+      ],
+      [
+       382780.4,
+       5466203.9
+      ],
+      [
+       382783.2,
+       5466203.1
+      ],
+      [
+       382786.2,
+       5466203.1
+      ],
+      [
+       382789.0,
+       5466203.7
+      ],
+      [
+       382791.7,
+       5466205.0
+      ],
+      [
+       382793.9,
+       5466206.9
+      ],
+      [
+       382795.6,
+       5466209.3
+      ],
+      [
+       382796.6,
+       5466212.1
+      ],
+      [
+       382797.0,
+       5466215.0
+      ]
+     ]
+    ]
+   },
+   "confidence": "low",
+   "lidar_ids": [
+    "KB-15"
+   ]
+  },
+  {
+   "id": "TF-14",
+   "kind": "avenue",
+   "name": "Apfelallee zur Karlslust",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      382288.7,
+      5465984.2
+     ],
+     [
+      382592.9,
+      5465439.4
+     ]
+    ]
+   },
+   "width": 8,
+   "trees": {
+    "species": "Malus domestica (D: 'Apfelallee')",
+    "rows": 2,
+    "spacing": 8,
+    "row_distance": 10
+   },
+   "confidence": "med",
+   "lidar_ids": [
+    "KB-14"
+   ],
+   "notes": "624 m, az 150.8 grid, from the Orangerie parterre towards the Karlslust; documented 'Apfelallee led to the Karlslust' (Commons) (I: identity)."
+  },
+  {
+   "id": "TF-20",
+   "kind": "pond",
+   "name": "Karlsbergweiher",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       381822.0,
+       5465895.0
+      ],
+      [
+       381832.0,
+       5465850.0
+      ],
+      [
+       381948.0,
+       5465857.0
+      ],
+      [
+       381961.0,
+       5465878.0
+      ],
+      [
+       381948.0,
+       5465900.0
+      ],
+      [
+       381822.0,
+       5465895.0
+      ]
+     ]
+    ]
+   },
+   "water_level": 276.18,
+   "confidence": "high",
+   "lidar_ids": [
+    "KB-40"
+   ]
+  },
+  {
+   "id": "TF-21",
+   "kind": "island",
+   "name": "Insel im Karlsbergweiher",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       381951.0,
+       5465880.0
+      ],
+      [
+       381950.9,
+       5465880.9
+      ],
+      [
+       381950.5,
+       5465882.3
+      ],
+      [
+       381949.8,
+       5465883.6
+      ],
+      [
+       381948.8,
+       5465884.6
+      ],
+      [
+       381947.6,
+       5465885.4
+      ],
+      [
+       381946.2,
+       5465885.9
+      ],
+      [
+       381944.7,
+       5465886.0
+      ],
+      [
+       381943.3,
+       5465885.7
+      ],
+      [
+       381941.9,
+       5465885.1
+      ],
+      [
+       381940.8,
+       5465884.2
+      ],
+      [
+       381939.9,
+       5465883.1
+      ],
+      [
+       381939.3,
+       5465881.7
+      ],
+      [
+       381939.0,
+       5465880.3
+      ],
+      [
+       381939.1,
+       5465878.8
+      ],
+      [
+       381939.6,
+       5465877.4
+      ],
+      [
+       381940.4,
+       5465876.2
+      ],
+      [
+       381941.4,
+       5465875.2
+      ],
+      [
+       381942.7,
+       5465874.5
+      ],
+      [
+       381944.1,
+       5465874.1
+      ],
+      [
+       381945.6,
+       5465874.0
+      ],
+      [
+       381947.0,
+       5465874.4
+      ],
+      [
+       381948.3,
+       5465875.0
+      ],
+      [
+       381949.4,
+       5465876.0
+      ],
+      [
+       381950.3,
+       5465877.2
+      ],
+      [
+       381950.8,
+       5465878.5
+      ],
+      [
+       381951.0,
+       5465880.0
+      ]
+     ]
+    ]
+   },
+   "level": 277.3,
+   "confidence": "high",
+   "lidar_ids": [
+    "KB-41"
+   ]
+  },
+  {
+   "id": "TF-22",
+   "kind": "dam",
+   "name": "Damm Karlsbergweiher (W)",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      381816.0,
+      5465902.0
+     ],
+     [
+      381822.0,
+      5465848.0
+     ]
+    ]
+   },
+   "crest": 277.0,
+   "confidence": "med",
+   "lidar_ids": [
+    "KB-42"
+   ]
+  },
+  {
+   "id": "TF-30",
+   "kind": "cascade",
+   "name": "Grosse Kaskade (Karlslust)",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      382815.0,
+      5464930.0
+     ],
+     [
+      382814.0,
+      5464835.0
+     ]
+    ]
+   },
+   "top": 310.5,
+   "foot": 271.6,
+   "steps": {
+    "count": 10,
+    "riser_m": 1.5,
+    "tread_area_m": [
+     10,
+     "10-15"
+    ],
+    "tag": "D dewp"
+   },
+   "width": 10,
+   "confidence": "med",
+   "lidar_ids": [
+    "KL-03"
+   ],
+   "notes": "CONFLICT: 10 x 1.5 m = 15 m drop (D) vs 26-39 m LiDAR fall. Model risers 1.5 m water falls + sloping basin floors on the DTM; upper 'Grosses Bassin' + 'Startbassin' at the top (Commons)."
+  },
+  {
+   "id": "TF-31",
+   "kind": "pond",
+   "name": "Tosbecken",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382783.0,
+       5464815.0
+      ],
+      [
+       382790.0,
+       5464800.0
+      ],
+      [
+       382815.0,
+       5464795.0
+      ],
+      [
+       382840.0,
+       5464805.0
+      ],
+      [
+       382835.0,
+       5464824.0
+      ],
+      [
+       382800.0,
+       5464826.0
+      ],
+      [
+       382783.0,
+       5464815.0
+      ]
+     ]
+    ]
+   },
+   "water_level": 271.7,
+   "confidence": "high",
+   "lidar_ids": [
+    "KL-04"
+   ]
+  },
+  {
+   "id": "TF-32",
+   "kind": "pond",
+   "name": "Schwanenweiher 1 (mit zwei Inselchen)",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382836.2,
+       5464779.2
+      ],
+      [
+       382838.6,
+       5464773.8
+      ],
+      [
+       382841.6,
+       5464768.9
+      ],
+      [
+       382845.1,
+       5464764.7
+      ],
+      [
+       382849.0,
+       5464761.2
+      ],
+      [
+       382853.1,
+       5464758.8
+      ],
+      [
+       382857.3,
+       5464757.3
+      ],
+      [
+       382861.4,
+       5464757.0
+      ],
+      [
+       382865.3,
+       5464757.8
+      ],
+      [
+       382868.7,
+       5464759.7
+      ],
+      [
+       382871.7,
+       5464762.6
+      ],
+      [
+       382874.0,
+       5464766.4
+      ],
+      [
+       382875.5,
+       5464770.9
+      ],
+      [
+       382876.3,
+       5464776.0
+      ],
+      [
+       382876.3,
+       5464781.5
+      ],
+      [
+       382875.4,
+       5464787.2
+      ],
+      [
+       382873.8,
+       5464792.8
+      ],
+      [
+       382871.4,
+       5464798.2
+      ],
+      [
+       382868.4,
+       5464803.1
+      ],
+      [
+       382864.9,
+       5464807.3
+      ],
+      [
+       382861.0,
+       5464810.8
+      ],
+      [
+       382856.9,
+       5464813.2
+      ],
+      [
+       382852.7,
+       5464814.7
+      ],
+      [
+       382848.6,
+       5464815.0
+      ],
+      [
+       382844.7,
+       5464814.2
+      ],
+      [
+       382841.3,
+       5464812.3
+      ],
+      [
+       382838.3,
+       5464809.4
+      ],
+      [
+       382836.0,
+       5464805.6
+      ],
+      [
+       382834.5,
+       5464801.1
+      ],
+      [
+       382833.7,
+       5464796.0
+      ],
+      [
+       382833.7,
+       5464790.5
+      ],
+      [
+       382834.6,
+       5464784.8
+      ],
+      [
+       382836.2,
+       5464779.2
+      ]
+     ]
+    ]
+   },
+   "water_level": 270.1,
+   "confidence": "high",
+   "lidar_ids": [
+    "KL-05"
+   ]
+  },
+  {
+   "id": "TF-33",
+   "kind": "pond",
+   "name": "Schwanenweiher 2",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382858.0,
+       5464740.0
+      ],
+      [
+       382860.0,
+       5464700.0
+      ],
+      [
+       382878.0,
+       5464683.0
+      ],
+      [
+       382900.0,
+       5464690.0
+      ],
+      [
+       382905.0,
+       5464712.0
+      ],
+      [
+       382880.0,
+       5464748.0
+      ],
+      [
+       382858.0,
+       5464740.0
+      ]
+     ]
+    ]
+   },
+   "water_level": 266.8,
+   "confidence": "high",
+   "lidar_ids": [
+    "KL-06"
+   ]
+  },
+  {
+   "id": "TF-34",
+   "kind": "pond",
+   "name": "Schwanenweiher 3",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382924.0,
+       5464690.0
+      ],
+      [
+       382923.9,
+       5464691.6
+      ],
+      [
+       382923.2,
+       5464694.2
+      ],
+      [
+       382921.8,
+       5464696.6
+      ],
+      [
+       382920.0,
+       5464698.5
+      ],
+      [
+       382917.7,
+       5464699.9
+      ],
+      [
+       382915.1,
+       5464700.8
+      ],
+      [
+       382912.5,
+       5464701.0
+      ],
+      [
+       382909.8,
+       5464700.5
+      ],
+      [
+       382907.3,
+       5464699.4
+      ],
+      [
+       382905.2,
+       5464697.8
+      ],
+      [
+       382903.6,
+       5464695.7
+      ],
+      [
+       382902.5,
+       5464693.2
+      ],
+      [
+       382902.0,
+       5464690.5
+      ],
+      [
+       382902.2,
+       5464687.9
+      ],
+      [
+       382903.1,
+       5464685.3
+      ],
+      [
+       382904.5,
+       5464683.0
+      ],
+      [
+       382906.4,
+       5464681.2
+      ],
+      [
+       382908.8,
+       5464679.8
+      ],
+      [
+       382911.4,
+       5464679.1
+      ],
+      [
+       382914.1,
+       5464679.1
+      ],
+      [
+       382916.7,
+       5464679.6
+      ],
+      [
+       382919.1,
+       5464680.9
+      ],
+      [
+       382921.2,
+       5464682.6
+      ],
+      [
+       382922.7,
+       5464684.8
+      ],
+      [
+       382923.7,
+       5464687.3
+      ],
+      [
+       382924.0,
+       5464690.0
+      ]
+     ]
+    ]
+   },
+   "water_level": 268.3,
+   "confidence": "med",
+   "lidar_ids": [
+    "KL-07"
+   ],
+   "notes": "Level higher than pond 2 although downstream - check (DTM water-surface artefact?)."
+  },
+  {
+   "id": "TF-35",
+   "kind": "avenue",
+   "name": "Achse S der Kaskade (Treppenallee/Kanal)",
+   "geometry": {
+    "type": "LineString",
+    "coordinates": [
+     [
+      382809.5,
+      5464785.0
+     ],
+     [
+      382812.8,
+      5464662.0
+     ]
+    ]
+   },
+   "width": 10,
+   "confidence": "med",
+   "lidar_ids": [
+    "KL-08"
+   ]
+  },
+  {
+   "id": "TF-36",
+   "kind": "rondell",
+   "name": "Rondell am S-Ende der Achse (Tschifflik-Alternative?)",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382821.0,
+       5464652.0
+      ],
+      [
+       382820.9,
+       5464652.9
+      ],
+      [
+       382820.5,
+       5464654.3
+      ],
+      [
+       382819.8,
+       5464655.6
+      ],
+      [
+       382818.8,
+       5464656.6
+      ],
+      [
+       382817.6,
+       5464657.4
+      ],
+      [
+       382816.2,
+       5464657.9
+      ],
+      [
+       382814.7,
+       5464658.0
+      ],
+      [
+       382813.3,
+       5464657.7
+      ],
+      [
+       382811.9,
+       5464657.1
+      ],
+      [
+       382810.8,
+       5464656.2
+      ],
+      [
+       382809.9,
+       5464655.1
+      ],
+      [
+       382809.3,
+       5464653.7
+      ],
+      [
+       382809.0,
+       5464652.3
+      ],
+      [
+       382809.1,
+       5464650.8
+      ],
+      [
+       382809.6,
+       5464649.4
+      ],
+      [
+       382810.4,
+       5464648.2
+      ],
+      [
+       382811.4,
+       5464647.2
+      ],
+      [
+       382812.7,
+       5464646.5
+      ],
+      [
+       382814.1,
+       5464646.1
+      ],
+      [
+       382815.6,
+       5464646.0
+      ],
+      [
+       382817.0,
+       5464646.4
+      ],
+      [
+       382818.3,
+       5464647.0
+      ],
+      [
+       382819.4,
+       5464648.0
+      ],
+      [
+       382820.3,
+       5464649.2
+      ],
+      [
+       382820.8,
+       5464650.5
+      ],
+      [
+       382821.0,
+       5464652.0
+      ]
+     ]
+    ]
+   },
+   "level": 287.5,
+   "confidence": "med",
+   "lidar_ids": [
+    "KL-09"
+   ]
+  },
+  {
+   "id": "TF-37",
+   "kind": "moat",
+   "name": "Menagerie-Wassergraben mit quadratischer Insel",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382957.0,
+       5464912.5
+      ],
+      [
+       382956.9,
+       5464914.6
+      ],
+      [
+       382956.5,
+       5464917.8
+      ],
+      [
+       382955.5,
+       5464920.9
+      ],
+      [
+       382954.1,
+       5464923.8
+      ],
+      [
+       382952.3,
+       5464926.5
+      ],
+      [
+       382950.2,
+       5464928.9
+      ],
+      [
+       382947.7,
+       5464931.0
+      ],
+      [
+       382944.9,
+       5464932.7
+      ],
+      [
+       382941.9,
+       5464933.9
+      ],
+      [
+       382938.8,
+       5464934.7
+      ],
+      [
+       382935.5,
+       5464935.0
+      ],
+      [
+       382932.3,
+       5464934.8
+      ],
+      [
+       382929.1,
+       5464934.2
+      ],
+      [
+       382926.1,
+       5464933.1
+      ],
+      [
+       382923.2,
+       5464931.6
+      ],
+      [
+       382920.6,
+       5464929.7
+      ],
+      [
+       382918.3,
+       5464927.4
+      ],
+      [
+       382916.4,
+       5464924.8
+      ],
+      [
+       382914.9,
+       5464921.9
+      ],
+      [
+       382913.8,
+       5464918.9
+      ],
+      [
+       382913.2,
+       5464915.7
+      ],
+      [
+       382913.0,
+       5464912.5
+      ],
+      [
+       382913.3,
+       5464909.2
+      ],
+      [
+       382914.1,
+       5464906.1
+      ],
+      [
+       382915.3,
+       5464903.1
+      ],
+      [
+       382917.0,
+       5464900.3
+      ],
+      [
+       382919.1,
+       5464897.8
+      ],
+      [
+       382921.5,
+       5464895.7
+      ],
+      [
+       382924.2,
+       5464893.9
+      ],
+      [
+       382927.1,
+       5464892.5
+      ],
+      [
+       382930.2,
+       5464891.5
+      ],
+      [
+       382933.4,
+       5464891.1
+      ],
+      [
+       382936.6,
+       5464891.1
+      ],
+      [
+       382939.8,
+       5464891.5
+      ],
+      [
+       382942.9,
+       5464892.5
+      ],
+      [
+       382945.8,
+       5464893.9
+      ],
+      [
+       382948.5,
+       5464895.7
+      ],
+      [
+       382950.9,
+       5464897.8
+      ],
+      [
+       382953.0,
+       5464900.3
+      ],
+      [
+       382954.7,
+       5464903.1
+      ],
+      [
+       382955.9,
+       5464906.1
+      ],
+      [
+       382956.7,
+       5464909.2
+      ],
+      [
+       382957.0,
+       5464912.5
+      ]
+     ]
+    ]
+   },
+   "confidence": "high",
+   "lidar_ids": [
+    "KL-01"
+   ]
+  },
+  {
+   "id": "TF-38",
+   "kind": "terrace",
+   "name": "Herzogsterrassen (Terrassenstreifen)",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       383020.0,
+       5464950.0
+      ],
+      [
+       382962.0,
+       5464862.0
+      ],
+      [
+       382985.0,
+       5464822.0
+      ],
+      [
+       383023.0,
+       5464722.0
+      ],
+      [
+       383063.0,
+       5464741.0
+      ],
+      [
+       383112.0,
+       5464765.0
+      ],
+      [
+       383070.6,
+       5464858.3
+      ],
+      [
+       383020.0,
+       5464950.0
+      ]
+     ]
+    ]
+   },
+   "confidence": "med",
+   "lidar_ids": [
+    "KL-02"
+   ]
+  },
+  {
+   "id": "TF-40",
+   "kind": "enclosure",
+   "name": "Rechteckige Wall-Einfriedung (Garten? Plantage?)",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382552.0,
+       5466438.0
+      ],
+      [
+       382555.0,
+       5466352.0
+      ],
+      [
+       382650.0,
+       5466355.0
+      ],
+      [
+       382640.0,
+       5466445.0
+      ],
+      [
+       382552.0,
+       5466438.0
+      ]
+     ]
+    ]
+   },
+   "confidence": "low",
+   "lidar_ids": [
+    "KB-53"
+   ]
+  },
+  {
+   "id": "TF-41",
+   "kind": "well",
+   "name": "Brunnen am ehem. Forsthaus",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       382388.5,
+       5466477.0
+      ],
+      [
+       382388.3,
+       5466478.0
+      ],
+      [
+       382387.8,
+       5466478.8
+      ],
+      [
+       382387.0,
+       5466479.3
+      ],
+      [
+       382386.0,
+       5466479.5
+      ],
+      [
+       382385.0,
+       5466479.3
+      ],
+      [
+       382384.2,
+       5466478.8
+      ],
+      [
+       382383.7,
+       5466478.0
+      ],
+      [
+       382383.5,
+       5466477.0
+      ],
+      [
+       382383.7,
+       5466476.0
+      ],
+      [
+       382384.2,
+       5466475.2
+      ],
+      [
+       382385.0,
+       5466474.7
+      ],
+      [
+       382386.0,
+       5466474.5
+      ],
+      [
+       382387.0,
+       5466474.7
+      ],
+      [
+       382387.8,
+       5466475.2
+      ],
+      [
+       382388.3,
+       5466476.0
+      ],
+      [
+       382388.5,
+       5466477.0
+      ]
+     ]
+    ]
+   },
+   "confidence": "med",
+   "lidar_ids": [
+    "KB-51"
+   ]
+  },
+  {
+   "id": "TF-42",
+   "kind": "well",
+   "name": "Runde Gruben E des Kuechenbaus (Brunnen?)",
+   "geometry": {
+    "type": "MultiPoint",
+    "coordinates": [
+     [
+      382280,
+      5466190
+     ],
+     [
+      382288,
+      5466172
+     ]
+    ]
+   },
+   "confidence": "low",
+   "lidar_ids": [
+    "KB-08",
+    "KB-09"
+   ]
+  }
+ ],
+ "open_questions": [
+  "Which way did the Ehrenhof open? Synthesis: W (HMS + no W closing wall in LiDAR); verify with Le Clerc 1790 / 1805 ruin map / 2006 Lageplan.",
+  "Mansard only on the Corps de logis (en.wikipedia) or on all Ehrenhof wings (HMS 2022)? Generator must support both.",
+  "Exact CdL footprint: east range at u 28-46 (this draft) or inside the terrace? Needs the 1804/1825 plans or Schwan 2010 p. XXXI.",
+  "Axis counts and storey heights of every wing (Schwan 2010, Weber 1987 'Ausmasse des Hauptgebaeudes').",
+  "Position of Kavaliersbau, Remisen, Marstall/Reithalle, Hundezwinger, Kasernen, Lazarett, Brauerei (only HMS-level or none).",
+  "Is KB-34 the 1785 Rotunde (D 28/34 m) or a basin/modern feature? Weber has its plan, section and elevations.",
+  "Cascade: 10 x 1.5 m (15 m) vs 26-39 m LiDAR fall.",
+  "Roof covering (slate vs Biberschwanz) and render/member colours outside the Orangerie.",
+  "Baumagazin 1793 length and roof (today shortened, roof changed, one end raised).",
+  "Karlslust lies S of N 5465000, outside the explorer 'karlsberg' AOI (381000-384000 / 5465000-5468000): AOI must be extended south to ~5464550."
+ ]
+}

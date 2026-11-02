@@ -1,0 +1,8 @@
+[
+ {"name": "c_karlslust", "e0": 382300, "n0": 5464400, "w": 1000, "h": 900, "layer": "combo", "grid": 50, "title": "Karlslust"},
+ {"name": "c_karlslust_dtm", "e0": 382300, "n0": 5464400, "w": 1000, "h": 900, "layer": "dtm", "grid": 50, "title": "Karlslust DTM"},
+ {"name": "c_weiher", "e0": 381650, "n0": 5465700, "w": 450, "h": 350, "layer": "combo", "grid": 25, "title": "Karlsbergweiher"},
+ {"name": "c_khof", "e0": 381350, "n0": 5465750, "w": 400, "h": 450, "layer": "combo", "grid": 25, "title": "Karlsberger Hof area"},
+ {"name": "c_forst", "e0": 382100, "n0": 5466250, "w": 600, "h": 600, "layer": "combo", "grid": 50, "title": "Forsthaus / Eiskeller"},
+ {"name": "c_plateau", "e0": 382000, "n0": 5465300, "w": 2000, "h": 1600, "layer": "combo", "grid": 100, "scalebar": 200, "title": "plateau"}
+]

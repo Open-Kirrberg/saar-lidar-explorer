@@ -1,0 +1,51 @@
+# Areas of interest for the pipeline. All coordinates in EPSG:25832 (ETRS89 / UTM 32N), metres.
+# bbox = [E_min, N_min, E_max, N_max]; E_min/N_min become the AOI origin (E0, N0) in the manifest.
+# Width/height must be multiples of `chunk_size` cells (data contract: 500).
+#
+# buffer_m: relief derivatives (SLRM r=20 m, SVF/openness r=10 m) are computed on AOI + buffer and
+#           then cropped, so there are no edge artefacts. Must be >= 100 m. All 1 km source tiles
+#           touching the buffered box (the "buffer ring") are fetched.
+# county:   LVGL Landkreis code of the open-data ZIP (SPK = Saarpfalz-Kreis).
+
+[defaults]
+buffer_m = 200
+county = "SPK"
+chunk_size = 500
+
+[karlsberg]
+name = "Schloss Karlsberg"
+bbox = [381000, 5465000, 384000, 5468000]
+phase = "MVP"
+
+[homburg]
+name = "Homburg + Schlossberg"
+bbox = [378000, 5463000, 381000, 5466000]
+phase = "P1"
+
+[kirrberg]
+name = "Kirrberg + Merburg"
+bbox = [380000, 5460000, 383000, 5463500]
+phase = "P1"
+
+[overall]
+name = "Homburg / Kirrberg / Karlsberg"
+bbox = [378000, 5460000, 384000, 5468000]
+phase = "P1"
+
+# F16 point-cloud focus areas (pointcloud.py, contract "Point clouds"). Defined once under [defaults] so every
+# AOI inherits them; an AOI writes the areas whose bbox lies fully inside it. bbox in EPSG:25832, multiples of
+# 100 m (tileSize), ≈ 1 km² each, placed to touch as few 1 km LAZ tiles as possible.
+[[defaults.pointclouds]]
+id = "karlsberg-schloss"
+name_de = "Schloss Karlsberg"
+bbox = [381700, 5465600, 382700, 5466600]   # Hauptschloss ≈ 382195/5466095, Orangerie, Eiskeller, Karlsbergweiher
+
+[[defaults.pointclouds]]
+id = "homburg-schlossberg"
+name_de = "Homburg Schlossberg (Hohenburg)"
+bbox = [379200, 5464000, 380200, 5465000]   # Hohenburg/Vauban-Festung ≈ 379680/5464415, Schlossberghöhlen
+
+[[defaults.pointclouds]]
+id = "merburg"
+name_de = "Burgruine Merburg"
+bbox = [381500, 5463000, 382500, 5464000]   # Merburg ≈ 381964/5463453

@@ -1,0 +1,4 @@
+[
+ {"name": "00_overview_ortho", "e0": 381000, "n0": 5465000, "w": 3000, "h": 3000, "layer": "ortho", "grid": 500, "scalebar": 500, "title": "AOI orthophoto (DOP20, resampled 1 m)"},
+ {"name": "00_overview_hist1840", "e0": 381000, "n0": 5465000, "w": 3000, "h": 3000, "layer": "hist1840", "blend": 0.2, "grid": 500, "scalebar": 500, "title": "AOI Bavarian survey 1836-41"}
+]

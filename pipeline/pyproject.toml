@@ -1,0 +1,42 @@
+[project]
+name = "saar-lidar-pipeline"
+version = "0.1.0"
+description = "Data pipeline for Saar LiDAR Explorer (DGM1/DOM1 2025 -> Terrarium chunks + relief layers)"
+requires-python = ">=3.12"
+dependencies = [
+    "certifi==2026.10.23",  # CA bundle (uv's standalone Python has no system trust store)
+    "laspy==2.7.0",
+    "lazrs==0.8.2",
+    "lxml==6.1.3",
+    "mapbox-earcut==2.1.0",
+    "matplotlib==3.11.2",  # needed by rvt.blend_func
+    "morecantile==7.1.0",
+    "numpy==2.5.4",
+    "pillow==13.0.0",
+    "pyproj==3.8.0",
+    "rasterio==1.5.2",
+    "rvt-py==2.2.3",
+    "scikit-image==0.26.0",
+    "scipy==1.18.1",
+    "shapely==2.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==9.2.0",
+]
+
+[tool.uv]
+# rvt-py declares a dependency on the `gdal` (osgeo) sdist, which needs a system GDAL build.
+# We only use rvt.vis + rvt.blend_func (numpy/scipy/matplotlib) and do raster I/O with rasterio (bundled GDAL wheels).
+# jupyter/pandas/geopandas are only used by rvt's notebooks/tiling helpers, not by rvt.vis/rvt.blend_func.
+override-dependencies = [
+    "gdal ; sys_platform == 'never'",
+    "jupyter ; sys_platform == 'never'",
+    "pandas ; sys_platform == 'never'",
+    "geopandas ; sys_platform == 'never'",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"

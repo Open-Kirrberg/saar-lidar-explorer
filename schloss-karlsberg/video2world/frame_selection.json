@@ -1,0 +1,124 @@
+{
+  "source": "input/karlsberg_1789_hms_2160p.webm (3840x2160, 60 fps container, 124.2 s; (c) Architekturvisualisierung Matzerath + Historisches Museum Saar — private use only)",
+  "notes": [
+    "Times are source PTS in seconds. fps = recommended sampling rate for SfM / Gaussian splatting.",
+    "Shots marked effective_fps 30 were rendered at 30 fps and frame-doubled to 60 (mpdecimate): never sample above 30 there.",
+    "lighting 'day' shots share one sun/sky setup and may be combined into one reconstruction; 'golden' (S23) must be reconstructed separately or used for geometry only.",
+    "mask: regions to mask before feature extraction (text/labels/leader lines). Sky should be masked in all shots (CG sky + animated clouds).",
+    "Priority 1 = core set for the main palace; 2 = useful extension; 3 = optional/low value."
+  ],
+  "shots": [
+    {
+      "id": "S04_crane_ehrenhof",
+      "t_start": 18.15, "t_end": 28.90, "fps": 4,
+      "subject": "Ehrenhof + corps de logis + both arms + Kuechenbau from above (crane-up from court pavement to high oblique, slight lateral drift)",
+      "why": "Strongest parallax on the U-shaped main palace; roofs, dormers and court facades from many angles; consistent daylight; true 60 fps. Skip the first ~0.4 s (blurred pavement).",
+      "priority": 1, "lighting": "day", "effective_fps": 60,
+      "mask": "centre text 'Zerstoert durch franzoesische Revolutionstruppen 1793' t~19-22.5; label 'Kuechenbau' + leader line t~25.5-28.9"
+    },
+    {
+      "id": "S06_oblique_nadir_complex",
+      "t_start": 34.10, "t_end": 36.95, "fps": 4,
+      "subject": "Near-nadir oblique of U, Sammlungsfluegel, Kuechenhof, Kuechenbau, Bildergalerie, rotunda, walled gardens",
+      "why": "Plan-like view, best single source for footprint layout; slow drift gives modest parallax; links S04 and S08 views.",
+      "priority": 1, "lighting": "day", "effective_fps": 60,
+      "mask": "label 'Sammlungsfluegel mit Bibliothek, ...' bottom third + leader line (whole shot)"
+    },
+    {
+      "id": "S08_overview_from_west",
+      "t_start": 39.60, "t_end": 42.20, "fps": 4,
+      "subject": "High oblique of the whole residence from the west: U, Sammlungsfluegel, Orangerie, avenues, walled garden, Nutzbauten in background",
+      "why": "Context and long-baseline view tying palace, Orangerie and avenues together; no overlays.",
+      "priority": 1, "lighting": "day", "effective_fps": 60,
+      "mask": "sky/horizon only"
+    },
+    {
+      "id": "S09_orangerie_looking_north",
+      "t_start": 42.25, "t_end": 47.55, "fps": 3,
+      "subject": "Orangerie (foreground) and palace south arm / Ehrenhof, looking north along the avenue to the Nutzbauten",
+      "why": "Only good aerial of the Orangerie roof/plan; slow push-in with some rotation; overlaps S08.",
+      "priority": 1, "lighting": "day", "effective_fps": 60,
+      "mask": "label 'Orangerie: ein Festsaal ...' lower-left + leader line + circle marker on Orangerie roof (t~42.3-47.5)"
+    },
+    {
+      "id": "S03_ehrenhof_ground",
+      "t_start": 8.70, "t_end": 18.05, "fps": 3,
+      "subject": "Portico pavilion (NW court corner) close-up, then Ehrenhof facades: south arm, corps de logis, north arm at eye level",
+      "why": "Facade detail at ground level (portals, guard boxes, windows, plinth); dolly + pan gives some parallax. Near-field DOF/motion blur on columns t~9-12.",
+      "priority": 2, "lighting": "day", "effective_fps": 60,
+      "mask": "title 'Schloss Karlsberg in Homburg / erbaut ab 1777' lower centre t~13.8-18.05"
+    },
+    {
+      "id": "S15_S16_south_arm_push_through",
+      "t_start": 68.85, "t_end": 79.45, "fps": 3,
+      "subject": "Rise over Orangerie roof, aerial push to south arm outer facade with terrace garden, through its portal passage, across the court to the north arm court facade and its portal",
+      "why": "Only frontal elevation of an arm (21 axes countable) and of the north arm court facade; strong forward motion. Passage interiors (t~73.6-75.4, 78.6-79.4) are fast and textureless — drop them for SfM.",
+      "priority": 2, "lighting": "day", "effective_fps": 30,
+      "mask": "label 'Moderne Blitzableiter ...' t~68.8-69.5; label 'Herzoglicher Wohnfluegel ...' lower centre t~75.9-79.4"
+    },
+    {
+      "id": "S17_kuechenhof_rise",
+      "t_start": 79.55, "t_end": 84.85, "fps": 3,
+      "subject": "Kuechenhof from the north-arm passage, crane up over the Bildergalerie roof looking north to the walled Hofgaertnerei with Treibhaeuser",
+      "why": "Only view of the Kuechenhof interior facades and the Treibhaeuser; crane gives parallax.",
+      "priority": 2, "lighting": "day", "effective_fps": 40,
+      "mask": "label 'Die Treibhaeuser des Hofgaertners Ludwig Reichard' upper centre + leader line t~81.5-84.85"
+    },
+    {
+      "id": "S14_orangerie_ground",
+      "t_start": 63.55, "t_end": 68.75, "fps": 3,
+      "subject": "Orangerie west facade at eye level: ashlar basement, pedimented risalit, Dachreiter",
+      "why": "Facade detail of the Orangerie; lateral truck gives parallax; fog cards in background.",
+      "priority": 2, "lighting": "day", "effective_fps": 30,
+      "mask": "label 'Moderne Blitzableiter Hemmer'sche Fuenfspitzen' upper left t~65.5-68.75"
+    },
+    {
+      "id": "S10_S11_topdown_nutzbauten",
+      "t_start": 47.60, "t_end": 52.80, "fps": 3,
+      "subject": "Nadir pan along the Nutzbauten/Marstall row and the avenue north of the palace",
+      "why": "Orthophoto-like coverage of outbuilding footprints; little parallax (nadir), good for a 2.5D map, poor for facades. Hard cut at 50.25 — treat as two sub-sequences.",
+      "priority": 2, "lighting": "day", "effective_fps": 60,
+      "mask": "none"
+    },
+    {
+      "id": "S13_topdown_appelallee",
+      "t_start": 61.00, "t_end": 63.45, "fps": 3,
+      "subject": "Nadir view of the north end of the residence / start of the Appelallee to Park Karlslust",
+      "why": "Footprints of northern outbuildings; nadir only.",
+      "priority": 3, "lighting": "day", "effective_fps": 60,
+      "mask": "label 'Appelallee: fuehrt in den Park Karlslust' bottom + leader line (whole shot)"
+    },
+    {
+      "id": "S12_nutzbauten_low",
+      "t_start": 52.90, "t_end": 60.95, "fps": 2,
+      "subject": "Low flight up the slope to the red-roofed Nutzbauten (Lazarett, Kasernen, Brauerei)",
+      "why": "Only oblique facades of the Nutzbauten; motion blur on grass, fog cards. Possible dissolve near 58.3.",
+      "priority": 3, "lighting": "day", "effective_fps": 30,
+      "mask": "label 'Nutzbauten fuer das Schloss ...' lower left t~55.5-60.95"
+    },
+    {
+      "id": "S05_S19_S21_ground_misc",
+      "t_start": 87.60, "t_end": 95.30, "fps": 2,
+      "subject": "Eye-level views: Sammlungsfluegel west front with portal (87.6-90.2), meadow with animated deer, terrace wall, Orangerie (90.2-95.3)",
+      "why": "Supplementary ground views; trees occlude, animated animals and fog — mask or skip. Hard cuts at 90.18 and 92.92.",
+      "priority": 3, "lighting": "day", "effective_fps": 30,
+      "mask": "animals (t~90.2-92.9); dissolve 94.5-94.85 must be skipped"
+    },
+    {
+      "id": "S23_golden_hour_orbit",
+      "t_start": 100.70, "t_end": 116.55, "fps": 3,
+      "subject": "Slow aerial arc from the garden (east) side around and over the whole palace, ending near-nadir",
+      "why": "Longest continuous orbit-like move (16 s) with large baseline over the complete complex; but low backlit sun, haze and bloom (t~100.7-104 nearly silhouetted). Reconstruct separately from the daylight set.",
+      "priority": 1, "lighting": "golden", "effective_fps": 60,
+      "mask": "label 'Bildergalerie mit anschliessender Rotunde' t~103.8-108; label 'Blick in den Englischen Garten von Bernhard Petri' t~108.5-113.3 (fades in/out); sun/sky"
+    }
+  ],
+  "excluded": [
+    { "t_start": 0.0, "t_end": 8.62, "why": "S01/S02 eye-level dolly through trees toward the palace; heavy foliage occlusion, fade from dark at ~3.8-4.8, camera passes through foliage at ~8.0-8.6. Usable only as reference." },
+    { "t_start": 28.95, "t_end": 34.05, "why": "S05 ground dolly beside the Orangerie with dense animated fog/dust cards; 30 fps effective." },
+    { "t_start": 36.97, "t_end": 39.53, "why": "S07 Schlossallee view: starts inside foliage, text overlay top right, low parallax." },
+    { "t_start": 84.90, "t_end": 87.55, "why": "S18 fast low flight over grass/trees: strong motion blur, no buildings." },
+    { "t_start": 95.38, "t_end": 100.63, "why": "S22 Marstall top-down: from ~96.3 the grade bleaches to near-white (transition), inconsistent appearance." },
+    { "t_start": 116.63, "t_end": 124.22, "why": "Black credits / logos." }
+  ]
+}

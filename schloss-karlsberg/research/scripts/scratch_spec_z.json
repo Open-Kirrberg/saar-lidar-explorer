@@ -1,0 +1,4 @@
+[
+ {"name": "z_core_s5", "e0": 382150, "n0": 5466060, "w": 150, "h": 180, "layer": "slrm5", "grid": 10, "lim": 0.4, "scalebar": 20},
+ {"name": "z_core_hs", "e0": 382150, "n0": 5466060, "w": 150, "h": 180, "layer": "hs", "grid": 10, "scalebar": 20}
+]

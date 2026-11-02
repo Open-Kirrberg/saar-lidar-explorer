@@ -1,0 +1,484 @@
+"""Build app data for an AOI: mosaic → RLP/nodata fill → relief layers → Terrarium + u8 PNG chunks → manifest.
+
+Usage:  uv run python build.py <aoi> [--no-dsm] [--no-previews] [--levels N]
+
+--levels N: coarse overview levels 1…N (contract v2, default 4); 0 writes a v1 manifest without `levels`.
+
+Reads data/raw/{lvgl-sl,rlp}/ (see fetch.py), writes
+  data/work/<aoi>/*.tif               float32 AOI rasters (EPSG:25832) for xyz.py / tests / QGIS
+  app/public/data/<aoi>/…             chunks + manifest.json (docs/data-contract.md)
+  docs/previews/<aoi>_{vat,slrm,chm}.jpg
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import shutil
+import sys
+import time
+import warnings
+from pathlib import Path
+
+import matplotlib.cm
+import numpy as np
+import rasterio
+from PIL import Image
+from pyproj import Transformer
+from rasterio.transform import from_origin
+from scipy import ndimage
+
+# rvt.blend_func imports matplotlib.cm.get_cmap, removed in matplotlib 3.9 → shim before import.
+if not hasattr(matplotlib.cm, "get_cmap"):
+    matplotlib.cm.get_cmap = matplotlib.colormaps.get_cmap
+import rvt.blend_func as rbf  # noqa: E402
+import rvt.vis  # noqa: E402
+
+from common import (  # noqa: E402
+    APP_DATA, ATTRIBUTION_RLP, ATTRIBUTION_SL, PREVIEW_DIR, RLP_RAW, SL_RAW, UTM32_PROJ4, WORK_DIR, load_aoi, sl_name,
+    update_manifest,
+)
+from encode import height_chunk, layer_chunk, terrarium_encode, u8_encode  # noqa: E402
+from levels import N_LEVELS, level0_entry, write_levels  # noqa: E402
+from render import CMAPS, cmap_rgba, downsample_mean  # noqa: E402
+
+# ----------------------------------------------------------------------------- parameters
+PARAMS = {
+    "hillshade": {"method": "multi-directional, MDOW-weighted (Mark 1992)", "azimuths": [225, 270, 315, 360],
+                  "sun_elevation": 35,
+                  "stretch_percentiles": [0.5, 99.5], "note": "display image: linearly stretched to 0–1"},
+    "slope": {"units": "degree"},
+    "slrm": {"radius_m": 20},
+    "svf": {"n_dir": 16, "r_max_m": 10, "noise": 0},
+    "openness": {"n_dir": 16, "r_max_m": 10},
+    "vat": {"method": "RVT 'VAT combined' = VAT general (50 %) over VAT flat, rvt.blend_func",
+            "note": "flat variant uses the same r=10 m SVF/openness as general (RVT uses larger radii for flat)"},
+    "chm": {"formula": "clip(DSM − DTM, 0, 40)"},
+}
+# RVT blender presets (top → bottom layer): (vis name, min, max, blend mode, opacity %)
+VAT_GENERAL = [("Sky-View Factor", 0.7, 1.0, "multiply", 25), ("Openness - Positive", 68, 93, "overlay", 50),
+               ("Slope gradient", 0, 50, "luminosity", 50), ("Hillshade", 0, 1, "normal", 100)]
+VAT_FLAT = [("Sky-View Factor", 0.9, 1.0, "multiply", 25), ("Openness - Positive", 85, 91, "overlay", 50),
+            ("Slope gradient", 0, 15, "luminosity", 50), ("Hillshade", 0, 1, "normal", 100)]
+
+LAYER_META = {
+    "hillshade": ("Schummerung (multidirektional)", None, "Multidirektionale Schummerung (Sonnenhöhe 35°)"),
+    "slope": ("Hangneigung", "deg", "Hangneigung in Grad"),
+    "slrm": ("Lokales Relief", "m", "Simple Local Relief Model: DGM minus 20-m-Mittelwert (positiv = Erhebung)"),
+    "svf": ("Himmelssicht (SVF)", None, "Sky-View Factor, 16 Richtungen, Radius 10 m"),
+    "opns_pos": ("Offenheit positiv", "deg", "Positive Offenheit (konvexe Formen hell), 16 Richtungen, 10 m"),
+    "opns_neg": ("Offenheit negativ", "deg", "Negative Offenheit (hohe Werte = Senken/Gräben), 16 Richtungen, 10 m"),
+    "vat": ("VAT (Kombination)", None, "Visualisation for Archaeological Topography (RVT, kombiniert allgemein+flach)"),
+    "chm": ("Vegetationshöhe", "m", "Vegetations-/Objekthöhe = DOM − DGM, auf 0–40 m begrenzt"),
+    "mask": ("Ergänzte Daten (RLP/Lücke)", None, "0 = LVGL-SL 2025, 0.5 = aus RLP 2022 ergänzt, 1 = interpoliert"),
+}
+
+
+def clear_build_outputs(out: Path) -> None:
+    """Delete only the chunk dirs this step owns: dtm/, dsm/ and relief/<k> for k in LAYER_META.
+
+    Other relief/ subdirs belong to later steps (relief/bldg from buildings.py) and must survive a
+    rebuild — the manifest merge keeps their layer entries (audit pipeline-1)."""
+    for sub in ("dtm", "dsm"):
+        shutil.rmtree(out / sub, ignore_errors=True)
+    for k in LAYER_META:
+        shutil.rmtree(out / "relief" / k, ignore_errors=True)
+
+
+def log(msg: str, t0: float = None):
+    print(f"{msg}" + (f"  [{time.time() - t0:.1f}s]" if t0 else ""), flush=True)
+
+
+# ----------------------------------------------------------------------------- mosaic
+def read_mosaic(paths: dict, box: tuple[int, int, int, int]) -> tuple[np.ndarray, list]:
+    """paths: {(e_km, n_km): Path}. Returns float32 array over box (row 0 = north), NaN where no data."""
+    bx0, by0, bx1, by1 = box
+    out = np.full((by1 - by0, bx1 - bx0), np.nan, np.float32)
+    used = []
+    for (e, n), p in sorted(paths.items()):
+        te0, tn0 = e * 1000, n * 1000
+        ex0, ex1 = max(bx0, te0), min(bx1, te0 + 1000)
+        ny0, ny1 = max(by0, tn0), min(by1, tn0 + 1000)
+        if ex0 >= ex1 or ny0 >= ny1:
+            continue
+        with rasterio.open(p) as ds:
+            t = ds.transform
+            if (t.a, t.b, t.c, t.d, t.e, t.f) != (1.0, 0.0, te0, 0.0, -1.0, tn0 + 1000) or ds.shape != (1000, 1000):
+                sys.exit(f"{p.name}: unexpected grid {t} {ds.shape} – would need resampling")
+            if ds.crs is not None and ds.crs.to_epsg() not in (25832, None) and "25832" not in ds.crs.to_wkt():
+                sys.exit(f"{p.name}: unexpected CRS {ds.crs}")
+            win = rasterio.windows.Window(ex0 - te0, tn0 + 1000 - ny1, ex1 - ex0, ny1 - ny0)
+            a = ds.read(1, window=win).astype(np.float32)
+            if ds.nodata is not None:
+                a[a == ds.nodata] = np.nan
+            a[(a < -1000) | (a > 5000)] = np.nan
+        out[by1 - ny1: by1 - ny0, ex0 - bx0: ex1 - bx0] = a
+        used.append((e, n))
+    return out, used
+
+
+def tile_paths(product: str, tiles: list) -> tuple[dict, dict]:
+    sl = {t: SL_RAW / sl_name(product, *t) for t in tiles if (SL_RAW / sl_name(product, *t)).exists()}
+    rlp = {}
+    for t in tiles:
+        hits = sorted(RLP_RAW.glob(f"{product}_32_{t[0]}_{t[1]}_1_rp_*.tif"))
+        if hits:
+            rlp[t] = hits[-1]  # newest year
+    return sl, rlp
+
+
+def rlp_offset(sl: np.ndarray, rlp: np.ndarray) -> dict:
+    both = np.isfinite(sl) & np.isfinite(rlp)
+    if both.sum() < 10_000:
+        return {"overlap_px": int(both.sum()), "applied": 0.0, "constant_bias": False}
+    d = (sl - rlp)[both].astype(np.float64)
+    med = float(np.median(d))
+    d = d[np.abs(d - med) < 1.0]  # drop real terrain change (construction, quarries)
+    med = float(np.median(d))
+    p10, p90 = (float(v) for v in np.percentile(d, [10, 90]))
+    constant = (p90 - p10) < 0.3 and abs(med) >= 0.01
+    return {"overlap_px": int(both.sum()), "median_sl_minus_rlp_m": round(med, 3), "p10": round(p10, 3),
+            "p90": round(p90, 3), "constant_bias": constant, "applied": round(med, 3) if constant else 0.0}
+
+
+def tiles_used(paths: dict, used: np.ndarray, box) -> list:
+    """[((e, n), path, n_pixels)] for tiles that contributed at least one pixel of `used`."""
+    out = []
+    for (e, n), p in sorted(paths.items()):
+        r0, r1 = max(0, box[3] - (n + 1) * 1000), min(used.shape[0], box[3] - n * 1000)
+        c0, c1 = max(0, e * 1000 - box[0]), min(used.shape[1], (e + 1) * 1000 - box[0])
+        if r0 < r1 and c0 < c1 and used[r0:r1, c0:c1].any():
+            out.append(((e, n), p, int(used[r0:r1, c0:c1].sum())))
+    return out
+
+
+def fill_nearest(a: np.ndarray) -> np.ndarray:
+    bad = ~np.isfinite(a)
+    if not bad.any():
+        return a
+    idx = ndimage.distance_transform_edt(bad, return_distances=False, return_indices=True)
+    return a[tuple(idx)]
+
+
+# ----------------------------------------------------------------------------- relief
+def mdow_hillshade(slope_rad, aspect_rad, azimuths, elev_deg):
+    """Multi-directional oblique-weighted hillshade: weight each azimuth by sin²(aspect − az)."""
+    zen = math.radians(90 - elev_deg)
+    acc = np.zeros_like(slope_rad)
+    wsum = np.zeros_like(slope_rad)
+    for az in azimuths:
+        a = math.radians(az)
+        hs = np.cos(zen) * np.cos(slope_rad) + np.sin(zen) * np.sin(slope_rad) * np.cos(a - aspect_rad)
+        w = np.sin(aspect_rad - a) ** 2 + 1e-3
+        acc += w * np.clip(hs, 0, 1)
+        wsum += w
+    return (acc / wsum).astype(np.float32)
+
+
+def rvt_blend(layers, imgs: dict) -> np.ndarray:
+    """Replicates rvt.blend.BlenderCombination.render_all_images for precomputed grayscale layers."""
+    rendered = None
+    for vis, vmin, vmax, mode, opacity in reversed(layers):
+        norm = rbf.normalize_image(vis, imgs[vis].astype(np.float32).copy(), vmin, vmax, "value")
+        if rendered is None:
+            rendered = norm
+            continue
+        top = rbf.blend_images(mode, norm, rendered)
+        rendered = rbf.render_images(top, rendered, opacity)
+    return rendered.astype(np.float32)
+
+
+def compute_relief(dtm: np.ndarray) -> dict:
+    out = {}
+    t = time.time()
+    sa = rvt.vis.slope_aspect(dtm, resolution_x=1, resolution_y=1, output_units="radian")
+    slope_rad, aspect_rad = sa["slope"].astype(np.float32), sa["aspect"].astype(np.float32)
+    out["slope"] = np.degrees(slope_rad).astype(np.float32)
+    p = PARAMS["hillshade"]
+    hs = mdow_hillshade(slope_rad, aspect_rad, p["azimuths"], p["sun_elevation"])
+    lo, hi = np.percentile(hs[::4, ::4], p["stretch_percentiles"])  # raw MDOW is low-contrast (≈0.37–0.67)
+    p["stretch_applied"] = [round(float(lo), 4), round(float(hi), 4)]
+    out["hillshade"] = np.clip((hs - lo) / (hi - lo), 0, 1).astype(np.float32)
+    # (rvt.vis.hillshade crops 1 px when slope/aspect are passed in, so let it recompute them)
+    hs315 = rvt.vis.hillshade(dtm, 1, 1, sun_azimuth=315, sun_elevation=35).astype(np.float32)
+    log("  slope + hillshade", t)
+    t = time.time()
+    out["slrm"] = rvt.vis.slrm(dtm, radius_cell=PARAMS["slrm"]["radius_m"]).astype(np.float32)
+    log("  slrm", t)
+    t = time.time()
+    s = PARAMS["svf"]
+    r = rvt.vis.sky_view_factor(dtm, resolution=1, compute_svf=True, compute_opns=True,
+                                svf_n_dir=s["n_dir"], svf_r_max=s["r_max_m"], svf_noise=s["noise"])
+    out["svf"], out["opns_pos"] = r["svf"].astype(np.float32), r["opns"].astype(np.float32)
+    log("  svf + positive openness", t)
+    t = time.time()
+    r = rvt.vis.sky_view_factor(-dtm, resolution=1, compute_svf=False, compute_opns=True,
+                                svf_n_dir=s["n_dir"], svf_r_max=s["r_max_m"], svf_noise=s["noise"])
+    out["opns_neg"] = r["opns"].astype(np.float32)
+    log("  negative openness", t)
+    t = time.time()
+    imgs = {"Sky-View Factor": out["svf"], "Openness - Positive": out["opns_pos"],
+            "Slope gradient": out["slope"], "Hillshade": hs315}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        general = rvt_blend(VAT_GENERAL, imgs)
+        flat = rvt_blend(VAT_FLAT, imgs)
+    out["vat"] = rbf.render_images(general, flat, 50).astype(np.float32)
+    log("  VAT blend", t)
+    return out
+
+
+# ----------------------------------------------------------------------------- ranges
+def pct(a, qs):
+    return [float(v) for v in np.percentile(a[::3, ::3], qs)]
+
+
+def choose_range(key: str, a: np.ndarray) -> tuple[float, float, dict]:
+    p = dict(zip(["p0.5", "p1", "p50", "p99", "p99.5"], pct(a, [0.5, 1, 50, 99, 99.5])))
+    stats = {k: round(v, 4) for k, v in p.items()}
+    if key in ("hillshade", "vat", "mask"):
+        return 0.0, 1.0, stats
+    if key == "slope":
+        return 0.0, float(math.ceil(p["p99.5"] / 5) * 5), stats
+    if key == "slrm":
+        m = max(abs(p["p0.5"]), abs(p["p99.5"]))
+        m = math.ceil(m * 10) / 10
+        return -m, m, stats
+    if key == "svf":
+        return math.floor(p["p0.5"] * 100) / 100, 1.0, stats
+    if key in ("opns_pos", "opns_neg"):
+        return float(math.floor(p["p0.5"])), float(math.ceil(p["p99.5"])), stats
+    if key == "chm":
+        return 0.0, 40.0, stats
+    raise KeyError(key)
+
+
+# ----------------------------------------------------------------------------- output
+def save_png(path: Path, arr: np.ndarray):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(arr).save(path, compress_level=9)
+
+
+def write_geotiff(path: Path, arr: np.ndarray, e0: int, n_top: int):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(path, "w", driver="GTiff", width=arr.shape[1], height=arr.shape[0], count=1,
+                       dtype="float32", crs="EPSG:25832", transform=from_origin(e0, n_top, 1, 1),
+                       compress="deflate", predictor=3, tiled=True, nodata=np.nan) as ds:
+        ds.write(arr.astype(np.float32), 1)
+
+
+def save_previews(aoi, layers: dict, ranges: dict):
+    PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+    f = max(1, round(max(aoi.width, aoi.height) / 1500))
+    vat = downsample_mean(layers["vat"], f)
+    Image.fromarray(np.rint(np.clip(vat, 0, 1) * 255).astype(np.uint8)).save(
+        PREVIEW_DIR / f"{aoi.key}_vat.jpg", quality=72, optimize=True)
+    lo, hi = ranges["slrm_display"]
+    rgba = cmap_rgba(downsample_mean(layers["slrm"], f), CMAPS["slrm"], lo, hi)
+    Image.fromarray(rgba[..., :3]).save(PREVIEW_DIR / f"{aoi.key}_slrm.jpg", quality=72, optimize=True)
+    rgba = cmap_rgba(downsample_mean(layers["chm"], f), CMAPS["chm"], 0, 35)
+    Image.fromarray(rgba[..., :3]).save(PREVIEW_DIR / f"{aoi.key}_chm.jpg", quality=72, optimize=True)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("aoi")
+    ap.add_argument("--no-dsm", action="store_true")
+    ap.add_argument("--no-previews", action="store_true")
+    ap.add_argument("--levels", type=int, default=N_LEVELS, help="coarse overview levels (0 = v1 manifest)")
+    args = ap.parse_args()
+    aoi = load_aoi(args.aoi)
+    T0 = time.time()
+    timings = {}
+    b = aoi.buffer_m
+    box = aoi.buffered
+    tiles = aoi.tiles(buffered=True)
+    log(f"AOI {aoi.key}: {aoi.width}×{aoi.height} cells, buffered box {box}, {len(tiles)} tiles")
+
+    # --- mosaic + fill -------------------------------------------------------------------
+    t = time.time()
+    sl_p, rlp_p = tile_paths("dgm1", tiles)
+    if not sl_p:
+        sys.exit("no LVGL DGM1 tiles found – run fetch.py first")
+    dtm_sl, sl_used = read_mosaic(sl_p, box)
+    dtm_rlp, _ = read_mosaic(rlp_p, box) if rlp_p else (np.full_like(dtm_sl, np.nan), [])
+    off = rlp_offset(dtm_sl, dtm_rlp)
+    log(f"DTM: SL nodata {np.isnan(dtm_sl).mean():.2%} of buffered box; RLP overlap {off}")
+    mask = np.zeros_like(dtm_sl)
+    use_rlp = ~np.isfinite(dtm_sl) & np.isfinite(dtm_rlp)
+    dtm = np.where(use_rlp, dtm_rlp + off["applied"], dtm_sl)
+    mask[use_rlp] = 0.5
+    gap = ~np.isfinite(dtm)
+    mask[gap] = 1.0
+    dtm = fill_nearest(dtm)
+    rlp_used = [("DGM1",) + u for u in tiles_used(rlp_p, use_rlp, box)]
+    fill_stats = {
+        "buffered": {"rlp_px": int(use_rlp.sum()), "interpolated_px": int(gap.sum())},
+        "aoi": {"rlp_px": int(use_rlp[b:b + aoi.height, b:b + aoi.width].sum()),
+                "interpolated_px": int(gap[b:b + aoi.height, b:b + aoi.width].sum())},
+    }
+    log(f"DTM fill: {fill_stats}")
+
+    dsm = None
+    dsm_info = None
+    if not args.no_dsm:
+        dsl_p, drlp_p = tile_paths("dom1", tiles)
+        if dsl_p:
+            dsm_sl, _ = read_mosaic(dsl_p, box)
+            dsm_rlp, _ = read_mosaic(drlp_p, box) if drlp_p else (np.full_like(dsm_sl, np.nan), [])
+            use = ~np.isfinite(dsm_sl) & np.isfinite(dsm_rlp)
+            dsm = np.where(use, dsm_rlp + off["applied"], dsm_sl)
+            dsm = np.where(np.isfinite(dsm), dsm, dtm)  # remaining gaps: bare earth
+            dsm = np.maximum(dsm, dtm - 0.5)  # guard against negative CHM from mixed sources
+            dsm_info = {"rlp_px": int(use.sum())}
+            rlp_used += [("DOM1",) + u for u in tiles_used(drlp_p, use, box)]
+    timings["mosaic_fill"] = round(time.time() - t, 1)
+
+    # --- relief -------------------------------------------------------------------------
+    t = time.time()
+    log("relief (buffered):")
+    rel = compute_relief(dtm)
+    timings["relief"] = round(time.time() - t, 1)
+
+    # buffered VAT for checking seams/fill in the buffer ring (not shipped)
+    WORK_DIR.joinpath(aoi.key).mkdir(parents=True, exist_ok=True)
+    fb = max(1, round(max(rel["vat"].shape) / 1700))
+    Image.fromarray(np.rint(np.clip(downsample_mean(rel["vat"], fb), 0, 1) * 255).astype(np.uint8)).save(
+        WORK_DIR / aoi.key / "vat_buffered.jpg", quality=80)
+
+    crop = (slice(b, b + aoi.height), slice(b, b + aoi.width))
+    A = {k: v[crop] for k, v in rel.items()}
+    A["dtm"] = dtm[crop]
+    A["mask"] = mask[crop]
+    if dsm is not None:
+        A["dsm"] = dsm[crop]
+        A["chm"] = np.clip(A["dsm"] - A["dtm"], 0, 40).astype(np.float32)
+    assert A["dtm"].shape == (aoi.height, aoi.width)
+
+    # --- work rasters ---------------------------------------------------------------------
+    t = time.time()
+    work = WORK_DIR / aoi.key
+    for k, v in A.items():
+        write_geotiff(work / f"{k}.tif", v, aoi.e0, aoi.n1)
+    timings["work_tifs"] = round(time.time() - t, 1)
+
+    # --- ranges -----------------------------------------------------------------------------
+    layer_keys = ["hillshade", "slope", "slrm", "svf", "opns_pos", "opns_neg", "vat"] + \
+                 (["chm"] if "chm" in A else []) + ["mask"]
+    ranges, stats = {}, {}
+    for k in layer_keys:
+        lo, hi, st = choose_range(k, A[k])
+        ranges[k] = (lo, hi)
+        stats[k] = st
+        log(f"  {k:9s} range [{lo}, {hi}]   pct {st}")
+    s98 = max(abs(v) for v in pct(A["slrm"], [2, 98]))
+    ranges["slrm_display"] = (-round(max(0.3, s98), 1), round(max(0.3, s98), 1))
+
+    # --- chunks -----------------------------------------------------------------------------
+    t = time.time()
+    out = APP_DATA / aoi.key
+    clear_build_outputs(out)
+    cs = aoi.chunk_size
+    nx, ny = aoi.width // cs, aoi.height // cs
+    for j in range(ny):
+        for i in range(nx):
+            save_png(out / "dtm" / f"{i}_{j}.png", terrarium_encode(height_chunk(A["dtm"], i, j, cs)))
+            if "dsm" in A:
+                save_png(out / "dsm" / f"{i}_{j}.png", terrarium_encode(height_chunk(A["dsm"], i, j, cs)))
+            for k in layer_keys:
+                lo, hi = ranges[k]
+                save_png(out / "relief" / k / f"{i}_{j}.png", u8_encode(layer_chunk(A[k], i, j, cs), lo, hi))
+    timings["chunks"] = round(time.time() - t, 1)
+
+    # --- manifest ---------------------------------------------------------------------------
+    tr = Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
+    corners = [tr.transform(e, n) for e in (aoi.e0, aoi.e1) for n in (aoi.n0, aoi.n1)]
+    lons, lats = [c[0] for c in corners], [c[1] for c in corners]
+    aoi_tiles = set(aoi.tiles(buffered=False))
+    sources = [{"tile": f"{e}_{n}", "provider": "LVGL-SL", "year": 2025, "product": "DGM1",
+                "role": "aoi" if (e, n) in aoi_tiles else "buffer"} for e, n in sl_used]
+    if dsm is not None:
+        sources += [{"tile": f"{e}_{n}", "provider": "LVGL-SL", "year": 2025, "product": "DOM1",
+                     "role": "aoi" if (e, n) in aoi_tiles else "buffer"} for e, n in sorted(dsl_p)]
+    for product, (e, n), p, px in rlp_used:
+        year = int(p.stem.rsplit("_", 1)[-1])
+        sources.append({"tile": f"{e}_{n}", "provider": "LVermGeo-RP", "year": year, "product": product,
+                        "role": "aoi" if (e, n) in aoi_tiles else "buffer", "filled_px": px})
+    attribution = [ATTRIBUTION_SL] + ([ATTRIBUTION_RLP] if rlp_used else [])
+
+    layers = {}
+    for k in layer_keys:
+        label, unit, desc = LAYER_META[k]
+        lo, hi = ranges[k]
+        entry = {"path": f"relief/{k}/{{i}}_{{j}}.png", "encoding": "u8", "min": lo, "max": hi}
+        if unit:
+            entry["unit"] = unit
+        entry["label_de"] = label
+        entry["description"] = desc
+        layers[k] = entry
+    height = {"dtm": {"path": "dtm/{i}_{j}.png", "encoding": "terrarium", "apron": 1}}
+    if "dsm" in A:
+        height["dsm"] = {"path": "dsm/{i}_{j}.png", "encoding": "terrarium", "apron": 1}
+    manifest = {
+        "version": 2 if args.levels > 0 else 1,
+        "aoi": aoi.key,
+        "name": aoi.name,
+        "crs": "EPSG:25832",
+        "origin": {"E0": aoi.e0, "N0": aoi.n0},
+        "size": {"width": aoi.width, "height": aoi.height},
+        "cellSize": 1,
+        "chunkSize": cs,
+        "chunks": {"nx": nx, "ny": ny},
+        "heightRange": {"min": round(float(A["dtm"].min()), 2), "max": round(float(A["dtm"].max()), 2)},
+        "wgs84Bounds": [[round(min(lats), 6), round(min(lons), 6)], [round(max(lats), 6), round(max(lons), 6)]],
+        "height": height,
+        "layers": layers,
+    }
+    # --- overview levels (contract v2) -----------------------------------------------------
+    if args.levels > 0:
+        t = time.time()
+        coarse = write_levels(out, A["dtm"], {k: A[k] for k in ("vat", "hillshade")}, layers, n_levels=args.levels,
+                              cs=cs)
+        manifest["levels"] = [level0_entry(manifest)] + coarse
+        timings["levels"] = round(time.time() - t, 1)
+        log(f"levels 1…{args.levels}: " + ", ".join(f"{e['cellSize']} m {e['chunks']['nx']}×{e['chunks']['ny']}"
+                                                   for e in coarse), t)
+    else:
+        shutil.rmtree(out / "levels", ignore_errors=True)
+    manifest["sources"] = sources
+    manifest["build"] = {
+        "generated": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "proj4": UTM32_PROJ4,
+        "verticalDatum": "DHHN2016 (EPSG:7837)",
+        "bufferM": b,
+        "params": PARAMS,
+        "layerStats": stats,
+        "slrmDisplayRange": list(ranges["slrm_display"]),
+        "rlpOffset": off,
+        "fill": fill_stats,
+        "dsmFill": dsm_info,
+        "dsmRange": {"min": round(float(A["dsm"].min()), 2), "max": round(float(A["dsm"].max()), 2)}
+        if "dsm" in A else None,
+        "timingsS": timings,
+    }
+    # read–modify–write: keys owned by other steps (xyz, vectors, models, candidates, …) survive a rebuild;
+    # `xyz` is dropped only when its tiles are gone. Attribution entries of other steps are kept.
+    manifest = update_manifest(out, manifest, attribution=attribution,
+                               drop_attribution=[ATTRIBUTION_SL, ATTRIBUTION_RLP],
+                               remove=([] if (out / "xyz").exists() else ["xyz"])
+                               + ([] if args.levels > 0 else ["levels"]),
+                               # per-sub-key merge (contract): keep foreign `layers`/`levels[k].layers` entries
+                               # (bldg, ortho, hist_*, …) written by buildings/ortho/historic
+                               own_layers=LAYER_META)
+    (work / "build.json").write_text(json.dumps(manifest["build"], indent=2, ensure_ascii=False))
+
+    if not args.no_previews:
+        t = time.time()
+        save_previews(aoi, A, ranges)
+        timings["previews"] = round(time.time() - t, 1)
+    size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file() and "xyz" not in f.parts)
+    log(f"wrote {out} ({size / 1e6:.1f} MB excl. xyz), {nx}×{ny} chunks", T0)
+
+
+if __name__ == "__main__":
+    main()

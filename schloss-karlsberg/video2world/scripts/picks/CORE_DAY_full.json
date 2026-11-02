@@ -1,0 +1,427 @@
+{
+ "run": "CORE_DAY_full",
+ "level_args": "--zclip 0.12",
+ "note": "Combined S04+S06+S08+S09 (160 frames, unordered). Levelled frame: +x = south, +y = east. Segments picked on view_-0.65_-0.42.png / view_0.55_-0.35.png (nDSM), snapped to the DSM edge by register.py. Main fit = palace envelope (both W ends, S face of Suedfluegel, both faces of Nordfluegel) + Orangerie (W front, both ends): long N-S baseline (~280 m) fixes scale; variants show the sensitivity.",
+ "init": {
+  "mesh": [
+   [
+    0.2,
+    -0.378
+   ],
+   [
+    1.07,
+    -0.281
+   ]
+  ],
+  "en": [
+   [
+    382196.6,
+    5466077.8
+   ],
+   [
+    382245.6,
+    5465926.7
+   ]
+  ]
+ },
+ "ground": [
+  [
+   -0.1,
+   0.07,
+   -0.3,
+   -0.1
+  ]
+ ],
+ "search": 0.012,
+ "lines": [
+  {
+   "name": "Suedfluegel outer (S) face",
+   "mesh": [
+    [
+     0.2,
+     -0.35
+    ],
+    [
+     0.2,
+     0.0
+    ]
+   ],
+   "lidar": [
+    "KB-02",
+    3,
+    0
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Nordfluegel court (S) face",
+   "mesh": [
+    [
+     -0.135,
+     -0.35
+    ],
+    [
+     -0.135,
+     -0.06
+    ]
+   ],
+   "lidar": [
+    "KB-03",
+    3,
+    0
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Nordfluegel W end",
+   "mesh": [
+    [
+     -0.21,
+     -0.368
+    ],
+    [
+     -0.14,
+     -0.37
+    ]
+   ],
+   "lidar": [
+    "KB-03",
+    2,
+    3
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Suedfluegel W end",
+   "mesh": [
+    [
+     0.115,
+     -0.378
+    ],
+    [
+     0.195,
+     -0.378
+    ]
+   ],
+   "lidar": [
+    "KB-02",
+    2,
+    3
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Orangerie W front (KB-30 wall)",
+   "mesh": [
+    [
+     0.62,
+     -0.277
+    ],
+    [
+     1.05,
+     -0.281
+    ]
+   ],
+   "lidar": [
+    "KB-30",
+    0,
+    1
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Suedfluegel court (N) face",
+   "mesh": [
+    [
+     0.11,
+     -0.35
+    ],
+    [
+     0.11,
+     0.0
+    ]
+   ],
+   "lidar": [
+    "KB-02",
+    1,
+    2
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Nordfluegel N face",
+   "mesh": [
+    [
+     -0.215,
+     -0.22
+    ],
+    [
+     -0.215,
+     0.02
+    ]
+   ],
+   "lidar": [
+    "KB-03",
+    1,
+    2
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Sammlungsfluegel W face",
+   "mesh": [
+    [
+     -0.6,
+     -0.355
+    ],
+    [
+     -0.25,
+     -0.36
+    ]
+   ],
+   "lidar": [
+    "KB-05",
+    0,
+    3
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Sammlungsfluegel E (court) face",
+   "mesh": [
+    [
+     -0.58,
+     -0.245
+    ],
+    [
+     -0.3,
+     -0.245
+    ]
+   ],
+   "lidar": [
+    "KB-05",
+    1,
+    2
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Sammlungsfluegel N end",
+   "mesh": [
+    [
+     -0.62,
+     -0.34
+    ],
+    [
+     -0.62,
+     -0.26
+    ]
+   ],
+   "lidar": [
+    "KB-05",
+    2,
+    3
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Kuechenbau W face",
+   "mesh": [
+    [
+     -0.47,
+     -0.055
+    ],
+    [
+     -0.28,
+     -0.055
+    ]
+   ],
+   "lidar": [
+    "KB-06",
+    0,
+    3
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Kuechenbau E face",
+   "mesh": [
+    [
+     -0.47,
+     0.04
+    ],
+    [
+     -0.28,
+     0.04
+    ]
+   ],
+   "lidar": [
+    "KB-06",
+    1,
+    2
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Kuechenbau S end",
+   "mesh": [
+    [
+     -0.26,
+     -0.04
+    ],
+    [
+     -0.26,
+     0.03
+    ]
+   ],
+   "lidar": [
+    "KB-06",
+    0,
+    1
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Kuechenbau N end",
+   "mesh": [
+    [
+     -0.49,
+     -0.04
+    ],
+    [
+     -0.49,
+     0.03
+    ]
+   ],
+   "lidar": [
+    "KB-06",
+    2,
+    3
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Galerie (thin bar) vs KB-07 scarp",
+   "mesh": [
+    [
+     -0.545,
+     -0.15
+    ],
+    [
+     -0.545,
+     0.2
+    ]
+   ],
+   "lidar": [
+    "KB-07",
+    0,
+    1
+   ],
+   "role": "check"
+  },
+  {
+   "name": "Orangerie N end",
+   "mesh": [
+    [
+     0.595,
+     -0.26
+    ],
+    [
+     0.595,
+     -0.05
+    ]
+   ],
+   "lidar": [
+    "KB-31",
+    2,
+    3
+   ],
+   "role": "control"
+  },
+  {
+   "name": "Orangerie S end",
+   "mesh": [
+    [
+     1.07,
+     -0.26
+    ],
+    [
+     1.07,
+     -0.14
+    ]
+   ],
+   "lidar": [
+    "KB-31",
+    0,
+    1
+   ],
+   "role": "control"
+  }
+ ],
+ "variants": {
+  "A_minimal_palace_court_plus_orangerie_front": {
+   "drop": [
+    "Orangerie N end",
+    "Orangerie S end",
+    "Nordfluegel N face"
+   ]
+  },
+  "B_no_orangerie_ends": {
+   "drop": [
+    "Orangerie N end",
+    "Orangerie S end"
+   ]
+  },
+  "C_no_nordfluegel_N_face": {
+   "drop": [
+    "Nordfluegel N face"
+   ]
+  },
+  "D_palace_only": {
+   "drop": [
+    "Orangerie W front (KB-30 wall)",
+    "Orangerie N end",
+    "Orangerie S end"
+   ]
+  },
+  "E_plus_all_palace_checks": {
+   "add": [
+    "Suedfluegel court (N) face",
+    "Sammlungsfluegel W face",
+    "Kuechenbau W face",
+    "Kuechenbau E face",
+    "Kuechenbau N end"
+   ]
+  }
+ },
+ "ridge_boxes": {
+  "Suedfluegel": [
+   "u",
+   -30,
+   22,
+   -34,
+   -24
+  ],
+  "Nordfluegel": [
+   "u",
+   -28,
+   22,
+   24,
+   36
+  ],
+  "Orangerie": [
+   "v",
+   -14,
+   -4,
+   -185,
+   -125
+  ]
+ },
+ "ridge_pairs": [
+  [
+   "Suedfluegel",
+   "Nordfluegel"
+  ]
+ ],
+ "ridge_note": "Sammlungsfluegel excluded from the tilt solve: its ridge is stepped (junction pavilion) and gave an outlier slope (+5 %)."
+}

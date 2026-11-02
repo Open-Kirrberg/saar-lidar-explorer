@@ -1,0 +1,28 @@
+/* F21 3D-Druck card + minimap grid */
+.sle-print-warn { margin: 4px 0 6px; padding: 4px 6px; font-size: 11px; line-height: 1.35; background: rgba(255, 159, 26, 0.12); border-left: 3px solid #ff9f1a; }
+#sle-print select { flex: 1; min-width: 0; font: inherit; background: #2b2b2b; color: inherit; border: 1px solid #444; border-radius: 3px; padding: 2px 4px; }
+.sle-print-totals { margin: 4px 0; font-size: 11px; line-height: 1.4; }
+.sle-print-tablewrap { max-height: 34vh; overflow: auto; border: 1px solid #333; border-radius: 3px; }
+.sle-print-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.sle-print-table th { position: sticky; top: 0; background: #151515; color: var(--ui-dim); font-weight: 400; text-align: left; padding: 3px 4px; }
+.sle-print-table td { padding: 3px 3px; border-top: 1px solid #2c2c2c; vertical-align: middle; }
+.sle-print-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sle-print-table tr[data-id] { cursor: pointer; }
+.sle-print-table tr[data-id]:hover { background: rgba(255, 255, 255, 0.05); }
+.sle-print-table tr[data-id].on { background: rgba(255, 159, 26, 0.2); }
+.sle-print-table tr[data-id]:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: -2px; }
+.sle-print-table img { display: block; width: 36px; height: 36px; object-fit: cover; border-radius: 2px; background: #111; }
+.sle-print-id { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sle-print-dl a { display: inline-block; margin-right: 6px; color: #ffd27a; white-space: nowrap; }
+.sle-print-files a, .sle-print-popup a { color: #ffd27a; }
+.sle-print-files p { margin: 4px 0 0; }
+.sle-print-detail { margin: 6px 0; padding: 6px; background: rgba(255, 255, 255, 0.05); border-radius: 3px; }
+.sle-print-detail p { margin: 0 0 4px; }
+.sle-print-cmd { font-size: 11px; line-height: 1.4; }
+.sle-print-code { display: block; margin: 4px 0; padding: 4px 6px; font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; background: #111; color: #e8e8e8; border-radius: 3px; white-space: pre-wrap; word-break: break-all; user-select: text; }
+.sle-print-popup .sle-print-cmd { color: #222; }
+.sle-print-popup .sle-btn { background: #333; color: #eee; border: 0; border-radius: 3px; padding: 3px 8px; cursor: pointer; }
+.sle-print-popup .sle-dim { color: #666; }
+.leaflet-tooltip.sle-print-label { background: rgba(20, 20, 24, 0.78); color: #ffd27a; border: 0; box-shadow: none; padding: 1px 4px; font: 600 10px/1.2 var(--ui-font, system-ui); }
+.leaflet-tooltip.sle-print-label::before { display: none; }
+.sle-print-table .sle-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saar LiDAR Explorer – Daten 2</title>
+<style>
+:root { --bg: #f6f5f1; --fg: #1d2125; --dim: #5b636b; --accent: #2f6b4f; --card: #fff; }
+@media (prefers-color-scheme: dark) { :root { --bg: #14181c; --fg: #e7e9eb; --dim: #9aa3ab; --accent: #7fc6a0; --card: #1d2227; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 32px 16px 48px; }
+a { color: var(--accent); }
+.cta { display: inline-block; margin: 8px 0 20px; padding: 10px 18px; border-radius: 8px; background: var(--accent); color: var(--bg); text-decoration: none; font-weight: 600; }
+.note { background: var(--card); border-left: 4px solid #c8452f; padding: 10px 14px; border-radius: 6px; }
+small, li { color: var(--dim); }
+</style>
+</head>
+<body>
+<main>
+<h1>Saar LiDAR Explorer – Daten 2</h1>
+<p>Kartenkacheln (Reliefs, historische Karten) bis Zoom {{XYZ_MAX_ZOOM}} und 3D-druckbare Geländekacheln (3MF).</p>
+<a class="cta" href="{{APP_URL}}">Explorer öffnen</a>
+<p class="note"><b>Schauen, nicht graben.</b> Geländemodelle, keine Befunde. Bodendenkmäler sind geschützt (SDschG Saarland, DSchG RLP).</p>
+<h2>3D-Druck</h2>
+<ul>
+{{PRINT_HTML}}
+</ul>
+<p>Teil 1: <a href="{{DATA_URL}}">{{DATA_URL}}</a> · Code: <a href="https://github.com/{{ORG}}/saar-lidar-explorer">github.com/{{ORG}}/saar-lidar-explorer</a> · <a href="README.md">README</a></p>
+<h2>Quellen und Lizenzen</h2>
+<ul>
+{{ATTRIBUTION_HTML_2}}
+</ul>
+</main>
+</body>
+</html>

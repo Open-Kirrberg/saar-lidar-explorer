@@ -1,0 +1,11 @@
+[
+ {"name": "00_overview_dtm", "e0": 380800, "n0": 5463400, "w": 3800, "h": 4800, "layer": "dtm", "grid": 500, "scalebar": 500, "title": "Overview: DTM + hillshade, Karlsberg forest",
+  "points": [[382195,5466095,"Schloss (POI)"],[382229,5465983,"Orangerie"],[381877,5465869,"Karlsbergweiher"],[382933,5464912,"Baerenzwinger"],[382871,5464746,"Schwanenweiher"],[382617,5464763,"Tschifflik"],[382520,5466333,"Eiskeller"],[383152,5464651,"Eremitage"]]},
+ {"name": "00_overview_combo", "e0": 380800, "n0": 5463400, "w": 3800, "h": 4800, "layer": "combo", "grid": 500, "scalebar": 500, "title": "Overview: local relief"},
+ {"name": "01_palace_1km_combo", "e0": 381700, "n0": 5465600, "w": 1000, "h": 1000, "layer": "combo", "grid": 100, "title": "Palace area 1 x 1 km"},
+ {"name": "01_palace_1km_hist1840", "e0": 381700, "n0": 5465600, "w": 1000, "h": 1000, "layer": "hist1840", "grid": 100, "title": "Palace area: Bavarian survey 1836-41 over hillshade"},
+ {"name": "01_palace_1km_hist1935", "e0": 381700, "n0": 5465600, "w": 1000, "h": 1000, "layer": "hist1935", "grid": 100, "title": "Palace area: Messtischblatt 1935 over hillshade"},
+ {"name": "01_palace_1km_ortho", "e0": 381700, "n0": 5465600, "w": 1000, "h": 1000, "layer": "ortho", "grid": 100, "title": "Palace area: orthophoto"},
+ {"name": "01_palace_1km_chm", "e0": 381700, "n0": 5465600, "w": 1000, "h": 1000, "layer": "chm", "grid": 100, "title": "Palace area: canopy height"},
+ {"name": "01_palace_1km_dtm", "e0": 381700, "n0": 5465600, "w": 1000, "h": 1000, "layer": "dtm", "grid": 100, "title": "Palace area: DTM"}
+]

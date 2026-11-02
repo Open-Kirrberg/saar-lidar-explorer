@@ -1,0 +1,6 @@
+[
+ {"name": "z_cells_hs", "e0": 382960, "n0": 5464700, "w": 200, "h": 270, "layer": "hs", "grid": 10, "scalebar": 20},
+ {"name": "z_bz_hs", "e0": 382760, "n0": 5464620, "w": 200, "h": 320, "layer": "hs", "grid": 10, "scalebar": 20},
+ {"name": "z_or_hs", "e0": 382195, "n0": 5465890, "w": 120, "h": 140, "layer": "hs", "grid": 10, "scalebar": 20},
+ {"name": "z_tsch", "e0": 382540, "n0": 5464680, "w": 240, "h": 160, "layer": "combo", "grid": 10, "scalebar": 20}
+]
