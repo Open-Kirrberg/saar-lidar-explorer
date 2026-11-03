@@ -76,6 +76,6 @@ Then give the user a short update: what shipped, how to try it (`http://localhos
 - Pinned dependency versions; Vite 8 / TS 7 / three r187 / Leaflet 1.9.4 / Python 3.12 via uv.
 
 ## When things go wrong
-- Downloads failing or a service changed → don't fake data. Report precisely, check `research/01`/`04` for alternatives, ask the user if a source decision is needed.
+- Downloads failing or a service changed → don't fake data. Report precisely, check `docs/research/01`/`04` for alternatives, ask the user if a source decision is needed.
 - An agent's report claims success but verification fails → fix or re-brief with the concrete failure; never pass unverified claims on to the user.
 - Scope creep (e.g. a bigger area before v5, quests in v2, accounts) → it's a PRD non-goal; ask before expanding.

@@ -7,7 +7,7 @@ description: Semi-automatic detection of possible archaeological relicts (pits/b
 
 Goal: point the user's eye at spots worth a closer look. The output is **hypotheses**, ranked and reviewable — not findings. The user explores by eye first (ADR 0008), so detection is a highlight layer plus a review queue, never a replacement for looking.
 
-Background reading: `research/03-archaeology-visualization.md` Part A2 (detection ideas, ML options and their licences, local false positives) and Part B (known sites for evaluation).
+Background reading: `docs/research/03-archaeology-visualization.md` Part A2 (detection ideas, ML options and their licences, local false positives) and Part B (known sites for evaluation).
 
 ## Ethics and law (shape the design, not just the disclaimer)
 

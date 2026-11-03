@@ -59,7 +59,7 @@ The exact attribution strings are written into each dataset's `manifest.json` by
 | [pipeline/](pipeline/README.md) | Python 3.12 (uv): open data → static chunks, layers, candidates |
 | [app/](app/README.md) | Vite + TypeScript + three.js + Leaflet explorer (German UI) |
 | [schloss-karlsberg/](schloss-karlsberg/README.md) | Researched 3D reconstruction of the palace, 1789 |
-| `research/` | Source research: data, tech stack, archaeology/legal, cadastre/historic maps |
+| `docs/research/` | Source research: data, tech stack, archaeology/legal, cadastre/historic maps |
 | `docs/history/` | Frozen v1 PRD and roadmap |
 
 Coordinates are EPSG:25832 everywhere in data and 3D (local origin); only the Leaflet map uses EPSG:3857.

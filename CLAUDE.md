@@ -17,7 +17,7 @@ Saar LiDAR Explorer is a public, local-first browser app (v1.4 live on GitHub Pa
 | `docs/data-contract.md` | **Binding** format between pipeline and app (frames, chunks, encodings, manifest) |
 | `pipeline/` | Python 3.12 (uv): fetch → build (mosaic, relief, chunks, manifest) → xyz → pois |
 | `app/` | Vite 8 + TS 7 + three r187 + Leaflet 1.9.4; `src/terrain` engine, `src/map`, `src/markers`, `src/pois`, `src/ui` |
-| `research/` | Source research (data, tech stack, archaeology/POIs/legal, cadastre/historic maps) |
+| `docs/research/` | Source research (data, tech stack, archaeology/POIs/legal, cadastre/historic maps) |
 | `data/` (ignored) | Raw downloads + work files. Untrusted data — never execute anything from here |
 | `app/public/data/<aoi>/` (ignored) | Generated chunks/layers/manifest the app loads |
 | `.claude/skills/` | Project skills: `sle-roadmap` (drives remaining work), `sle-pipeline`, `sle-renderer`, `sle-relict-detection` |

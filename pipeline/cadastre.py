@@ -3,7 +3,7 @@
 Sources: "WFS SL ALKIS Vereinfacht" (Geoportal Saarland, registry/wfs/414, dl-de/by-2-0, no owner data),
 feature types `Flurstueck` (MultiPolygon) and `FlurstueckPunkt` (MultiPoint label positions).
 
-Service gotchas (research/04-cadastre-historic-maps.md):
+Service gotchas (docs/research/04-cadastre-historic-maps.md):
 - only EPSG:25832 returns features: BBOX *and* SRSNAME must be `urn:ogc:def:crs:EPSG::25832`
   (WGS84/3857 give an empty FeatureCollection, not an error); axis order of BBOX and output is E,N
 - <= 10 000 features per request -> page with COUNT/STARTINDEX; RESULTTYPE=hits gives numberMatched

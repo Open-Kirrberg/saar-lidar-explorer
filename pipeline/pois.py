@@ -1,8 +1,8 @@
 """Convert the POI seed tables of the research notes into app/public/data/pois.geojson (data contract).
 
 Sources:
-  research/03-archaeology-visualization.md  Part B, table "B2–B3. POI table" (primary)
-  research/01-data-sources.md               §5 focus points (merged when within DEDUPE_M of a primary POI)
+  docs/research/03-archaeology-visualization.md  Part B, table "B2–B3. POI table" (primary)
+  docs/research/01-data-sources.md               §5 focus points (merged when within DEDUPE_M of a primary POI)
 
 Usage:  uv run python pois.py
 """
@@ -17,8 +17,8 @@ from pyproj import Transformer
 from common import APP_DATA, ROOT
 
 DEDUPE_M = 80
-R03 = ROOT / "research" / "03-archaeology-visualization.md"
-R01 = ROOT / "research" / "01-data-sources.md"
+R03 = ROOT / "docs" / "research" / "03-archaeology-visualization.md"
+R01 = ROOT / "docs" / "research" / "01-data-sources.md"
 
 # German display names + contract types per row number of the research/03 table.
 DE = {

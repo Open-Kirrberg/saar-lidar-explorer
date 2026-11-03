@@ -9,7 +9,7 @@ The pipeline turns open geodata (LVGL Saarland ALS 2025, Rheinland-Pfalz, OSM, G
 
 ## Before you change anything
 
-Read `pipeline/README.md` (commands, files, data notes), `docs/data-contract.md` (the binding format), and `references/sources.md` in this skill (every source with URL, CRS, license and gotchas). For a new source, also check `research/01-data-sources.md` and `research/04-cadastre-historic-maps.md`.
+Read `pipeline/README.md` (commands, files, data notes), `docs/data-contract.md` (the binding format), and `references/sources.md` in this skill (every source with URL, CRS, license and gotchas). For a new source, also check `docs/research/01-data-sources.md` and `docs/research/04-cadastre-historic-maps.md`.
 
 Layout you'll extend:
 

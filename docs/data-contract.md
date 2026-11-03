@@ -379,7 +379,7 @@ Encoding rounds to the nearest centimetre (LAZ coordinates are already cm-exact)
 
 **World frame in the app.** Like everything else: `x = E − E0`, `z = −(N − N0)`, `y = hRef + (h_true − hRef) · exag` (the terrain's exaggeration uniforms). Per tile the vertex shader adds the tile origin `(Emin + tx·tileSize − E0, hBase, −(Nmin + ty·tileSize − N0))`; never put raw UTM into float32. `agl` is exaggeration-free (used for height-above-ground clipping, e.g. hide `agl > 2 m` for an "X-ray" view of the ground).
 
-**Classes** (LVGL ALS 2025 code list, `research/01-data-sources.md`; app defaults, manifest `classes` overrides/extends):
+**Classes** (LVGL ALS 2025 code list, [research/01](research/01-data-sources.md); app defaults, manifest `classes` overrides/extends):
 
 | Code | `label_de` | meaning | measured 3dm_32_382_5466 (Karlsberg, 4.0 pts/m²) |
 |---|---|---|---|

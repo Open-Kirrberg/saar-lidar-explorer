@@ -1,6 +1,6 @@
 # Source cheat sheet (verified 2026-11-01)
 
-Full research: `research/01-data-sources.md` (LiDAR, ortho, RLP), `research/04-cadastre-historic-maps.md` (ALKIS, historic maps), `research/03-…` (POIs). Re-verify a URL before relying on it if something fails — services move.
+Full research: `docs/research/01-data-sources.md` (LiDAR, ortho, RLP), `docs/research/04-cadastre-historic-maps.md` (ALKIS, historic maps), `research/03-…` (POIs). Re-verify a URL before relying on it if something fails — services move.
 
 ## LVGL Saarland open data (ALS 2025, released Jan 2026) — dl-de/by-2-0
 
