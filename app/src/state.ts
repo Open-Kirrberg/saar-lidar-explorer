@@ -118,7 +118,7 @@ export function createStore(initial?: Partial<AppState>): Store<AppState> {
 // Field 14 is the active blend preset id (written only when one is active): the preset restores the
 // overlay blend/colormap/stretch/shade and the LRM radius; fields 6–13 are applied on top of it.
 // With fields 10–13 present, a missing field 14 means "no preset".
-// Markers, candidates and measurements are never part of the hash (heritage privacy, PRD §9).
+// Markers, candidates and measurements are never part of the hash (heritage privacy, docs/adr/0009).
 
 export interface HashPose {
   E: number;

@@ -1,6 +1,6 @@
 # Data Contract v2 — pipeline → app
 
-The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (git-ignored). The app (`app/`) loads them via `fetch('data/<aoi>/manifest.json')`. Both sides must follow this file; change it only together with a PRD changelog entry.
+The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (git-ignored). The app (`app/`) loads them via `fetch('data/<aoi>/manifest.json')`. Both sides must follow this file; change it only together with a `CHANGELOG.md` line (and an ADR if the change is a decision, e.g. a new layer kind).
 
 **Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`.
 
@@ -225,7 +225,7 @@ GroundSurface polygons may be omitted from the mesh (they sit on the terrain); t
 
 Semi-automatic relict candidates from `pipeline/detect.py` (rule-based, local relief + shape filters). They are **hypotheses, not findings**. `candidates` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid.
 
-**Privacy (heritage law, SDschG Saarland §§ 3, 8, 16; DSchG RLP).** Candidate files live only under the git-ignored `app/public/data/<aoi>/candidates/`, are never committed, uploaded, published or sent anywhere by the pipeline or the app, and carry no digging/detector guidance. Review decisions are **never** written into data files (see "Review decisions"). Every UI that shows candidates shows the hypothesis note and the "Schauen, nicht graben" disclaimer. (Exception by user decision 2026-11-02, PRD §9: the *relict* classes of the `overall` AOI are part of the public release, see "Public release"; the UXO classes below never are.)
+**Privacy (heritage law, SDschG Saarland §§ 3, 8, 16; DSchG RLP).** Candidate files live under the git-ignored `app/public/data/<aoi>/candidates/` and are never committed to this repo; neither the pipeline nor the app sends them anywhere. The *relict* classes of the `overall` AOI are published only through the release export (see "Public release"; [ADR 0009](adr/0009-candidates-public-user-data-private.md)); the UXO classes below never are ([ADR 0010](adr/0010-craters-never-public.md)). Candidates carry no digging/detector guidance. Review decisions are **never** written into data files (see "Review decisions"). Every UI that shows candidates shows the hypothesis note and the "Schauen, nicht graben" disclaimer.
 
 **UXO classes (`crater`, `crater_field`, F22, additive).** Written by the sister project `saar-lidar-detect` (`sld run`, contract `../saar-lidar-detect/docs/data-contract.md`), not by `pipeline/detect.py`. They are **UXO indicators** (Kampfmittel-Vorerkundung, for professionals) and **always private**: a public build (`SLE_PUBLIC=1`) drops them while parsing, and the release export (`scripts/release/export_data.py`) strips them from `candidates.geojson`, the manifest and the mask before anything is staged. Every UI that shows them adds the note **„Hinweis, keine Aussage über Kampfmittel/Blindgänger“** (missing candidates never mean an area is free of ordnance).
 
@@ -323,7 +323,7 @@ CandidateProps = {
 
 ## Point clouds (`pointclouds`, optional, F16)
 
-Classified ALS 2025 points for a few focus areas (Karlsberg palace, Homburg Schlossberg, Merburg; ≈ 1 km² each). `pointclouds` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid. **No Potree/Docker** (PRD §9): the pipeline reads the LAZ with `laspy` + `lazrs` and writes this simple tiled format, `sle-pts-v1`.
+Classified ALS 2025 points for a few focus areas (Karlsberg palace, Homburg Schlossberg, Merburg; ≈ 1 km² each). `pointclouds` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid. **No Potree/Docker** (docs/history/prd-v1.md §9): the pipeline reads the LAZ with `laspy` + `lazrs` and writes this simple tiled format, `sle-pts-v1`.
 
 **Source frame.** The LVGL LAZ 2025 files carry **no CRS VLR**: coordinates are EPSG:25832 (E, N in metres, scale 0.01 m) and heights DHHN2016 (m), like the DGM. Other providers (RLP) must be checked for the same frame before use.
 

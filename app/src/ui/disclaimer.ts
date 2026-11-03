@@ -4,7 +4,7 @@ import { uxoClassesAllowed } from '../data/publicBuild';
 
 /**
  * F22 crater note — only where crater markings can exist (local builds). The public build never shows craters,
- * so it must not mention them either (PRD §9, Q-29).
+ * so it must not mention them either (docs/adr/0010).
  */
 export function craterDisclaimer(allowed: boolean = uxoClassesAllowed()): string {
   if (!allowed) return '';

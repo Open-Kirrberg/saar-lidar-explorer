@@ -38,8 +38,8 @@ or the HMS-derived `video2world/` outputs.
   `model/src/materials/` (then the exterior agent owns that file for the cycle).
 - **Plans:** after any layout or catalogue change that moves walls, openings, names or features, the plans agent (or
   you) runs `pnpm run plans` (all sheets; `--only GR-01 --no-pdf` for a quick look). It needs `plans/data/` (see
-  CLAUDE.md for `plans/scripts/terrain.py`) and Chrome (`CHROME_BIN`). Previews in `docs/plans-preview/` are tracked
-  and belong in the item's commit.
+  CLAUDE.md for `plans/scripts/terrain.py`) and Chrome (`CHROME_BIN`). Previews in `docs/plans-preview/` are git-ignored
+  (regenerable).
 - **Terrain:** `cd ../pipeline && uv run python -I ../schloss-karlsberg/scripts/prepare-terrain.py` reads
   `../data/work` read-only and writes `viewer/public/terrain/` (git-ignored). This runs a command in `../pipeline`
   but writes only castle files, so it is allowed.

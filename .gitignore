@@ -8,3 +8,9 @@ __pycache__/
 app/public/data/
 *.laz
 *.tif
+
+# Regenerable preview images (pipeline build steps, castle `pnpm run plans`) and ad-hoc verification shots.
+# Commit an image only if a README/ADR/research doc links it (CLAUDE.md "Images").
+/docs/previews/
+/docs/shots/
+/schloss-karlsberg/docs/plans-preview/

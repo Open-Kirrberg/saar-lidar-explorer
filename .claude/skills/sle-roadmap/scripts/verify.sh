@@ -18,6 +18,9 @@ if [[ "$WHAT" == all || "$WHAT" == app ]]; then
   run "app: typecheck + build"      check "cd '$ROOT/app' && pnpm run build 2>&1 | tail -8"
   run "app: dist excludes AOI data" check "cd '$ROOT/app' && test \$(du -sm dist | cut -f1) -lt 20"
 fi
+if [[ "$WHAT" == all || "$WHAT" == docs ]]; then
+  run "docs: ADR index + PRD length"  check "python3 -I '$ROOT/.claude/skills/sle-roadmap/scripts/check_docs.py' '$ROOT'"
+fi
 if [[ "$WHAT" == all || "$WHAT" == pipeline ]]; then
   run "pipeline: contract tests"    check "cd '$ROOT/pipeline' && uv run pytest -q 2>&1 | tail -15"
 fi

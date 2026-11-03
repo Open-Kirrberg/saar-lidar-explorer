@@ -1,11 +1,11 @@
 ---
 name: sle-relict-detection
-description: Semi-automatic detection of possible archaeological relicts (pits/bomb craters, mounds/burial mounds, ditches and hollow ways, walls and terrace edges, rectangular foundations, charcoal-kiln platforms) in the Saar LiDAR Explorer's 1 m DTM — algorithm design, pipeline implementation, candidate data format, scoring, review UI in the app, and evaluation against known sites. Use it for PRD feature F15 or whenever the user asks to "find anomalies", "highlight suspicious spots", "detect bunkers/craters/walls automatically", tune detection thresholds, or reduce false positives — and also when they ask how reliable the candidates are.
+description: Semi-automatic detection of possible archaeological relicts (pits/bomb craters, mounds/burial mounds, ditches and hollow ways, walls and terrace edges, rectangular foundations, charcoal-kiln platforms) in the Saar LiDAR Explorer's 1 m DTM — algorithm design, pipeline implementation, candidate data format, scoring, review UI in the app, and evaluation against known sites. Use it for feature F15 (v2: the glowing candidates in the Relikt-Blick lens) or whenever the user asks to "find anomalies", "highlight suspicious spots", "detect bunkers/craters/walls automatically", tune detection thresholds, or reduce false positives — and also when they ask how reliable the candidates are.
 ---
 
 # Relict candidate detection (F15)
 
-Goal: point the user's eye at spots worth a closer look. The output is **hypotheses**, ranked and reviewable — not findings. The user explores by eye first (PRD decision), so detection is a highlight layer plus a review queue, never a replacement for looking.
+Goal: point the user's eye at spots worth a closer look. The output is **hypotheses**, ranked and reviewable — not findings. The user explores by eye first (ADR 0008), so detection is a highlight layer plus a review queue, never a replacement for looking.
 
 Background reading: `research/03-archaeology-visualization.md` Part A2 (detection ideas, ML options and their licences, local false positives) and Part B (known sites for evaluation).
 
@@ -57,4 +57,4 @@ Each feature: `id`, `class`, `score`, `area_m2`, `depth_m`/`height_m`, `length_m
 
 ## Phase 2 (only if the rule-based layer proves useful)
 
-Small ML model on VAT/SLRM tiles trained on the user's own confirmed candidates (local, in-browser via ONNX/TF.js or in the pipeline). Public pretrained models for barrows/charcoal kilns mostly carry non-commercial licences — fine for this personal tool, but note the licence in the PRD before using them.
+Small ML model on VAT/SLRM tiles trained on the user's own confirmed candidates (local, in-browser via ONNX/TF.js or in the pipeline). Public pretrained models for barrows/charcoal kilns mostly carry non-commercial licences — check them against the public release (ADR 0012) and record the choice as an ADR before using them.

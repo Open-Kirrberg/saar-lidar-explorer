@@ -43,7 +43,7 @@ from heights import DtmSampler, bake_collection
 
 WFS_URL = "https://geoportal.saarland.de/registry/wfs/414"
 TYPE_PREFIX = "ALKIS_ALKIS_WFS_ohne_Eig:"
-# Rheinland-Pfalz (PRD Q-6): "WFS RP ALKIS Vereinfacht" (Geoportal RLP registry/wfs/519, deegree, dl-de/by-2-0,
+# Rheinland-Pfalz (docs/history/prd-v1.md Q-6): "WFS RP ALKIS Vereinfacht" (Geoportal RLP registry/wfs/519, deegree, dl-de/by-2-0,
 # CORS *). Same AdV "ALKIS vereinfacht" attributes (lower-case), GML 3.2 only, EPSG:25832 E,N, paging,
 # no label-point feature type (labels fall back to the parcel's representative point).
 RLP_WFS_URL = "https://www.geoportal.rlp.de/registry/wfs/519"

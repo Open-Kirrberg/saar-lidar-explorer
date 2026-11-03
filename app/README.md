@@ -12,7 +12,26 @@ pnpm preview          # serves dist/ plus the data dir via a preview middleware
 pnpm run serve:local  # build, then preview on http://127.0.0.1:5250/ (loopback only, strict port)
 ```
 
-**Data and the build.** There is one data directory: `public/data/` (the pipeline writes there). `pnpm dev` serves it as usual. `pnpm run build` does **not** copy AOI datasets (every `public/data/<dir>/` that contains a `manifest.json`: ≈ 300 MB for Karlsberg, ≈ 1.4 GB for overall) into `dist/`; the rest of `public/` (e.g. `data/pois.geojson`) is copied, so `dist/` stays ≈ 2 MB (`verify.sh` checks < 20 MB). `pnpm preview` / `serve:local` serve `<base>data/<path>` straight from the data dir (`dataMiddleware` in `vite.config.ts`, URL match anchored at the base so `/src/data/*.ts` still reaches Vite — `scripts/dataPath.ts`, tested: GET/HEAD, `Last-Modified` + 304, `Cache-Control: no-cache`, a real 404 for missing files instead of the SPA's index.html, no paths outside the data dir). `SLE_DATA_DIR=/path/to/data` (absolute or relative to `app/`) makes dev, preview and `serve:local` serve from another directory first (files missing there fall back to `public/data/`); to keep a single copy elsewhere, symlink `public/data` instead, since the pipeline always writes to `app/public/data/`. Any other static server works once `dist/data/<aoi>` is a link to the dataset (relative base `./`). `VITE_DATA_URL=https://example.org/sle-data/ pnpm run build` loads AOIs from `${VITE_DATA_URL}<aoi>/manifest.json` (CORS needed if cross-origin) — private setups only, public hosting is a PRD non-goal.
+**Data and the build.** There is one data directory: `public/data/` (the pipeline writes there). `pnpm dev` serves it as usual. `pnpm run build` does **not** copy AOI datasets (every `public/data/<dir>/` that contains a `manifest.json`: ≈ 300 MB for Karlsberg, ≈ 1.4 GB for overall) into `dist/`; the rest of `public/` (e.g. `data/pois.geojson`) is copied, so `dist/` stays ≈ 2 MB (`verify.sh` checks < 20 MB). `pnpm preview` / `serve:local` serve `<base>data/<path>` straight from the data dir (`dataMiddleware` in `vite.config.ts`, URL match anchored at the base so `/src/data/*.ts` still reaches Vite — `scripts/dataPath.ts`, tested: GET/HEAD, `Last-Modified` + 304, `Cache-Control: no-cache`, a real 404 for missing files instead of the SPA's index.html, no paths outside the data dir). `SLE_DATA_DIR=/path/to/data` (absolute or relative to `app/`) makes dev, preview and `serve:local` serve from another directory first (files missing there fall back to `public/data/`); to keep a single copy elsewhere, symlink `public/data` instead, since the pipeline always writes to `app/public/data/`. Any other static server works once `dist/data/<aoi>` is a link to the dataset (relative base `./`). `VITE_DATA_URL=https://example.org/sle-data/ pnpm run build` loads AOIs from `${VITE_DATA_URL}<aoi>/manifest.json` (CORS needed if cross-origin) — private setups only; the public release goes through `scripts/release/` (ADR 0012).
+
+### Serving & packaging: one data directory, no copies
+
+The AOI datasets (≈ 300 MB for Karlsberg, ≈ 1.4 GB for overall) are **never copied into `dist/`**. `pnpm run build` copies only the small files in `public/` (e.g. `data/pois.geojson`); `dist/` stays at about 2 MB.
+
+There is one data directory, `app/public/data/`, where the pipeline writes and from which every server reads:
+
+| Command | Serves the app from | Serves `data/` from |
+|---|---|---|
+| `pnpm dev` | sources (Vite dev server) | `app/public/data/` |
+| `pnpm run build && pnpm preview` | `dist/` | `app/public/data/` (preview middleware in `app/vite.config.ts`) |
+| `pnpm run serve:local` | build + preview on `127.0.0.1:5250` (strict port, loopback only) | `app/public/data/` |
+
+- **Data elsewhere** (e.g. an external disk): set `SLE_DATA_DIR=/Volumes/disk/sle-data` (absolute, or relative to `app/`) for `pnpm dev`, `pnpm preview` or `pnpm run serve:local`. Files found there win; files missing there still come from `app/public/data/`. The pipeline always writes to `app/public/data/`, so to keep a single copy on another disk, make `app/public/data` a symlink to it instead.
+- **Another static server:** the build uses a relative base (`./`) and loads `./data/<aoi>/manifest.json`, so any static file server works once `dist/data/<aoi>` links to the dataset (e.g. `ln -s ../../public/data/overall app/dist/data/overall`). Run `pnpm run build` again before that, and remove the link before measuring `dist/` (verify.sh checks that `dist/` stays under 20 MB).
+- `VITE_DATA_URL=https://…/data/ pnpm run build` points the build at a separate data host (CORS needed if cross-origin).
+- **Public release (GitHub Pages, org Open-Kirrberg):** `SLE_PUBLIC=1 pnpm run build` builds the public site (base `/saar-lidar-explorer/`, data from the `saar-lidar-data` / `saar-lidar-data-2` Pages sites, AOI `overall`, castle viewer under `castle/`). Export scripts, limits and the publishing steps: [scripts/release/RELEASING.md](../scripts/release/RELEASING.md). Find markers, reviews and measurements stay in each browser.
+
+The minimap's OpenStreetMap/OpenTopoMap tiles, the live DOP/Flurstück WMS overlays and the optional online Flurstück lookup need a network connection; the 3D view, relief layers, buildings, historic maps, point clouds, candidates and the *Meldung* report work from local data.
 
 URL parameters:
 

@@ -7,8 +7,8 @@ Reads   data/work/<aoi>/{dtm,chm,bldg,mask}.tif   (from build.py / buildings.py;
 Writes  app/public/data/<aoi>/candidates/candidates.geojson (+ candidates/mask/{i}_{j}.png)
         manifest `candidates` (docs/data-contract.md "Candidates"), data/work/<aoi>/detect.json (evaluation)
 
-Output = HYPOTHESES, not findings. Candidate data is private/local (SDschG Saarland, DSchG RLP): never commit,
-upload or publish it. No digging/detector guidance anywhere.
+Output = HYPOTHESES, not findings (SDschG Saarland, DSchG RLP). Never commit candidate data to this repo; relict
+classes are published only via scripts/release/ (docs/adr/0009). No digging/detector guidance anywhere.
 
 Method (transparent rules; PARAMS/WEIGHTS/PENALTIES are authoritative, the numbers below are their defaults;
 everything is pure numpy/scipy/skimage on arrays so it is unit-testable on synthetic DTMs):

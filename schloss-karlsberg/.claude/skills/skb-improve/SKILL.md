@@ -147,7 +147,7 @@ git show --stat --oneline HEAD                             # every path starts w
 `git commit -- <paths>` commits only those paths, even if the other agent has something staged. Message style
 `KB-I06: <what shipped>`; end with the attribution trailer the session provides. Generated data (`viewer/public/terrain/`,
 `plans/out/`, `model/out/`, `dist/`, `sources/`, textures) stays out of git; `model/catalogue.json` and
-`docs/plans-preview/` are tracked and go in the commit when regenerated. If the user or the launching workflow said not
+`docs/plans-preview/` is git-ignored (regenerable), never committed. If the user or the launching workflow said not
 to commit, stop after step 4 and list the files to commit.
 
 Then give the user a short update (template in `references/verification.md` §5): what shipped, evidence, numbers, how

@@ -1,6 +1,6 @@
 # Releasing to GitHub Pages (Open-Kirrberg)
 
-The public release (user decision 2026-11-02, reverses the old PRD non-goal "public hosting") consists of three
+The public release ([ADR 0012](../../docs/adr/0012-github-pages-release.md), user decision 2026-11-02) consists of three
 GitHub repositories in the org **Open-Kirrberg**, all served by GitHub Pages under `https://open-kirrberg.github.io/`:
 
 | Repository | Pages | Content | Built by |

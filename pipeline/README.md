@@ -118,7 +118,7 @@ The percentiles behind each range are stored in `manifest.build.layerStats`. `ma
 
 ## Relict detection (`detect.py`, F15)
 
-Output = **hypotheses, not findings**. Candidate files exist only under the git-ignored `app/public/data/<aoi>/candidates/`; never commit, upload or publish them (SDschG Saarland §§ 3, 8, 16; DSchG RLP). No digging/detector guidance. Contract: `docs/data-contract.md` "Candidates".
+Output = **hypotheses, not findings**. Candidate files live under the git-ignored `app/public/data/<aoi>/candidates/`; never commit them here. Relict classes are published only via `scripts/release/` (ADR 0009); UXO classes never (ADR 0010). SDschG Saarland §§ 3, 8, 16; DSchG RLP. No digging/detector guidance. Contract: `docs/data-contract.md` "Candidates".
 
 **Rules** (`method: "lrm-rules"`, `version: 2` = the fine rules of version 1 + a coarse pass; every threshold in `PARAMS`, every weight/penalty in `WEIGHTS`/`PENALTIES`, all copied into the manifest). DTM smoothed with σ = 1 m; local relief = smoothed DTM − box mean (r = 7 / 10 / 25 m, odd-reflected edges so planes stay flat at the AOI border).
 - **pit** — LRM10 ≤ −0.3 m seed, grows to −0.15 m (hysteresis), 3–400 m², and a **closed depression ≥ 0.15 m** below its local spill point (morphological reconstruction on a 3 m margin). This one rule removed ≈ 85 % of the first-draft pits (slope hollows, gully heads). Score: depth, closedness, roundness (4πA/P²), size (Ø 5–15 m best), raised rim (plane-detrended ring profile).

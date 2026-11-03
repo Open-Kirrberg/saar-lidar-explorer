@@ -1,6 +1,6 @@
 # Renderer recipes
 
-Concrete approaches for the remaining roadmap features. They are starting points that fit the current engine — deviate when the code tells you otherwise, and record the decision in the PRD.
+Concrete approaches for the remaining roadmap features. They are starting points that fit the current engine — deviate when the code tells you otherwise, and record the decision as an ADR in `docs/adr/`.
 
 ## Contents
 1. Draped vector lines (F10 OSM, F12 Flurstücke)

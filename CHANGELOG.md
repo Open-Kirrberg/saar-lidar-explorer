@@ -1,0 +1,28 @@
+# 📝 Changelog
+
+One line per shipped item, newest first. Details go in commits and module READMEs; decisions in [ADRs](docs/adr/README.md). Long-form entries up to 2026-11-04: [PRD v1 changelog](docs/history/prd-v1.md#changelog).
+
+| Date | Version | What |
+|---|---|---|
+| 2026-11-04 | docs | 📚 PRD split into ADRs 0001–0027, a short PRD and this changelog; v2 vision recorded (ADR 0014–0024); v1 PRD and roadmap frozen in `docs/history/` |
+| 2026-11-03 | castle | 🏰 Waves 10–11: paintings, HYG night sky, July field mosaic, garden-front relief, candle light |
+| 2026-11-03 | F21 | 🖨️ Kirrberg showpiece tile `kirrberg-11050` (1:11050, engraved title) |
+| 2026-11-02 | F21 | 🖨️ LoD2 buildings in print tiles; filament-saving slicer hint (−24…−55 %) |
+| 2026-11-02 | v1.5-local | 💣 F22 crater / crater-field review merged to `main`, private; UXO leak in the release export fixed |
+| 2026-11-02 | v1.4.2 | 🖨️ Print tiles fit the Bambu Studio GUI (1:9200 / 1:2300, centred) |
+| 2026-11-02 | v1.4.1 | 🩹 Favicon, planner labels, „Über & Datenschutz“ dialog |
+| 2026-11-02 | v1.4 | 🚀 Public release on GitHub Pages (Open-Kirrberg), candidates included |
+| 2026-11-01 | v1.3 | 🖨️ F21 3D-Druck: joinable 3MF tiles for the Bambu P1S + app planner |
+| 2026-11-01 | v1.2 | 📱 F20 mobile: touch gestures, *Einfach* layout, *Mobil* quality, *Mein Standort*, HTTPS LAN dev |
+| 2026-11-01 | v1.1 | 🏰 F19 Schloss Karlsberg 1789 reconstruction in the explorer + *Betreten* |
+| 2026-11-01 | v1.0.1 | 🩹 Audit fixes (quadtree sibling eviction, footer layout, …) |
+| 2026-11-01 | v1.0 | ✨ Polish: settings, share, intro + tour, quality presets, a11y, offline packaging |
+| 2026-11-01 | v0.12 | ☁️ F16 point clouds for the focus areas (`sle-pts-v1`) |
+| 2026-11-01 | v0.11 | 🔍 F15 relict candidates, F17 measuring, F18 report export |
+| 2026-11-01 | v0.10 | 🏠 F11 LoD2 buildings, F13 orthophoto, F14 historic maps |
+| 2026-11-01 | v0.9 | 🗺️ F9 `overall` AOI (6 × 8 km) with overview levels + quadtree streaming |
+| 2026-11-01 | v0.8 | 🛤️ F10 OSM ways + F12 Flurstücke in 3D |
+| 2026-11-01 | v0.7 | 🔧 R0 hardening (local relief, canopy, import, hash, LOD cracks, manifest merge) |
+| 2026-11-01 | v0.6 | 🎉 MVP: relief lab, forest, Leaflet minimap, find markers, disclaimer |
+| 2026-11-01 | v0.5 | 🛫 M0 pipeline + M1 first flight |
+| 2026-11-01 | v0.1–0.4 | 📋 Skeleton, research, data sources, cadastre and historic maps resolved |
