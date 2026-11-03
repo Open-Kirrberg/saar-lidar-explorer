@@ -1,6 +1,6 @@
 ---
 name: skb-improve
-description: Drives the ongoing improvement of the Schloss Karlsberg 1789 reconstruction (schloss-karlsberg/) toward "historically right AND beautiful". Keeps the prioritised backlog docs/improvement-backlog.md (KB-I01…), picks the next item, plans it, delegates to subagents by directory ownership (catalogue/layout, exterior, interior, site, viewer, plans) with skb-historic-architecture, skb-schlossgarten and skb-visual-wow as domain guides, verifies (tests, build, fixed-pose before/after shots, GPU timings), updates README changelog and backlog, re-exports the explorer light layer when needed and commits castle files only ("KB-I06: calibrated light"). Use it whenever the user says "continue", "improve the castle", "next step", "what's left", "make the castle look better / more wow" (open-ended, no single domain), "work on the backlog", or names a KB-I id, even without mentioning the backlog. A narrow question about history, the garden or rendering goes to the matching domain skill.
+description: Drives the ongoing improvement of the Schloss Karlsberg 1789 reconstruction (schloss-karlsberg/) toward "historically right AND beautiful". Keeps the open-items backlog docs/improvement-backlog.md (KB-I…; v2 zone items KB-I101+ first), picks the next item, plans it, delegates to subagents by directory ownership (catalogue/layout, exterior, interior, site, viewer, plans) with skb-historic-architecture, skb-schlossgarten and skb-visual-wow as domain guides, verifies (tests, build, fixed-pose before/after shots, GPU timings), adds one CHANGELOG.md line, records decisions as ADRs, re-exports the explorer light layer when needed and commits castle files only ("KB-I06: calibrated light"). Use it whenever the user says "continue", "improve the castle", "next step", "what's left", "make the castle look better / more wow" (open-ended, no single domain), "work on the backlog", or names a KB-I id, even without mentioning the backlog. A narrow question about history, the garden or rendering goes to the matching domain skill.
 ---
 
 # Schloss Karlsberg: improvement driver
@@ -28,7 +28,7 @@ are relative to this skill folder (`.claude/skills/skb-improve/`).
 
 ## Orient (read only as deep as the task needs)
 
-1. `docs/improvement-backlog.md`: the index table (order, status) and the item you will do. Start here.
+1. `docs/improvement-backlog.md`: open items, v2 zone items first. Start here. Full text of an older id: `docs/history/improvement-backlog-waves0-11.md`.
 2. `git log --oneline -8 -- .` and `git status --short -- .`: what changed since the backlog was last ticked.
 3. `CLAUDE.md` (commands, conventions), then `docs/architecture.md` only for the section the item touches.
 4. The evidence the item cites: research/09 (building practice), 10 (source sweep), 11 (gardens), the visual audit
@@ -50,7 +50,7 @@ Then tell the user in 2–4 lines which item(s) you'll do and why (wave order, d
 - Before starting an item, re-read its "Why": if a newer research doc or a user decision contradicts it, fix the item
   text first.
 - **Decisions.** The user wants this chat for updates and questions only, and prefers that you decide by your own
-  recommendation. Items marked `[?]` carry a recommendation: follow it, log it in the backlog's Decisions log, and
+  recommendation. Items marked `[?]` carry a recommendation: follow it, record it as an ADR in `../docs/adr/` if it is a real decision, and
   mention it in the update. Ask only for what you can't decide yourself: public hosting, licences of a new source,
   copyrighted material, anything that changes the explorer's data contract.
 
@@ -105,13 +105,13 @@ node .claude/skills/skb-improve/scripts/shots.mjs --out <scratchpad>/KB-Ixx-afte
 - Say what you could not verify (pointer-lock flight feel, walking, real rAF pacing, weaker Macs).
 
 ### 4. Record
-- **Backlog** (`docs/improvement-backlog.md`): tick the item `[x] (hash)` in the index and the heading, write the
-  measured numbers and the shot paths into the item, move anything you found under "Discovered" (promote to a new
-  `KB-Inn` id when it is real work), and add Decisions log rows for non-obvious choices.
-- **README.md changelog**: one dated entry per item: `- 2026-11-03 — KB-I06 calibrated light budget (…):` then 2–5
-  bullets with what changed, the evidence tags, numbers (tests, ms, triangles, MB) and the shot paths. Update the
-  README status line and test count when they change.
-- **Shots**: commit 2–4 representative before/after pairs to `docs/shots/KB-Ixx/` (full sets stay in the scratchpad).
+- **Backlog** (`docs/improvement-backlog.md`, open items only): remove the done row; new work found on the way gets
+  a new `KB-I1xx` row (one line). The full v1 item texts are frozen in `docs/history/` — don't extend them.
+- **CHANGELOG.md**: one line per item (date · id · what). Numbers (tests, ms, triangles, MB), evidence tags and
+  what wasn't verified go in the **commit message**.
+- **Decisions**: a non-obvious choice is a new ADR in `../docs/adr/` + index row (ADR 0025); implementation details
+  go in `docs/architecture.md` or code comments.
+- **Shots** stay in the git-ignored `docs/shots/`; commit an image only if a doc links it.
 - **Contracts**: `docs/architecture.md` in the same commit as any API, spec, material-name or grammar change it lists.
 - **Research**: a new fact found while working goes into the research doc it belongs to (with source), not only into
   code or the catalogue.

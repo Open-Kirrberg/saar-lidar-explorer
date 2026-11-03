@@ -1,6 +1,6 @@
 ---
 name: sle-pipeline
-description: Data-pipeline work for the Saar LiDAR Explorer — building new areas of interest (Homburg, Kirrberg, overall), adding data layers or sources (OSM ways, ALKIS Flurstücke via WFS, LoD2 buildings, TrueDOP orthophotos, historic maps WMS, building masks, overview/LOD levels, LAZ point clouds with PDAL/Potree), changing the pipeline→app data contract, and debugging downloads from the LVGL Saarland / geobasis-rlp services. Use it for any task that touches pipeline/, docs/data-contract.md or app/public/data/, or when the user asks to "add data", "download tiles", "process LiDAR", "make a new layer" for this project — even if they only describe the desired map/3D result.
+description: Data-pipeline work for the Saar LiDAR Explorer — building new areas of interest (Homburg, Kirrberg, overall), the v2 `trees` layer from the CHM (local maxima + crowns), zone packages per the zone contract, adding data layers or sources (OSM ways, ALKIS Flurstücke via WFS, LoD2 buildings, TrueDOP orthophotos, historic maps WMS, building masks, overview/LOD levels, LAZ point clouds with PDAL/Potree), changing the pipeline→app data contract, and debugging downloads from the LVGL Saarland / geobasis-rlp services. Use it for any task that touches pipeline/, docs/data-contract.md or app/public/data/, or when the user asks to "add data", "download tiles", "process LiDAR", "make a new layer" for this project — even if they only describe the desired map/3D result.
 ---
 
 # Saar LiDAR Explorer — data pipeline

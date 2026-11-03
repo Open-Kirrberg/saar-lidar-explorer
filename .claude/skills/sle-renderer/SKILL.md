@@ -1,11 +1,11 @@
 ---
 name: sle-renderer
-description: three.js / Leaflet / UI work in the Saar LiDAR Explorer app (app/) — custom terrain engine (chunk LOD, quadtree streaming, LRU, skirts), GLSL relief shading and layer channels, canopy, drone controls, draped vector lines (OSM ways, Flurstücke) and labels, LoD2 building meshes, orthophoto/historic-map textures, Potree point clouds, measuring tools and height profiles, the minimap, markers and German UI panels. Use it whenever a task changes or debugs anything under app/src (rendering, shaders, controls, map sync, panels, performance, visual artefacts like cracks, seams, z-fighting, floating objects), even if the user just says "show X in 3D", "it looks wrong when…", or "make it faster".
+description: three.js / Leaflet / UI work in the Saar LiDAR Explorer app (app/) — v2 game shell (HUD, feature tiers Standard/Entdecker/Labor, settings, phone layout), game minimap, instanced CHM trees with stable-id LOD, the Relikt-Blick lens, zone portals and loading screens, plus the v1 core: custom terrain engine (chunk LOD, quadtree streaming, LRU, skirts), GLSL relief shading and layer channels, canopy, drone controls, draped vector lines (OSM ways, Flurstücke) and labels, LoD2 building meshes, orthophoto/historic-map textures, Potree point clouds, measuring tools and height profiles, the minimap, markers and German UI panels. Use it whenever a task changes or debugs anything under app/src (rendering, shaders, controls, map sync, panels, performance, visual artefacts like cracks, seams, z-fighting, floating objects), even if the user just says "show X in 3D", "it looks wrong when…", or "make it faster".
 ---
 
 # Saar LiDAR Explorer — renderer & app
 
-A Vite 8 + TypeScript 7 + three.js r187 (WebGLRenderer, GLSL3) app with a small custom terrain engine, a Leaflet 1.9.4 minimap and German UI. Read `app/README.md` first — its *Architecture*, *Rendering*, *Extension points* and *Known gaps* sections describe the current engine precisely. `docs/data-contract.md` defines what the data looks like. Recipes for upcoming features are in `references/recipes.md`.
+A Vite 8 + TypeScript 7 + three.js r187 (WebGLRenderer, GLSL3) app with a small custom terrain engine, a Leaflet 1.9.4 minimap and German UI. Read `app/README.md` first — its *Architecture*, *Rendering*, *Extension points* and *Known gaps* sections describe the current engine precisely. `docs/data-contract.md` defines what the data looks like. `references/recipes.md` holds the patterns behind the shipped v1 features (F9–F18); v2 items and their acceptance live in the `sle-roadmap` backlog (V2.x).
 
 ## Mental model
 

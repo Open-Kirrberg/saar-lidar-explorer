@@ -32,7 +32,7 @@ def main(root: Path) -> int:
     for target in re.findall(r"\]\((\d{4}-[^)]+\.md)\)", index):
         if not (adr_dir / target).exists():
             errors.append(f"docs/adr/README.md: dead link {target}")
-    for doc in [root / "PRD.md", root / "CHANGELOG.md", root / "README.md", root / "app/README.md", adr_dir / "README.md", *adrs]:
+    for doc in [root / "PRD.md", root / "CHANGELOG.md", root / "README.md", root / "app/README.md", root / "schloss-karlsberg/README.md", root / "schloss-karlsberg/CHANGELOG.md", root / "schloss-karlsberg/docs/improvement-backlog.md", adr_dir / "README.md", *adrs]:
         for href in LINK.findall(doc.read_text(encoding="utf-8")):
             if "://" in href or href.startswith("mailto:"):
                 continue

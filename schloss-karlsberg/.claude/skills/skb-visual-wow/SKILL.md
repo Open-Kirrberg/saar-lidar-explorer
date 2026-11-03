@@ -18,7 +18,7 @@ this skill's folder (`.claude/skills/skb-visual-wow/`).
    `docs/visual-audit/`. Read §1 and §6 every time, and the §5 subsection for the area you touch.
 2. `CLAUDE.md` and `docs/architecture.md` §3.5 (LOD), §3.6 (materials), §7 (gates). Material names
    (`MATERIAL_NAMES` in `model/src/context.ts`) and `PartUserData` are a contract. Don't rename them.
-3. `README.md` changelog, to see what changed since the audit (2026-11-02).
+3. `CHANGELOG.md`, to see what changed since the audit (2026-11-02).
 4. The reference file for your area (table below).
 
 Then tell the user in 2–4 lines what you'll change, which audit items it closes, and the expected frame cost.
@@ -54,7 +54,7 @@ Then tell the user in 2–4 lines what you'll change, which audit items it close
 
 This section is the audit-time baseline (before the backlog). Waves 0–11 changed most of it (own post chain,
 calibrated light, forest tiles, the candle pool, …); the current API is in `docs/architecture.md` (the wave paragraphs
-at the end of §4.4 and §9) and the done items of `docs/improvement-backlog.md`.
+at the end of §4.4 and §9) and the done items in `docs/history/improvement-backlog-waves0-11.md`.
 
 - `viewer/src/main.ts`: one `WebGLRenderer` (`antialias`, `preserveDrawingBuffer: true`, DPR `min(dpr, 2)`),
   `ACESFilmicToneMapping`, no post chain.
@@ -77,7 +77,7 @@ at the end of §4.4 and §9) and the done items of `docs/improvement-backlog.md`
   is 28,381 trees on ground class 6 (today's canopy, tag U for 1789), never frustum-culled (bounding sphere about
   2.15 km). It is the single largest cost.
 - `viewer/src/terrain.ts`: chunked terrain with a ground-class splat patch (lawn, meadow, gravel, forest, water).
-- Test hooks: `window.skb` (full list in `README.md` under the viewer keys), e.g. `step`, `goto`, `pose`, `set`,
+- Test hooks: `window.skb` (`Object.keys(window.skb)` lists them), e.g. `step`, `goto`, `pose`, `set`,
   `setMode`, `look`, `bench`, `gpuBench`, `triangles`, `atmosphere`, `post`, `cloudData`, `nightSky`, `moon`, `night`,
   `candles`.
   Automated tabs are often hidden (rAF paused), so drive frames with `skb.step(n)`.
@@ -94,7 +94,7 @@ at the end of §4.4 and §9) and the done items of `docs/improvement-backlog.md`
 3. **Documented colours survive the pipeline.** The default "Dokumentation" look uses Khronos PBR Neutral tone
    mapping, so `#ECE8DF` render and `#A65E4A` sandstone read as authored. Use AgX + LUT grading only in the
    "Kino" look (Rundflug, photo mode). This was audit §8 Q2; the backlog (KB-I41) decides it by this
-   recommendation unless the user objects. Log it in the backlog's Decisions log when it lands.
+   recommendation unless the user objects. It landed in KB-I41 (frozen backlog, `docs/history/`).
 4. **Wow from period truth, not invention.** The best levers are documented or period-normal: raking 17:30 light
    on the west court front, low sun on hand-made crown glass, blue-grey slate against red Biberschwanz service
    roofs, gilt gate tips, candle-lit rooms, an open young landscape garden instead of a forest clearing, and the
@@ -146,8 +146,8 @@ come before any post effect. One backlog item (or one tight bundle in the same f
    overlap, so never cite its shots as backlog poses.
 2. **Plan** in chat (5–10 lines): files, the backlog item(s), new deps with exact pins and why, expected ms, tests.
    New runtime dependencies (e.g. `postprocessing` 6.39.6 + `n8ao` 2.0.1, which cap three at < 0.188) follow the
-   backlog's recommendation (KB-I41: pmndrs + n8ao, pinned exactly) unless the user objects; record the choice in
-   the backlog's Decisions log (audit §8 Q1).
+   backlog's recommendation (KB-I41: pmndrs + n8ao, pinned exactly) unless the user objects; a new choice becomes an ADR in
+   `../docs/adr/` (audit §8 Q1).
 3. **Implement** in the owning files (audit §6 "Files" column). New viewer modules: `viewer/src/atmosphere.ts`,
    `post.ts`, `quality.ts`, `tour.ts`, `photo.ts`, `festival.ts`. Keep `main.ts` edits small and re-read it
    before each edit, because other agents may touch it. Extend `skb` with hooks for anything you add
@@ -158,10 +158,9 @@ come before any post effect. One backlog item (or one tight bundle in the same f
 5. **After shots + numbers** with the same command into `…/after`. Compare pose by pose with the checklist in
    `references/performance-and-review.md`. Look at every image yourself (Read the JPEGs). Check the driver's stdout
    log for console warnings and errors.
-6. **Record:** tick the backlog item with measured numbers, and add a README changelog entry with before/after
-   GPU ms (1080p and retina) for the worst pose, the images you compared, what wasn't verified (live frame pacing,
-   pointer-lock feel, other Macs), and any new decision (backlog Decisions log). Keep full shot sets in the
-   scratchpad; commit only 2–4 representative pairs to `docs/shots/KB-Ixx/`. Update `docs/architecture.md` if an
+6. **Record:** remove the backlog row, add one `CHANGELOG.md` line, and put before/after GPU ms (1080p and retina)
+   for the worst pose, the images you compared and what wasn't verified (live frame pacing, pointer-lock feel,
+   other Macs) in the commit message; a new decision becomes an ADR. Shots stay in the git-ignored `docs/shots/`. Update `docs/architecture.md` if an
    API or the material contract changed. Don't commit unless the user asks; follow the parent repo's commit style
    if they do.
 

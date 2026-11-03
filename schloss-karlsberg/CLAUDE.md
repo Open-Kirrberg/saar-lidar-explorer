@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is the `schloss-karlsberg/` sub-project of the Saar LiDAR Explorer; the parent `../CLAUDE.md` (explorer app, pipeline, licences, heritage rules, commit style) also applies. It is a researched, georeferenced 3D reconstruction of Schloss Karlsberg as of summer 1789: a procedural generator, a standalone three.js viewer (Fliegen/Gehen), and generated plan sheets. Everything it produces is a **hypothesis** with evidence tags and confidence levels.
 
 Docs to read before non-trivial changes:
-- `README.md`: the living status, run commands, viewer keys and changelog. Add a changelog entry for each shipped change.
+- `README.md`: short status, run, viewer keys, layout. `CHANGELOG.md`: **one line** per shipped change. `docs/improvement-backlog.md`: open items only. Decisions are ADRs in `../docs/adr/` (never edited once accepted; see ADR 0025). The pre-2026-11-04 long forms are frozen in `docs/history/` — read, never extend.
 - `docs/architecture.md`: the **binding contract** between core, exterior, interior, site, viewer and plans (frames, sides, storeys, LOD, materials, naming, builder rules). If you change an API it lists, update it in the same commit. Note: its §2 ownership table predates implementation (work packages, not people); everything listed there exists.
 - `docs/explorer-integration.md`: the `sle-recon-v1` light layer and the camera handover with `../app`. The explorer side is in `../docs/data-contract.md`.
 - `plans/README.md`: the sheet list and drawing conventions.

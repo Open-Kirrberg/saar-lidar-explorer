@@ -58,8 +58,8 @@ node .claude/skills/skb-improve/scripts/shots.mjs --out <dir> --poses 03 --eval 
 - **Look at every image** (Read the JPEG). Check: the feature is there and where the evidence puts it; nothing floats
   or sinks (plinths meet the ground, steps reach the grade); no z-fighting or flicker strips; colours plausible against
   the catalogue hexes; the footer still shows attribution and "Schauen, nicht graben".
-- Keep full sets in the scratchpad. Commit **2–4 representative pairs** per item to `docs/shots/KB-Ixx/`
-  (`before-<pose>.jpg`, `after-<pose>.jpg`, quality 85 ≈ 0.1–0.4 MB each) and link them from the changelog entry.
+- Keep full sets in the scratchpad. Keep 2–4 representative pairs per item in the git-ignored `docs/shots/KB-Ixx/`
+  (`before-<pose>.jpg`, `after-<pose>.jpg`, quality 85) for the review; commit an image only if a doc links it.
 - Interactive checks (pointer-lock flight, walking feel, real rAF pacing) can't be automated here. Say so and ask the
   user to try it. If the Chrome extension *is* connected, the same hooks work there: `skb.goto(id)`, `skb.set(key, v)`,
   `skb.step(n)` (automated tabs are often hidden and rAF is paused, so never wait on rAF).

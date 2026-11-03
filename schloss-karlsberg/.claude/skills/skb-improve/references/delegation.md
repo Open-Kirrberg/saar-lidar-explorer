@@ -14,7 +14,7 @@ use the map below, which reflects the code as it is.
 | **site** | `model/src/site/**`, `scripts/prepare-terrain.py`, regenerated `viewer/public/terrain/` (git-ignored) | I09, I11–I14, I23, I32–I40 | `skb-schlossgarten` |
 | **viewer** | `viewer/src/**` **except `viewer/src/handover.ts`**, `viewer/tests/**` **except `handover.test.ts`**, `viewer/index.html`, `viewer/textures.json` | I01, I04–I08, I10, I41, I43–I47 | `skb-visual-wow` |
 | **plans** | `plans/**`, `docs/plans-preview/` | regeneration after layout/catalogue changes, I52 (SC-02) | – |
-| **lead (you)** | `docs/architecture.md`, `docs/explorer-integration.md`, `README.md`, `docs/improvement-backlog.md`, `CLAUDE.md`, `package.json` + `pnpm-lock.yaml`, `model/src/context.ts` (`MATERIAL_NAMES`, `BuildContext`), `model/src/api.ts`, `model/src/explorer/export.ts` + `scripts/export-explorer.ts` | contract edits, dependency pins, light-layer export | – |
+| **lead (you)** | `docs/architecture.md`, `docs/explorer-integration.md`, `README.md`, `CHANGELOG.md`, `docs/improvement-backlog.md`, `CLAUDE.md`, `package.json` + `pnpm-lock.yaml`, `model/src/context.ts` (`MATERIAL_NAMES`, `BuildContext`), `model/src/api.ts`, `model/src/explorer/export.ts` + `scripts/export-explorer.ts` | contract edits, dependency pins, light-layer export | – |
 
 Why this split: `layout/` is the single truth that exterior, interior, site, plans and the explorer export all read.
 If two agents change it at once, the consumers disagree; so contract changes (a new `spec.ts` field, a new
@@ -50,10 +50,10 @@ or the HMS-derived `video2world/` outputs.
 You are the <package> agent for backlog item KB-Ixx "<title>" in
 schloss-karlsberg.
 
-Goal and acceptance (copied from docs/improvement-backlog.md KB-Ixx):
+Goal and acceptance (from the backlog row, or the frozen item text in docs/history/ for KB-I01…I100):
 - …
 
-Read first: CLAUDE.md, docs/architecture.md §<n>, docs/improvement-backlog.md KB-Ixx,
+Read first: CLAUDE.md, docs/architecture.md §<n>, docs/improvement-backlog.md KB-Ixx (+ its docs/history/ text),
 research/<nn> §<section> (the evidence), and the <domain> skill at .claude/skills/<skill>/SKILL.md.
 
 You own: <paths>. Do not edit anything else. Never edit outside schloss-karlsberg/, never

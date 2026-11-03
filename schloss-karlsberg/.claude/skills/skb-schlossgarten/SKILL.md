@@ -165,7 +165,7 @@ recipes and budgets are in **`references/performance.md`**. The short rules:
    vegetation stats with `node .claude/skills/skb-schlossgarten/scripts/garden-shots.mjs --out
    <scratchpad>/<topic>-before --bench` (and `-after`); its pose ids are its own (its 03 is not the backlog's 03).
    Both run against the dev server on 5260.
-7. **Record.** Add a changelog entry in `README.md` and update `docs/architecture.md` if an API listed there changed.
+7. **Record.** Add one line to `CHANGELOG.md` and update `docs/architecture.md` if an API listed there changed.
    Mark resolved items in research/11 §8 (open questions). Run `pnpm run plans --only LP-00 --only LP-01 --no-pdf` if avenues or
    features changed (LP-00 and LP-01 draw the gardens and the avenue trees, plans/README.md).
    Don't commit unless the user asks.

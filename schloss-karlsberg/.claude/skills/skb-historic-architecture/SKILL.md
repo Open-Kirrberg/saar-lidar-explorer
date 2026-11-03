@@ -19,7 +19,7 @@ All paths are relative to `schloss-karlsberg/` (the folder with `CLAUDE.md`). `r
 
 ## Orient (every session, as deep as the task needs)
 
-1. `CLAUDE.md`, `README.md` (status, changelog) and `docs/architecture.md` (the binding contract: frames, sides, storeys, LOD, materials §3.6, grammar §4.4, builder rules §5).
+1. `CLAUDE.md`, `README.md` (status), `CHANGELOG.md` and `docs/architecture.md` (the binding contract: frames, sides, storeys, LOD, materials §3.6, grammar §4.4, builder rules §5).
 2. `references/fact-sheet.md`: a condensed version of what is known per building and globally, with the open research deltas. Start here for any "what did X look like" question.
 3. Run the history check. It is read-only and takes under 1 s:
    ```bash
@@ -75,7 +75,7 @@ All paths are relative to `schloss-karlsberg/` (the folder with `CLAUDE.md`). `r
 2. **Decide the level:** a building fact (catalogue), a period norm (grammar), a colour or material (materials + defaults), new geometry (exterior/ or interior/ builder, plus a layout helper if plans need it), or a spec/contract change (core: `spec.ts`, `validate.ts`, `docs/architecture.md` in the same change).
 3. **Implement** following `references/source-to-model.md`. It has the edit points (`EDITS` in `scripts/catalogue-v2/buildings.ts`, `PROGRAMMES` and `FIN` in `scripts/catalogue-v2/programme.ts`, `NEW` buildings in `scripts/catalogue-v2/newBuildings.ts`, `SRC` keys, grammar tables, `MATERIAL_BASE`) and the rebuild order. For construction details and numbers, use `references/period-grammar.md`.
 4. **Keep the alternative.** If you overrule an earlier reading (for example the LP06 square pavilion vs the documented round temple), move the old reading into `alternatives` with its tag. Don't delete it.
-5. **Verify** (below), then **record**: add a README changelog entry (CLAUDE.md asks for one per shipped change). Update `docs/architecture.md` if an API, field or material changed, and tick the delta in research by adding a line to its section only if the research doc tracks status. Don't commit unless the user asked.
+5. **Verify** (below), then **record**: add one `CHANGELOG.md` line (details in the commit message). Update `docs/architecture.md` if an API, field or material changed, and tick the delta in research by adding a line to its section only if the research doc tracks status. Don't commit unless the user asked.
 
 ## Verification (before you say "done")
 

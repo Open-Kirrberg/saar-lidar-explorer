@@ -18,6 +18,9 @@ if [[ "$WHAT" == all || "$WHAT" == app ]]; then
   run "app: typecheck + build"      check "cd '$ROOT/app' && pnpm run build 2>&1 | tail -8"
   run "app: dist excludes AOI data" check "cd '$ROOT/app' && test \$(du -sm dist | cut -f1) -lt 20"
 fi
+if [[ "$WHAT" == all || "$WHAT" == castle ]]; then
+  run "castle: tests + build"         check "cd '$ROOT/schloss-karlsberg' && '$ROOT/schloss-karlsberg/.claude/skills/skb-improve/scripts/verify.sh' test build 2>&1 | tail -12"
+fi
 if [[ "$WHAT" == all || "$WHAT" == docs ]]; then
   run "docs: ADR index + PRD length"  check "python3 -I '$ROOT/.claude/skills/sle-roadmap/scripts/check_docs.py' '$ROOT'"
 fi

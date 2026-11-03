@@ -124,9 +124,8 @@ Read each before/after pair as images. Don't judge from file sizes or numbers. F
 
 ### 4.3 Record
 
-- Keep full before/after sets in the scratchpad; commit only 2–4 representative pairs to `docs/shots/KB-Ixx/`
-  (JPEG q85, about 0.1–0.4 MB each). Don't commit dozens of iterations.
-- Tick the backlog item (status, hash, measured numbers) and add a README changelog entry: what changed, which
+- Keep before/after sets in the git-ignored `docs/shots/KB-Ixx/` (JPEG q85); commit an image only if a doc links it.
+- Remove the backlog row and add one `CHANGELOG.md` line; the commit message carries what changed, which
   backlog/audit items it closes, worst-pose GPU ms before → after (1080p and retina), and what was **not** verified.
 - If a technique claim or a period claim went into docs or UI, it carries a URL/paper or an evidence tag.
 

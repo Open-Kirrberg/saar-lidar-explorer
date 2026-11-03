@@ -3,7 +3,8 @@
 // trees of the catalogue) in node, takes every crown as a sphere and checks each shot at u = 0.05 … 0.95: at most 15 %
 // of a 16 × 7 ray grid through the letterboxed frame may hit a crown within 30 m (and within 60 m) of the camera,
 // and the approach stays ≥ 25 m above the canopy.
-import { readFileSync } from 'node:fs';
+// Needs the generated terrain (viewer/public/terrain/, git-ignored): the scene checks are skipped without it.
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import * as THREE from 'three';
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -25,11 +26,13 @@ const f32 = (p: string) => {
 const u8 = (p: string) => new Uint8Array(read(p));
 
 const MAX_SHARE = 0.15;
+const haveTerrain = existsSync(resolve(ROOT, 'viewer/public/terrain/meta.json'));
 let crowns: Sphere[] = [];
 let tour: ReturnType<typeof resolveTour>;
 let ground: (x: number, z: number) => number;
 
 beforeAll(() => {
+  if (!haveTerrain) return;
   const meta = JSON.parse(read('viewer/public/terrain/meta.json').toString('utf8')) as TerrainMeta;
   const T = 'viewer/public/terrain/';
   const terrain = new TerrainData(meta, f32(T + meta.files.dtm1789), f32(T + meta.files.dtm2025), u8(T + meta.files.ground), meta.files.ground2025 ? u8(T + meta.files.ground2025) : undefined);
@@ -80,7 +83,7 @@ beforeAll(() => {
   tour = resolveTour(rundflugSpec(anchors), terrain.sample);
 }, 120_000);
 
-describe('Rundflug: no near crowns filling the frame (wave-5 review)', () => {
+describe.skipIf(!haveTerrain)('Rundflug: no near crowns filling the frame (wave-5 review)', () => {
   it('found the vegetation', () => {
     expect(crowns.length).toBeGreaterThan(5000);
   });
@@ -108,7 +111,7 @@ function canopyClearance(pos: readonly number[], radius = 50): number {
   return pos[1] - top;
 }
 
-describe('Rundflug: the approach flies well above the canopy (wave-5 review)', () => {
+describe.skipIf(!haveTerrain)('Rundflug: the approach flies well above the canopy (wave-5 review)', () => {
   it('anflug keeps ≥ 25 m over every crown within 50 m', () => {
     let worst = Infinity;
     for (let k = 0; k <= 20; k++) worst = Math.min(worst, canopyClearance(shotAt(tour, 'anflug', k / 20, ground)!.pos));

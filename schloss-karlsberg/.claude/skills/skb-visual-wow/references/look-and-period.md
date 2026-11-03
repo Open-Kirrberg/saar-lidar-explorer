@@ -32,7 +32,7 @@ hue and saturation (it pushes yellows to white and reds to orange), so the viewe
 the source says ([Khronos PBR Neutral](https://github.com/KhronosGroup/ToneMapping);
 [three.js forum: Tone Mapping Overview](https://discourse.threejs.org/t/tone-mapping-overview/75204)). The choice
 was an open question (audit §8 Q2); backlog KB-I41 decides it by this recommendation (Neutral default, AgX for
-"Kino") unless the user objects, and logs it in the backlog's Decisions log. Switching costs nothing:
+"Kino") unless the user objects, and records new choices as ADRs in `../docs/adr/`. Switching costs nothing:
 put both behind `skb.look('doku' | 'kino')` and a German UI toggle ("Darstellung: Dokumentation / Kino").
 
 ## 3. Time-of-day presets (15 Jul 1789, `viewer/src/sun.ts`, azimuth from true north)

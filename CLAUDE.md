@@ -30,7 +30,7 @@ cd pipeline && ./run.sh karlsberg build xyz         # selected steps; AOIs in pi
 cd app && pnpm install && pnpm dev --port 5240 --strictPort   # http://localhost:5240/ (?aoi=fixture for synthetic data)
 cd app && pnpm run test                             # vitest
 cd app && pnpm run build                            # tsc --noEmit + vite build (AOI data is NOT copied to dist)
-.claude/skills/sle-roadmap/scripts/verify.sh        # all gates: app tests + build, pipeline pytest
+.claude/skills/sle-roadmap/scripts/verify.sh        # all gates: app, castle, docs, pipeline (or one: app|castle|docs|pipeline)
 ```
 
 Use `pnpm run <script>` (pnpm 12 rejects `pnpm -s`). Check a port isn't owned by another project before starting a dev server.

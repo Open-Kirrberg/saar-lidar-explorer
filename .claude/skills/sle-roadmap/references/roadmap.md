@@ -9,9 +9,9 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 ---
 
 ## V2.0 — Baseline 📏 (first)
-- [ ] **Why:** every v2 item is judged on the phone; we have never measured one (Q-22).
-- **Approach:** run the v1.4 public build on a real mid-range Android + iOS Safari; record fps, memory and load time at 3 fixed views (`window.sle.flyTo`). Fix the castle test that needs generated data (`viewer/tests/tour-occlusion.test.ts` → skip when `public/terrain/meta.json` is missing) and add the castle tests to `verify.sh`.
-- **Acceptance:** numbers in the commit + `app/README.md` "Performance"; `verify.sh` covers the castle viewer.
+- [~] **Why:** every v2 item is judged on the phone; we have never measured one (Q-22).
+- **Approach:** run the v1.4 public build on a real mid-range Android + iOS Safari; record fps, memory and load time at 3 fixed views (`window.sle.flyTo`). ✅ Done: castle test skips without generated terrain; `verify.sh castle` gate.
+- **Acceptance:** numbers in the commit + `app/README.md` "Performance".
 - **Skill:** `sle-renderer` · ADR [0014](../../../../docs/adr/0014-audience-scope-devices.md)
 
 ## V2.1 — Removals & move-outs 🗑️
@@ -69,4 +69,3 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 ## Known issues / notes log
 - Carried from v1 (details: [`docs/history/roadmap-v1.md`](../../../../docs/history/roadmap-v1.md#known-issues--notes-log)): F15 precision unknown (Q-15); never run on a real phone (Q-22); canopy ends ≈ 1.9 km out (moot after V2.4); failed DSM / point tiles not retried until reload; F21 nothing printed (Q-26, moves out with F21); sld outlines beyond the AOI bbox (Q-30).
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).
-- Castle viewer test `viewer/tests/tour-occlusion.test.ts` fails without generated terrain (`ENOENT viewer/public/terrain/meta.json`) → V2.0.

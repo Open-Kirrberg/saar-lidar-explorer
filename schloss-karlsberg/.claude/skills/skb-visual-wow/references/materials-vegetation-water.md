@@ -103,7 +103,7 @@ and §5.6–5.9. Colour *values* are history: change them only through the evide
 - **Culling (done, KB-I10):** `Forest` (`viewer/src/forest.ts`) tiles the instances into 320 m cells, each its own `InstancedMesh` with a
   correct bounding sphere. Or use `@three.ez/instanced-mesh` 0.3.16 (`InstancedMesh2`: per-instance BVH culling,
   `addLOD`, `addShadowLOD`; [repo](https://github.com/three-ez/instanced-mesh)). Prefer the dependency-free tiling; a new dependency is pinned exactly and its choice recorded in the backlog's
-  Decisions log (KB-I10).
+  Decisions log (KB-I10, frozen in `docs/history/`).
 - **Far LOD:** octahedral impostors beyond about 400 m (Brucks, ["Octahedral Impostors"](https://shaderbits.com/blog/octahedral-impostors), 2018).
   Orient billboards in the vertex shader, not per instance on the CPU. Watch the overdraw.
 - **Shadows:** only trees inside the near shadow box cast.
