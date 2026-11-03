@@ -22,7 +22,7 @@
  *   but not located in the crop [D presence; U position], so they are not drawn.
  */
 import { hashString, mulberry32, smoothstep } from '@model/layout/geom.ts';
-import { GROUND_CLASS, distanceTo, latticeNoise, noiseLattice, type ForestSpecies, type ForestTree, type GroundGrid } from './landcover.ts';
+import { GROUND_CLASS, cellAt, distanceTo, latticeNoise, noiseLattice, type ForestSpecies, type ForestTree, type GroundGrid } from './landcover.ts';
 
 /** Species of the hinterland that the forest palette lacks [N; I hues]. */
 export const HINTERLAND_SPECIES: Record<string, ForestSpecies> = {
@@ -114,6 +114,12 @@ export const HINTERLAND_TAGS: Record<HinterlandKind, string> = {
 
 /** Covers whose parcel edges can carry a hedge, and the classes a hedge may stand between. */
 const HEDGE_COVERS = new Set(['field', 'hay']);
+/**
+ * Wave 11 (KB-I84): the field areas that fill the open meadow between the first-cut parcels (catalogue-v2/landcover.ts
+ * GEWANN_FILL_IDS). The open Gewannflur had no hedges between its strips [N; KB-I57], so their outlines carry none;
+ * skipping them also leaves every other parcel's hedgerow exactly where it was.
+ */
+export const GEWANN_FILL = new Set(['LC-06', 'LC-07', 'LC-08']);
 const OPEN = new Set<number>([GROUND_CLASS.meadow, GROUND_CLASS.hay, GROUND_CLASS.field]);
 
 function pick(list: [string, number][], u: number): string {
@@ -139,12 +145,7 @@ export function hinterlandPlan(g: GroundGrid, opts: HinterlandOptions): Hinterla
   const toBuilding = distanceTo(g, [C.building]);
   const W = g.cols * g.cell;
   const H = g.rows * g.cell;
-  const at = (x: number, y: number) => {
-    const c = Math.floor(x / g.cell);
-    const r = Math.floor(y / g.cell);
-    if (c < 0 || r < 0 || c >= g.cols || r >= g.rows) return -1;
-    return r * g.cols + c;
-  };
+  const at = (x: number, y: number) => cellAt(g, x, y);
   const trees: HinterlandTree[] = [];
   const step = opts.step ?? 2.6;
   const share = opts.hedgeShare ?? HEDGE_SHARE;
@@ -159,7 +160,7 @@ export function hinterlandPlan(g: GroundGrid, opts: HinterlandOptions): Hinterla
   const cellOf = (x: number, y: number) => Math.floor(y / 3) * 100000 + Math.floor(x / 3);
   let walk = 0;
   for (const p of opts.parcels) {
-    if (!HEDGE_COVERS.has(p.cover) || p.geometry?.type !== 'Polygon') continue;
+    if (!HEDGE_COVERS.has(p.cover) || GEWANN_FILL.has(p.id) || p.geometry?.type !== 'Polygon') continue;
     walk++;
     const ring = p.geometry.coordinates[0].map(([E, N]) => [E - opts.west, opts.north - N] as [number, number]);
     for (let k = 0; k + 1 < ring.length; k++) {

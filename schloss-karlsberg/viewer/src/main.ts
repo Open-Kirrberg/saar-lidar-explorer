@@ -20,24 +20,32 @@ import { TerrainMesh, loadTerrain, terrainMaterial } from './terrain.ts';
 import { freezeSceneRoot, freezeStatic } from './staticMatrices.ts';
 import { Controls, EYE, type Mode, isTyping } from './controls.ts';
 import { EXPLORER_DEFAULT_URL, backTarget, headingToYaw, liftAboveGround, parseHandover, pickWalkStart, pitchToRad, poseFromCamera, poseToLocal, walkFallbackYaw } from './handover.ts';
-import { dayOfYear, sunPosition } from './sun.ts';
+import { KARLSBERG_LAT, KARLSBERG_LON, dayOfYear, sunPosition } from './sun.ts';
+import { dateLabelDe, fullMoonEvening, gmst, jdLocal, moonIlluminance, moonLabelDe, moonState } from './ephemeris.ts';
+import { NightSky } from './nightSky.ts';
+import { cloudAloft, cloudData, cloudMode, cloudsShown } from './clouds.ts';
 import { type Look, type UiState, buildUi } from './ui.ts';
 import { Forest } from './forest.ts';
 import { Vines } from './vines.ts';
 import { GrassBlades, type GrassWalk } from './grassBlades.ts';
+import { lawnZoneInput } from './lawnZones.ts';
 import { siteFeatures } from '@model/site/access.ts';
 import { foliageUniforms, tickFoliage, useFoliage } from './foliage.ts';
 import { LeafCards, siteCardOptions } from './leafCards.ts';
-import { Atmosphere, InteriorLook, RENDER_ORDER, installHeightFog, installShadowTaps, useSkyShDiffuse, useTerrainVertexLight } from './atmosphere.ts';
-import { addCandleFlames, addMantelCandelabra, addPortalLanterns, lanternLights, prepareLitWindows, setCandles, setWindowFest, setWindowGlow } from './night.ts';
+import { Atmosphere, InteriorLook, type LightState, RENDER_ORDER, installHeightFog, installShadowTaps, useSkyShDiffuse, useTerrainVertexLight } from './atmosphere.ts';
+import { addCandleFlames, addMantelCandelabra, addPortalLanterns, addTableCandles, lanternLights, prepareLitWindows, setCandles, setWindowFest, setWindowGlow } from './night.ts';
+import { CandleLights, installCandleFalloff } from './candleLight.ts';
+import { INDOOR_NIGHT_VISION } from './candleMath.ts';
+import { setNightVision } from './grade.ts';
 import { Festival } from './festival.ts';
 import { festivalOn } from './festivalMath.ts';
 import { festivalLamps } from '@model/layout/festival.ts';
 import { FarShadow, installFarShadowChunk } from './shadowsFar.ts';
 import { farShadowBox } from './shadowsFarMath.ts';
+import { nearShadowBias } from './shadowsNearMath.ts';
 import { catalogueRooms } from './windowRooms.ts';
 import { windowCandleColour, windowGlow } from './nightlights.ts';
-import { easeEv, kelvinLinear, whiteBalance } from './light.ts';
+import { CANDLE_AMBIENT_LUX, easeEv, kelvinLinear, whiteBalance } from './light.ts';
 import { type TourFrame, TourPlayer, captionFor, resolveTour, rundflugSpec, shortName, shotAt, tourAt } from './tour.ts';
 import { downloadPng, photoBusy, takePhoto } from './photo.ts';
 import { type PhotoOptions, photoFileName } from './photoMath.ts';
@@ -48,7 +56,7 @@ import { windowTransmittance } from './interiorGrade.ts';
 import { RoomMirrors } from './mirrors.ts';
 import { mirrorKey } from './mirrorsMath.ts';
 import { ReviewClock } from './clock.ts';
-import { countsAsIndoor, interiorMode, ringDistance, roomLightOn, shellLiftEv } from './indoor.ts';
+import { countsAsIndoor, interiorMode, lightOnStorey, ringDistance, roomLightOn, shellLiftEv } from './indoor.ts';
 import { applyInteriorMode } from './interiorView.ts';
 import { pointInPolygon } from '@model/layout/geom.ts';
 
@@ -57,6 +65,8 @@ installHeightFog();
 installShadowTaps();
 // KB-I50: the sun reads a static far shadow map beyond its near map (shadowsFar.ts); also before any compile
 installFarShadowChunk();
+// wave 11: candle clusters are sphere lights (candleLight.ts); also before any compile
+installCandleFalloff();
 
 const { spec } = loadSite(catalogue);
 /** Camera handover from the explorer (?src=explorer&E=…&N=…&h=…&heading=…&pitch=…&mode=…&back=…), or null. */
@@ -84,6 +94,7 @@ const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 12
 const sun = new THREE.DirectionalLight('#ffffff', 1);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
+// KB-I99: the depth bias is set in metres per fitted frustum (shadowsNearMath.ts; was −0.0004 ≈ 1.16 m)
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.6;
 sun.shadow.radius = 3;
@@ -124,7 +135,25 @@ const state: UiState & { doy: number } = {
   haze: true,
   fest: false,
   festival: false,
+  fullMoon: false,
+  // wave-10 review fix: the cumulus only from the air by default (clouds.ts CloudMode)
+  clouds: 'air',
 };
+/** Wave-10 review fix: the camera is aloft (clouds.ts cloudAloft), and the Rundflug shot's own wish (null = no tour). */
+let cloudsAloft = false;
+let tourClouds: boolean | null = null;
+/** Wave 10 (night sky): the documented date and the full-moon night nearest it (6 Jul 1789, ephemeris.ts). */
+const BASE_DATE = { year: 1789, month: 7, day: 15 };
+const FULL_MOON_DATE = fullMoonEvening(BASE_DATE, KARLSBERG_LON);
+const skyDate = () => (state.fullMoon ? FULL_MOON_DATE : BASE_DATE);
+/** Stars and the moon disc (night only; the moonlight is the sun's light turned to the moon, atmosphere.ts). */
+const nightSky = new NightSky();
+scene.add(nightSky.group);
+/** Wave 11: the candles of the visitor's room light it after dusk (candleLight.ts; hidden by day and outdoors). */
+const candles = new CandleLights();
+scene.add(candles.group);
+let candlesOn = false;
+let candleAmbient = 0;
 /** KB-I48 Festbeleuchtung (built after the buildings; off by default, night only). */
 let festival: Festival | null = null;
 
@@ -136,14 +165,28 @@ let snapExposure = true;
 let shadowDirty = true;
 
 function updateSun(): void {
+  const d = skyDate();
+  state.doy = dayOfYear(d.year, d.month, d.day);
+  atmosphere.clouds = cloudsShown(state.clouds, tourClouds ?? cloudsAloft);
   const { elevation, azimuth } = sunPosition(state.doy, state.hour);
   // azimuth is from TRUE north; local −z is GRID north: grid az = true az − convergence
   const gamma = gridConvergenceDeg(382226, 5466120);
   atmosphere.hour = state.hour;
-  const ls = atmosphere.update(elevation, azimuth - gamma);
+  // wave 10: the moon of that night (Meeus); its light takes over the directional light after sunset
+  const jd = jdLocal(d.year, d.month, d.day, state.hour, KARLSBERG_LON);
+  const moon = moonState(jd, KARLSBERG_LAT, KARLSBERG_LON);
+  const maz = ((moon.az - gamma) * Math.PI) / 180;
+  const mel = (moon.alt * Math.PI) / 180;
+  const moonDir = new THREE.Vector3(Math.sin(maz) * Math.cos(mel), Math.sin(mel), -Math.cos(maz) * Math.cos(mel));
+  const ls = atmosphere.update(elevation, azimuth - gamma, { dir: [moonDir.x, moonDir.y, moonDir.z], lux: moonIlluminance(moon) });
+  const sunLocal = ls.dir;
+  const mc = sun.color;
+  const ml = Math.max(1e-6, 0.2126 * mc.r + 0.7152 * mc.g + 0.0722 * mc.b);
+  nightSky.update({ jd, lst: gmst(jd) + KARLSBERG_LON, lat: KARLSBERG_LAT, gamma, night: ls.night, pre: ls.pre, moon, moonDir, sunDir: sunLocal, colour: ls.moonLux > 0 ? [mc.r / ml, mc.g / ml, mc.b / ml] : [1, 0.96, 0.9] });
   // KB-I48: the Festbeleuchtung is a celebration: the chandeliers burn too
   interiorLook.fest = state.fest || state.festival;
-  interiorLook.update(inside ? ls.roomCandles : ls.room, ls.pre, ls.night);
+  updateCandles(true);
+  interiorLook.update(roomLevel(ls), ls.pre, ls.night);
   setWindowGlow(inside ? 0 : windowGlow(ls.elevation), ls.pre, WINDOW_RGB);
   // wave-5 review fix: candles burn at night, the chandeliers only for a celebration (night.ts, nightlights.ts)
   setCandles(ls.night, state.fest || state.festival);
@@ -193,7 +236,9 @@ const gridU = gridFrame(spec.palace_grid).uDir; // field strips and kitchen-gard
 // vineyard outlines of the 1789 land cover: the bake draws the staked-out edge exactly where the raster has the class
 // (wave-3 review fix)
 const vineyards = (spec.landcover ?? []).filter((a) => a.cover === 'vineyard').map((a) => a.geometry.coordinates[0].map(([E, N]) => [E - E0, -(N - N0)] as [number, number]));
-const tmat = terrainMaterial(terrain, { textureBase: './textures/', sandCourts: sandCourtRings(), gridU: [gridU[0], -gridU[1]], renderer, vineyards });
+// wave 10 (garden, audit #1): Petri's lawn is close-mown only near the house and along the walks (lawnZones.ts)
+const lawnZones = lawnZoneInput(siteFeatures(spec, DEFAULT_BUILD_OPTIONS.year)) ?? undefined;
+const tmat = terrainMaterial(terrain, { textureBase: './textures/', sandCourts: sandCourtRings(), gridU: [gridU[0], -gridU[1]], renderer, vineyards, lawnZones });
 // terrain and vegetation take their diffuse sky light from the SH probe, not the PMREM (wave-1 review: fill rate); the
 // terrain evaluates its smooth light terms per vertex and is drawn after the other opaque objects (KB-I59)
 useTerrainVertexLight(tmat);
@@ -351,6 +396,39 @@ nightRoot.add(festival.group);
 // KB-I41/I43: the lanterns light reveals and gravel through the post chain (screen-space, night only)
 post.setLamps([...lanternLights()]);
 post.lampColour.setRGB(WINDOW_RGB[0], WINDOW_RGB[1], WINDOW_RGB[2], THREE.LinearSRGBColorSpace);
+/** The post chain's lamps are the portal lanterns outside; indoors the candles are point lights (wave 11, candleLight.ts). */
+let lampsIndoor = false;
+function syncLamps(): void {
+  lampsIndoor = inside;
+  post.setLamps(inside ? [] : [...lanternLights()]);
+}
+
+/**
+ * Wave 11: room ambient for the interior look. Outdoors the daylight share only; indoors the candle share follows the
+ * candles of the visitor's room (candleLight.ts: bounce + far clusters) instead of the fixed CANDLE_AMBIENT_LUX.
+ */
+function roomLevel(ls: LightState): number {
+  if (!inside) return ls.room;
+  if (!candles.room) return ls.roomCandles;
+  return ls.room + (ls.roomCandles - ls.room) * (candles.ambientLux / CANDLE_AMBIENT_LUX);
+}
+const candleDir = new THREE.Vector3();
+/** Wave 11: place the candle pool for the eye; switch the rooms' own lights and the room ambient when it changes. */
+function updateCandles(inSun = false): void {
+  const ls = atmosphere.state;
+  if (!ls) return;
+  // wave-11 review fix: the view direction picks the cluster that casts the candle shadow (candleMath.shadowClusterIndex)
+  const on = candles.update({ eye: camera.position, dir: camera.getWorldDirection(candleDir), night: ls.night, fest: state.fest || state.festival, pre: ls.pre, colour: interiorLook.candleColour, inside: inside && state.interiors }, CANDLE_AMBIENT_LUX);
+  // the eye adapted to the candles keeps their colour (candleMath.INDOOR_NIGHT_VISION); outdoors the full night grade
+  setNightVision(ls.night * atmosphere.nightVision * (inside ? INDOOR_NIGHT_VISION : 1), ls.pre);
+  const ambientChanged = Math.abs(candles.ambientLux - candleAmbient) > 0.002 * Math.max(candleAmbient, CANDLE_AMBIENT_LUX);
+  candleAmbient = candles.ambientLux;
+  if (on !== candlesOn) {
+    candlesOn = on;
+    if (!inSun) updateInteriorBudget();
+  }
+  if (ambientChanged && !inSun) interiorLook.update(roomLevel(ls), ls.pre, ls.night);
+}
 for (const root of [buildingsRoot, features.group, forest, terrainMesh.group, nightRoot]) freezeStatic(root);
 freezeSceneRoot(scene);
 
@@ -390,7 +468,21 @@ function updateInteriorBudget(): void {
     // room lights only while the visitor is inside: point lights cast no shadows, and through the walls they lit the
     // Ehrenhof gravel warm at dusk (wave-1 fix, pose 10)
     // KB-I65: a light at zero intensity (candelabra by day, chandeliers on an ordinary night) is not drawn at all
-    for (const l of (inner.userData.lights ?? []) as THREE.Light[]) l.visible = roomLightOn(e === nearest && nd < 20, inside, l.intensity);
+    const lights = (inner.userData.lights ?? []) as THREE.Light[];
+    // wave-10 review fix (07): no light through a floor from another storey (indoor.ts lightOnStorey)
+    let storey: number | undefined;
+    let near = Infinity;
+    const lp = new THREE.Vector3();
+    if (e === nearest && inside)
+      for (const l of lights) {
+        const d = l.getWorldPosition(lp).distanceTo(p);
+        if (l.intensity > 0 && d < near) {
+          near = d;
+          storey = roomStorey.get(l.userData.roomId as string);
+        }
+      }
+    // wave 11: while the candle pool lights the visitor's room, the rooms' own lights stay off (candleLight.ts)
+    for (const l of lights) l.visible = !candlesOn && roomLightOn(e === nearest && nd < 20, inside, l.intensity) && lightOnStorey(roomStorey.get(l.userData.roomId as string), storey, l.getWorldPosition(lp).distanceTo(p));
   }
 }
 
@@ -408,6 +500,8 @@ function updateLod2(all = false, at?: THREE.Vector3): void {
       if (inner) {
         addMantelCandelabra(inner, e.b.id, interiorLook.candleColour);
         addCandleFlames(inner, e.b.id);
+        addTableCandles(inner, e.b.id);
+        candles.register(inner);
         interiorLook.adopt(inner);
         mirrors.register(inner);
       }
@@ -652,7 +746,7 @@ addEventListener('keydown', (e) => {
 // ---------------------------------------------------------------- UI
 /** Apply a changed state key (UI and skb.set share this). */
 function onStateChange(key: keyof UiState): void {
-  if (key === 'hour' || key === 'fest' || key === 'festival') updateSun();
+  if (key === 'hour' || key === 'fest' || key === 'festival' || key === 'fullMoon' || key === 'clouds') updateSun();
   if (key === 'quality' || key === 'autoScale') {
     if (!state.autoScale) adaptive.reset();
     applyQuality();
@@ -685,6 +779,7 @@ const ui = buildUi({
   attribution: terrain.meta.attribution,
   onTour: () => startTour(),
   onPhoto: () => void savePhoto(),
+  skyNote: () => ({ date: dateLabelDe(skyDate()), moon: moonLabelDe(skyDate(), state.hour, KARLSBERG_LAT, KARLSBERG_LON) }),
 });
 status.textContent = '';
 
@@ -739,6 +834,7 @@ function updateShadowFrustum(): void {
   cam.far = 3000;
   cam.updateProjectionMatrix();
   sun.shadow.normalBias = walk ? 0.03 : Math.min(1.0, ext / 300);
+  sun.shadow.bias = nearShadowBias(ext, sun.shadow.mapSize.x, cam.near, cam.far);
   sun.shadow.needsUpdate = true;
   shadowRedraws++;
 }
@@ -792,7 +888,8 @@ function syncInside(force = false): void {
   if (now === inside) return;
   inside = now;
   // the candle ambient burns only in the rooms around the visitor (lit windows are KB-I43)
-  interiorLook.update(inside ? ls.roomCandles : ls.room, ls.pre, ls.night);
+  updateCandles(true);
+  interiorLook.update(roomLevel(ls), ls.pre, ls.night);
   // lit windows are seen from outside only
   setWindowGlow(inside ? 0 : windowGlow(ls.elevation), ls.pre, WINDOW_RGB);
   updateInteriorBudget();
@@ -875,8 +972,11 @@ function beginTourLook(): void {
 
 function applyTourFrame(f: TourFrame, newShot: boolean): void {
   // the hour changes only at a cut, while the frame is black
-  if (state.hour !== f.hour) {
+  // wave-10 review fix: the aerial shots ask for the cumulus (TourShotSpec.clouds), at the same black frame
+  const wantClouds = f.shot.clouds ?? false;
+  if (state.hour !== f.hour || tourClouds !== wantClouds) {
     state.hour = f.hour;
+    tourClouds = wantClouds;
     updateSun();
   }
   if (newShot) snapExposure = true;
@@ -918,6 +1018,10 @@ function startTour(): void {
 function endTour(): void {
   tourPlayer.stop();
   tourProbe = null;
+  if (tourClouds !== null) {
+    tourClouds = null;
+    updateSun();
+  }
   if (!tourSaved) return;
   const s = tourSaved;
   tourSaved = null;
@@ -1050,6 +1154,15 @@ function frame(dt: number, snap = false): void {
   if (frames % 4 === 0) updateLod2();
   else if (frames % 4 === 2 && tourProbe) updateLod2(false, tourProbe);
   if (frames % 8 === 0) updateInteriorBudget();
+  if (frames % 8 === 4) updateCandles();
+  if (frames % 8 === 4) {
+    // wave-10 review fix: 'Wolken: aus der Luft' follows the height above the ground (with hysteresis)
+    const aloft = cloudAloft(cloudsAloft, camera.position.y - terrain.sample(camera.position.x, camera.position.z), controls.mode === 'walk');
+    if (aloft !== cloudsAloft) {
+      cloudsAloft = aloft;
+      if (state.clouds === 'air' && tourClouds === null) updateSun();
+    }
+  }
   if (frames % 4 === 0) {
     const sig = lodLevels();
     if (sig !== lodSignature) {
@@ -1068,10 +1181,13 @@ function frame(dt: number, snap = false): void {
   // KB-I41 post chain; the portal lanterns light their surroundings in screen space (KB-I43 review fix)
   post.tick(dt);
   post.indoor = inside;
-  post.lampLevel = inside || !atmosphere.state ? 0 : windowGlow(atmosphere.state.elevation);
+  post.lampLevel = !atmosphere.state ? 0 : inside ? atmosphere.state.night : windowGlow(atmosphere.state.elevation);
+  // indoors the candles are point lights (wave 11); the screen-space lamps are the portal lanterns outside
+  if (inside !== lampsIndoor) syncLamps();
   if (festival?.group.visible) festival.setView(renderer.getDrawingBufferSize(festView).y, camera.fov);
   // KB-I75: at most one mirror cube face per frame, only after entering a room or a light change
   mirrors.update(camera, inside, inside ? mirrorKey('', state.hour, state.look, state.fest || state.festival) : '', frames);
+  if (nightSky.group.visible) nightSky.setView(renderer.getDrawingBufferSize(festView).y, camera.fov);
   post.render(scene, camera);
   if (farDraw) farCasters(false);
   frames++;
@@ -1117,6 +1233,11 @@ addEventListener('resize', () => {
 
 applyQuality();
 applyLook();
+{
+  // wave 10: the cloud field's sunny clearing and the sky's march origin sit on the palace anchor (view-east target)
+  const ve = pois.find((p) => p.id === 'view-east');
+  if (ve?.lookAt) atmosphere.cloudCentre = [ve.lookAt.x, ve.lookAt.z];
+}
 updateSun();
 applyDisplay();
 if (!startFromHandover()) goto('view-west');
@@ -1179,6 +1300,8 @@ function lightProbe(): { sunCard: number; shadeCard: number; upCard: number; rat
 
 function setKey(key: keyof UiState, value: unknown): void {
   if (key === 'quality' && !isPreset(value)) throw new Error(`unknown quality ${String(value)}`);
+  // wave-10 review fix: 'clouds' is a mode now; true / false (older poses, A/B evals) mean 'on' / 'off'
+  if (key === 'clouds') value = cloudMode(value);
   (state as unknown as Record<string, unknown>)[key] = value;
   ui.sync();
   onStateChange(key);
@@ -1195,6 +1318,16 @@ const skb = {
   atmosphere,
   /** KB-I41 post chain: A/B with e.g. `skb.post.settings.ao = false`, `skb.post.aoStrength = 0`. */
   post,
+  /** Wave 10: the cumulus block `uCloud` (clouds.ts: 0 amount, 1–2 offset, 3 shadow, …); A/B via `skb.set('clouds', false)`. */
+  cloudData,
+  /** Wave 10: stars and moon disc (`skb.nightSky.group.visible`); moon of the current date and hour. */
+  nightSky,
+  moon: () => {
+    const d = skyDate();
+    return { date: d, ...moonState(jdLocal(d.year, d.month, d.day, state.hour, KARLSBERG_LON), KARLSBERG_LAT, KARLSBERG_LON), lux: atmosphere.state?.moonLux ?? 0 };
+  },
+  /** Wave 11 candle pool: `skb.candles.stats()` (room, clusters, ambient lux); A/B with `skb.candles.enabled = false`. */
+  candles,
   /** KB-I75 room mirrors: `skb.mirrors.enabled = false` for an A/B, `.captures` (cube faces rendered). */
   mirrors,
   /** KB-I75 window pull: `skb.windowPull.enabled = false` for an A/B (the shoulder: `skb.post.indoorShoulder`). */

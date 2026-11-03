@@ -12,6 +12,7 @@ import {
   DORMER,
   MIN_END_PIER,
   BALCONY,
+  CDL_CENTRE,
   MAIN_PERRON,
   PASSAGE_PORTICO,
   PORTAL,
@@ -216,6 +217,8 @@ export interface FacadeOpening {
   steps?: number;
   /** Grade the steps start from (m DHHN2016); undefined = base_h. */
   grade_h?: number;
+  /** Wave 10: a door drawn as a closed glazed two-leaf French door (portal spec `glazed`). */
+  glazed?: boolean;
   /**
    * Columned portico in front (portal spec `portico`). On a Durchfahrt (wave-8 review fix, KB-I72) the columns stand on
    * the court and carry a balcony deck at `deck_h` (the floor of the storey above, PASSAGE_PORTICO).
@@ -233,6 +236,38 @@ export interface FacadeOpening {
    */
   balconyRun?: { a0: number; a1: number; depth: number; tag?: string };
   tag: string;
+}
+
+/** How an open shutter leaf is hung on its pier: flat full leaf, two-panel folding leaf, or left off. */
+export type LeafFit = 'full' | 'folded' | 'none';
+
+/** Gap between a surround's outer edge and the hinge side of an open shutter leaf (exterior/facade.ts). */
+export const LEAF_GAP = 0.02;
+
+/**
+ * Facade span [a0, a1] an open shutter leaf of an opening (centre `a`, `width`) covers on side `side` (-1 left, +1
+ * right) when hung `fit`; each leaf closes half the opening, a folded leaf lies `CDL_CENTRE.shutter.fold` of that
+ * wide. null for 'none'.
+ */
+export function leafSpan(a: number, width: number, side: -1 | 1, fit: LeafFit, face: number = ARTICULATION.surround.face): [number, number] | null {
+  if (fit === 'none') return null;
+  const lw = (width / 2) * (fit === 'folded' ? CDL_CENTRE.shutter.fold : 1);
+  const hinge = a + side * (width / 2 + face + LEAF_GAP);
+  return side < 0 ? [hinge - lw, hinge] : [hinge, hinge + lw];
+}
+
+/**
+ * Wave-11 review fix (CDL_CENTRE.shutter) [I]: the largest leaf that lies flat on its pier, clear by `clear` m of every
+ * `guard` span (a Lisene, a risalit return and the air beyond the risalit edge): 'full', else 'folded', else 'none'.
+ * With no guard every leaf stays 'full' (the rule only acts where a Lisene or a return stands beside the opening).
+ */
+export function shutterLeafFit(a: number, width: number, side: -1 | 1, guards: readonly (readonly [number, number])[], face: number = ARTICULATION.surround.face): LeafFit {
+  const c = CDL_CENTRE.shutter.clear;
+  for (const fit of ['full', 'folded'] as const) {
+    const [x0, x1] = leafSpan(a, width, side, fit, face)!;
+    if (!guards.some(([g0, g1]) => x1 > g0 - c && x0 < g1 + c)) return fit;
+  }
+  return 'none';
 }
 
 /** Freitreppe in front of an opening with steps (no portico): the shared numbers of exterior, court and plans. */
@@ -400,6 +435,7 @@ export function facadeOpenings(inp: FacadeOpeningInput): FacadeOpening[] {
         o.steps = p.steps ?? Math.ceil((level.floor_h - plinth.floor_h) / STAIR.freitreppe.riser - 1e-6);
       } else if (p.steps) o.steps = p.steps; // perron in front of a door (fix round 1)
       if (p.grade_h !== undefined) o.grade_h = p.grade_h;
+      if (p.glazed && p.kind === 'door') o.glazed = true;
       if (p.portico) o.portico = { columns: p.portico.columns, balcony: p.portico.balcony, depth: p.portico.depth ?? PORTICO.depth, tag: p.portico.tag };
       out.push(o);
       if (plinth && storey === entrance && p.kind === 'portal') for (const ax of axes) take(plinth.index, ax);

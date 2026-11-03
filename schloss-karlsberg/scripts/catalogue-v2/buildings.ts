@@ -798,7 +798,7 @@ const EDITS: Record<string, Patch> = {
     b.function = 'menagerie extension on terraces (Herzogsterrassen 1786, T20; V23 no. 29): straight rows of single-storey animal houses, heated from outside in winter, separated by iron grilles, with runs crossed by a broad watercourse under an ≈ 3.6 m net (D T1 pp. 383, 413)';
     b.facade = {
       ...b.facade,
-      material: 'rendered houses with iron grille fronts (D T1 p. 413), slate gable roofs (I by analogy with the documented ring, T20; cover U); runs of trampled ground fenced with square iron bars under a cord net on posts (D T1 p. 383); broad watercourse with sandstone kerbs (D T1 "breiter Wasserlauf"; kerbs I); dry sandstone terrace walls on the ≈ 1 m LiDAR steps (D KL-02; wall I); in beech wood (D T1 p. 383, beeches TF-39 I)',
+      material: 'rendered houses with iron grille fronts (D T1 p. 413), limewashed warm broken white (I, KB-I97), slate gable roofs (I by analogy with the documented ring, T20; cover U); runs of trampled ground fenced with square iron bars under a cord net on posts (D T1 p. 383); broad watercourse (D T1 "breiter Wasserlauf") 4.5 m wide in a sandstone trough of level reaches with weirs at the terrace steps (width, trough and weirs I, KB-I97); dry sandstone terrace walls on the ≈ 1 m LiDAR steps (D KL-02; wall I); in beech wood (D T1 p. 383, beeches TF-39 I)',
       menagerie: {
         kind: 'rows',
         // back lines of the rows on the LiDAR terrace banks (scripts/catalogue-v2/menagerie.ts)

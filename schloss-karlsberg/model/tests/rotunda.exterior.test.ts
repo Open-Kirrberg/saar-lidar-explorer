@@ -20,7 +20,12 @@ const B07 = spec.buildings.find((b) => b.id === 'KB-B07')!;
 const ctx = (lod: 0 | 1 | 2): BuildContext => ({ spec, lod, materials: createMaterials(), terrain: () => NaN, options: { ...DEFAULT_BUILD_OPTIONS, showHypothetical: true }, layout });
 
 describe('KB-I24 rotunda layout: portico roof and attic block', () => {
-  it('the pediment roof stays under the attic block top, which clears it by ROTUNDA.atticBlockClear', () => {
+  it('wave 10: with the lead collar (ROTUNDA.porticoCollar) the portico roof needs no attic block', () => {
+    const P = rotundaLayout(layout(B07))!.portico!;
+    expect(P.pediment).not.toBeNull();
+    expect(P.atticBlock === null).toBe(ROTUNDA.porticoCollar);
+  });
+  it.skipIf(ROTUNDA.porticoCollar)('the pediment roof stays under the attic block top, which clears it by ROTUNDA.atticBlockClear', () => {
     const R = rotundaLayout(layout(B07))!;
     const P = R.portico!;
     expect(P.pediment).not.toBeNull();

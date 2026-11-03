@@ -95,6 +95,32 @@ export function mantelCandelabra(b: Box): P3[] {
       ];
 }
 
+/**
+ * Wave 10 (audit rank 5: the candle-lit rooms showed no candle in their default views 07 and 25): candelabra on the
+ * laid dining table and a candlestick on each guéridon of a candle-lit room [N: a laid table carries a row of
+ * candelabra; the guéridon is by origin a candle stand; I place]. `every` m of table per candelabrum (2–3), `stem` the
+ * height (m) of the candle cups above the top. They burn with the room's other candles and add no light of their own
+ * (the room's light budget stays; the mantel candelabra carry the room light).
+ */
+export const TABLE_CANDLES = { every: 2.4, min: 2, max: 3, stem: 0.34, gueridonStem: 0.24 } as const;
+
+/** Candelabra on a table whose top box is `b` (building-local, axis-aligned): evenly along its long axis, on its centre line. */
+export function tableCandelabra(b: Box): P3[] {
+  const wx = b.max[0] - b.min[0];
+  const wz = b.max[2] - b.min[2];
+  const long = Math.max(wx, wz);
+  if (long < 1.2 || Math.min(wx, wz) < 0.5) return [];
+  const n = Math.min(TABLE_CANDLES.max, Math.max(TABLE_CANDLES.min, Math.round(long / TABLE_CANDLES.every)));
+  const cx = (b.min[0] + b.max[0]) / 2;
+  const cz = (b.min[2] + b.max[2]) / 2;
+  const out: P3[] = [];
+  for (let k = 0; k < n; k++) {
+    const u = (k + 0.5) / n - 0.5;
+    out.push(wx >= wz ? [cx + u * long, b.max[1], cz] : [cx, b.max[1], cz + u * long]);
+  }
+  return out;
+}
+
 /** Luminous intensity of one candelabrum (cd): three candles of ≈ 1 cd [D-> hypertextbook]. */
 export const CANDELABRUM_CD = 3;
 /** Luminance of a lit window seen from outside (cd/m²) [I, tuned on pose 10 so the windows read as warm points]. */

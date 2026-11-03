@@ -6,10 +6,11 @@
  */
 import * as THREE from 'three';
 import type { MaterialLibrary, MaterialName } from '../context.ts';
-import { HEARTH, STATE_ROOM } from '../layout/grammar.ts';
+import { HEARTH, ROOM_ORDER, STATE_ROOM } from '../layout/grammar.ts';
 import { type HearthKit, chimneypiece, faienceStove } from './hearth.ts';
 import { type RGB, canvasGrid, meanderRects, mirrorGrid, srgbToLinear } from './finish.ts';
-import { type Accumulator, type Bucket, type MouldProfile, type PartInfo, type V3, T, beadProfile, cyl, mouldFrame, placeMatrix } from './mesh.ts';
+import { canvasParams, hangOf } from './painting.ts';
+import { type Accumulator, type Bucket, type MouldProfile, type PartInfo, type V3, T, beadProfile, carvedHead, cyl, mouldFrame, placeMatrix } from './mesh.ts';
 import { type InteriorExtra, type Tints, interiorMaterial, marbleMaterial } from './materials.ts';
 import type { Item, SizedKind } from './programme.ts';
 import { mulberry32, hashString } from '../layout/geom.ts';
@@ -62,7 +63,7 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
     mouldFrame(b, F, N, x0, y0, x1, y1, prof);
   };
   /** Colour grid (canvas, mirror glass) on the local XY plane at depth z, sRGB colours in. */
-  const grid = (b: Bucket, x0: number, y0: number, x1: number, y1: number, z: number, g: { nx: number; ny: number; colours: RGB[] }) => {
+  const grid = (b: Bucket, x0: number, y0: number, x1: number, y1: number, z: number, g: { nx: number; ny: number; colours: RGB[] }, canvas?: [number, number, number, number]) => {
     const P = (x: number, y: number): V3 => {
       const v = new THREE.Vector3(x, y, z).applyMatrix4(m);
       return [v.x, v.y, v.z];
@@ -71,7 +72,7 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
     b.colourGrid(P(x0, y0), P(x1, y0), P(x1, y1), P(x0, y1), [nv.x, nv.y, nv.z], g.nx, g.ny, (i, j) => {
       const c = g.colours[j * g.nx + i];
       return [srgbToLinear(c[0]), srgbToLinear(c[1]), srgbToLinear(c[2])];
-    });
+    }, canvas);
   };
   const seed = hashString(`${fc.roomId}|${it.kind}|${it.pos[0].toFixed(2)}|${it.pos[1].toFixed(2)}|${(it.z ?? 0).toFixed(2)}`);
 
@@ -167,8 +168,13 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
       grid(M('interior.mirror'), -w / 2 + fw * 0.8, fw * 0.8, w / 2 - fw * 0.8, h - fw * 0.8, 0.012, mirrorGrid(seed, w, h, { wall: fc.wall ?? '#E2DDD0' }));
       box(M('wall.boiserie'), [-w / 2, 0, 0], [w / 2, h, 0.01], ['-z']);
       mould(gilt, -w / 2, 0, w / 2, h, beadProfile(fw, 0.045), 0.01);
-      box(gilt, [-w / 4, h, 0], [w / 4, h + 0.06, 0.04]);
-      geo(gilt, new THREE.CylinderGeometry(0.14, 0.14, 0.035, 14, 1, false, 0, Math.PI), T(0, h + 0.06, 0.02).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)).multiply(new THREE.Matrix4().makeRotationY(-Math.PI / 2)));
+      // wave 11 (audit #9): the crest is a carved head - a laurel swag from a bow knot over a low tablet, draped in
+      // front of the frame's top rail (was a plain half disc) [N research/09 §4.2; sizes I, ROOM_ORDER.carved]
+      const C = ROOM_ORDER.carved;
+      box(gilt, [-w * 0.18, h - 0.01, 0], [w * 0.18, h + 0.14, 0.03], ['-z']);
+      // wave-11 review fix: the bows sit just outside the frame's top corners, so the ribbon ends and the laurel drops
+      // hang beside the frame against the boiserie (the pier keeps ≥ 0.25 m beside the glass, programme.ts)
+      carvedHead(gilt, m.clone().multiply(T(0, h + 0.09, 0.06)), Math.min(C.glassMax, w + 0.1), C.bead, C.sag);
       break;
     }
     case 'alcove': {
@@ -324,7 +330,9 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
             x += run;
           }
         } else if (kind === 'shelf') {
-          const cu = tint('metal.gilt', '#b87333');
+          // copper pans (wave-10 review: a gilt-named copper tint was taken for the table candelabra by the viewer's
+          // night.ts, which looks for the first `metal.gilt`; copper as a tinted metal of its own base)
+          const cu = tint('metal.iron', '#b87333');
           for (let x = -w / 2 + 0.25; x < w / 2 - 0.2; x += 0.45) {
             const r = 0.09 + rnd() * 0.07;
             geo(cu, cyl(r, r * 1.05, 0.14 + rnd() * 0.1, 10), T(x, y + 0.025 + 0.1, 0));
@@ -338,20 +346,28 @@ export function buildFixture(it: Item, fc: FixtureCtx): void {
       // KB-I27 review: a varnished canvas with tonal variation (finish.ts canvasGrid; placeholder, no artwork) in a
       // moulded gilt frame; frame width grows with the picture [N]
       const fw = Math.min(0.12, 0.05 + 0.03 * Math.max(w, h));
-      grid(M('interior.canvas'), -w / 2 + fw * 0.85, fw * 0.85, w / 2 - fw * 0.85, h - fw * 0.85, 0.018, canvasGrid(seed, w - 1.7 * fw, h - 1.7 * fw));
+      {
+        // wave 10: a composition of the canvas atlas (painting.ts / paintingArt.ts), dealt per wall so none repeats
+        // before all of its genre hang there (the wall = room, facing and wall line); the grid stays the fallback
+        const cg = canvasGrid(seed, w - 1.7 * fw, h - 1.7 * fw);
+        const wallKey = `${fc.roomId}|${it.facing[0].toFixed(2)},${it.facing[1].toFixed(2)}|${Math.round(it.pos[0] * it.facing[0] + it.pos[1] * it.facing[1])}`;
+        const pk = hangOf(fc.acc).pick(wallKey, cg.kind, seed);
+        grid(M('interior.canvas'), -w / 2 + fw * 0.85, fw * 0.85, w / 2 - fw * 0.85, h - fw * 0.85, 0.018, cg, canvasParams(cg.kind, pk.tile, pk.mirror, w - 1.7 * fw, h - 1.7 * fw));
+      }
       box(tint('wood.door', '#2a2018'), [-w / 2 + 0.02, 0.02, 0], [w / 2 - 0.02, h - 0.02, 0.016], ['-z']);
       mould(gilt, -w / 2, 0, w / 2, h, beadProfile(fw, 0.05), 0.0);
       break;
     }
     case 'sconce': {
       // KB-I26: bras de lumière, two arms with bobèches and candles on a gilt-bronze backplate [N research/09 I7]
+      // wave 11 (budget for the carved heads): lighter backplate, finial and arms, same silhouette
       const iy = 0.0;
-      geo(gilt, new THREE.SphereGeometry(1, 10, 8), T(0, iy + 0.18, 0.02).multiply(new THREE.Matrix4().makeScale(0.07, 0.17, 0.025)));
-      geo(gilt, new THREE.SphereGeometry(0.035, 8, 6), T(0, iy + 0.36, 0.03));
+      geo(gilt, new THREE.SphereGeometry(1, 8, 6), T(0, iy + 0.18, 0.02).multiply(new THREE.Matrix4().makeScale(0.07, 0.17, 0.025)));
+      geo(gilt, new THREE.SphereGeometry(0.035, 6, 4), T(0, iy + 0.36, 0.03));
       const candle = M('interior.candle');
       for (const sx of [-1, 1]) {
-        geo(gilt, new THREE.TorusGeometry(0.1, 0.012, 5, 10, Math.PI), T(sx * 0.1, iy + 0.12, 0.09).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeRotationZ(sx > 0 ? Math.PI : 0)));
-        geo(gilt, cyl(0.045, 0.03, 0.03, 10), T(sx * 0.2, iy + 0.22, 0.17));
+        geo(gilt, new THREE.TorusGeometry(0.1, 0.012, 4, 10, Math.PI), T(sx * 0.1, iy + 0.12, 0.09).multiply(new THREE.Matrix4().makeRotationY(Math.PI / 2)).multiply(new THREE.Matrix4().makeRotationZ(sx > 0 ? Math.PI : 0)));
+        geo(gilt, cyl(0.045, 0.03, 0.03, 8), T(sx * 0.2, iy + 0.22, 0.17));
         geo(candle, cyl(0.011, 0.011, 0.16, 6), T(sx * 0.2, iy + 0.315, 0.17));
       }
       break;
@@ -492,41 +508,95 @@ function oakBookcase(it: Item, fc: FixtureCtx, M: MFn, tint: TintFn, oak: Bucket
     const x = -w / 2 + (k * w) / bays;
     box(oak, [x - 0.022, base, z0], [x + 0.022, top, zf]);
   }
+  // open shelves with leather and vellum bindings (books of the rescued library, now Bamberg [D research/01]); behind
+  // the wire doors as well (wave 10: they show where a door stands open)
+  const rnd = mulberry32(seed >>> 0);
+  const gap = 0.31;
+  const shelves = () => {
+    for (let y = base + 0.04; y < top - 0.2; y += gap) {
+      box(oak, [-w / 2 + 0.05, y, z0 + 0.03], [w / 2 - 0.05, y + 0.025, zf - 0.08]);
+      let x = -w / 2 + 0.06;
+      while (x < w / 2 - 0.1) {
+        const run = Math.min(w / 2 - 0.06 - x, 0.2 + rnd() * 0.4);
+        const bh = Math.min(gap - 0.05, 0.19 + rnd() * 0.08);
+        const c = rnd() < 0.18 ? '#CDBE98' : BOOKS[Math.floor(rnd() * BOOKS.length)];
+        box(tint('wood.door', c), [x, y + 0.025, z0 + 0.06], [x + run - 0.006, y + 0.025 + bh, z0 + 0.06 + 0.25]);
+        x += run;
+      }
+    }
+  };
   if (st.wireDoors) {
-    // brass-wire doors on crimson taffeta: the taffeta behind, a brass lattice in front, oak stiles and rails
+    // brass-wire doors on crimson taffeta [D T5; N form]. Wave 10 (review leftover, pose 21: the cases read as flat red
+    // gingham): each bay is a framed door; the taffeta hangs gathered in folds 5 cm behind a lozenge brass-wire lattice
+    // [N grillage en losange]; one door in about four stands open with its curtain drawn, so the book backs show [I]
+    shelves();
     const taffeta = tint('wall.silk.crimson', L.taffeta);
-    box(taffeta, [-w / 2 + 0.05, base + 0.04, zf - 0.03], [w / 2 - 0.05, top, zf - 0.025]);
+    const fold = tint('wall.silk.crimson', L.taffetaFold);
     const brass = M('metal.gilt');
-    const P = (x: number, y: number): V3 => {
-      const p = new THREE.Vector3(x, y, zf - 0.008).applyMatrix4(m);
-      return [p.x, p.y, p.z];
-    };
     const nv = new THREE.Vector3(0, 0, 1).transformDirection(m);
     const n: V3 = [nv.x, nv.y, nv.z];
-    const t = 0.004;
-    for (let x = -w / 2 + 0.05 + L.mesh / 2; x < w / 2 - 0.05; x += L.mesh) brass.quad(P(x - t, base + 0.04), P(x + t, base + 0.04), P(x + t, top), P(x - t, top), n);
-    for (let y = base + 0.04 + L.mesh / 2; y < top; y += L.mesh) brass.quad(P(-w / 2 + 0.05, y - t), P(w / 2 - 0.05, y - t), P(w / 2 - 0.05, y + t), P(-w / 2 + 0.05, y + t), n);
-    for (let k = 0; k <= bays; k++) {
-      const x = -w / 2 + (k * w) / bays;
-      box(oak, [x - 0.035, base + 0.04, zf - 0.005], [x + 0.035, top, zf + 0.02]);
+    const P = (x: number, y: number, zz: number): V3 => {
+      const p = new THREE.Vector3(x, y, zz).applyMatrix4(m);
+      return [p.x, p.y, p.z];
+    };
+    const fw = L.doorFrame;
+    const y0 = base + 0.04;
+    const y1 = top - 0.06;
+    const openRnd = mulberry32((seed ^ 0x51ed27) >>> 0);
+    for (let k = 0; k < bays; k++) {
+      const x0 = -w / 2 + (k * w) / bays + (k === 0 ? 0.05 : 0.022);
+      const x1 = -w / 2 + ((k + 1) * w) / bays - (k === bays - 1 ? 0.05 : 0.022);
+      const open = openRnd() < L.openShare;
+      if (open) {
+        // the door leaf stands open at right angles on its hinge side: frame, a strip of lattice and taffeta seen edge-on
+        const hx = k % 2 ? x1 : x0;
+        const sx = k % 2 ? -1 : 1;
+        const lw = x1 - x0;
+        box(oak, [hx - sx * 0.01 - 0.012, y0, zf], [hx - sx * 0.01 + 0.012, y1, zf + lw]);
+        box(taffeta, [hx - sx * 0.01 - 0.008, y0 + fw, zf + fw], [hx - sx * 0.01 + 0.008, y1 - fw, zf + lw - fw]);
+        continue;
+      }
+      // gathered taffeta: alternating light and shaded folds, a little deeper in the fold
+      const nf = Math.max(4, Math.round((x1 - x0) / 0.07));
+      for (let i = 0; i < nf; i++) {
+        const a = x0 + fw + ((x1 - x0 - 2 * fw) * i) / nf;
+        const b = x0 + fw + ((x1 - x0 - 2 * fw) * (i + 1)) / nf;
+        const zz = zf - (i % 2 ? 0.07 : 0.05);
+        (i % 2 ? fold : taffeta).quad(P(a, y0 + fw, zz), P(b, y0 + fw, zz), P(b, y1 - fw, zz), P(a, y1 - fw, zz), n);
+      }
+      // lozenge brass wire (diagonals both ways), clipped to the door's glazing field
+      const ax0 = x0 + fw;
+      const ax1 = x1 - fw;
+      const ay0 = y0 + fw;
+      const ay1 = y1 - fw;
+      const t = 0.0025;
+      const zw = zf - 0.012;
+      for (const dir of [1, -1]) {
+        // lines y = dir·x + c across the field
+        const cs = dir > 0 ? [ay0 - ax1, ay1 - ax0] : [ay0 + ax0, ay1 + ax1];
+        for (let c = Math.ceil(cs[0] / L.mesh) * L.mesh; c <= cs[1]; c += L.mesh) {
+          // clip x so that y stays inside [ay0, ay1]
+          const xa = dir > 0 ? Math.max(ax0, ay0 - c) : Math.max(ax0, c - ay1);
+          const xb = dir > 0 ? Math.min(ax1, ay1 - c) : Math.min(ax1, c - ay0);
+          if (xb - xa < 0.01) continue;
+          const ya = dir * xa + c;
+          const yb = dir * xb + c;
+          // thickness across the wire (perpendicular to the diagonal)
+          const ox = t * 0.7071;
+          const oy = -dir * t * 0.7071;
+          brass.quad(P(xa - ox, ya - oy, zw), P(xb - ox, yb - oy, zw), P(xb + ox, yb + oy, zw), P(xa + ox, ya + oy, zw), n);
+        }
+      }
+      // the door frame: stiles and rails standing proud of the lattice
+      box(oak, [x0, y0, zf - 0.02], [x0 + fw, y1, zf + 0.02]);
+      box(oak, [x1 - fw, y0, zf - 0.02], [x1, y1, zf + 0.02]);
+      box(oak, [x0 + fw, y0, zf - 0.02], [x1 - fw, y0 + fw, zf + 0.02]);
+      box(oak, [x0 + fw, y1 - fw, zf - 0.02], [x1 - fw, y1, zf + 0.02]);
     }
     box(oak, [-w / 2, top - 0.06, zf - 0.005], [w / 2, top, zf + 0.02]);
     return;
   }
-  // open shelves with leather and vellum bindings (books of the rescued library, now Bamberg [D research/01])
-  const rnd = mulberry32(seed >>> 0);
-  const gap = 0.31;
-  for (let y = base + 0.04; y < top - 0.2; y += gap) {
-    box(oak, [-w / 2 + 0.05, y, z0 + 0.03], [w / 2 - 0.05, y + 0.025, zf - 0.02]);
-    let x = -w / 2 + 0.06;
-    while (x < w / 2 - 0.1) {
-      const run = Math.min(w / 2 - 0.06 - x, 0.2 + rnd() * 0.4);
-      const bh = Math.min(gap - 0.05, 0.19 + rnd() * 0.08);
-      const c = rnd() < 0.18 ? '#CDBE98' : BOOKS[Math.floor(rnd() * BOOKS.length)];
-      box(tint('wood.door', c), [x, y + 0.025, z0 + 0.06], [x + run - 0.006, y + 0.025 + bh, z0 + 0.06 + 0.25]);
-      x += run;
-    }
-  }
+  shelves();
 }
 
 /** Calf and morocco bindings under candle-dark varnish [N]. */

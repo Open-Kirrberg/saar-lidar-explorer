@@ -9,6 +9,7 @@
  * (the accumulation-buffer method; Haeberli & Akeley 1990, "The accumulation buffer",
  * https://doi.org/10.1145/97880.97913).
  */
+import { STAR_ATTRIBUTION } from './starCatalogue.ts';
 
 /** Radical inverse of i in base b (Halton sequence, i ≥ 1). */
 export function halton(i: number, b: number): number {
@@ -142,5 +143,5 @@ export function burnInText(hour: number, attribution: string): { label: string; 
  * "Schauen, nicht graben", is bold in the footer). Wave-5 review: the photo's credit was shorter than the footer.
  */
 export function footerParts(attribution: string): string[] {
-  return [attribution, 'Texturen CC0 (Poly Haven, ambientCG)', 'Rekonstruktion: Hypothese nach research/01–11 (Teilprojekt Schloss Karlsberg)', 'Schauen, nicht graben'];
+  return [attribution, 'Texturen CC0 (Poly Haven, ambientCG)', STAR_ATTRIBUTION, 'Rekonstruktion: Hypothese nach research/01–11', 'Schauen, nicht graben'];
 }

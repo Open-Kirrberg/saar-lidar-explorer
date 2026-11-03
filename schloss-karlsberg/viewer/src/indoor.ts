@@ -59,6 +59,17 @@ export function roomLightOn(nearestRoom: boolean, inside: boolean, intensity: nu
 }
 
 /**
+ * Wave-10 review fix (pose 07: a specular glint on the Festsaal floor came from the Prunktreppe's light, 14 m away
+ * through the wall; point lights cast no shadows): a room light burns for the visitor only on the visitor's storey
+ * (the storey of the room whose light is nearest) or within `LIGHT_SPILL_M` (a door or a stair hall next to them).
+ */
+export const LIGHT_SPILL_M = 6;
+export function lightOnStorey(lightStorey: number | undefined, visitorStorey: number | undefined, dist: number): boolean {
+  if (lightStorey === undefined || visitorStorey === undefined) return true;
+  return lightStorey === visitorStorey || dist < LIGHT_SPILL_M;
+}
+
+/**
  * How much of a building's real interior is drawn (KB-I42 / KB-I65). From outside every LOD2 window shows its mapped
  * room (GLASS_LOOK.interior), so the ≈ 900 interior draw calls of the palace wings at pose 03 need not be submitted:
  * - 'full': a visitor inside this building or a neighbour within `INTERIOR_NEIGHBOUR_M` (enfilades and doors across

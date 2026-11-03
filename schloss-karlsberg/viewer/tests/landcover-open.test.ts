@@ -147,11 +147,12 @@ describe('openTreePlan (field trees, Überhälter in the meadow, hedges)', () =>
     if (c >= 220) return GROUND_CLASS.field;
     return GROUND_CLASS.meadow;
   });
-  const plan = openTreePlan(g, { gridU: [1, 0] });
+  // the wave-2 even scatter (wave 11 keeps it as the A/B mode; the clustered default: field-trees.test.ts)
+  const plan = openTreePlan(g, { gridU: [1, 0], clustered: false });
   const toForest = distanceTo(g, [GROUND_CLASS.forest]);
   const at = (t: { gx: number; gy: number }) => Math.floor(t.gy / g.cell) * g.cols + Math.floor(t.gx / g.cell);
   it('is deterministic and never on lawn, vineyard, buildings or forest', () => {
-    expect(openTreePlan(g, { gridU: [1, 0] })).toEqual(plan);
+    expect(openTreePlan(g, { gridU: [1, 0], clustered: false })).toEqual(plan);
     for (const t of plan) expect([GROUND_CLASS.meadow, GROUND_CLASS.hay, GROUND_CLASS.field]).toContain(classAt(g, t));
   });
   it('puts standards 5-15 m out in front of the forest edge and field trees well away from it', () => {
@@ -174,7 +175,7 @@ describe('openTreePlan (field trees, Überhälter in the meadow, hedges)', () =>
     for (const t of hedge) expect(classAt(g, t)).toBe(GROUND_CLASS.field);
     const trees = hedge.filter((t) => t.species !== 'shrub').length;
     expect(trees / hedge.length).toBeLessThan(0.15);
-    expect(openTreePlan(g, {}).some((t) => t.role === 'hedge')).toBe(false); // no grid axis, no hedges
+    expect(openTreePlan(g, { clustered: false }).some((t) => t.role === 'hedge')).toBe(false); // no grid axis, no hedges
   });
 });
 

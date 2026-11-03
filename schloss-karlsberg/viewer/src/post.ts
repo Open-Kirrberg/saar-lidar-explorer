@@ -37,9 +37,9 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { WATER_RIPPLE_GLSL, waterTime } from '@model/materials/index.ts';
 import { gradeData } from './grade.ts';
 import type { PostSettings } from './quality.ts';
-import { AO_INDOOR, KINO_SKY_BLUE, KINO_SKY_GOLD, KINO_SKY_GOLD_MAX, kinoSkyGold, BLOOM_CLAMP, LANTERN_ALBEDO, LANTERN_CD, LANTERN_REACH, SKY_CUBE_FACES_PER_FRAME, SKY_CUBE_SIZE, SSR_GROWTH, SSR_STEPS, SSR_T0, aoDivisor, marchReach, aoRadius, kinoSkyStrength, bloomStrength, bloomThreshold, sceneMsaa, skyScale, smallUniformChange, uniformNumbers, uniformSignature, vignetteFor } from './postMath.ts';
+import { AO_INDOOR, KINO_SKY_BLUE, KINO_SKY_GOLD, KINO_SKY_GOLD_MAX, kinoSkyGold, BLOOM_CLAMP, LANTERN_ALBEDO, LANTERN_CD, LANTERN_REACH, SKY_CUBE_FACES_PER_FRAME, SKY_CUBE_SIZE, SKY_CUBE_TILES, skyCubeTile, SSR_GROWTH, SSR_STEPS, SSR_T0, aoDivisor, marchReach, aoRadius, kinoSkyStrength, bloomStrength, bloomThreshold, sceneMsaa, skyScale, smallUniformChange, uniformNumbers, uniformSignature, vignetteFor } from './postMath.ts';
 import { advanceClock } from './clock.ts';
-import { INDOOR_SHOULDER_GLSL, INDOOR_TONE } from './interiorGrade.ts';
+import { AO_BRIGHT_FADE_GLSL, INDOOR_SHOULDER_GLSL, INDOOR_TONE, indoorToneParams } from './interiorGrade.ts';
 
 export type PostLook = 'doku' | 'kino';
 
@@ -259,8 +259,10 @@ uniform float uDebug;
 uniform vec4 uSkyGrade;    // Kino sky: strength, unit vector to the sun (world)
 uniform float uSkyGold;    // Kino golden glow round the low sun (KB-I06)
 uniform vec3 uIndoorTone;  // KB-I75 indoor highlight shoulder: knee, s, weight (0 = off)
+uniform vec3 uIndoorTone2; // KB-I92 second stage: knee2, s2; wave-11 review fix: measure (0 luminance, 1 peak)
 varying vec2 vUv;
 ${INDOOR_SHOULDER_GLSL}
+${AO_BRIGHT_FADE_GLSL}
 
 const vec3 LUMW = vec3( 0.2126, 0.7152, 0.0722 );
 
@@ -380,7 +382,9 @@ void main() {
     if ( uAoOn > 0.5 ) {
       float ao = texture2D( tAO, vUv ).x;
       float l = dot( c, LUMW ) * toneMappingExposure;
-      float k = uAoStrength * ( 1.0 - 0.65 * smoothstep( 0.45, 1.1, l ) );
+      // KB-I92: indoors by day the sky-lit reveals keep more AO (interiorGrade.ts aoBrightFade)
+      // (by candle light as before the wave-11 review fix: the indoor weight fades with the night, uIndoorTone2.z)
+      float k = uAoStrength * ( 1.0 - skbAoBrightFade( l, uIndoorTone.z * ( 1.0 - uIndoorTone2.z ) ) );
       c *= mix( 1.0, ao, k );
     }
   } else if ( uSkyGrade.x > 0.0 ) {
@@ -400,7 +404,7 @@ void main() {
   }
   c += texture2D( tBloom, vUv ).rgb * uBloom;
   // KB-I75: indoors by day the sun pools and the window light roll off before the tone mapping (interiorGrade.ts)
-  if ( uIndoorTone.z > 0.0 ) c = skbIndoorShoulder( c, toneMappingExposure, uIndoorTone );
+  if ( uIndoorTone.z > 0.0 ) c = skbIndoorShoulder( c, toneMappingExposure, uIndoorTone, uIndoorTone2 );
   if ( uGrade[ 0 ].x > 0.0 ) c = skbNightVision( c );
 #ifdef TM_AGX
   c = AgXToneMapping( c );
@@ -438,6 +442,8 @@ export interface LampSpot {
   n: THREE.Vector3;
   /** distance of the lamp centre from the wall plane (m) */
   out: number;
+  /** luminous intensity (cd); default LANTERN_CD (wave-10 review fix: the table candles indoors are 1–3 cd) */
+  cd?: number;
 }
 
 export class PostChain {
@@ -478,7 +484,7 @@ export class PostChain {
   skyLowRes = true;
   /** A/B switch of the cached sky cube (`skb.post.skyCache = false`: the per-frame small target, as in wave 6). */
   skyCache = true;
-  /** Sky cube faces shaded so far (debug / bench: re-shading must be rare). */
+  /** Sky cube strips shaded so far (SKY_CUBE_TILES per face; debug / bench: re-shading must be rare). */
   skyCubeRenders = 0;
 
   private readonly quad: THREE.Mesh;
@@ -499,7 +505,7 @@ export class PostChain {
   private skyCubeKey = '';
   /** signature being shaded, and its faces done */
   private skyCubePending = '';
-  private skyCubeFaces = 0;
+  private skyCubeFaces = 0; // strips done (0 … 6 · SKY_CUBE_TILES)
   /** uniform numbers of the complete cube (for the small-change test) */
   private skyCubeNumbers: number[] = [];
   private readonly texel = new THREE.Vector2();
@@ -572,6 +578,7 @@ export class PostChain {
       uSkyGrade: { value: new THREE.Vector4() },
       uSkyGold: { value: 0 },
       uIndoorTone: { value: new THREE.Vector3() },
+      uIndoorTone2: { value: new THREE.Vector3(INDOOR_TONE.knee2, INDOOR_TONE.s2, 0) },
       uGrade: { value: gradeData },
       toneMappingExposure: { value: 1 },
     });
@@ -582,7 +589,7 @@ export class PostChain {
     this.lamps = spots.slice(0, MAX_LAMPS);
     const u = this.gradeMat.uniforms;
     this.lamps.forEach((s, i) => {
-      (u.uLamp.value as THREE.Vector4[])[i].set(s.p.x, s.p.y, s.p.z, LANTERN_CD);
+      (u.uLamp.value as THREE.Vector4[])[i].set(s.p.x, s.p.y, s.p.z, s.cd ?? LANTERN_CD);
       (u.uLampN.value as THREE.Vector4[])[i].set(s.n.x, s.n.y, s.n.z, s.out);
     });
   }
@@ -711,7 +718,12 @@ export class PostChain {
     } else if (lowSky) {
       // KB-I65: the sky alone into its small target; in the scene pass the dome reads it back per pixel
       r.setRenderTarget(this.skyRT);
+      // wave-10 review fix: the cumulus take a cheaper march here (atmosphere.ts uCloudFast); only while a jump refreshes
+      // the cube (or with the cache off), and set after the cube's key was taken, so the key never sees it
+      const fast = (sky.material as THREE.ShaderMaterial).uniforms?.uCloudFast;
+      if (fast) fast.value = 1;
       r.render(sky, camera);
+      if (fast) fast.value = 0;
       this.passes++;
       const skyMat = sky.material;
       this.skyProxy.uniforms.tSky.value = this.skyRT!.texture;
@@ -812,8 +824,11 @@ export class PostChain {
     g.uSkyGrade.value.set(kinoSkyStrength(this.look, this.sunDir.y), this.sunDir.x, this.sunDir.y, this.sunDir.z);
     g.uSkyGold.value = kinoSkyGold(this.look, this.sunDir.y);
     g.toneMappingExposure.value = exposure;
-    // KB-I75: the indoor shoulder by day only (candle flames keep their glow at night)
-    g.uIndoorTone.value.set(INDOOR_TONE.knee, INDOOR_TONE.s, this.indoor && this.indoorShoulder ? 1 - this.night : 0);
+    // KB-I75: the indoor shoulder; wave-11 review fix: also by candle light, as one softer stage (indoorToneParams), so
+    // the lit marble next to a flame keeps its falloff and the flames still reach near white
+    const tone = indoorToneParams(this.night);
+    g.uIndoorTone.value.set(tone.knee, tone.s, this.indoor && this.indoorShoulder ? 1 : 0);
+    g.uIndoorTone2.value.set(tone.knee2, tone.s2, tone.peak);
     const tm = this.look === 'kino' ? 'TM_AGX' : 'TM_NEUTRAL';
     if (!(tm in this.gradeMat.defines)) {
       this.gradeMat.defines = { [tm]: '' };
@@ -847,7 +862,7 @@ export class PostChain {
     if (key === this.skyCubeKey) return true;
     const numbers = uniformNumbers(values);
     const stale = this.skyCubeKey !== '' && smallUniformChange(this.skyCubeNumbers, numbers);
-    if (key !== this.skyCubePending && !(stale && this.skyCubeFaces > 0 && this.skyCubeFaces < 6)) {
+    if (key !== this.skyCubePending && !(stale && this.skyCubeFaces > 0 && this.skyCubeFaces < 6 * SKY_CUBE_TILES)) {
       // a new state; a refresh under way for a small change runs on (its faces differ by less than the tolerance)
       this.skyCubePending = key;
       this.skyCubeFaces = 0;
@@ -865,14 +880,21 @@ export class PostChain {
     // the dome is centred on the camera and direction-only: shade it from its own centre
     cc.position.copy(sky.position);
     cc.updateMatrixWorld(true);
-    for (let k = 0; k < SKY_CUBE_FACES_PER_FRAME && this.skyCubeFaces < 6; k++) {
-      r.setRenderTarget(this.skyCube, this.skyCubeFaces);
-      r.render(sky, cc.children[this.skyCubeFaces] as THREE.Camera);
+    // wave-10 review fix: one scissored strip of a face per frame (SKY_CUBE_TILES), so a refresh never spikes
+    const steps = 6 * SKY_CUBE_TILES;
+    const rt = this.skyCube;
+    for (let k = 0; k < SKY_CUBE_FACES_PER_FRAME && this.skyCubeFaces < steps; k++) {
+      const tile = skyCubeTile(this.skyCubeFaces);
+      rt.scissor.set(0, tile.y, SKY_CUBE_SIZE, tile.h);
+      rt.scissorTest = true;
+      r.setRenderTarget(rt, tile.face);
+      r.render(sky, cc.children[tile.face] as THREE.Camera);
+      rt.scissorTest = false;
       this.skyCubeFaces++;
       this.skyCubeRenders++;
       this.passes++;
     }
-    if (this.skyCubeFaces < 6) return stale;
+    if (this.skyCubeFaces < steps) return stale;
     this.skyCubeKey = key;
     this.skyCubeNumbers = numbers;
     this.skyCubeFaces = 0;

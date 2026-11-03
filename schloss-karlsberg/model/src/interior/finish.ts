@@ -12,8 +12,8 @@
  * - the Greek-key (meander) frieze of the Hofbibliothek cases [D T5 "Fries a la greece"; geometry N];
  * - numbers from a room's `function` text ("20 crystal chandeliers"), so documented counts stay in the catalogue.
  */
-import { STATE_ROOM } from '../layout/grammar.ts';
-import { fract, mulberry32, smoothstep as smooth } from '../layout/geom.ts';
+import { ROOM_ORDER, STATE_ROOM } from '../layout/grammar.ts';
+import { clamp, fract, mulberry32, smoothstep as smooth } from '../layout/geom.ts';
 import type { Finish } from '../spec.ts';
 import { DEFAULT_BOISERIE, type Hole, type Panel, type WallRect, boiseriePanels, solidRects } from './wall.ts';
 
@@ -487,4 +487,66 @@ export function countIn(text: string | undefined, noun: RegExp): number | null {
   if (!text) return null;
   const m = text.match(new RegExp(`(\\d+)\\s+(?:[\\w-]+\\s+){0,3}?${noun.source}`, 'i'));
   return m ? Number(m[1]) : null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Wave 11 (audit #9): room hierarchy of the panelled rooms (grammar ROOM_ORDER) [N research/09 §4.2; I assignment]
+// ---------------------------------------------------------------------------------------------
+
+export type CorniceOrder = 'grand' | 'state' | 'plain';
+export type BoiserieTone = keyof typeof ROOM_ORDER.boiserie;
+
+const GRAND = new Set(['festsaal', 'gallery', 'dining', 'gardesaal', 'orangery', 'vestibule', 'audience', 'statebed']);
+const PLAIN = new Set(['antichambre', 'cabinet', 'bedroom', 'garderobe', 'chamber', 'corridor', 'office']);
+const PERLE = new Set(['audience', 'statebed', 'salon', 'cabinet', 'bedroom']);
+
+/**
+ * Cornice order and boiserie tone of a room type (programme.ts RoomType): salles get the grand cornice, antichambres
+ * and cabinets the plain one; audience / bed / salon / cabinet rooms the pearl tone, antichambres the gris, the
+ * salles, library and collection rooms white (the armoury's "white panelling" is documented, T5) [N tones; I rank].
+ */
+export function roomOrder(type: string): { cornice: CorniceOrder; tone: BoiserieTone } {
+  const cornice: CorniceOrder = GRAND.has(type) ? 'grand' : PLAIN.has(type) ? 'plain' : 'state';
+  const tone: BoiserieTone = type === 'antichambre' ? 'gris' : PERLE.has(type) ? 'perle' : 'blanc';
+  return { cornice, tone };
+}
+
+/**
+ * Section of the cove cornice of a panelled room as (offset into the room, height) points from the wall at `ch - c`
+ * up to the ceiling at `ch`, `reach` m into the ceiling. 'state' is the wave-10 section (fillet, ovolo, 8-step cove);
+ * 'grand' adds an architrave step and a second ovolo under the cove (a frieze band); 'plain' keeps a fillet and a
+ * shorter 5-step cove. Offsets and heights never decrease, so the swept loop has no folds [N; I sizes].
+ */
+export function corniceProfile(order: CorniceOrder, c: number, reach: number, ch: number): [number, number][] {
+  const b = ch - c;
+  const cove = (o0: number, v0: number, r: number, n: number): [number, number][] =>
+    Array.from({ length: n }, (_, k) => {
+      const a = ((k + 1) / (n + 1)) * (Math.PI / 2);
+      return [o0 + (r - o0) * (1 - Math.cos(a)), v0 + (ch - v0) * Math.sin(a)] as [number, number];
+    });
+  if (order === 'plain') {
+    const r = Math.max(c * 0.9, reach * ROOM_ORDER.plainCove);
+    const v0 = b + Math.min(0.05, c * 0.4);
+    return [[0, b], [0.025, b], [0.035, v0], ...cove(0.035, v0, r, 5), [r + c * 0.05, ch]];
+  }
+  if (order === 'grand' && c > 0.3) {
+    const v0 = b + 0.12;
+    return [[0, b], [0.025, b], [0.025, b + 0.03], [0.045, b + 0.035], [0.05, b + 0.06], [0.065, b + 0.08], [0.075, b + 0.1], [0.085, v0], ...cove(0.085, v0, reach, 8), [reach + c * 0.05, ch]];
+  }
+  const v0 = b + 0.07;
+  return [[0, b], [0.03, b], [0.035, b + 0.05], [0.06, v0], ...cove(0.06, v0, reach, 8), [reach + c * 0.05, ch]];
+}
+
+/** Stucco rosette radius for a room whose shorter plan span is `span` m (ROOM_ORDER.rosette) [I]. */
+export function rosetteRadius(span: number): number {
+  const R = ROOM_ORDER.rosette;
+  return clamp(span * R.share, R.min, R.max);
+}
+
+/**
+ * Which of `n` panel fields in a row carry a carved head: every second one, symmetric about the middle of the row
+ * (both ends always; the middle field of an odd row when n ≡ 1 mod 4) [N Louis-seize alternation; I rule].
+ */
+export function carvedFields(n: number): boolean[] {
+  return Array.from({ length: n }, (_, i) => Math.min(i, n - 1 - i) % 2 === 0);
 }

@@ -33,11 +33,15 @@ import { FOG_GLSL, fogFor } from './fog.ts';
 import { type CandleKind, roomLightShare } from './nightlights.ts';
 import { gradeData, installGrade, kinoLookAt, setKinoLook, setNightVision } from './grade.ts';
 import { patchShadowChunk } from './shadowTaps.ts';
+import { CLOUD, CLOUD_PARS_GLSL, cloudData, setClouds } from './clouds.ts';
+import { setCloudTexture } from './shadowsFar.ts';
 import {
   type RGB,
   CANDLE_K,
   HORIZON_SAT,
   NIGHT_FLOOR_LUX,
+  NIGHT_GROUND_FILL,
+  nightGroundFill,
   adaptationDegree,
   envSkyIso,
   envSkySat,
@@ -147,6 +151,7 @@ uniform vec3 uCloudSun;
 uniform vec3 uCloudAmb;
 uniform float uIso;
 uniform vec3 uSkyAvg;
+uniform float uCloudFast;
 `;
 
 function replaceOnce(src: string, a: string, b: string): string {
@@ -154,10 +159,90 @@ function replaceOnce(src: string, a: string, b: string): string {
   return src.replace(a, b);
 }
 
+/**
+ * Wave 10 (clouds.ts): the cumulus layer, marched from the residence through the slab [base, base + thickness +
+ * billows] over the shared coverage field. Wave-10 review fix (eye level: tents, prisms, vertical streaks, flat white):
+ * each cloud is a dome over its footprint (`skbCloudColumn`: top = thickness · √margin) whose surface the 3D billows
+ * push in and out (`skbCloudBillow`, near the surface only), over a flat base. Light: Beer–Lambert optical depth toward
+ * the sun from two samples of the smooth dome plus the point's own skin, a multiple-scattering octave (bases grey,
+ * not black), a powder term (the skin facing away from the sun darker when the sun is behind the viewer), a two-lobe
+ * Henyey–Greenstein phase (silver lining toward the sun), the sky's light falling off toward the base and the ground
+ * bounce on it; distant clouds sink into the haze. 64 steps crowded toward the base, with per-pixel jitter; the result is cached in the sky
+ * cube (post.ts, refreshed a tile at a time), so the march costs nothing in a steady view. Lit in the same Preetham
+ * units as three's clouds (uCloudSun, uCloudAmb), so the scale, tint and saturation that follow treat both alike.
+ */
+const CUMULUS_GLSL = /* glsl */ `
+      if ( direction.y > 0.004 && uCloud[ 0 ] > 0.0 ) {
+        vec3 co = vec3( uCloud[ 6 ], uCloud[ 10 ], uCloud[ 7 ] );
+        float cb = uCloud[ 4 ];
+        float ct = uCloud[ 5 ];
+        vec2 off = vec2( uCloud[ 1 ], uCloud[ 2 ] );
+        const float ER = ${CLOUD.erode.toFixed(1)};
+        float t0 = ( cb - co.y ) / direction.y;
+        float t1 = min( ( cb + ct + ER - co.y ) / direction.y, t0 + 20000.0 );
+        if ( t0 < 30000.0 ) {
+          // steps crowd toward the base entry (t ∝ u^1.7), where a cloud seen from below shows its edge
+          // uCloudFast: the per-frame small sky shown while the cube refreshes after a jump (post.ts) takes a cheaper
+          // march (24 steps, no billows); the cube itself always gets the full one
+          const int STEPS = 64;
+          bool fast = uCloudFast > 0.5;
+          int nSteps = fast ? 24 : STEPS;
+          float span = t1 - t0;
+          // per-pixel start offset (interleaved gradient noise) against step banding
+          float jit = fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) );
+          vec3 sd = normalize( vSunDirection );
+          float dayK = max( smoothstep( -0.05, 0.12, sd.y ), 0.05 );
+          // two-lobe Henyey–Greenstein, 1 at 90° from the sun: forward lobe = silver lining, back lobe = soft glow
+          float hgF = 0.64 / pow( 1.36 - 1.2 * cosTheta, 1.5 );
+          float hgB = 0.96 / pow( 1.04 + 0.4 * cosTheta, 1.5 );
+          float phase = min( ( 0.7 * hgF + 0.3 * hgB ) / 0.554, 4.0 );
+          float powderK = 0.5 - 0.5 * cosTheta;
+          float bounce = 0.17 * max( sd.y, 0.0 );
+          float aerY = smoothstep( 0.004, 0.06, direction.y );
+          float trans = 1.0;
+          vec3 acc = vec3( 0.0 );
+          for ( int i = 0; i < STEPS; i ++ ) {
+            if ( i >= nSteps ) break;
+            float u = ( float( i ) + jit ) / float( nSteps );
+            float t = t0 + span * pow( u, 1.7 );
+            float dt = max( span * 1.7 * pow( u, 0.7 ) / float( nSteps ), 2.0 );
+            vec3 p = co + direction * t;
+            float h = p.y - cb;
+            float top = skbCloudColumn( p.xz - off );
+            if ( top < 0.0 || h > top + ER ) continue;
+            float s = top - h;
+            // billows only near the surface (deep inside a dome the density is full anyway)
+            if ( s < ER + 90.0 && ! fast ) s += skbCloudBillow( p );
+            float dens = smoothstep( 0.0, 60.0, s ) * smoothstep( 0.0, 40.0, h );
+            if ( dens < 0.003 ) continue;
+            // optical depth toward the sun: the point's own skin and two samples of the smooth dome (90 m, 320 m)
+            float od = 45.0 * dens;
+            vec3 q = p + sd * 90.0;
+            float hq = q.y - cb;
+            od += 130.0 * smoothstep( 0.0, 90.0, skbCloudColumn( q.xz - off ) - hq ) * step( 0.0, hq );
+            q = p + sd * 320.0;
+            hq = q.y - cb;
+            od += 330.0 * smoothstep( 0.0, 90.0, skbCloudColumn( q.xz - off ) - hq ) * step( 0.0, hq );
+            float sunT = ( exp( -0.01 * od ) + 0.5 * exp( -0.0022 * od ) ) * ( 1.0 / 1.5 );
+            float powder = 1.0 - 0.45 * powderK * exp( -0.04 * od );
+            float hn = clamp( h / max( top, 150.0 ), 0.0, 1.0 );
+            vec3 cc = uCloudAmb * mix( 0.5, 1.1, hn ) + uCloudSun * ( sunT * phase * powder + bounce * ( 1.0 - hn ) );
+            // aerial perspective: far clouds sink into the haze
+            cc = mix( texColor, cc * dayK, exp( -t / 15000.0 ) * aerY );
+            float a = 1.0 - exp( -0.012 * dens * dt );
+            acc += trans * a * cc;
+            trans *= 1.0 - a;
+            if ( trans < 0.02 ) break;
+          }
+          texColor = texColor * trans + acc;
+        }
+      }
+`;
+
 function patchSky(s: Sky): void {
   const m = s.material;
   let f = m.fragmentShader;
-  f = replaceOnce(f, 'uniform float time;', `uniform float time;${SKY_UNIFORMS}\nuniform float uHorizonSoft;`);
+  f = replaceOnce(f, 'uniform float time;', `uniform float time;${SKY_UNIFORMS}\nuniform float uHorizonSoft;\n${CLOUD_PARS_GLSL}`);
   // wave-8 review (52): a smooth horizon clamp at night (light.ts horizonSoftness); 0 by day = three's clamp
   f = replaceOnce(f, 'float zenithAngle = acos( max( 0.0, direction.y ) );', 'float zenithAngle = acos( min( 1.0, 0.5 * ( direction.y + sqrt( direction.y * direction.y + uHorizonSoft * uHorizonSoft ) ) ) );');
   // clouds lit in the same units as the normalised sky: sun colour × illuminance × albedo / π, plus the sky irradiance
@@ -166,7 +251,8 @@ function patchSky(s: Sky): void {
   f = replaceOnce(
     f,
     'gl_FragColor = vec4( texColor, 1.0 );',
-    `if ( direction.y > 0.0 ) texColor = mix( texColor, uSkyAvg, uIso );
+    `${CUMULUS_GLSL}
+      if ( direction.y > 0.0 ) texColor = mix( texColor, uSkyAvg, uIso );
       {
         float skyL = dot( texColor, vec3( 0.2126, 0.7152, 0.0722 ) );
         float hz = pow( 1.0 - clamp( direction.y, 0.0, 1.0 ), 3.0 );
@@ -198,6 +284,9 @@ function patchSky(s: Sky): void {
   m.uniforms.uCloudAmb = { value: new THREE.Vector3() };
   m.uniforms.uIso = { value: 0 };
   m.uniforms.uSkyAvg = { value: new THREE.Vector3() };
+  m.uniforms.uCloudFast = { value: 0 };
+  // wave 10: fair-weather cumulus (clouds.ts), one shared block with the cloud shadows
+  m.uniforms.uCloud = { value: cloudData };
   // the display grade (night vision, Kino look) reaches the sky's tone mapping too (grade.ts)
   m.uniforms.uGrade = { value: gradeData };
   m.needsUpdate = true;
@@ -226,6 +315,21 @@ export interface LightState {
   night: number;
   /** Kino golden hour: exposure lift outdoors (EV, light.ts kinoLowSun); 0 in Dokumentation */
   kinoEv: number;
+  /** moonlight on a surface facing the moon (lux) while it carries the directional light; 0 otherwise */
+  moonLux: number;
+}
+
+/**
+ * Colour temperature of moonlight (K): sunlight reflected by the slightly reddening regolith, ≈ 4100 K [I; the moon's
+ * spectrum is the solar one tilted toward red, CCT ≈ 4000–4300 K]. The scotopic night grade (grade.ts) turns it
+ * grey-blue on screen, as the eye sees it.
+ */
+export const MOON_K = 4100;
+
+/** The moon for `Atmosphere.update`: unit vector toward it (local frame) and its illuminance (lux, ephemeris.ts). */
+export interface MoonLight {
+  dir: V3;
+  lux: number;
 }
 
 /** Shared uniform blocks for materials patched by `useSkyShDiffuse` (terrain, vegetation). */
@@ -441,6 +545,12 @@ export class Atmosphere {
   look: 'doku' | 'kino' = 'doku';
   /** Strength of the scotopic night vision at full night (grade.ts); 0 switches it off for an A/B. */
   nightVision = 1;
+  /** Wave 10: fair-weather cumulus and their shadows (clouds.ts); false = cloudless ("klar"). */
+  clouds = true;
+  /** Wave 10: centre of the residence (local x, z): the cloud field's sunny clearing and the sky's march origin. */
+  cloudCentre: [number, number] = [0, 0];
+  /** Cloud cover of the last update (0…1). */
+  cloudAmount = 0;
 
   constructor(
     renderer: THREE.WebGLRenderer,
@@ -457,7 +567,8 @@ export class Atmosphere {
     su.rayleigh.value = this.params.rayleigh;
     su.mieCoefficient.value = this.params.mieCoefficient;
     su.mieDirectionalG.value = this.params.mieDirectionalG;
-    if (su.cloudCoverage) su.cloudCoverage.value = 0.25;
+    // wave 10: three's flat cloud streaks are replaced by the cumulus layer (clouds.ts); "klar" shows no clouds
+    if (su.cloudCoverage) su.cloudCoverage.value = 0;
     su.uHorizonSat.value = HORIZON_SAT;
     su.uSkyCap.value.set(SKY_CAP[0], SKY_CAP[1]);
     // the environment twin shares the Preetham and cloud uniforms with the visible sky; scale, saturation, sun disc,
@@ -474,7 +585,7 @@ export class Atmosphere {
   }
 
   /** Recompute sun, sky, environment, haze and exposure for a sun position (degrees; azimuth from GRID north). */
-  update(elevation: number, azimuthGrid: number): LightState {
+  update(elevation: number, azimuthGrid: number, moon?: MoonLight): LightState {
     const az = (azimuthGrid * Math.PI) / 180;
     const dirAt = (elDeg: number): V3 => {
       const e = (elDeg * Math.PI) / 180;
@@ -552,6 +663,16 @@ export class Atmosphere {
     this.sun.intensity = sunLux * pre;
     this.sun.visible = sunLux > 0;
     this.sun.userData.dir = new THREE.Vector3(...sunDir);
+    // wave 10 (night sky): once the sun has set its light is the moon's (one directional light, so the moonlight casts
+    // shadows through the near and far maps); never while the sun's disc is up, so every day frame stays the same
+    const moonLux = sunLux <= 0 && moon && moon.lux > 0 && moon.dir[1] > -0.02 ? moon.lux : 0;
+    if (moonLux > 0) {
+      const mc = normalise(kelvinLinear(MOON_K));
+      this.sun.color.setRGB(mc[0] * gains[0], mc[1] * gains[1], mc[2] * gains[2], THREE.LinearSRGBColorSpace);
+      this.sun.intensity = moonLux * pre;
+      this.sun.visible = true;
+      this.sun.userData.dir = new THREE.Vector3(...moon!.dir);
+    }
 
     // ground below the horizon in the environment: albedo × (sun + sky) / π
     const sinEl = Math.max(0, Math.sin((elevation * Math.PI) / 180));
@@ -585,6 +706,8 @@ export class Atmosphere {
       const s = luminance(blue) > 0 ? l / luminance(blue) : 1;
       hAway = [0, 1, 2].map((i) => hAway[i] + (blue[i] * s - hAway[i]) * 0.55 * cool) as RGB;
     }
+    this.cloudAmount = setClouds(this.clouds, this.hour, sunDir, this.cloudCentre);
+    if (this.cloudAmount > 0) setCloudTexture(this.cloudCentre);
     const f = fogFor(this.hour);
     // Kino (Rundflug, stills): a clearer evening air than the documentary haze, so the golden hour keeps its contrast
     if (this.look === 'kino') f.a *= KINO_HAZE * kl.haze;
@@ -609,7 +732,9 @@ export class Atmosphere {
     this.envRT?.dispose();
     this.envRT = this.pmrem.fromScene(this.envScene, 0.02);
     this.scene.environment = this.envRT.texture;
-    this.scene.environmentIntensity = 1;
+    const night = 1 - Math.min(1, Math.max(0, (elevation + 6) / 4)); // 0 above −2°, 1 below −6°
+    // wave-10 review fix: the night fill on the buildings' sky light too (light.ts NIGHT_GROUND_FILL.env)
+    this.scene.environmentIntensity = 1 + NIGHT_GROUND_FILL.env * night;
 
     // SH twin of the environment's diffuse part for terrain and vegetation (no clouds; they barely change E)
     const envScale = unitEnv * pre * fill;
@@ -619,11 +744,12 @@ export class Atmosphere {
       const L = saturate([0, 1, 2].map((i) => r[i] * (1 - iso) + avg[i] * iso) as RGB, envSat);
       return [L[0] * envScale * envTint[0], L[1] * envScale * envTint[1], L[2] * envScale * envTint[2]];
     });
-    for (let i = 0; i < 9; i++) shCoefficients[i].set(sh[i][0], sh[i][1], sh[i][2]);
+    // wave-10 review fix: the dark-adapted eye's fill on the land at night (light.ts NIGHT_GROUND_FILL)
+    const nf = nightGroundFill(night);
+    for (let i = 0; i < 9; i++) shCoefficients[i].set(sh[i][0] * nf[0], sh[i][1] * nf[1], sh[i][2] * nf[2]);
     // golden light pushes greens toward olive, not neon lime: −15 % foliage saturation at low sun [I]
     shUniforms.uLeafSat.value = (1 - (kino ? 0.08 : 0.15) * (1 - Math.min(1, Math.max(0, (elevation - 4) / 16))) * (elevation > -4 ? 1 : 0)) * (kino ? KINO_LEAF_SAT : 1);
 
-    const night = 1 - Math.min(1, Math.max(0, (elevation + 6) / 4)); // 0 above −2°, 1 below −6°
     setNightVision(night * this.nightVision, pre);
     setKinoLook(this.look === 'kino', kinoLookAt(kl.g));
     this.state = {
@@ -640,6 +766,7 @@ export class Atmosphere {
       gains,
       night,
       kinoEv: kl.ev,
+      moonLux,
     };
     return this.state;
   }

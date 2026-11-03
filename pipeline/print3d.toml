@@ -11,7 +11,7 @@
 #   tile id              = "E{E/1000}_N{N/1000}" (km, decimals only when needed: E382.5_N5466)
 #   vertex grid          = `vertices` × `vertices` incl. both edges, cell = tile_m / (vertices − 1); the printed top
 #                          surface is simplified to max_error_mm at every vertex (edges kept → seams stay exact)
-#   z_mm                 = base_mm + (max(h, datum) − datum) / scale · 1000 · exag
+#   z_mm                 = base_mm + (max(h, datum) − datum) / scale · 1000 · exag   (h incl. LoD2 roofs, `buildings`)
 #   datum_mode "series"  → datum = datum_m for every tile
 #   datum_mode "set"     → datum per named set = floor(min h of the set) − datum_margin_m, recorded in index.json
 #                          (setDatum_m) and frozen; tiles of an overlapping / nested set adopt it
@@ -32,7 +32,8 @@ datum_margin_m = 5.0         # "set" datum: whole metres below the lowest vertex
 base_mm = 4.0                # plate thickness below the datum level
 origin = [0, 0]              # grid origin E, N (m)
 printer = "stock"            # "stock" | "sle-250"
-role = "main"                # catalog hint for the app: "main" | "detail"
+role = "main"                # catalog hint for the app: "main" | "detail" | "single" (standalone piece)
+title = ""                   # optional name engraved large on the bottom (A–Z 0–9, no umlauts, ≤ 16 chars)
 rlp_offset_m = -0.07         # added to RLP 2022 heights where SL 2025 has no data (README "Data notes"); a
                              # constant, never measured per tile, so neighbours stay bit-identical
 counties = ["SPK"]           # LVGL county ZIPs tried first; other Saarland counties are tried automatically
@@ -45,7 +46,16 @@ shell_mm = 0.9               # filament estimate for the stock process (grid 15 
 infill = 0.155               #   S = A·shell_mm — least-squares fit to the 19 sliced tiles, max error 2 % (was 1.2 / 0.15:
                              #   6–14 % too high)
 max_error_mm = 0.03          # top surface simplified: every sampled vertex within 0.03 mm (≈ 1/7 of a 0.2 mm layer)
-max_triangles = 500000       # top-surface triangle budget (Bambu Studio warns above 1 M per object)
+max_triangles = 900000       # top-surface triangle budget (Bambu Studio warns above 1 M per object; walls + bottom add
+                             # ≈ 10–20 k). Was 500 k for bare earth (max 458 k); LoD2 walls need every vertex along both
+                             # edges of each wall step: Homburg E378_N5464 needs 562 k at 0.03 mm
+buildings = true             # LoD2 buildings in the heightfield: h = max(DGM, roof) at vertices inside a building's top
+                             # view, same datum / scale / exag as the terrain; `--no-buildings` (or false here per
+                             # series) writes bare-earth tiles. Not a geometry parameter of the grid: footprint, datum,
+                             # keys and seams with bare tiles stay (edges differ only where a building crosses them)
+building_min_feature_mm = 0.8   # grey-scale opening of the LoD2 surface with a disk of ceil(0.8 / cell_mm) = 4 cells:
+                             # at every height level, parts narrower than ≈ 0.8 mm in the print (0.4 mm nozzle) are
+                             # removed or cut down to the wider part below — 8 m at 1:9200, 2 m at 1:2300
 
 [defaults.connectors]
 enabled = true               # bowtie (double dovetail) key recesses on the bottom face
@@ -95,6 +105,35 @@ datum_mode = "set"
 [series.detail-2300.sets]
 karlsberg = ["E382_N5465.5", "E382_N5466"]                 # Hauptschloss 382195/5466095 + Orangerie 382229/5465983 at the shared edge
 merburg = ["E381.5_N5463", "E382_N5463", "E381.5_N5463.5", "E382_N5463.5"]   # Merburg 381964/5463453 near the common corner
+
+# Single showpiece: the village of Kirrberg as ONE tile (standalone, joins nothing). Built-up extent (LoD2 building
+# cluster around the church, = OSM landuse=residential 47225604): E 380553–382467, N 5461407–5463480 (1.91 × 2.07 km);
+# framed with ≈ 250 m (E/W) / 160 m (N/S) of fields and forest, Fischweiher 381863/5463533 + Merburg 381964/5463453
+# in the north, bunker ruin 382118/5461504 in the south. 2.4 km at 1:11050 → 217.19 mm (stock P1S, centred; < 218 mm).
+# 2.4 km instead of 2.5 km (1:11500): LoD2 houses ≥ 100 m² survive the 0.8 mm opening to 95 % instead of 91 %
+# (all buildings 57 % vs 52 %; 1:10580 / 2.3 km: 98 % but only ≈ 110 m margin and the pond at the edge).
+# exag 1.5: the valley (236–367 m) still reads (≈ 18 mm), houses (same exag) stay house-shaped instead of towers.
+# Own origin = the tile's lower-left corner, so the series grid is centred on the village; datum per set
+# (floor(min h) − 5 m), no bowtie keys (nothing to join), "KIRRBERG" engraved on the bottom.
+[series.kirrberg-11050]
+name_de = "Kirrberg 1:11050"
+role = "single"
+title = "Kirrberg"
+scale = 11050
+tile_m = 2400                # 2.4 km → 217.19 mm, cell 2.4 m
+origin = [380300, 5461250]   # tile E380.3_N5461.25 = 380300–382700 / 5461250–5463650, centre ≈ village centre
+exag = 1.5
+datum_mode = "set"
+
+[series.kirrberg-11050.connectors]
+enabled = false              # standalone piece: no key recesses
+
+[series.kirrberg-11050.slicer]
+saving_pct = [12, 12]        # measured on this tile (Bambu Studio 02.08.02.61 CLI, stock P1S 0.4, centred): 221.5 →
+time_saving_pct = [-9, -9]   #   193.8 g, 7 h 31 → 8 h 09 — a thin tile (z 4.8–22.7 mm) saves little and prints slower
+
+[series.kirrberg-11050.sets]
+kirrberg = ["E380.3_N5461.25"]
 
 # OPTIONAL, not generated: the former 250 mm / 1:8000 main series. A 250 mm tile does NOT fit the stock P1S profile;
 # printer = "sle-250" writes a user printer preset that moves the exclusion area to a 5 mm front strip and frees the

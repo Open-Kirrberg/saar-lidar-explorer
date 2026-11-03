@@ -18,7 +18,7 @@
  */
 import type { EN, MenagerieSpec } from '../spec.ts';
 import { MENAGERIE } from './grammar.ts';
-import { mulberry32 } from './geom.ts';
+import { clamp, mulberry32, polylineLength } from './geom.ts';
 
 export interface MenagerieHouse {
   kind: 'house' | 'loge';
@@ -60,8 +60,15 @@ export interface MenagerieLayout {
   /** Net posts (≈ 3.6 m) around the runs. */
   posts: EN[];
   channel: EN[] | null;
-  /** 'rows': one terrace wall per row back line. */
+  /** 'rows': the terrace wall of each row back line, cut open where the watercourse passes (KB-I97). */
   terraces: MenagerieTerrace[];
+}
+
+/** KB-I97: one level reach of the watercourse, from arc length `s0` to `s1`, its water at `level` (m DHHN2016). */
+export interface ChannelReach {
+  s0: number;
+  s1: number;
+  level: number;
 }
 
 const add = (p: EN, v: EN, k: number): EN => [p[0] + v[0] * k, p[1] + v[1] * k];
@@ -150,7 +157,14 @@ function rowsLayout(m: MenagerieSpec, seed: number): MenagerieLayout {
     }
     const slot = len / row.houses;
     const w0 = Math.min(H.width, slot - H.gap);
-    terraces.push({ a: row.p0, b: row.p1, back: [-front[0], -front[1]] });
+    const back: EN = [-front[0], -front[1]];
+    // KB-I97: the terrace wall stops at the trough (its weir takes the step there)
+    const cross = channel ? crossing(row.p0, row.p1, channel) : null;
+    if (cross) {
+      const cut = (MENAGERIE.channel.width / 2 + MENAGERIE.channel.kerb + 0.05) / Math.max(0.2, cross.sin);
+      if (cross.t * len - cut > 0.5) terraces.push({ a: row.p0, b: add(row.p0, tan, cross.t * len - cut), back });
+      if ((1 - cross.t) * len - cut > 0.5) terraces.push({ a: add(row.p0, tan, cross.t * len + cut), b: row.p1, back });
+    } else terraces.push({ a: row.p0, b: row.p1, back });
     for (let i = 0; i < row.houses; i++) {
       const s0 = i * slot;
       const s1 = s0 + slot;
@@ -184,6 +198,110 @@ function rowsLayout(m: MenagerieSpec, seed: number): MenagerieLayout {
     }
   }
   return { houses, grilles: dedupeGrilles(grilles), runs, posts: dedupePoints(posts), channel, terraces };
+}
+
+/** Where segment a -> b crosses the polyline: `t` along a -> b, arc length `s` along the line, |sin| of the angle. */
+export function crossing(a: EN, b: EN, line: EN[]): { t: number; s: number; sin: number } | null {
+  let acc = 0;
+  for (let i = 1; i < line.length; i++) {
+    const c = line[i - 1];
+    const d = line[i];
+    const seg = Math.hypot(d[0] - c[0], d[1] - c[1]);
+    const den = (b[0] - a[0]) * (d[1] - c[1]) - (b[1] - a[1]) * (d[0] - c[0]);
+    if (Math.abs(den) > 1e-12) {
+      const t = ((c[0] - a[0]) * (d[1] - c[1]) - (c[1] - a[1]) * (d[0] - c[0])) / den;
+      const u = ((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / den;
+      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+        const lab = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        return { t, s: acc + u * seg, sin: Math.abs(den) / (lab * (seg || 1)) };
+      }
+    }
+    acc += seg;
+  }
+  return null;
+}
+
+/** Point and unit direction at arc length `s` along the polyline (clamped to its ends). */
+export function polylineAt(line: EN[], s: number): { p: EN; dir: EN } {
+  let acc = 0;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1];
+    const b = line[i];
+    const seg = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1e-9;
+    if (s <= acc + seg || i === line.length - 1) {
+      const t = clamp((s - acc) / seg, 0, 1);
+      return { p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], dir: [(b[0] - a[0]) / seg, (b[1] - a[1]) / seg] };
+    }
+    acc += seg;
+  }
+  return { p: line[0], dir: [0, 1] };
+}
+
+/**
+ * KB-I97 (pure): the level reaches of the watercourse along `line` [I]. The bed ground of a station is the highest
+ * ground across the bed (5 samples over the width, stations every 1 m). Walking downstream, a reach ends where the
+ * ground has fallen more than `maxProud` below its water: the weir goes to the foot of that fall (the terrace step), so
+ * the upper reach runs out over the step on its walls and the lower one starts on the lower terrace. Reaches are at
+ * least `minReach` long (a short last one joins the reach above). Each reach's water stands `over` above its highest
+ * bed ground, so the trough is never buried; a reach whose water would stand higher than the one above it is merged
+ * into it (water never runs uphill). The line may be drawn either way: the flow runs from its higher end.
+ */
+export function channelReaches(line: EN[], ground: (p: EN) => number, C: { width: number; over: number; maxProud: number; minReach: number } = MENAGERIE.channel): ChannelReach[] {
+  const L = polylineLength(line);
+  if (L < 1e-6) return [];
+  const hw = C.width / 2;
+  const bed = (s: number) => {
+    const { p, dir } = polylineAt(line, s);
+    let m = -Infinity;
+    for (const k of [-1, -0.5, 0, 0.5, 1]) {
+      const h = ground([p[0] - dir[1] * hw * k, p[1] + dir[0] * hw * k]);
+      if (Number.isFinite(h)) m = Math.max(m, h);
+    }
+    return m;
+  };
+  // flow from the higher end: work in flow arc length f (f = s, or L - s on a line drawn uphill)
+  const down = !(bed(L) > bed(0));
+  const S = (f: number) => (down ? f : L - f);
+  const n = Math.max(1, Math.ceil(L));
+  const st = Array.from({ length: n + 1 }, (_, i) => (i * L) / n);
+  const g = st.map((f) => bed(S(f)));
+  const out: { f0: number; f1: number; top: number }[] = [];
+  let f0 = 0;
+  let top = g[0];
+  for (let i = 1; i <= n; i++) {
+    if (Number.isFinite(top) && g[i] < top - C.maxProud && st[i] - f0 >= C.minReach) {
+      // the weir stands at the foot of the fall
+      let j = i;
+      while (j < n && g[j + 1] < g[j] - 0.05) j++;
+      // a fall that runs on to the end: the weir at its top; too near the end: no weir
+      if (j >= n) j = i;
+      if (L - st[j] < C.minReach) {
+        top = Math.max(top, g[i]);
+        continue;
+      }
+      out.push({ f0, f1: st[j], top });
+      f0 = st[j];
+      top = g[j];
+      i = j;
+      continue;
+    }
+    top = Math.max(top, g[i]);
+  }
+  if (out.length && L - f0 < C.minReach) {
+    const last = out.pop()!;
+    out.push({ f0: last.f0, f1: L, top: Math.max(last.top, top) });
+  } else out.push({ f0, f1: L, top });
+  // water never runs uphill: merge a reach into the one above it while it would stand higher
+  for (let i = 1; i < out.length; i++) {
+    if (out[i].top > out[i - 1].top) {
+      out[i - 1] = { f0: out[i - 1].f0, f1: out[i].f1, top: out[i].top };
+      out.splice(i, 1);
+      i = Math.max(0, i - 2);
+    }
+  }
+  const fb = (t: number) => (Number.isFinite(t) ? t : 0) + C.over;
+  const r = out.map((x) => ({ s0: Math.min(S(x.f0), S(x.f1)), s1: Math.max(S(x.f0), S(x.f1)), level: fb(x.top) }));
+  return down ? r : r.reverse();
 }
 
 function segmentCrosses(a: EN, b: EN, line: EN[]): boolean {

@@ -4,7 +4,7 @@
  * evidence live in the pure module nightlights.ts.
  */
 import * as THREE from 'three';
-import { CANDELABRUM_CD, type CandleKind, LANTERN_LEVEL, type P3, chandelierAt, flameSpots, flamesLit, groupPanes, litShare, mantelCandelabra, portalLanterns, windowLevel, windowLight, windowShade } from './nightlights.ts';
+import { CANDELABRUM_CD, type CandleKind, LANTERN_LEVEL, type P3, TABLE_CANDLES, chandelierAt, flameSpots, flamesLit, groupPanes, litShare, mantelCandelabra, portalLanterns, tableCandelabra, windowLevel, windowLight, windowShade } from './nightlights.ts';
 import { ARTICULATION, FESTIVAL } from '@model/layout/grammar.ts';
 import { sidePoint, stToLocal } from '@model/layout/footprint.ts';
 import type { BuildingLayout } from '@model/layout/building.ts';
@@ -312,11 +312,144 @@ export function addMantelCandelabra(inner: THREE.Object3D, buildingId: string, c
   return n;
 }
 
+// ---------------------------------------------------------------- wave 10: candles in view
+
+let tableGeo: { body: THREE.BufferGeometry; sticks: THREE.BufferGeometry; flames: THREE.BufferGeometry; stick1: THREE.BufferGeometry; flame1: THREE.BufferGeometry; body1: THREE.BufferGeometry } | null = null;
+function tableCandleGeometry(): NonNullable<typeof tableGeo> {
+  if (tableGeo) return tableGeo;
+  const S = TABLE_CANDLES.stem;
+  const g = TABLE_CANDLES.gueridonStem;
+  const merge = (parts: THREE.BufferGeometry[]) => mergeGeometries(parts.map((p) => p.toNonIndexed()));
+  // a three-light candelabrum: foot, baluster stem, two arms and three cups (Louis-seize, gilt) [N form]
+  const body = merge([
+    new THREE.CylinderGeometry(0.045, 0.065, 0.025, 10).translate(0, 0.0125, 0),
+    new THREE.CylinderGeometry(0.012, 0.02, S - 0.02, 8).translate(0, (S - 0.02) / 2 + 0.02, 0),
+    new THREE.SphereGeometry(0.024, 8, 6).translate(0, S * 0.45, 0),
+    new THREE.BoxGeometry(0.2, 0.012, 0.012).translate(0, S - 0.04, 0),
+    ...[-0.1, 0, 0.1].map((x) => new THREE.CylinderGeometry(0.018, 0.01, 0.03, 8).translate(x, S - 0.02 + (x === 0 ? 0.04 : 0), 0)),
+  ]);
+  const cups: P3[] = [-0.1, 0, 0.1].map((x) => [x, S + (x === 0 ? 0.04 : 0), 0]);
+  const sticks = merge(cups.map((c) => new THREE.CylinderGeometry(0.01, 0.01, 0.16, 6).translate(c[0], c[1] + 0.08, c[2])));
+  const flames = merge(cups.map((c) => new THREE.ConeGeometry(0.009, 0.035, 5).translate(c[0], c[1] + 0.16 + 0.0175, c[2])));
+  // a single candlestick for a guéridon
+  const body1 = merge([new THREE.CylinderGeometry(0.035, 0.05, 0.02, 10).translate(0, 0.01, 0), new THREE.CylinderGeometry(0.01, 0.016, g - 0.02, 8).translate(0, (g - 0.02) / 2 + 0.02, 0), new THREE.CylinderGeometry(0.018, 0.01, 0.03, 8).translate(0, g - 0.015, 0)]);
+  const stick1 = new THREE.CylinderGeometry(0.01, 0.01, 0.18, 6).translate(0, g + 0.09, 0).toNonIndexed();
+  const flame1 = new THREE.ConeGeometry(0.009, 0.035, 5).translate(0, g + 0.18 + 0.0175, 0).toNonIndexed();
+  tableGeo = { body, sticks, flames, stick1, flame1, body1 };
+  return tableGeo;
+}
+
+/**
+ * Wave 10 (audit rank 5): candles where the candle-lit rooms' default views can see them: candelabra on the laid
+ * dining table (`table` fixture named "Tafel…") and a candlestick on every guéridon, in each room that has a model
+ * light. The flames burn with the other candles (`setCandles`, kind 'other'); their light comes from the room's candle
+ * clusters (candleLight.ts, wave 11). Returns the number of candlesticks.
+ */
+export function addTableCandles(inner: THREE.Object3D, buildingId: string): number {
+  if (inner.userData.tableCandles !== undefined) return inner.userData.tableCandles as number;
+  const lights = (inner.userData.lights ?? []) as THREE.Light[];
+  const rooms = new Set(lights.map((l) => l.userData.roomId as string).filter(Boolean));
+  candleMat ??= new THREE.MeshStandardMaterial({ name: 'interior.candle', color: '#fff4dc', emissive: '#ffcf80', emissiveIntensity: 2.2, roughness: 0.6 });
+  waxMat ??= new THREE.MeshStandardMaterial({ name: 'interior.wax', color: '#f4ecd9', roughness: 0.55 });
+  inner.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(inner.matrixWorld).invert();
+  const toInner = (o: THREE.Object3D) => new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+  let gilt: THREE.Material | null = null;
+  const tops: { roomId: string; p: P3; rotY: number; single: boolean }[] = [];
+  const im4 = new THREE.Matrix4();
+  inner.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mat = Array.isArray(mesh.material) ? null : mesh.material;
+    if (!gilt && mat?.name === 'metal.gilt') gilt = mat;
+    const ud = o.userData as { roomId?: string; name_de?: string; instances?: { roomId: string }[] };
+    // the laid table: the cloth bucket of a "Tafel" in a candle-lit room
+    if (ud.roomId && rooms.has(ud.roomId) && o.name.startsWith(`${buildingId}/${ud.roomId}/table/`) && /Tafel/.test(ud.name_de ?? '') && /ceiling\.stucco/.test(o.name)) {
+      mesh.geometry.computeBoundingBox();
+      const box = mesh.geometry.boundingBox!.clone().applyMatrix4(toInner(o));
+      for (const p of tableCandelabra({ min: box.min.toArray() as P3, max: box.max.toArray() as P3 })) {
+        const wx = box.max.x - box.min.x;
+        const wz = box.max.z - box.min.z;
+        // the arms run across the table
+        tops.push({ roomId: ud.roomId, p, rotY: wx >= wz ? Math.PI / 2 : 0, single: false });
+      }
+    }
+    // guéridons: the marble top of each instance in a candle-lit room
+    const im = o as THREE.InstancedMesh;
+    if (im.isInstancedMesh && o.name === `${buildingId}/interior/furniture/gueridon/Platte`) {
+      const M = toInner(o);
+      for (let i = 0; i < im.count; i++) {
+        const roomId = ud.instances?.[i]?.roomId ?? ud.roomId ?? '';
+        if (!rooms.has(roomId)) continue;
+        im.getMatrixAt(i, im4);
+        const v = new THREE.Vector3(0, 0.76, 0).applyMatrix4(im4).applyMatrix4(M);
+        tops.push({ roomId, p: [v.x, v.y, v.z], rotY: 0, single: true });
+      }
+    }
+  });
+  const geo = tableCandleGeometry();
+  const body = gilt ?? waxMat;
+  let n = 0;
+  for (const t of tops) {
+    const g = new THREE.Group();
+    g.position.set(t.p[0], t.p[1], t.p[2]);
+    g.rotation.y = t.rotY;
+    g.name = `${buildingId}/${t.roomId}/tafelleuchter`;
+    const ud = { buildingId, roomId: t.roomId, part: 'interior/tafelleuchter', name_de: t.single ? 'Leuchter (Guéridon)' : 'Tafelleuchter', evidence: 'N', tag: 'N candelabra on a laid table, candlestick on a guéridon; place I' };
+    g.userData = ud;
+    const parts: [THREE.BufferGeometry, THREE.Material, string][] = t.single
+      ? [
+          [geo.body1, body, 'metal.gilt'],
+          [geo.stick1, waxMat, 'interior.wax'],
+        ]
+      : [
+          [geo.body, body, 'metal.gilt'],
+          [geo.sticks, waxMat, 'interior.wax'],
+        ];
+    for (const [gg, mm, nm] of parts) {
+      const m = new THREE.Mesh(gg, mm);
+      m.name = `${g.name}/${nm}`;
+      m.userData = { ...ud };
+      g.add(m);
+    }
+    const f = new THREE.Mesh(t.single ? geo.flame1 : geo.flames, candleMat);
+    f.name = `${g.name}/flamme/interior.candle`;
+    f.userData = { ...ud, part: 'interior/flame' };
+    f.castShadow = false;
+    f.receiveShadow = false;
+    g.add(f);
+    registerFlames(f, 'other');
+    inner.add(g);
+    n++;
+  }
+  inner.userData.tableCandles = n;
+  return n;
+}
+
 // ---------------------------------------------------------------- wave-5 review fix: candle flames
 
 /** Flame meshes and the kind of candle they belong to; shown by `setCandles`. */
 const flameSets: { mesh: THREE.Object3D; kind: CandleKind }[] = [];
 let candleState = { night: 0, fest: false };
+
+/**
+ * Wave 11 (candleLight.ts): every registered flame mesh with its candle kind; the room lights are built from them (one
+ * candle per flame cone, `flameCentres`).
+ */
+export function flameMeshes(): readonly { mesh: THREE.Object3D; kind: CandleKind }[] {
+  return flameSets;
+}
+
+const flameCentreCache = new WeakMap<THREE.BufferGeometry, P3[]>();
+/** Centres of the flame cones of a flame geometry (its own space; one connected component per flame), cached. */
+export function flameCentres(geo: THREE.BufferGeometry): P3[] {
+  let c = flameCentreCache.get(geo);
+  if (!c) {
+    c = components(geo, new THREE.Matrix4()).centroids;
+    flameCentreCache.set(geo, c);
+  }
+  return c;
+}
 
 function registerFlames(mesh: THREE.Object3D, kind: CandleKind): void {
   flameSets.push({ mesh, kind });

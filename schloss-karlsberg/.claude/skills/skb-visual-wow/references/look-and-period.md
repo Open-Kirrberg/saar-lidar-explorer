@@ -55,8 +55,10 @@ The UI slider covers 4.5–21 h (`viewer/src/ui.ts`); `skb.set('hour', 22)` work
   (audit P6, L7). Each POI view may carry a preferred hour.
 - The Ehrenhof faces west because the palace axis lies at 80.5° grid (research/03 §5). Garden-side shots want
   morning light, court-side shots want afternoon light.
-- Weather: keep clear to lightly clouded (`cloudCoverage` about 0.25). A July high-pressure day is plausible [I].
-  No rain, snow or storm presets without a reason.
+- Weather: clear to lightly clouded. A July high-pressure day is plausible [I]; the weather of 15 Jul 1789 is U.
+  three's streak clouds are off (`cloudCoverage` 0); wave 10 draws fair-weather cumulus and their shadows from one
+  coverage field (`viewer/src/clouds.ts`, "Wolken": `air` default = only from the air and in the Rundflug's aerial
+  shots, `on`, `off`). No rain, snow or storm presets without a reason.
 
 ## 4. Palette and materials: what the look may and may not change
 

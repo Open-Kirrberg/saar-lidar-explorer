@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   airmass,
   easeEv,
+  CANDLE_KEY_LUX,
   evFromLux,
   evIndoor,
   evOutdoor,
@@ -129,9 +130,11 @@ describe('light budget (KB-I06)', () => {
     // wave-1 review: a small candle ambient (0.4 lx, wave-5 fix 0.15 lx with the chandeliers out), the point lights carry the room
     expect(roomIlluminance(-15, true)).toBeGreaterThan(roomIlluminance(-15, false) + 0.1);
     expect(roomIlluminance(-15, true)).toBeLessThan(roomIlluminance(-15, false) + 1);
-    // the night meter (≈ 5 lx near the candles) keeps the far end of the room dark but not black
-    expect(evIndoor(-15)).toBeGreaterThan(0.5);
-    expect(evIndoor(-15)).toBeLessThan(1.5);
+    // the night meter (CANDLE_KEY_LUX near the candles; 5 lx until wave 10, 3 lx with the wave-11 candle pool) keeps
+    // the far end of the room dark but not black
+    expect(evIndoor(-15)).toBeGreaterThan(0.2);
+    expect(evIndoor(-15)).toBeLessThan(1.0);
+    expect(evIndoor(-15)).toBeCloseTo(evFromLux(roomIlluminance(-15) + CANDLE_KEY_LUX), 6);
     expect(roomIlluminance(40, true)).toBeCloseTo(roomIlluminance(40, false), 6);
   });
 

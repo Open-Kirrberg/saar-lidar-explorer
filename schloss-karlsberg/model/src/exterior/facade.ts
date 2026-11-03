@@ -19,10 +19,10 @@
  */
 import type { BuildContext } from '../context.ts';
 import type { BuildingLayout } from '../layout/building.ts';
-import { type FacadeOpening, type RoofOpening, cullBuriedOpenings, facadeOpenings, freitreppePlan, layoutBays } from '../layout/facade.ts';
+import { type FacadeOpening, type RoofOpening, cullBuriedOpenings, facadeOpenings, freitreppePlan, layoutBays, leafSpan, shutterLeafFit } from '../layout/facade.ts';
 import type { FrameSide } from '../layout/footprint.ts';
 import { resolveCourtToward } from '../layout/site.ts';
-import { ARTICULATION, BALCONY, CASEMENT, FACHWERK, MAIN_PERRON, PASSAGE_PORTICO, PORTAL_FRAME, PORTICO, WALL_THICKNESS, glazingLayout } from '../layout/grammar.ts';
+import { ARTICULATION, BALCONY, CASEMENT, CDL_CENTRE, FACHWERK, GLAZING, MAIN_PERRON, PASSAGE_PORTICO, PORTAL_FRAME, PORTICO, WALL_THICKNESS, glazingLayout } from '../layout/grammar.ts';
 import { fachwerkStoreys } from '../layout/fachwerk.ts';
 import type { WindowRow } from '../layout/grammar.ts';
 import type { HeadForm, ST } from '../spec.ts';
@@ -31,7 +31,7 @@ import { hashString, mulberry32 } from '../layout/geom.ts';
 import * as THREE from 'three';
 import { type GeoBuilder, type MatKey, type P3, type ShadeFn, matKey } from './builder.ts';
 import { type Rect, archCurve, archRise, archSpandrels, wallPieces } from './cut.ts';
-import { AO, CORNICE_AO, type WallZones, ashlarBlocks, blockTint, passageAO, plinthAO, REVEAL_GRIME, revealAO, revealCornerAO, sillGrime, wallAO, wallBreaks, wallGrime } from './shade.ts';
+import { AO, CORNICE_AO, type WallZones, ashlarBlocks, blockTint, passageAO, plinthAO, plinthDamp, REVEAL_GRIME, revealAO, revealCornerAO, sillGrime, wallAO, wallBreaks, wallGrime } from './shade.ts';
 import { type ExteriorInfo, type ExteriorPalette, offsetRing } from './index.ts';
 import { roofHardware } from './hardware.ts';
 import { chimneyStations } from './hardwarePlan.ts';
@@ -146,6 +146,8 @@ interface Segment {
   a0: number;
   a1: number;
   d: number;
+  /** Wave 11 (audit #8): the CdL centre risalit (CDL_CENTRE Lisenen, surrounds, keystones). */
+  centre?: boolean;
 }
 
 /** Ring of the building outline including risalit projections (CCW, deduplicated) - for cornices and caps. */
@@ -334,13 +336,15 @@ function holeOf(o: { a: number; width: number; bottom_h: number; top_h: number }
  */
 function furnishOpening(
   f: Face,
-  o: { kind: FacadeOpening['kind']; a: number; width: number; bottom_h: number; top_h: number; head: HeadForm; storey?: number; row?: WindowRow | null; hood?: boolean; balcony?: boolean; portico?: unknown },
+  o: { kind: FacadeOpening['kind']; a: number; width: number; bottom_h: number; top_h: number; head: HeadForm; storey?: number; row?: WindowRow | null; hood?: boolean; balcony?: boolean; portico?: unknown; glazed?: boolean },
   d: number,
   bandKey: MatKey,
   band: Rect,
   opt: FacadeOptions,
   revealDepth: number,
   isLowestBand: boolean,
+  centre = false,
+  guards: readonly (readonly [number, number])[] = [],
 ): void {
   const a0 = o.a - o.width / 2;
   const a1 = o.a + o.width / 2;
@@ -396,7 +400,10 @@ function furnishOpening(
   if (!owns) return;
   const lod = opt.lod;
   const kind = o.kind;
-  if (isWindowLike(kind)) f.g.withShade(joineryShade, () => windowJoinery(f, o, d, revealDepth, opt, head, rise, spring));
+  // wave 10 (audit #8): a glazed door is closed glazed joinery instead of open leaves; wave 11: door joinery (stiles,
+  // meeting stile with a cover bead, fielded lower panel), no longer a window run to the floor [CDL_CENTRE.door]
+  if (o.glazed && rise === 0) f.g.withShade(joineryShade, () => glazedDoorJoinery(f, o, d, opt));
+  else if (isWindowLike(kind) || o.glazed) f.g.withShade(joineryShade, () => windowJoinery(f, o.glazed ? { ...o, kind: 'porte_fenetre' } : o, d, revealDepth, opt, head, rise, spring));
   else if (kind === 'portal' || kind === 'door' || kind === 'double_door' || kind === 'carriage_gate') f.g.withShade(joineryShade, () => {
     const dd = d - Math.min(0.35, revealDepth * 0.4);
     const leafH = spring - o.bottom_h;
@@ -459,13 +466,32 @@ function furnishOpening(
   const m = portalStone ? opt.stone : opt.members;
   const jb = Math.max(o.bottom_h, band.h0);
   const dress = (key: string, draw: () => void) => (portalStone ? f.g.withShade(stoneShade(opt, `${key}${o.a.toFixed(1)}`, opt.stone), draw) : draw());
-  dress('pjL', () => f.box(m, a0 - sf, a0, d, d + pj, jb, spring, true));
-  dress('pjR', () => f.box(m, a1, a1 + sf, d, d + pj, jb, spring, true));
-  dress('pjH', () => {
-    if (rise === 0) f.box(m, a0 - sf, a1 + sf, d, d + pj, o.top_h, o.top_h + sf, true);
-    else archBand(f, m, a0, a1, o.top_h, head, sf, d, pj, true);
-  });
+  // wave 11 (audit #8): on the CdL centre risalit a profiled fascia (outer band proud, an inner fillet stepped back)
+  // [CDL_CENTRE.surround, N 02 §2.3]; elsewhere the plain flat band [ARTICULATION.surround]
+  const prof = centre && rise === 0 && !portalStone;
+  if (prof) {
+    const C = CDL_CENTRE.surround;
+    const fi = C.fillet;
+    f.box(m, a0 - sf, a0 - fi, d, d + C.projection, jb, o.top_h + sf, true);
+    f.box(m, a1 + fi, a1 + sf, d, d + C.projection, jb, o.top_h + sf, true);
+    f.box(m, a0 - fi, a1 + fi, d, d + C.projection, o.top_h + fi, o.top_h + sf, true);
+    f.box(m, a0 - fi, a0, d, d + C.filletProjection, jb, o.top_h + fi, true);
+    f.box(m, a1, a1 + fi, d, d + C.filletProjection, jb, o.top_h + fi, true);
+    f.box(m, a0, a1, d, d + C.filletProjection, o.top_h, o.top_h + fi, true);
+  } else {
+    dress('pjL', () => f.box(m, a0 - sf, a0, d, d + pj, jb, spring, true));
+    dress('pjR', () => f.box(m, a1, a1 + sf, d, d + pj, jb, spring, true));
+    dress('pjH', () => {
+      if (rise === 0) f.box(m, a0 - sf, a1 + sf, d, d + pj, o.top_h, o.top_h + sf, true);
+      else archBand(f, m, a0, a1, o.top_h, head, sf, d, pj, true);
+    });
+  }
   const crown = o.top_h + sf;
+  // wave 11: a flat keystone over the ground-floor windows and the garden door of the CdL centre risalit [N 02 §2.3]
+  if (prof && (o.row === 'ground' || o.glazed)) {
+    const K = CDL_CENTRE.keystone;
+    f.box(m, o.a - K.width / 2, o.a + K.width / 2, d, d + K.projection, o.top_h - K.drop, crown + K.rise, true);
+  }
   if (lod >= 2 && rise > 0) dress('pjK', () => f.box(m, o.a - 0.14, o.a + 0.14, d, d + pj + 0.05, o.top_h - 0.05, crown + 0.08, true)); // keystone
   // wave-8 audit rank 3: sandstone pilaster strips and an entablature frame a main portal without a portico [PORTAL_FRAME]
   if (kind === 'portal' && !o.portico && lod >= 1) {
@@ -480,11 +506,16 @@ function furnishOpening(
   }
   // sill (Sohlbank)
   if (kind === 'window') f.box(m, a0 - sf - 0.06, a1 + sf + 0.06, d - 0.02, d + 0.13, o.bottom_h - 0.13, o.bottom_h, true);
-  // Verdachung (cornice cap): only where the layout marks it (CdL Beletage centre axes, KB-I17) [HMS; research/09 G7]
-  if (o.hood && (kind === 'window' || kind === 'porte_fenetre')) {
+  // Verdachung (cornice cap): only where the layout marks it (CdL Beletage centre axes, KB-I17) [HMS; research/09 G7];
+  // wave 11: only where it clears the main cornice (the CdL Beletage heads meet the architrave, so the caps lay inside
+  // the cornice), and over the glazed garden door on the centre axis [CDL_CENTRE.door.hood, N 02 §2.3; I]
+  const capTop = (rise > 0 ? crown + 0.04 : crown) + 0.16;
+  const capFits = capTop <= opt.eaves - opt.corniceH + 0.01;
+  if (capFits && ((o.hood && (kind === 'window' || kind === 'porte_fenetre')) || (prof && o.glazed && CDL_CENTRE.door.hood))) {
     const top = rise > 0 ? crown + 0.04 : crown;
-    f.box(m, a0 - sf - 0.08, a1 + sf + 0.08, d, d + pj + 0.08, top, top + 0.07, true);
-    f.box(m, a0 - sf - 0.12, a1 + sf + 0.12, d, d + pj + 0.16, top + 0.07, top + 0.16, true);
+    const sp = prof ? CDL_CENTRE.surround.projection : pj;
+    f.box(m, a0 - sf - 0.08, a1 + sf + 0.08, d, d + sp + 0.08, top, top + 0.07, true);
+    f.box(m, a0 - sf - 0.12, a1 + sf + 0.12, d, d + sp + 0.16, top + 0.07, top + 0.16, true);
   }
   // balconet in front of a catalogue porte-fenêtre on an upper storey (iron railing on a stone slab) [KB-I17]
   if (kind === 'porte_fenetre' && o.balcony) {
@@ -496,15 +527,23 @@ function furnishOpening(
   }
   // shutters (open, against the wall)
   if (opt.shutters && kind === 'window' && o.bottom_h > opt.plinthTop - 0.01 && !(o.storey !== undefined && opt.shutterOmit.includes(o.storey))) {
-    const lw = o.width / 2;
     const h0 = o.bottom_h;
     const h1 = spring;
-    f.box(opt.shutters, a0 - sf - 0.02 - lw, a0 - sf - 0.02, d + 0.01, d + 0.05, h0, h1, true);
-    f.box(opt.shutters, a1 + sf + 0.02, a1 + sf + 0.02 + lw, d + 0.01, d + 0.05, h0, h1, true);
-    if (lod >= 2) {
-      for (let y = h0 + 0.12; y < h1 - 0.1; y += 0.12) {
-        f.box(opt.shutters, a0 - sf - lw + 0.03, a0 - sf - 0.05, d + 0.05, d + 0.065, y, y + 0.03, true);
-        f.box(opt.shutters, a1 + sf + 0.05, a1 + sf + lw - 0.03, d + 0.05, d + 0.065, y, y + 0.03, true);
+    // wave-11 review fix: each leaf lies flat on its own wall plane; beside a CdL Lisene or a risalit return it is sized
+    // to the pier (full, folding leaf or none; layout shutterLeafFit, CDL_CENTRE.shutter) [I]
+    for (const side of [-1, 1] as const) {
+      const fit = shutterLeafFit(o.a, o.width, side, guards, sf);
+      const span = leafSpan(o.a, o.width, side, fit, sf);
+      if (!span) continue;
+      const [x0, x1] = span;
+      f.box(opt.shutters, x0, x1, d + 0.01, d + 0.05, h0, h1, true);
+      // a folding leaf (volet brisé): the outer panel folded back onto the inner one, a second board in front
+      if (fit === 'folded') f.box(opt.shutters, x0 + 0.005, x1 - 0.005, d + 0.05, d + 0.085, h0 + 0.005, h1 - 0.005, true);
+      const df = fit === 'folded' ? d + 0.035 : d;
+      if (lod >= 2) {
+        // louvre slats between the stiles (0.03 m on the hinge side, 0.05 m on the outer one)
+        const [i0, i1] = side < 0 ? [0.05, 0.03] : [0.03, 0.05];
+        for (let y = h0 + 0.12; y < h1 - 0.1; y += 0.12) f.box(opt.shutters, x0 + i0, x1 - i1, df + 0.05, df + 0.065, y, y + 0.03, true);
       }
     }
   }
@@ -635,6 +674,95 @@ function windowJoinery(
   }
 }
 
+/**
+ * Wave 11 (audit #8, wave-10 review): a glazed two-leaf garden door (croisée-porte) as door joinery: the frame, each
+ * leaf with stiles and a bottom rail, a fielded lower panel (soubassement) to CDL_CENTRE.door.panel above the
+ * threshold under a lock rail, glass above it in the glazing grid of the storey's windows, the two meeting stiles
+ * under a proud cover bead (battement) up to the transom, and a fixed top light [N research/09 §3.1, §3.3; I sizes].
+ */
+function glazedDoorJoinery(f: Face, o: { a: number; width: number; bottom_h: number; top_h: number; row?: WindowRow | null }, d: number, opt: FacadeOptions): void {
+  const D = CDL_CENTRE.door;
+  const a0 = o.a - o.width / 2;
+  const a1 = o.a + o.width / 2;
+  const h = o.top_h - o.bottom_h;
+  const fw = CASEMENT.frame;
+  const fd = d - 0.14;
+  const J = opt.joinery;
+  const gl = glazingLayout(opt.cls as never, o.row ?? 'ground', o.width, h);
+  const tH = gl.transom !== null ? o.bottom_h + gl.transom : o.top_h - fw;
+  const pTop = o.bottom_h + D.panel;
+  // frame (Blendrahmen) and transom
+  f.box(J, a0, a0 + fw, fd - 0.06, fd, o.bottom_h, o.top_h, false);
+  f.box(J, a1 - fw, a1, fd - 0.06, fd, o.bottom_h, o.top_h, false);
+  f.box(J, a0, a1, fd - 0.06, fd, o.top_h - fw, o.top_h, false);
+  if (gl.transom !== null) f.box(J, a0, a1, fd - 0.06, fd, tH - fw / 2, tH + fw / 2, false);
+  // glass: one pane field per leaf above the lock rail, and the top light
+  const leaves: [number, number][] = [
+    [a0 + fw, o.a],
+    [o.a, a1 - fw],
+  ];
+  // glass span of a leaf between its outer stile (next to the frame) and its meeting stile
+  const glassSpan = (x0: number, x1: number): [number, number] => (x1 <= o.a + 1e-6 ? [x0 + D.stile, x1 - D.meetingStile] : [x0 + D.meetingStile, x1 - D.stile]);
+  const gd = fd - 0.035;
+  const g0 = pTop + 0.06;
+  const g1 = gl.transom !== null ? tH - fw / 2 : o.top_h - fw;
+  f.g.withShade(glassShade, () => {
+    for (const [x0, x1] of leaves) f.poly(GLASS, [[x0, g0], [x1, g0], [x1, g1], [x0, g1]], gd);
+    if (gl.transom !== null) f.poly(GLASS, [[a0 + fw, tH + fw / 2], [a1 - fw, tH + fw / 2], [a1 - fw, o.top_h - fw], [a0 + fw, o.top_h - fw]], gd);
+  });
+  if (opt.backing) f.poly(BACKING, [[a0, o.bottom_h], [a1, o.bottom_h], [a1, o.top_h], [a0, o.top_h]], d - opt.thickness + 0.02);
+  for (const [x0, x1] of leaves) {
+    // outer stile (next to the frame) and meeting stile; the glass lies between them
+    const [gx0, gx1] = glassSpan(x0, x1);
+    f.box(J, x0, gx0, fd - 0.055, fd - 0.005, o.bottom_h, g1, false);
+    f.box(J, gx1, x1, fd - 0.055, fd - 0.005, o.bottom_h, g1, false);
+    // bottom rail, panel board and lock rail as one leaf body under the glass
+    f.box(J, gx0, gx1, fd - 0.055, fd - 0.005, o.bottom_h, g0, false);
+    // fielded panel: a raised field in a sunk margin (plate-bande, a shade darker as its bevel is in shade), so the
+    // lower leaf reads as boarded, not glazed [N]
+    const m = 0.05;
+    if (gx1 - gx0 > 2 * m + 0.1) {
+      const y0 = o.bottom_h + D.bottomRail;
+      const y1 = pTop - m;
+      f.box(darker(J, 0.72), gx0 + m * 0.4, gx1 - m * 0.4, fd - 0.005, fd - 0.002, y0 - m * 0.6, y1 + m * 0.6, false);
+      f.box(J, gx0 + m, gx1 - m, fd - 0.005, fd - 0.005 + D.raise, y0, y1, false);
+    }
+    // glazing bars of the leaf (the storey's pane grid; LOD2)
+    if (opt.lod >= 2) {
+      const per = Math.max(1, gl.cols / 2);
+      for (let i = 1; i < per; i++) {
+        const x = gx0 + ((gx1 - gx0) * i) / per;
+        f.bar(J, x - gl.bar / 2, x + gl.bar / 2, fd - 0.05, fd - 0.01, g0, g1, true);
+      }
+      const rows = Math.max(1, Math.round((g1 - g0) / (((gx1 - gx0) / per) * GLAZING[gl.rule].aspect)));
+      for (let j = 1; j < rows; j++) {
+        const y = g0 + ((g1 - g0) * j) / rows;
+        f.bar(J, gx0, gx1, fd - 0.05, fd - 0.01, y - gl.bar / 2, y + gl.bar / 2, false);
+      }
+    }
+  }
+  // battement: the cover bead over the two meeting stiles, proud of the leaves, up to the transom
+  f.box(J, o.a - D.bead / 2, o.a + D.bead / 2, fd - 0.005, fd - 0.005 + D.beadProjection, o.bottom_h, g1, false);
+  // fixed top light: the stile line and the leaves' bar grid carried on, rows of the same pane height [N]
+  if (opt.lod >= 2 && gl.transom !== null) {
+    const t0 = tH + fw / 2;
+    const t1 = o.top_h - fw;
+    const per = Math.max(1, gl.cols / 2);
+    const xs = [o.a];
+    for (const [x0, x1] of leaves) {
+      const [gx0, gx1] = glassSpan(x0, x1);
+      for (let i = 1; i < per; i++) xs.push(gx0 + ((gx1 - gx0) * i) / per);
+    }
+    for (const x of xs) f.bar(J, x - gl.bar / 2, x + gl.bar / 2, fd - 0.05, fd - 0.01, t0, t1, true);
+    const paneH = ((o.width / 2 - D.stile - D.meetingStile) / per) * GLAZING[gl.rule].aspect;
+    const rows = Math.max(1, Math.round((t1 - t0) / paneH));
+    for (let j = 1; j < rows; j++) {
+      const y = t0 + ((t1 - t0) * j) / rows;
+      f.bar(J, a0 + fw, a1 - fw, fd - 0.05, fd - 0.01, y - gl.bar / 2, y + gl.bar / 2, false);
+    }
+  }
+}
+
 /** Flat arch band of width w around an arched head, projecting pj. */
 function archBand(f: Face, k: MatKey, a0: number, a1: number, top: number, head: HeadForm, w: number, d: number, pj: number, _sides: boolean): void {
   const inner = archCurve(a0, a1, top, head, 10);
@@ -735,15 +863,18 @@ function freitreppe(f: Face, opt: FacadeOptions, o: FacadeOpening, base: number,
     }
     return;
   }
+  // wave 10 (audit #3): ordinary flights in the dressed portal / member sandstone like the main perron (wave 9), not
+  // in the plinth red: treads of a paler, harder stone than the plinth courses [I; research/09 §3.7 mixed stone]
+  const sk = MAIN_PERRON.stoneTreads ? opt.stone : k;
   for (let i = 1; i <= n; i++) {
     const top = base + i * rise;
     const depth = (n - i + 1) * fp.tread + (i === n ? fp.landing : 0);
-    stoneBox(f, opt, `${id}:${i}`, k, o.a - w / 2, o.a + w / 2, d - 0.1, d + depth, base - 0.3, top, true);
+    stoneBox(f, opt, `${id}:${i}`, sk, o.a - w / 2, o.a + w / 2, d - 0.1, d + depth, base - 0.3, top, true);
   }
   // cheek walls (Wangen)
   const depth = fp.depth;
-  stoneBox(f, opt, `${id}:L`, k, o.a - w / 2 - fp.cheek, o.a - w / 2, d - 0.1, d + depth, base - 0.3, o.bottom_h + fp.cheekAbove, true);
-  stoneBox(f, opt, `${id}:R`, k, o.a + w / 2, o.a + w / 2 + fp.cheek, d - 0.1, d + depth, base - 0.3, o.bottom_h + fp.cheekAbove, true);
+  stoneBox(f, opt, `${id}:L`, sk, o.a - w / 2 - fp.cheek, o.a - w / 2, d - 0.1, d + depth, base - 0.3, o.bottom_h + fp.cheekAbove, true);
+  stoneBox(f, opt, `${id}:R`, sk, o.a + w / 2, o.a + w / 2 + fp.cheek, d - 0.1, d + depth, base - 0.3, o.bottom_h + fp.cheekAbove, true);
 }
 
 /**
@@ -840,10 +971,14 @@ function balconyRun(f: Face, opt: FacadeOptions, o: FacadeOpening, run: NonNulla
 }
 
 /** One wall segment (plane at offset s.d): plinth band + wall band with the openings cut and furnished. */
-function wallSegment(f: Face, s: Segment, mine: FacadeOpening[], opt: FacadeOptions): void {
+function wallSegment(f: Face, s: Segment, mine: FacadeOpening[], opt: FacadeOptions, neighbours: readonly [number, number][] = []): void {
   const pp = ARTICULATION.plinthProjection;
   const T = opt.thickness;
   const holes = mine.map(holeOf);
+  // wave-11 review fix: open shutter leaves stay clear of the CdL centre risalit's edge Lisenen and of the air beyond its
+  // edges (guards of this segment), and of a centre risalit's returns (`neighbours`) [CDL_CENTRE.shutter]
+  const lw = CDL_CENTRE.lisene.width;
+  const lis: [number, number][] = [...(s.centre ? ([[s.a0 - 50, s.a0 + lw], [s.a1 - lw, s.a1 + 50]] as [number, number][]) : []), ...neighbours];
   const bands: { key: MatKey; band: Rect; d: number }[] = [
     { key: opt.plinth, band: { a0: s.a0, a1: s.a1, h0: opt.plinthBottom, h1: opt.plinthTop }, d: s.d + pp },
     { key: opt.wall, band: { a0: s.a0, a1: s.a1, h0: opt.plinthTop, h1: opt.eaves }, d: s.d },
@@ -856,7 +991,7 @@ function wallSegment(f: Face, s: Segment, mine: FacadeOpening[], opt: FacadeOpti
       if (o.top_h <= band.h0 || o.bottom_h >= band.h1) continue;
       const wT = o.storey !== undefined && opt.fachwerk.includes(o.storey) ? FACHWERK.wall : T;
       const depth = o.kind === 'durchfahrt' ? opt.depth + s.d + 0.2 : wT + (d - s.d);
-      furnishOpening(f, o, d, key, band, opt, depth, bi === 0);
+      furnishOpening(f, o, d, key, band, opt, depth, bi === 0, !!s.centre, lis);
     }
   });
   // plinth top ledge (horizontal strip between the projecting plinth and the wall), open over Durchfahrten that
@@ -911,6 +1046,11 @@ function plinthPieces(f: Face, key: MatKey, band: Rect, holes: Rect[], d: number
   const u0 = f.u0;
   const ao: ShadeFn = (q, _ny, out) => {
     out[3] = plinthAO(q[2], z);
+    // wave 10: splash / damp darkening of the lowest course (shade.ts PLINTH_DAMP)
+    const dm = plinthDamp(q[2], z);
+    out[0] *= dm;
+    out[1] *= dm;
+    out[2] *= dm;
   };
   // no extra split at the foot fade: the 0.36 m courses already carry the AO gradient
   for (const sub of splitBand(band, [z.grade])) {
@@ -945,7 +1085,7 @@ function buildSide(g: GeoBuilder, L: BuildingLayout, side: 'garden' | 'end_b' | 
     const r0 = Math.max(0, r.a0);
     const r1 = Math.min(len, r.a1);
     if (r0 > a + 1e-4) segs.push({ a0: a, a1: r0, d: 0 });
-    segs.push({ a0: r0, a1: r1, d: r.risalit.projection ?? ARTICULATION.risalitProjection });
+    segs.push({ a0: r0, a1: r1, d: r.risalit.projection ?? ARTICULATION.risalitProjection, centre: r.risalit.kind === 'centre' && opt.risalitLisenen === 'all' });
     a = r1;
   }
   if (len > a + 1e-4) segs.push({ a0: a, a1: len, d: 0 });
@@ -953,7 +1093,8 @@ function buildSide(g: GeoBuilder, L: BuildingLayout, side: 'garden' | 'end_b' | 
   const ops = openings.filter((o) => o.side === side);
   for (const s of segs) {
     const mine = ops.filter((o) => o.a >= s.a0 && o.a <= s.a1);
-    wallSegment(f, s, mine, opt);
+    // the spans of the other (CdL centre) risalits: a leaf on this plane must not run into their returns
+    wallSegment(f, s, mine, opt, segs.filter((x) => x !== s && x.centre).map((x) => [x.a0, x.a1] as [number, number]));
     // returns at segment ends (risalit sides) - from the base plane out to the segment plane
     if (s.d > 0) {
       for (const [ae, dir] of [
@@ -977,14 +1118,19 @@ function buildSide(g: GeoBuilder, L: BuildingLayout, side: 'garden' | 'end_b' | 
       }
       // Lisenen on the risalit edges (KB-I17): building corners follow the corner-strip rule; inner edges only on the
       // CdL and on porticoed risalits (B02 head, LC 1790) [HMS; research/09 §3.4]
-      const lw = ARTICULATION.ecklisene.width;
-      for (const [e0, e1, edge] of [
-        [s.a0, s.a0 + lw, s.a0],
-        [s.a1 - lw, s.a1, s.a1],
-      ] as [number, number, number][]) {
-        const corner = edge <= 1e-4 || edge >= len - 1e-4;
-        const ok = corner ? opt.cornerLisenen : opt.risalitLisenen === 'all' || mine.some((o) => o.portico);
-        if (ok) lisene(f, opt, e0, e1, s.d, mine);
+      // wave 11 (audit #8): the CdL centre risalit's inner edges at the norm's width and projection [CDL_CENTRE.lisene]
+      for (const corner of [false, true]) {
+        const lw = !corner && s.centre ? CDL_CENTRE.lisene.width : ARTICULATION.ecklisene.width;
+        const pj = !corner && s.centre ? CDL_CENTRE.lisene.projection : ARTICULATION.ecklisene.projection;
+        for (const [e0, e1, edge] of [
+          [s.a0, s.a0 + lw, s.a0],
+          [s.a1 - lw, s.a1, s.a1],
+        ] as [number, number, number][]) {
+          const isCorner = edge <= 1e-4 || edge >= len - 1e-4;
+          if (isCorner !== corner) continue;
+          const ok = corner ? opt.cornerLisenen : opt.risalitLisenen === 'all' || mine.some((o) => o.portico);
+          if (ok) lisene(f, opt, e0, e1, s.d, mine, pj);
+        }
       }
     }
   }
@@ -1085,7 +1231,7 @@ function portico(f: Face, opt: FacadeOptions, o: FacadeOpening, base: number, d:
   void p.tag;
 }
 
-function lisene(f: Face, opt: FacadeOptions, a0: number, a1: number, d: number, ops: FacadeOpening[]): void {
+function lisene(f: Face, opt: FacadeOptions, a0: number, a1: number, d: number, ops: FacadeOpening[], projection: number = ARTICULATION.ecklisene.projection): void {
   // shrink away from openings (and their surrounds)
   const sf = ARTICULATION.surround.face + 0.08;
   for (const o of ops) {
@@ -1096,7 +1242,7 @@ function lisene(f: Face, opt: FacadeOptions, a0: number, a1: number, d: number, 
     }
   }
   if (a1 - a0 < 0.2) return;
-  const pj = ARTICULATION.ecklisene.projection;
+  const pj = projection;
   f.box(opt.members, a0, a1, d, d + pj, opt.plinthTop, opt.eaves - opt.corniceH * 0.6, true);
 }
 

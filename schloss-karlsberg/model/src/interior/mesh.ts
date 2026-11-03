@@ -41,6 +41,10 @@ export class Bucket {
   col: number[] = [];
   private coloured = false;
   private ink: V3 = [1, 1, 1];
+  /** Wave 10: per-vertex painting parameters (interior/painting.ts `aCanvas`); written only once a canvas was added. */
+  can: number[] = [];
+  private canvased = false;
+  private canInk: [number, number, number, number] = [0, 0, 1, 1];
 
   get vertexCount(): number {
     return this.pos.length / 3;
@@ -51,6 +55,7 @@ export class Bucket {
     this.nor.push(n[0], n[1], n[2]);
     this.uv.push(u, v);
     this.col.push(this.ink[0], this.ink[1], this.ink[2]);
+    this.can.push(this.canInk[0], this.canInk[1], this.canInk[2], this.canInk[3]);
     return this.pos.length / 3 - 1;
   }
 
@@ -58,8 +63,12 @@ export class Bucket {
    * Planar grid over the quad a (u0 v0) - b (u1 v0) - c (u1 v1) - d (u0 v1) with `nx` × `ny` vertices and one LINEAR
    * colour per vertex (`colour(i, j)`, j from the a-b edge). The geometry then carries a `color` attribute (KB-I26).
    */
-  colourGrid(a: V3, b: V3, c: V3, d: V3, normal: V3, nx: number, ny: number, colour: (i: number, j: number) => V3): void {
+  colourGrid(a: V3, b: V3, c: V3, d: V3, normal: V3, nx: number, ny: number, colour: (i: number, j: number) => V3, canvas?: [number, number, number, number]): void {
     this.coloured = true;
+    if (canvas) {
+      this.canvased = true;
+      this.canInk = canvas;
+    }
     const base = this.vertexCount;
     const flip = dot(cross(sub(b, a), sub(d, a)), normal) < 0;
     for (let j = 0; j < ny; j++) {
@@ -72,6 +81,7 @@ export class Bucket {
       }
     }
     this.ink = [1, 1, 1];
+    this.canInk = [0, 0, 1, 1];
     for (let j = 0; j < ny - 1; j++) {
       for (let i = 0; i < nx - 1; i++) {
         const q0 = base + j * nx + i;
@@ -154,6 +164,7 @@ export class Bucket {
       this.pos.push(v.x, v.y, v.z);
       this.nor.push(w.x, w.y, w.z);
       this.col.push(1, 1, 1);
+      this.can.push(0, 0, 1, 1);
       if (uv) this.uv.push(uv.getX(i), uv.getY(i));
       else this.uv.push(v.x, v.z);
     }
@@ -216,6 +227,7 @@ export class Bucket {
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     if (this.coloured) g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
+    if (this.canvased) g.setAttribute('aCanvas', new THREE.Float32BufferAttribute(this.can, 4));
     g.setIndex(this.vertexCount > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
     g.computeBoundingBox();
     g.computeBoundingSphere();
@@ -358,6 +370,79 @@ export function beadProfile(w: number, z: number): MouldProfile {
     [w, z * 0.18],
     [w, 0],
   ];
+}
+
+/**
+ * Wave 11: a lighter bead for the small dado (lambris d'appui) frames below the chair rail, seen from above and at
+ * 0.035 m wide: outer fillet, a two-facet bead and the inner step (5 faces instead of 10) [N; budget].
+ */
+export function beadProfileLite(w: number, z: number): MouldProfile {
+  return [
+    [0, 0],
+    [w * 0.1, z * 0.55],
+    [w * 0.42, z],
+    [w * 0.78, z * 0.5],
+    [w, z * 0.2],
+    [w, 0],
+  ];
+}
+
+// wave-11 review fix: a pointed leaf with a raised midrib (4-sided bipyramid, 8 triangles) and a lighter bipyramid for
+// the bow loops and knots (3-sided, 6 triangles)
+const LEAF = new THREE.SphereGeometry(1, 4, 2);
+const KNOT_LITE = new THREE.SphereGeometry(1, 3, 2);
+
+/**
+ * Wave 11 (audit #9): a carved head of Louis-seize boiserie - a laurel swag tied at both ends with a ribbon bow (noeud
+ * de ruban); the full head adds ribbon ends and a laurel drop hanging from each bow, `lite` (panel fields) has neither
+ * [N research/09 §4.2; sizes I, ROOM_ORDER.carved].
+ * Wave-11 review fix: the swag is paired, pointed laurel leaves (two per station, splayed ±0.38 rad off the swag and
+ * slightly twisted so one of each pair catches the light, pointing from the bows to the middle; lite: one leaf per
+ * station, alternately above and below), not a chain of beads;
+ * the ribbon ends and the drops are about twice as long (drop 0.44 m), so they read at 4-6 m.
+ * Plane frame of `m`: x along, y up, z out of the wall; the bows sit at (±w/2, 0) and the swag sags `sag` × w between
+ * them. Full 276-292 triangles (9-10 stations), lite 100 (8 stations).
+ */
+export function carvedHead(b: Bucket, m: THREE.Matrix4, w: number, bead: number, sag: number, lite = false): void {
+  const put = (g: THREE.BufferGeometry, x: number, y: number, z: number, sx: number, sy: number, sz: number, rot = 0, twist = 0) =>
+    b.geometry(g, m.clone().multiply(T(x, y, z)).multiply(new THREE.Matrix4().makeRotationZ(rot)).multiply(new THREE.Matrix4().makeRotationX(twist)).multiply(new THREE.Matrix4().makeScale(sx, sy, sz)));
+  const span = w - bead * 1.2;
+  // stations ≈ 9 cm apart (9-10, lite 4); wider spacing takes slightly larger leaves so the garland stays closed
+  const n = lite ? 8 : Math.min(10, Math.max(9, Math.round(span / 0.09)));
+  const grow = Math.min(1.4, Math.max(1, span / n / 0.085));
+  const y0 = -bead * 0.4;
+  for (let k = 0; k < n; k++) {
+    const t = (k + 0.5) / n;
+    const fat = 0.75 + 0.5 * Math.sin(Math.PI * t);
+    const x = (t - 0.5) * span;
+    const y = y0 - 4 * sag * w * t * (1 - t);
+    const th = Math.atan(-4 * sag * (w / span) * (1 - 2 * t));
+    // leaves point from the bow towards the middle of the swag
+    const dir = t < 0.5 ? 1 : -1;
+    const along = dir > 0 ? th : th + Math.PI;
+    const hl = bead * (lite ? 1.4 : 1.6) * fat * grow;
+    // full: a pair per station; lite: one leaf per station, alternately above and below the swag line
+    for (const v of lite ? [k % 2 === 0 ? 1 : -1] : [-1, 1]) {
+      const phi = along + v * dir * 0.38;
+      put(LEAF, x + Math.cos(phi) * hl * 0.6, y + Math.sin(phi) * hl * 0.6, bead * 0.55 * fat, hl, bead * 0.62 * fat, bead * 0.42 * fat, phi, v * 0.35);
+    }
+  }
+  const knot = KNOT_LITE;
+  for (const sx of [-1, 1]) {
+    const x = (sx * w) / 2;
+    // the bow: two loops either side of the knot
+    for (const lx of [-1, 1]) put(knot, x + lx * bead * 1.1, bead * 0.3, bead * 0.4, bead * 1.15, bead * 0.6, bead * 0.3, lx * 0.45);
+    put(knot, x, 0, bead * 0.5, bead * 0.5, bead * 0.5, bead * 0.45);
+    if (lite) continue;
+    // ribbon ends (twice the wave-11 length), fluttering slightly outwards
+    for (const lx of [-1, 1]) put(LEAF, x + lx * bead * 0.9, -bead * 2.4, bead * 0.25, bead * 0.3, bead * 2.2, bead * 0.1, lx * 0.22);
+    // a laurel drop of four shrinking leaves pointing down, alternately turned (≈ 1.9 × the wave-11 drop: 0.44 m)
+    for (let k = 0; k < 4; k++) {
+      const s = 1.7 - 0.15 * k;
+      const lean = (k % 2 === 0 ? 1 : -1) * 0.28;
+      put(LEAF, x + lean * bead * 0.9, -bead * (2.8 + 3.2 * k), bead * 0.6, bead * s, bead * 0.55 * s, bead * 0.42, -Math.PI / 2 + lean, lean * 1.2);
+    }
+  }
 }
 
 /**

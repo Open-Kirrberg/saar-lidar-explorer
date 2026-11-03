@@ -81,7 +81,8 @@ export interface RotundaPortico {
   pediment: { base_h: number; apex_h: number; halfWidth: number } | null;
   /**
    * Attic block the portico roof ends against (wave-4 review): distances from the centre along the axis (front, back),
-   * half width and top height; top ≥ the pediment's roof + ROTUNDA.atticBlockClear. Null without a pediment.
+   * half width and top height; top ≥ the pediment's roof + ROTUNDA.atticBlockClear. Null without a pediment, and
+   * null when the roof runs into the drum under a lead collar (ROTUNDA.porticoCollar, wave 10).
    */
   atticBlock: { front: number; back: number; halfWidth: number; top_h: number } | null;
   steps: RotundaSteps;
@@ -213,7 +214,8 @@ export function rotundaLayout(L: BuildingLayout): RotundaLayout | null {
     const pediment = p.pediment ? { base_h: order.entablature[1], apex_h: order.entablature[1] + corniceHalf * Math.tan(pitch), halfWidth: corniceHalf } : null;
     // attic block: from just in front of the drum cornice back into the dome, a little wider than the pediment; its top
     // clears the pediment's lead roof (0.07 m over the raking cornice) [N]
-    const atticBlock = pediment
+    // wave 10 (audit #10): no block when the roof is flashed into the drum (ROTUNDA.porticoCollar)
+    const atticBlock = pediment && !ROTUNDA.porticoCollar
       ? {
           front: R + 0.45,
           back: Math.sqrt(Math.max(0, R * R - (corniceHalf + 0.1) ** 2)) - 0.3,

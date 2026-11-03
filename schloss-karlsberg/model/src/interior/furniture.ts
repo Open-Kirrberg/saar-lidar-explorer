@@ -30,19 +30,157 @@ function legs(b: Bucket, w: number, d: number, h: number, t = 0.045, inset = 0.0
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.geometry(cyl(t * 0.55, t * 0.75, h, 6), T(sx * (w / 2 - inset - t / 2), h / 2, sz * (d / 2 - inset - t / 2)));
 }
 
+/**
+ * Wave 10 (audit #9): a fluted, tapering Louis-seize leg - the square dé (corner block) under the rail, a collar, a
+ * fluted shaft (alternate vertices of a 12-gon pulled in), a ring and a toupie foot [N Jacob / Sené seating 1780s].
+ */
+function lsLeg(b: Bucket, x: number, z: number, h: number, r: number): void {
+  // budget (wave 10): ≈ 38 triangles a leg - the box dé, an open 8-gon fluted shaft, an open toupie cone
+  b.box([x - r * 1.25, h - 0.09, z - r * 1.25], [x + r * 1.25, h, z + r * 1.25], undefined, ['+y', '-y']); // top hidden under the rail, bottom on the shaft
+  const shaft = new THREE.CylinderGeometry(r, r * 0.62, h - 0.16, 8, 1, true);
+  const pos = shaft.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    const a = Math.atan2(pos.getZ(i), pos.getX(i));
+    const k = Math.round((a / (Math.PI * 2)) * 8 + 8) % 2 ? 0.8 : 1;
+    pos.setXYZ(i, pos.getX(i) * k, pos.getY(i), pos.getZ(i) * k);
+  }
+  shaft.computeVertexNormals();
+  b.geometry(shaft, T(x, 0.07 + (h - 0.16) / 2, z));
+  b.geometry(new THREE.CylinderGeometry(r * 0.75, r * 0.3, 0.07, 6, 1, true), T(x, 0.035, z));
+}
+
+/**
+ * Wave 11 (audit #9 rest): the moulded oval of a medallion back as a swept profile instead of a 3-sided tube (which
+ * read as a thick faceted ring at 1:1): the centre line is the ellipse (half axes a, b) in the local XY plane, the
+ * section `prof` is [radial offset (+ outward), depth (+ towards the room)] as a closed loop (last point joins the
+ * first). Normals are smooth around the oval and hard across the section, so the bead catches one clean highlight.
+ */
+export function ovalMoulding(a: number, b: number, segs: number, prof: readonly (readonly [number, number])[]): THREE.BufferGeometry {
+  const pos: number[] = [];
+  const nor: number[] = [];
+  const idx: number[] = [];
+  const loop = [...prof, prof[0]];
+  for (let k = 0; k < loop.length - 1; k++) {
+    const [r0, z0] = loop[k];
+    const [r1, z1] = loop[k + 1];
+    const l = Math.hypot(r1 - r0, z1 - z0) || 1;
+    // the section runs clockwise in (r, z): its outward normal is (-dz, dr)
+    const sr = -(z1 - z0) / l;
+    const sz = (r1 - r0) / l;
+    const base = pos.length / 3;
+    for (let i = 0; i <= segs; i++) {
+      const t = (i / segs) * Math.PI * 2;
+      const ex = a * Math.cos(t);
+      const ey = b * Math.sin(t);
+      let nx = Math.cos(t) / a;
+      let ny = Math.sin(t) / b;
+      const nl = Math.hypot(nx, ny);
+      nx /= nl;
+      ny /= nl;
+      for (const [r, z] of [[r0, z0], [r1, z1]]) {
+        pos.push(ex + nx * r, ey + ny * r, z);
+        nor.push(nx * sr, ny * sr, sz);
+      }
+    }
+    for (let i = 0; i < segs; i++) {
+      const v = base + i * 2;
+      idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setIndex(idx);
+  return g;
+}
+
+/**
+ * Section of the medallion moulding (m): a 22 mm rail, 16 mm deep, with a rounded bead towards the room and a flat
+ * back - the carved and gilt "baguette" of a Louis-seize chaise en médaillon [N Jacob / Sené 1780s].
+ */
+export const MEDALLION_SECTION: readonly (readonly [number, number])[] = [
+  [-0.011, -0.008],
+  [-0.011, 0.002],
+  [-0.002, 0.008],
+  [0.011, 0.002],
+  [0.011, -0.008],
+];
+
+/**
+ * Wave-10 review: a carved ribbon knot (noeud de ruban) on the crest of a medallion back - two flattened loops and the
+ * knot, with short tails [N Louis-seize carving].
+ */
+function ribbonCrest(b: Bucket, y: number, z: number): void {
+  // budget: ≈ 56 triangles (143 seats in B02 alone stay within the 300k interior budget)
+  for (const sx of [-1, 1]) {
+    const loop = new THREE.TorusGeometry(0.022, 0.0065, 3, 4).scale(1.25, 0.8, 0.6);
+    b.geometry(loop, T(sx * 0.03, y + 0.022, z).multiply(new THREE.Matrix4().makeRotationZ(sx * 0.35)));
+  }
+  b.geometry(new THREE.OctahedronGeometry(0.012), T(0, y + 0.02, z));
+}
+
+/**
+ * Louis-seize seat [N research/09 I-rows; Jacob / Dugourc forms of research/01 §3.2; T5 counts]: gilt frame on four
+ * fluted tapering legs, a seat rail bowed at the front, a stuffed seat, arm supports set back on the legs with padded
+ * manchettes (fauteuil, canapé), and an upholstered back in a moulded frame - an oval medallion on the chairs and
+ * armchairs, a rectangular back with an arched top rail on the canapé. Wave 10 (audit #9: the slab-backed box chairs).
+ */
 function seat(gilt: THREE.Material, silk: THREE.Material, w: number, d: number, arms: boolean, backH: number): PartSpec[] {
+  const sh = 0.44; // seat rail top
+  const medallion = w < 1.2;
+  const bw = medallion ? w * 0.78 : w - 0.1; // back width
+  const b0 = sh + 0.1; // back frame bottom
+  const b1 = sh + backH; // back frame top
+  const bz = -d / 2 + 0.03;
   return [
     {
       mat: gilt,
       label: 'Gestell (vergoldet)',
       build: (b) => {
-        legs(b, w, d, 0.4);
-        b.box([-w / 2, 0.38, -d / 2], [w / 2, 0.44, d / 2]);
-        b.box([-w / 2 + 0.02, 0.44, -d / 2], [w / 2 - 0.02, 0.44 + backH, -d / 2 + 0.05]);
+        const r = 0.024;
+        for (const sx of [-1, 1]) for (const sz of [-1, 1]) lsLeg(b, sx * (w / 2 - 0.04), sz * (d / 2 - 0.04), sh - 0.02, r);
+        // wave-10 review: a canapé stands on six fluted legs (a middle pair) [N]
+        if (!medallion) for (const sz of [-1, 1]) lsLeg(b, 0, sz * (d / 2 - 0.04), sh - 0.02, r);
+        // seat rails: back and sides straight, the front bowed in three pieces (undersides never seen: skipped)
+        const U = ['-y'];
+        b.box([-w / 2 + 0.01, sh - 0.1, -d / 2 + 0.01], [w / 2 - 0.01, sh - 0.02, -d / 2 + 0.04], undefined, U);
+        for (const sx of [-1, 1]) b.box([sx * (w / 2) - 0.03 * sx - 0.015, sh - 0.1, -d / 2 + 0.02], [sx * (w / 2) - 0.03 * sx + 0.015, sh - 0.02, d / 2 - 0.02], undefined, U);
+        const bow = 0.03;
+        b.box([-w * 0.22, sh - 0.1, d / 2 - 0.03 + bow - 0.015], [w * 0.22, sh - 0.02, d / 2 - 0.03 + bow + 0.015], undefined, U);
+        for (const sx of [-1, 1]) {
+          const len = w / 2 - 0.04 - w * 0.22;
+          const ang = Math.atan2(bow, len);
+          const m = T(sx * (w * 0.22 + len / 2), sh - 0.06, d / 2 - 0.03 + bow / 2).multiply(new THREE.Matrix4().makeRotationY(sx * ang));
+          b.box([-len / 2 - 0.01, -0.04, -0.015], [len / 2 + 0.01, 0.04, 0.015], m, U);
+        }
+        // back: uprights from the back legs and the frame
+        for (const sx of [-1, 1]) b.box([sx * (bw / 2) - 0.02, sh - 0.02, bz - 0.02], [sx * (bw / 2) + 0.02, b0 + 0.05, bz + 0.02]);
+        if (medallion) {
+          const cy = (b0 + b1) / 2;
+          // wave 11 (audit #9 rest): a fine carved oval - a 22 mm swept bead on 18 segments with smooth normals around
+          // it - instead of the 3-sided 16-segment tube that read as a thick faceted gold ring at 1:1 (pose 20) [N]
+          b.geometry(ovalMoulding(bw / 2 - 0.012, (b1 - b0) / 2 - 0.012, 18, MEDALLION_SECTION), T(0, cy, bz));
+          ribbonCrest(b, b1 - 0.004, bz);
+        } else {
+          b.box([-bw / 2 - 0.02, b0 - 0.02, bz - 0.02], [-bw / 2 + 0.02, b1, bz + 0.02]);
+          b.box([bw / 2 - 0.02, b0 - 0.02, bz - 0.02], [bw / 2 + 0.02, b1, bz + 0.02]);
+          b.box([-bw / 2, b0 - 0.02, bz - 0.02], [bw / 2, b0 + 0.02, bz + 0.02]);
+          // arched top rail (chapeau de gendarme) in two rising halves
+          for (const sx of [-1, 1]) {
+            const half = bw / 2;
+            const rise = 0.06;
+            const ang = Math.atan2(rise, half);
+            const m = T(sx * half / 2, b1 + rise / 2, bz).multiply(new THREE.Matrix4().makeRotationZ(-sx * ang));
+            b.box([-half / 2 - 0.02, -0.025, -0.02], [half / 2 + 0.02, 0.025, 0.02], m);
+          }
+        }
         if (arms) {
           for (const sx of [-1, 1]) {
-            b.box([sx * (w / 2) - 0.025, 0.62, -d / 2 + 0.05], [sx * (w / 2) + 0.025, 0.66, d / 2 - 0.08]);
-            b.box([sx * (w / 2) - 0.02, 0.44, d / 2 - 0.12], [sx * (w / 2) + 0.02, 0.64, d / 2 - 0.08]);
+            // arm support set back from the front leg, and the arm rest curving down to the back
+            const x = sx * (w / 2 - 0.035);
+            b.box([x - 0.02, sh - 0.02, d / 2 - 0.16], [x + 0.02, 0.66, d / 2 - 0.12]);
+            b.box([x - 0.022, 0.64, -d / 2 + 0.06], [x + 0.022, 0.67, d / 2 - 0.1]);
+            b.box([x - 0.03, 0.635, d / 2 - 0.13], [x + 0.03, 0.685, d / 2 - 0.07]);
           }
         }
       },
@@ -52,8 +190,31 @@ function seat(gilt: THREE.Material, silk: THREE.Material, w: number, d: number, 
       colourable: true,
       label: 'Bezug (Seide)',
       build: (b) => {
-        b.box([-w / 2 + 0.03, 0.44, -d / 2 + 0.05], [w / 2 - 0.03, 0.5, d / 2 - 0.02], undefined, ['-y']);
-        b.box([-w / 2 + 0.07, 0.52, -d / 2 + 0.05], [w / 2 - 0.07, 0.44 + backH - 0.06, -d / 2 + 0.07], undefined, ['-z']);
+        // stuffed seat: a squab with a domed top
+        b.box([-w / 2 + 0.03, sh - 0.02, -d / 2 + 0.04], [w / 2 - 0.03, sh + 0.035, d / 2 - 0.01], undefined, ['-y']);
+        // wave-10 review: a domed stuffing (half ellipsoid) instead of a second flat slab
+        const dome = new THREE.SphereGeometry(1, 10, 2, 0, Math.PI * 2, 0, Math.PI / 2).scale(w / 2 - 0.04, 0.045, (d - 0.06) / 2);
+        b.geometry(dome, T(0, sh + 0.033, 0.015));
+        if (medallion) {
+          // wave 11: the upholstery sits inside the finer moulding, its faces just behind the bead's crown
+          const disc = new THREE.CircleGeometry(1, 18).scale(bw / 2 - 0.026, (b1 - b0) / 2 - 0.026, 1);
+          b.geometry(disc, T(0, (b0 + b1) / 2, bz + 0.006));
+          b.geometry(disc.clone().rotateY(Math.PI), T(0, (b0 + b1) / 2, bz - 0.007));
+        } else {
+          // wave-10 review: the canapé's back cushion follows the arched top rail (chapeau de gendarme) and is padded
+          // (a thicker middle), not a flat slab
+          const sh2 = new THREE.Shape();
+          const hw = bw / 2 - 0.02;
+          sh2.moveTo(-hw, b0 + 0.02);
+          sh2.lineTo(hw, b0 + 0.02);
+          sh2.lineTo(hw, b1 + 0.01);
+          sh2.quadraticCurveTo(hw * 0.45, b1 + 0.07, 0, b1 + 0.065);
+          sh2.quadraticCurveTo(-hw * 0.45, b1 + 0.07, -hw, b1 + 0.01);
+          sh2.closePath();
+          const pad = new THREE.ExtrudeGeometry(sh2, { depth: 0.02, bevelEnabled: true, bevelThickness: 0.018, bevelSize: 0.015, bevelSegments: 2, curveSegments: 8 });
+          b.geometry(pad, T(0, 0, bz - 0.01));
+        }
+        if (arms) for (const sx of [-1, 1]) b.box([sx * (w / 2 - 0.035) - 0.026, 0.665, -d / 2 + 0.14], [sx * (w / 2 - 0.035) + 0.026, 0.69, d / 2 - 0.2], undefined, ['-y']);
       },
     },
   ];

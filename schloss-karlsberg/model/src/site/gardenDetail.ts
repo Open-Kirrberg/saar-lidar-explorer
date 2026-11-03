@@ -15,7 +15,8 @@ import type { BuildContext } from '../context.ts';
 import { E0, N0, gridFrame } from '../frame.ts';
 import { type P2, hashString, mulberry32, pointInPolygon } from '../layout/geom.ts';
 import { type AngloiseLayout, distanceToLine, kitchenBeds, parterreAnglaise, type RectUV } from '../layout/garden.ts';
-import { GARDEN_DETAIL } from '../layout/grammar.ts';
+import { GARDEN_DETAIL, HOTBED_LIGHT } from '../layout/grammar.ts';
+import { hotbedLightStates, lightSection } from './hotbed.ts';
 import type { EN, GardenItem, SiteSpec, TerrainFeature } from '../spec.ts';
 import { type GeoBuilder, type MatKey, matKey } from '../exterior/builder.ts';
 import { type HedgeProfilePoint, hedgeProfile } from './hedgeProfile.ts';
@@ -831,8 +832,13 @@ export function buildBeds(env: GardenDetailEnv, f: TerrainFeature): void {
     }
   }
   // hotbed frames: timber boxes 1.3 m deep (N-S), lights 1.0 m wide along the row, glass tilted to the S [D-> BSB 25r]
+  // wave 10 (audit #11: the lights read as blue solar panels): small lapped panes of greenish crown glass in wooden
+  // sash bars, a soft sheen instead of the facade glass's mirror (no room proxy, no SSR), and the July states:
+  // propped up, taken off or limewashed (grammar HOTBED_LIGHT; hotbed.ts) [D-> BSB 25r; N]. The panes use the plain
+  // painted-joinery material (roughness 0.6), not a `stone.*` one: the explorer light layer exports stone site meshes
   const woodK = matKey('wood.frame', '#6B5A45');
-  const glassK = matKey('glass.crown');
+  const glassK = matKey('wood.frame', HOTBED_LIGHT.glass);
+  const washK = matKey('wood.frame', HOTBED_LIGHT.whitewash);
   const seedK = matKey('ground.grass', '#3E5530');
   const grid = gridFrame(env.spec.palace_grid);
   for (const row of bl.frame_rows ?? []) {
@@ -848,6 +854,7 @@ export function buildBeds(env: GardenDetailEnv, f: TerrainFeature): void {
     if (sth[0] * (Eb - Ea) + sth[1] * (Nb - Na) < 0) sth = [-sth[0], -sth[1]];
     const [lw, ld] = K.frameLight; // 1.3 along N-S, 1.0 along the row
     const n = Math.floor(L / ld);
+    const states = hotbedLightStates(n, hashString(`${f.id}/${row[0][0].toFixed(1)},${row[0][1].toFixed(1)}`) ^ env.ctx.options.seed);
     for (let q = 0; q < n; q++) {
       const a = q * ld;
       const ms = p0[0] + tan[0] * (a + ld / 2);
@@ -864,8 +871,25 @@ export function buildBeds(env: GardenDetailEnv, f: TerrainFeature): void {
       // seedlings under the glass, then the sloped glass light and its frame bar
       gb.orientedBox(seedK, p0, tan, sth, a + 0.05, a + ld, -D + 0.05, D - 0.05, y - 0.05, y + 0.08);
       const P3 = (al: number, d: number, hh: number): P3 => [p0[0] + tan[0] * al + sth[0] * d, p0[1] + tan[1] * al + sth[1] * d, hh];
-      gb.quad(glassK, P3(a + 0.03, D, loY + 0.02), P3(a + ld - 0.03, D, loY + 0.02), P3(a + ld - 0.03, -D, hiY + 0.02), P3(a + 0.03, -D, hiY + 0.02));
       gb.quad(woodK, P3(a - 0.02, D, loY + 0.03), P3(a + 0.04, D, loY + 0.03), P3(a + 0.04, -D, hiY + 0.03), P3(a - 0.02, -D, hiY + 0.03));
+      const st = states[q];
+      if (st.kind === 'removed') continue; // taken off: the seedlings show
+      const [fd, fh, bd, bh] = lightSection(D, loY + 0.02, hiY + 0.02, st.kind === 'propped' ? st.deg : 0);
+      const pane = st.kind === 'whitewashed' ? washK : glassK;
+      gb.quad(pane, P3(a + 0.03, fd, fh), P3(a + ld - 0.03, fd, fh), P3(a + ld - 0.03, bd, bh), P3(a + 0.03, bd, bh));
+      // sash frame (sides) and bars along the slope, 1 cm proud of the glass
+      const bw = HOTBED_LIGHT.bar;
+      for (let b = 0; b <= HOTBED_LIGHT.bars + 1; b++) {
+        const x = a + 0.03 + ((ld - 0.06) * b) / (HOTBED_LIGHT.bars + 1);
+        const x0 = Math.max(a + 0.03, x - bw / 2);
+        const x1 = Math.min(a + ld - 0.03, x + bw / 2);
+        gb.quad(woodK, P3(x0, fd, fh + 0.012), P3(x1, fd, fh + 0.012), P3(x1, bd, bh + 0.012), P3(x0, bd, bh + 0.012));
+      }
+      if (st.kind === 'propped') {
+        // the prop: a short stick under the raised back edge
+        const pd = bd + 0.08;
+        gb.orientedBox(woodK, p0, tan, sth, a + ld / 2 - 0.02, a + ld / 2 + 0.02, pd - 0.02, pd + 0.02, hiY - 0.02, bh);
+      }
     }
     // closing end board
     gb.orientedBox(woodK, p0, tan, sth, n * ld, n * ld + 0.05, -lw / 2, lw / 2, groundAt(env, p0[0] + tan[0] * n * ld, p0[1] + tan[1] * n * ld, 340) - 0.05, groundAt(env, p0[0] + tan[0] * n * ld, p0[1] + tan[1] * n * ld, 340) + K.frameLow);

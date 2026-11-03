@@ -27,7 +27,7 @@ import { buildingLum, limewashColour, roofTint } from './shade.ts';
 import { buildFacades, buildRoundFacades } from './facade.ts';
 import { buildRotunda } from './rotunda.ts'; // KB-I24 round temple pavilion (programme owner)
 import { vaneAt } from './hardware.ts';
-import { COURT_FURNITURE, GARDEN_DETAIL } from '../layout/grammar.ts';
+import { COURT_FURNITURE, GARDEN_DETAIL, ROTUNDA } from '../layout/grammar.ts';
 import { gardenWall } from '../site/gardenWall.ts'; // wave 5: stepped garden walls (garden owner)
 import { buildGlasshouse } from './glasshouse.ts'; // wave-5 fix: lean-to forcing houses (garden owner)
 import { buildMenagerie } from './menagerie.ts'; // KB-I29 menagerie houses (architecture)
@@ -168,7 +168,10 @@ export function buildRoof(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPalette
     const r = f.shape === 'round' ? (f.radius ?? f.width / 2) : Math.min(f.length, f.width) / 2;
     // smooth revolved roofs: 48 segments and 12 profile steps from LOD1 (wave-4 review, lead dome of KB-B07)
     const s = type === 'dome' || type === 'mound' ? domeSection({ ...sec, type: 'dome' }, lod >= 1 ? 12 : 8) : sec;
-    roundRoof(g, s, r, pal.roof, 0, 0, lod >= 1 ? 48 : 32);
+    // wave-10 review: a round sheet-lead dome (KB-B07) in alternating gores between its roll seams (grammar ROTUNDA)
+    const leadDome = type === 'dome' && f.shape === 'round' && L.building.roof.cover === 'lead' && lod >= 1;
+    const gores = leadDome ? { count: ROTUNDA.domeRibs, keys: ROTUNDA.leadGores.map((c) => matKey('roof.lead', c)) } : undefined;
+    roundRoof(g, s, r, pal.roof, 0, 0, leadDome ? ROTUNDA.domeRibs * 4 : lod >= 1 ? 48 : 32, undefined, gores);
     if (f.shape !== 'round') {
       // dome over a rectangle: close the corners with a flat lead deck at the eaves
       const l = f.length / 2;

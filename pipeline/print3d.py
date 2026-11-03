@@ -1,4 +1,4 @@
-"""F21 3D-Druck: printable terrain tiles (3MF, optional STL) on a global UTM grid, from the 1 m DGM.
+"""F21 3D-Druck: printable terrain tiles (3MF, optional STL) on a global UTM grid, from the 1 m DGM + LoD2 buildings.
 
 Usage:
   uv run python print3d.py --series saarpfalz-9200 --tiles E380_N5460 E382_N5460
@@ -7,7 +7,7 @@ Usage:
   uv run python print3d.py --series detail-2300 --set karlsberg --set merburg   # named sets in print3d.toml
   uv run python print3d.py --series detail-2300 --tiles E383_N5466 --datum 290   # ad-hoc tile, per-set datum
   uv run python print3d.py --series saarpfalz-9200 --layout-only          # rebuild index summary + layout.png
-  options: --no-fetch (cached tiles only) --stl (also write STL, ≈ 100 MB per tile) --out DIR --list
+  options: --no-buildings (bare earth) --no-fetch (cached tiles only) --stl (also write STL, ≈ 100 MB per tile) --out DIR --list
 
 Series are defined in print3d.toml. Every tile of a series lies on the series' global grid (lower-left E, N ≡
 origin mod tile_m) and is computed only from the raw 1 km DGM tiles (LVGL-SL 2025, RLP 2022 fill with a constant
@@ -22,6 +22,10 @@ of the DGM over the axis-aligned square of side `cell` = tile_m/(V−1) centred 
 the plain mean of the 2 × 2 cells around the integer vertex position; for cell = 0.5 m it equals bilinear
 interpolation of the cell centres. The weights depend only on global coordinates and are summed in a fixed order,
 so a shared edge is bit-identical in both neighbours.
+
+Buildings (default, `buildings` in print3d.toml): LoD2 roofs (raw CityGML, SL + RLP) rasterised on the same vertex
+grid, grey-scale opened so nothing narrower than building_min_feature_mm is left in the print, h = max(DGM, roof),
+same z formula (see the "buildings (LoD2)" section).
 
 Datum: a series either has one datum_m for all tiles (datum_mode "series", e.g. the 2 km main series) or a local
 datum per named set (datum_mode "set": floor(min h of the set) − datum_margin_m, frozen in index.json
@@ -104,6 +108,19 @@ class Slicer:
     time_saving_pct: tuple[int, int] = (-3, 22)
 
 
+ROLES = ("main", "detail", "single")   # single: a standalone showpiece (own origin, no neighbours, no AOI grid)
+
+
+def title_problem(title: str) -> str | None:
+    """Why `title` cannot be engraved with the stroke font (_G), or None. Case-insensitive; no umlauts."""
+    bad = sorted({ch for ch in title.upper() if ch not in _G})
+    if bad:
+        return f"title {title!r}: no engraving glyph for {''.join(bad)!r} (A–Z, 0–9, space, - _ . : / =)"
+    if len(title) > 16:
+        return f"title {title!r}: at most 16 characters"
+    return None
+
+
 SLICER_PATTERNS_DE = {"lightning": "Blitz", "gyroid": "Gyroid", "adaptivecubic": "Adaptiv kubisch",
                       "grid": "Gitternetz"}   # Bambu Studio 02.08 German UI (i18n/de/BambuStudio.mo)
 
@@ -122,7 +139,8 @@ class Series:
     datum_mode: str = "series"        # "series": datum_m for every tile; "set": local datum per named set
     datum_margin_m: float = 5.0       # set datum = floor(min h of the set) − margin
     printer: str = "stock"            # "stock" (Bambu P1S stock profile) | "sle-250" (user preset, 250 mm tiles)
-    role: str = "main"                # "main" | "detail" (catalog hint for the app)
+    role: str = "main"                # "main" | "detail" | "single" (catalog hint for the app, ROLES)
+    title: str = ""                   # optional name engraved large on the bottom (e.g. "Kirrberg"); "" = none
     origin: tuple[int, int] = (0, 0)
     rlp_offset_m: float = -0.07
     counties: tuple[str, ...] = ("SPK",)
@@ -133,7 +151,9 @@ class Series:
     shell_mm: float = 0.9
     infill: float = 0.155
     max_error_mm: float = 0.03        # top-surface simplification: max |Δz| at every sampled vertex; 0 = full grid
-    max_triangles: int = 500_000      # top-surface triangle budget (walls + bottom add ≈ 10–20 k)
+    max_triangles: int = 900_000      # top-surface triangle budget (walls + bottom add ≈ 10–20 k; Bambu warns > 1 M)
+    buildings: bool = True            # LoD2 buildings in the heightfield (False / --no-buildings: bare earth)
+    building_min_feature_mm: float = 0.8   # opening disk: building parts narrower than this in the print are dropped
     connectors: Connectors = field(default_factory=Connectors)
     slicer: Slicer | None = None      # recommended process changes (None: none recommended)
     sets: dict = field(default_factory=dict, compare=False, hash=False)
@@ -159,6 +179,10 @@ def check_series(s: Series) -> None:
         raise ValueError(f"{s.key}: datum_mode must be 'series' or 'set'")
     if (s.datum_mode == "series") != (s.datum_m is not None):
         raise ValueError(f"{s.key}: datum_m must be set for datum_mode 'series' and None for 'set'")
+    if s.role not in ROLES:
+        raise ValueError(f"{s.key}: role must be one of {list(ROLES)}")
+    if s.title and (err := title_problem(s.title)):
+        raise ValueError(f"{s.key}: {err}")
     if s.datum_margin_m < 0:
         raise ValueError(f"{s.key}: datum_margin_m must be ≥ 0")
     if s.vertices < 3:
@@ -186,6 +210,8 @@ def check_series(s: Series) -> None:
         raise ValueError(f"{s.key}: max_height_mm {s.max_height_mm} > printable height {PRINTABLE_HEIGHT_MM} mm")
     if s.max_error_mm < 0 or s.max_triangles < 16 * (s.vertices - 1):
         raise ValueError(f"{s.key}: max_error_mm must be ≥ 0 and max_triangles ≥ 16·(vertices − 1)")
+    if s.building_min_feature_mm < 0:
+        raise ValueError(f"{s.key}: building_min_feature_mm must be ≥ 0")
     if s.text and not (0 < s.engrave_mm < s.base_mm):
         raise ValueError(f"{s.key}: engrave_mm must be in (0, base_mm)")
     sl = s.slicer
@@ -213,13 +239,15 @@ def load_series(key: str, path: Path = CONFIG_PATH) -> Series:
         vertices=int(d.get("vertices", 1001)), exag=float(d.get("exag", 2.0)),
         datum_m=float(d.get("datum_m", 180.0)) if mode == "series" else None, base_mm=float(d.get("base_mm", 4.0)),
         datum_mode=mode, datum_margin_m=float(d.get("datum_margin_m", 5.0)),
-        printer=str(d.get("printer", "stock")), role=str(d.get("role", "main")),
+        printer=str(d.get("printer", "stock")), role=str(d.get("role", "main")), title=str(d.get("title", "")),
         origin=tuple(int(v) for v in d.get("origin", (0, 0))), rlp_offset_m=float(d.get("rlp_offset_m", -0.07)),
         counties=tuple(d.get("counties", ("SPK",))), max_height_mm=float(d.get("max_height_mm", 250.0)),
         text=bool(d.get("text", True)), engrave_mm=float(d.get("engrave_mm", 0.6)),
         material_density_g_cm3=float(d.get("material_density_g_cm3", 1.24)), shell_mm=float(d.get("shell_mm", 0.9)),
         infill=float(d.get("infill", 0.155)), max_error_mm=float(d.get("max_error_mm", 0.03)),
-        max_triangles=int(d.get("max_triangles", 500_000)),
+        max_triangles=int(d.get("max_triangles", 900_000)),
+        buildings=bool(d.get("buildings", True)),
+        building_min_feature_mm=float(d.get("building_min_feature_mm", 0.8)),
         connectors=Connectors(enabled=bool(conn.get("enabled", True)),
                               positions=tuple(float(p) for p in conn.get("positions", (0.25, 0.75))),
                               **{k: float(conn[k]) for k in ("depth_mm", "length_mm", "waist_mm", "end_mm",
@@ -353,6 +381,318 @@ def z_from_h(h: np.ndarray, s: Series, datum_m: float | None = None) -> tuple[np
 def set_datum(h_min: float, margin_m: float) -> float:
     """Local datum of a set: whole metres below the lowest vertex of the set, minus the margin."""
     return float(math.floor(h_min) - margin_m)
+
+
+# ============================================================================ buildings (LoD2)
+# Buildings become part of the heightfield: at every vertex inside the top view of a LoD2 building the surface height
+# is max(DGM sample, highest LoD2 surface above that point), after a grey-scale opening of the LoD2 surface that
+# removes parts narrower than `building_min_feature_mm` in the print at every height level (a 2-D footprint opening
+# kept thin towers standing on wider roofs — Bambu Studio then reported "floating regions" on Homburg E378_N5464). Everything is a function of global coordinates (vertex
+# positions from the global grid index, LoD2 geometry, a fixed margin), so a building crossing a tile edge is cut
+# identically on both sides and shared edges stay bit-identical. Same z formula (datum, scale, exag) as the terrain.
+LOD2_MARGIN_M = 500.0     # LoD2 files are read for the tile box ± this; a building may overhang its file square by at
+                          # most this much (checked on load; measured max 197 m over the 69 SL tiles around Homburg)
+
+
+def grid_coords(start: int, origin: int, tile_m: int, n: int, lo: int, hi: int) -> np.ndarray:
+    """Vertex coordinates for local indices lo … hi (inclusive; may lie outside 0 … n−1) from the GLOBAL vertex index
+    g = (start − origin)·(n − 1)/tile_m + i: x = origin + g·tile_m/(n − 1). Equal in every tile that contains the
+    same global vertex (also beyond its own edges) and equal to vertex_coords for 0 … n−1 on dyadic cells."""
+    g0 = (start - origin) * (n - 1) // tile_m
+    g = np.arange(lo, hi + 1, dtype=np.int64) + g0
+    return origin + (g * tile_m) / (n - 1)
+
+
+def feature_cells(min_feature_mm: float, cell_mm: float) -> int:
+    """Diameter (in grid cells) of the opening disk: the smallest whole number of cells ≥ min_feature_mm."""
+    return max(1, math.ceil(min_feature_mm / cell_mm - 1e-9)) if min_feature_mm > 0 else 0
+
+
+def disk_offsets(k: int) -> list[tuple[int, int]]:
+    """(dy, dx) of a digital disk of diameter k cells (k × k box, cells whose centre is within k/2 of its centre)."""
+    c, r2 = (k - 1) / 2, (k / 2) ** 2
+    return [(a, b) for a in range(k) for b in range(k) if (a - c) ** 2 + (b - c) ** 2 <= r2 + 1e-9]
+
+
+def _shift(a: np.ndarray, dy: int, dx: int, fill=0) -> np.ndarray:
+    """out[y, x] = a[y + dy, x + dx] (`fill` outside)."""
+    out = np.full_like(a, fill)
+    H, W = a.shape
+    ys, yd = (slice(dy, H), slice(0, H - dy)) if dy >= 0 else (slice(0, H + dy), slice(-dy, H))
+    xs, xd = (slice(dx, W), slice(0, W - dx)) if dx >= 0 else (slice(0, W + dx), slice(-dx, W))
+    out[yd, xd] = a[ys, xs]
+    return out
+
+
+def grey_open(g: np.ndarray, k: int) -> np.ndarray:
+    """Flat grey-scale opening with a k-cell disk (−inf = no building; outside the array counts as −inf): min over
+    the disk, then max over the disk. At every height level z the cross-section {g ≥ z} is opened, i.e. the result
+    is the highest level at which a whole disk placement around the cell still lies inside the building: parts
+    narrower than k cells are removed (−inf), and a narrow part standing on a wider, lower one (a thin tower on a
+    roof) is cut down to the lower one. Anti-extensive (≤ g), idempotent. k ≤ 1: unchanged."""
+    g = np.asarray(g, np.float64)
+    if k <= 1:
+        return g.copy()
+    offs = disk_offsets(k)
+    ero = np.full_like(g, np.inf)
+    for dy, dx in offs:
+        ero = np.minimum(ero, _shift(g, dy, dx, -np.inf))
+    out = np.full_like(g, -np.inf)
+    for dy, dx in offs:
+        out = np.maximum(out, _shift(ero, -dy, -dx, -np.inf))
+    return out
+
+
+def open_mask(mask: np.ndarray, k: int) -> np.ndarray:
+    """Binary opening with a k-cell disk: the union of all disk placements fully inside the mask (parts narrower than
+    k cells dropped; outside the array counts as False) = the support of grey_open."""
+    return np.isfinite(grey_open(np.where(np.asarray(mask, bool), 0.0, -np.inf), k))
+
+
+def rasterize_roofs(tris: np.ndarray, xs: np.ndarray, ys: np.ndarray,
+                    chunk: int = 4_000_000) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Top-down z-buffer of 3D triangles at the grid points (xs[i], ys[j]) (both ascending; row 0 = south).
+
+    tris: (k, 3, 3) E, N, h. A point counts as inside when it lies in the closed triangle (edge functions with a
+    1e-9 relative tolerance); its height is the plane height there (barycentric, clamped to the triangle's h range);
+    the result per point is the maximum over all triangles. Returns (roof (ny, nx) with NaN = no building,
+    pair triangle index, pair flat point index j·nx + i) for every inside (triangle, point) pair. Pure function of
+    the global coordinates: the same point gets the same value in every tile."""
+    ny, nx = len(ys), len(xs)
+    best = np.full(ny * nx, -np.inf)
+    pt, pp = [np.zeros(0, np.int64)], [np.zeros(0, np.int64)]
+    tris = np.asarray(tris, np.float64).reshape(-1, 3, 3)
+    if len(tris):
+        E, N = tris[:, :, 0], tris[:, :, 1]
+        i0, i1 = np.searchsorted(xs, E.min(1), "left"), np.searchsorted(xs, E.max(1), "right")
+        j0, j1 = np.searchsorted(ys, N.min(1), "left"), np.searchsorted(ys, N.max(1), "right")
+        w, hh = np.clip(i1 - i0, 0, None), np.clip(j1 - j0, 0, None)
+        cnt = w * hh
+        live = np.flatnonzero(cnt > 0)
+        csum = np.cumsum(cnt[live])
+        start = 0
+        while start < len(live):
+            stop = int(np.searchsorted(csum, (csum[start - 1] if start else 0) + chunk, "right"))
+            stop = max(stop, start + 1)
+            t_ids = live[start:stop]
+            c = cnt[t_ids]
+            t = np.repeat(t_ids, c)
+            k = np.arange(int(c.sum())) - np.repeat(np.cumsum(c) - c, c)
+            ii, jj = i0[t] + k % w[t], j0[t] + k // w[t]
+            px, py = xs[ii], ys[jj]
+            a, b, cc = tris[t, 0], tris[t, 1], tris[t, 2]
+            d = (b[:, 0] - a[:, 0]) * (cc[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (cc[:, 0] - a[:, 0])
+            e0 = (b[:, 0] - a[:, 0]) * (py - a[:, 1]) - (b[:, 1] - a[:, 1]) * (px - a[:, 0])   # weight of c
+            e1 = (cc[:, 0] - b[:, 0]) * (py - b[:, 1]) - (cc[:, 1] - b[:, 1]) * (px - b[:, 0])  # weight of a
+            e2 = (a[:, 0] - cc[:, 0]) * (py - cc[:, 1]) - (a[:, 1] - cc[:, 1]) * (px - cc[:, 0])  # weight of b
+            sg = np.sign(d)
+            tol = -1e-9 * np.abs(d)
+            ok = (np.abs(d) > 1e-8) & (e0 * sg >= tol) & (e1 * sg >= tol) & (e2 * sg >= tol)
+            if ok.any():
+                dd = np.where(ok, d, 1.0)
+                z = (e1 * a[:, 2] + e2 * b[:, 2] + e0 * cc[:, 2]) / dd
+                z = np.clip(z, tris[t, :, 2].min(1), tris[t, :, 2].max(1))
+                f = jj * nx + ii
+                np.maximum.at(best, f[ok], z[ok])
+                pt.append(t[ok])
+                pp.append(f[ok])
+            start = stop
+    roof = np.where(np.isfinite(best), best, np.nan).reshape(ny, nx)
+    return roof, np.concatenate(pt), np.concatenate(pp)
+
+
+@dataclass
+class Lod2:
+    """LoD2 buildings around a tile: non-vertical surface triangles (E, N, h) with their building index."""
+    tris: np.ndarray = field(default_factory=lambda: np.zeros((0, 3, 3)))
+    bidx: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))
+    ids: list = field(default_factory=list)
+    source: list = field(default_factory=list)            # 'sl' | 'rlp' per building
+    centroid: np.ndarray = field(default_factory=lambda: np.zeros((0, 2)))
+    files: dict = field(default_factory=dict)             # {'sl': [...], 'rlp': [...]} file names used
+
+
+def building_triangles(surfaces) -> np.ndarray:
+    """(rings, class) surfaces of a LoD2 building → (k, 3, 3) triangles of its non-vertical surfaces (roofs, closure
+    / ceiling / floor parts; walls dropped). GroundSurfaces are not passed (they lie below everything else)."""
+    from buildings import triangulate_polygon
+    out = []
+    for rings, _cls in surfaces:
+        r = triangulate_polygon(rings)
+        if r is None:
+            continue
+        v, t, nrm = r
+        if abs(nrm[2]) < 1e-3:
+            continue
+        out.append(v[t])
+    return np.concatenate(out) if out else np.zeros((0, 3, 3))
+
+
+def building_surface(s: Series, e0: int, n0: int, h: np.ndarray, lod2: Lod2) -> tuple[np.ndarray, dict]:
+    """Terrain h (n, n; row 0 = south) → (surface heights with buildings, stats).
+
+    Samples the LoD2 top view on the tile's vertex grid extended by a margin of k + 2 vertices (k = opening disk in
+    cells), opens the LoD2 surface (absolute heights, −inf outside buildings; no terrain involved) grey-scale with the
+    k-cell disk — at every height level, parts narrower than building_min_feature_mm in the print are removed or cut
+    down to the wider part below them — and raises kept vertices to max(h, opened roof). The margin makes the opening
+    at the tile edge see the same neighbourhood as the neighbouring tile, so shared edges stay bit-identical."""
+    n = s.vertices
+    k = feature_cells(s.building_min_feature_mm, s.cell_mm)
+    M = k + 2
+    xs = grid_coords(e0, s.origin[0], s.tile_m, n, -M, n - 1 + M)
+    ys = grid_coords(n0, s.origin[1], s.tile_m, n, -M, n - 1 + M)
+    roof, pt, pp = rasterize_roofs(lod2.tris, xs, ys)
+    cover = np.isfinite(roof)
+    op = grey_open(np.where(cover, roof, -np.inf), k)
+    kept = np.isfinite(op)
+    c = slice(M, M + n)
+    rc, kc = op[c, c], kept[c, c]
+    hs = np.where(kc, np.fmax(h, rc), h)
+    nb = len(lod2.ids)
+    in_tile = np.zeros(nb, bool)
+    if nb:
+        ce = lod2.centroid
+        in_tile = (ce[:, 0] >= e0) & (ce[:, 0] < e0 + s.tile_m) & (ce[:, 1] >= n0) & (ce[:, 1] < n0 + s.tile_m)
+    touched = np.zeros(nb, bool)
+    survived = np.zeros(nb, bool)
+    here = np.zeros(nb, bool)                              # a kept vertex of the building lies in this tile
+    if len(pt):
+        b = lod2.bidx[pt]
+        touched[b] = True
+        kp = kept.ravel()[pp]
+        survived[b[kp]] = True
+        jj, ii = np.divmod(pp, n + 2 * M)
+        here[b[kp & (jj >= M) & (jj < M + n) & (ii >= M) & (ii < M + n)]] = True
+    raised = kc & (rc > h)
+    above = np.where(raised, rc - h, 0.0)
+    stats = {
+        "enabled": True,
+        "count": int((in_tile & touched).sum()),          # buildings with their footprint centroid in this tile
+        "kept": int((in_tile & survived).sum()),           # … of which at least one vertex survived the opening
+        "dropped": int((in_tile & touched & ~survived).sum()),
+        "vertices": int(kc.sum()), "raisedVertices": int(raised.sum()),
+        "droppedVertices": int((cover[c, c] & ~kc).sum()),
+        "loweredVertices": int((kc & (rc < roof[c, c])).sum()),   # narrow upper parts cut down to a wider level
+        "maxAboveGround_m": round(float(above.max()) if raised.any() else 0.0, 2),
+        "minFeature_mm": s.building_min_feature_mm, "minFeature_cells": k,
+        "sources": {"sl": sorted(lod2.files.get("sl", [])), "rlp": sorted(lod2.files.get("rlp", []))},
+        "usedSources": sorted({lod2.source[i] for i in np.flatnonzero(here)}),   # → attribution
+    }
+    return hs, stats
+
+
+def _overhang(bounds, sq) -> float:
+    x0, y0, x1, y1 = bounds
+    return max(sq[0] - x0, x1 - sq[2], sq[1] - y0, y1 - sq[3], 0.0)
+
+
+def lod2_file_buildings(path: Path, source: str, square: tuple[float, float, float, float]) -> list[dict]:
+    """Parse one LoD2 CityGML file (hardened parser from buildings.py) → [{id, source, tris, centroid, overhang}]."""
+    from buildings import footprint_of, iter_buildings
+    out = []
+    for b in iter_buildings(path, source):
+        fp = footprint_of(b)
+        tris = building_triangles(b.surfaces)
+        if fp is None or not len(tris):
+            continue
+        c = fp.representative_point() if source == "rlp" else fp.centroid
+        out.append({"id": b.id, "source": source, "tris": tris, "centroid": (fp.centroid.x, fp.centroid.y),
+                    "point": (c.x, c.y), "footprint": fp, "overhang": _overhang(fp.bounds, square)})
+    return out
+
+
+class _Box:
+    """Duck-typed AOI for buildings.fetch_sl / fetch_rlp (tiles(), county, e0/n0/e1/n1, key)."""
+
+    def __init__(self, box, county: str, tiles=None):
+        self.e0, self.n0, self.e1, self.n1 = box
+        self.county, self.key = county, "print3d"
+        self._tiles = tiles if tiles is not None else km_tiles(tuple(int(v) for v in box))
+
+    def tiles(self, buffered: bool = True):
+        return list(self._tiles)
+
+
+def load_lod2(box, s: Series, fetch: bool = True, cache: dict | None = None) -> Lod2:
+    """LoD2 buildings for the tile box ± LOD2_MARGIN_M: SL 1 km files (county ZIPs, series counties first, then the
+    other Saarland counties for files not found) + RLP 2 km files; RLP buildings whose representative point lies in
+    an SL footprint are dropped (duplicates), a repeated gml:id is used once. Raises SystemExit when a building
+    overhangs its file square by more than the margin (neighbour seams could then differ)."""
+    import buildings as bmod
+    from shapely import STRtree
+    cache = {} if cache is None else cache
+    e0, n0, e1, n1 = box
+    big = (e0 - LOD2_MARGIN_M, n0 - LOD2_MARGIN_M, e1 + LOD2_MARGIN_M, n1 + LOD2_MARGIN_M)
+    kms = km_tiles((math.floor(big[0]), math.floor(big[1]), math.ceil(big[2]), math.ceil(big[3])))
+    sl_dir, rlp_dir = bmod.LOD2_RAW / "sl", bmod.LOD2_RAW / "rlp"
+
+    def sl_path(t):
+        return sl_dir / (bmod.sl_tile_name(*t) + ".gz")
+
+    def known_missing(c):
+        f = sl_dir / f"_not_in_zip_{c}.json"
+        return set(json.loads(f.read_text())) if f.exists() else set()
+
+    if fetch:
+        for c in list(s.counties) + [c for c in SL_COUNTIES if c not in s.counties]:
+            todo = [t for t in kms if not sl_path(t).exists() and bmod.sl_tile_name(*t) not in known_missing(c)]
+            if not todo:
+                continue
+            if c not in s.counties and not any((SL_RAW / sl_name("dgm1", *t)).exists() for t in todo):
+                continue     # other counties only for 1 km tiles we know to be Saarland (a SL DGM tile exists)
+            print(f"  fetch SL LoD2 {c}: {len(todo)} tile(s)", flush=True)
+            try:
+                bmod.fetch_sl(_Box(big, c, todo))
+            except SystemExit as ex:
+                print(f"  ! SL LoD2 {c}: {ex}")
+    rlp: list[Path] = []
+    if fetch:
+        try:
+            rlp = bmod.fetch_rlp(_Box(big, "RLP"))
+        except SystemExit as ex:
+            print(f"  ! RLP LoD2: {ex}")
+    else:                                                   # cache only: whatever 2 km files are already there
+        rlp = sorted(rlp_dir.glob("LoD2_32_*_2_RP.gml.gz"))
+    files = [("sl", sl_path(t), (t[0] * 1000, t[1] * 1000, t[0] * 1000 + 1000, t[1] * 1000 + 1000))
+             for t in kms if sl_path(t).exists()]
+    for p in sorted(rlp):
+        m = re.search(r"LoD2_32_(\d+)_(\d+)_2_RP", p.name)
+        if m:
+            ek, nk = int(m.group(1)), int(m.group(2))
+            files.append(("rlp", p, (ek * 1000, nk * 1000, ek * 1000 + 2000, nk * 1000 + 2000)))
+    seen: set = set()
+    out = {"sl": [], "rlp": []}
+    used = {"sl": [], "rlp": []}
+    for src, p, sq in files:
+        if not (sq[0] < big[2] and sq[2] > big[0] and sq[1] < big[3] and sq[3] > big[1]):
+            continue
+        if p not in cache:
+            cache[p] = lod2_file_buildings(p, src, sq)
+        bl = cache[p]
+        used[src].append(re.sub(r"^LoD2_32_(\d+)_(\d+)_.*$", r"\1_\2", p.name))
+        for b in bl:
+            if b["overhang"] > LOD2_MARGIN_M:
+                raise SystemExit(f"LoD2 {b['id']} overhangs its file {p.name} by {b['overhang']:.0f} m > "
+                                 f"{LOD2_MARGIN_M:g} m — raise LOD2_MARGIN_M")
+            if b["id"] and b["id"] in seen:
+                continue
+            seen.add(b["id"])
+            out[src].append(b)
+    if out["sl"] and out["rlp"]:
+        tree = STRtree([b["footprint"] for b in out["sl"]])
+        from shapely.geometry import Point
+        out["rlp"] = [b for b in out["rlp"] if not len(tree.query(Point(b["point"]), predicate="within"))]
+    allb = out["sl"] + out["rlp"]
+    # keep only buildings whose triangles reach the tile box (± a few cells); the rest cannot touch the raster
+    pad = 50.0
+    allb = [b for b in allb if b["tris"][:, :, 0].max() >= e0 - pad and b["tris"][:, :, 0].min() <= e1 + pad
+            and b["tris"][:, :, 1].max() >= n0 - pad and b["tris"][:, :, 1].min() <= n1 + pad]
+    if not allb:
+        return Lod2(files=used)
+    return Lod2(tris=np.concatenate([b["tris"] for b in allb]),
+                bidx=np.concatenate([np.full(len(b["tris"]), i, np.int64) for i, b in enumerate(allb)]),
+                ids=[b["id"] for b in allb], source=[b["source"] for b in allb],
+                centroid=np.array([b["centroid"] for b in allb], np.float64), files=used)
 
 
 # ============================================================================ source DGM
@@ -563,8 +903,11 @@ def _clean_ring(coords, eps: float = 1e-6) -> list[tuple[float, float]]:
 
 
 def label_lines(s: Series, tid: str, datum_m: float | None = None) -> list[tuple[str, float]]:
+    """Engraved bottom label [(text, cap height mm at 250 mm)]: N arrow, tile id (or the series `title` large with
+    the id small below), series key, scale + exaggeration, datum."""
     d = s.datum_m if datum_m is None else datum_m
-    return [("N↑", 16.0), (tid.replace("_", " "), 13.0), (s.key, 6.5),
+    head = [(s.title, 18.0), (tid.replace("_", " "), 7.0)] if s.title else [(tid.replace("_", " "), 13.0)]
+    return [("N↑", 16.0), *head, (s.key, 6.5),
             (f"1:{s.scale}  Z {s.exag:g}X", 6.0), (f"BASIS {d:g} M = {s.base_mm:g} MM", 5.0)]
 
 
@@ -895,11 +1238,14 @@ def slicer_note_de(sl: Slicer) -> str:
     lo, hi = sl.saving_pct
     tlo, thi = sl.time_saving_pct
     pat = SLICER_PATTERNS_DE[sl.sparse_infill_pattern]
-    t = (f"Druckzeit etwa gleich bis ≈ {thi} % kürzer" if tlo <= 0 else f"≈ {tlo}–{thi} % weniger Druckzeit")
+    rng = lambda a, b: f"{a}" if a == b else f"{a}–{b}"
+    t = (f"≈ {rng(-thi, -tlo)} % längere Druckzeit" if thi < 0 else
+         f"Druckzeit etwa gleich bis ≈ {thi} % kürzer" if tlo <= 0 else f"≈ {rng(tlo, thi)} % weniger Druckzeit")
+    save = f"≈ {lo} % Filament" if lo == hi else f"≈ {lo}–{hi} % Filament (dicke Kacheln am meisten)"
     return (f"Filament sparen: in Bambu Studio unter Prozess → Stärke Füllmuster „{pat}“, Fülldichte "
             f"{_de_num(round(sl.sparse_infill_density * 100, 1))} %, Wandlinien {sl.wall_loops}, Obere "
             f"Schalenschichten {sl.top_shell_layers} (Dicke der oberen Schale {_de_num(sl.top_shell_thickness_mm)} mm)"
-            f" – spart ≈ {lo}–{hi} % Filament (dicke Kacheln am meisten), {t} als mit dem Standardprozess. Das "
+            f" – spart {save}, {t} als mit dem Standardprozess. Das "
             f"Modell bleibt gleich; die 3MF kann diese Einstellungen nicht mitbringen – einmal als eigenes "
             f"Prozessprofil speichern.")
 
@@ -1053,8 +1399,11 @@ def write_layout(path: Path, s: Series, tiles: list[dict], out_dir: Path, cell_p
     ny_max = max(b["ny"] for b in blocks)
     basis = (f"Basis {s.datum_m:g} m NHN" if s.datum_mode == "series"
              else f"Basis je Satz (tiefster Punkt − {s.datum_margin_m:g} m)")
+    nb = sum(bool((t.get("buildings") or {}).get("enabled")) for t in tiles)
+    bld = ("" if not nb else f" · Gebäude LoD2 (< {s.building_min_feature_mm:g} mm entfernt)"
+           + ("" if nb == len(tiles) else f" auf {nb} von {len(tiles)}"))
     sub = (f"Überhöhung {s.exag:g}× · {basis} = {s.base_mm:g} mm · Gitter EPSG:25832, {s.tile_m} m · Norden oben · "
-           f"Schlüssel: {keys_needed(s, tiles)} Stück")
+           f"Schlüssel: {keys_needed(s, tiles)} Stück{bld}")
     f_sub = _font(15)
     W = max(sum(b["nx"] for b in blocks) * cell_px + gap * (len(blocks) - 1) + 2 * m, 960,
             int(f_sub.getlength(sub)) + 2 * m)
@@ -1389,7 +1738,16 @@ def series_meta(s: Series) -> dict:
                     "vertices on the tile edges (shared edges bit-identical)",
         "frame": "mm, X = east, Y = north, Z up, origin = tile lower-left corner at z = 0",
         "maxError_mm": s.max_error_mm, "maxTriangles": s.max_triangles,
-        "text": {"engraved": s.text, "depth_mm": s.engrave_mm, "mirrored": True,
+        "buildings": {
+            "default": s.buildings, "source": "LoD2 CityGML (LVGL-SL 1 km, GeoBasis-RLP 2 km)",
+            "minFeature_mm": s.building_min_feature_mm,
+            "minFeature_cells": feature_cells(s.building_min_feature_mm, s.cell_mm),
+            "sampling": "vertex inside the top view of a LoD2 building (closed triangles of its non-vertical "
+                        "surfaces) → highest surface there; grey-scale opened with a disk of minFeature_cells cells (parts narrower "
+                        "than minFeature_mm removed or cut down at every height level)",
+            "zRule": "h = max(DGM sample, LoD2 surface) at kept vertices, then zFormula (same datum, scale, exag)",
+        },
+        "text": {"engraved": s.text, "depth_mm": s.engrave_mm, "mirrored": True, "title": s.title or None,
                  "note_de": "Unterseite: gespiegelt graviert, lesbar nach Wenden um die Nord-Süd-Achse"},
         "connectors": {"enabled": c.enabled, "type": "bowtie", "positions": list(c.positions),
                        "depth_mm": c.depth_mm, "length_mm": c.length_mm, "waist_mm": c.waist_mm,
@@ -1463,8 +1821,10 @@ def merge_index(old: dict | None, s: Series, new_tiles: list[dict], attribution:
     tiles = {k: ({**t, "filament_g": tile_filament(t["volume_cm3"], t["surface_cm2"], s)}
                  if "volume_cm3" in t and "surface_cm2" in t else t) for k, t in tiles.items()}
     ordered = sorted(tiles.values(), key=lambda t: (-t["bboxUTM"][1], t["bboxUTM"][0]))
-    att = [a for a in (old or {}).get("attribution", "").split("; ") if a]
-    for a in attribution:
+    att = []                       # derived from the tiles (a re-generated bare tile drops its LoD2 entry)
+    derived = [ATTRIBUTION_SL] + ([ATTRIBUTION_RLP] if any(t.get("sources", {}).get("rlp") for t in ordered) else [])
+    derived += lod2_attribution({k for t in ordered for k in (t.get("buildings") or {}).get("usedSources", [])})
+    for a in list(attribution) + derived:
         if a not in att:
             att.append(a)
     sets = set_tiles(s)
@@ -1515,15 +1875,29 @@ def sample_tile(s: Series, e0: int, n0: int, fetch: bool = True) -> tuple[np.nda
     return h, src
 
 
+def lod2_attribution(used_sources) -> list[str]:
+    """Manifest attribution strings (buildings.py) for the LoD2 sources a tile used."""
+    from buildings import ATTRIBUTION_LOD2_RLP, ATTRIBUTION_LOD2_SL
+    return [a for k, a in (("sl", ATTRIBUTION_LOD2_SL), ("rlp", ATTRIBUTION_LOD2_RLP)) if k in used_sources]
+
+
 def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, stl: bool = False,
-                  datum_m: float | None = None, sampled: tuple[np.ndarray, dict] | None = None) -> dict:
+                  datum_m: float | None = None, sampled: tuple[np.ndarray, dict] | None = None,
+                  lod2: Lod2 | None = None) -> dict:
+    """lod2: LoD2 buildings around the tile (load_lod2) → buildings in the heightfield; None → bare earth."""
     tid = tile_id(e0, n0)
     datum = s.datum_m if datum_m is None else datum_m
     T = {}
     t0 = time.time()
     h, src = sampled if sampled is not None else sample_tile(s, e0, n0, fetch)
     T["sample"] = time.time() - t0
-    z, clamped = z_from_h(h, s, datum)
+    bstats: dict = {"enabled": False}
+    hs = h
+    if lod2 is not None:
+        t = time.time()
+        hs, bstats = building_surface(s, e0, n0, h, lod2)
+        T["buildings"] = time.time() - t
+    z, clamped = z_from_h(hs, s, datum)
     if clamped:
         print(f"  ! {tid}: {clamped} vertices below datum {datum} m clamped (min h {h.min():.2f} m)")
     t = time.time()
@@ -1547,11 +1921,16 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
     px, py = s.placement_mm
     prn = (f"stock printer '{STOCK_PRINTER}'" if s.printer == "stock"
            else f"printer preset '{PRESET_NAME}' ({PRESET_FILE})")
-    meta = {"Title": f"{tid} {s.key}", "Designer": "Saar LiDAR Explorer (print3d.py)",
-            "Description": (f"{s.name_de} ({s.key}), exag {s.exag:g}x, datum {datum:g} m NHN, base {s.base_mm:g} mm; "
-                            f"Bambu Studio: {prn}, lower-left corner at plate X {px:g} / Y {py:g} mm"
+    bdesc = (f"; LoD2 buildings in the heightfield (same exag/datum, parts < {s.building_min_feature_mm:g} mm dropped, "
+             f"{bstats['kept']} of {bstats['count']} buildings)" if bstats["enabled"] else "; bare earth (no buildings)")
+    copy = [ATTRIBUTION_SL] + ([ATTRIBUTION_RLP] if src["rlp"] else [])
+    if bstats["enabled"]:
+        copy += lod2_attribution(bstats["usedSources"])
+    meta = {"Title": f"{s.title} {tid} {s.key}" if s.title else f"{tid} {s.key}", "Designer": "Saar LiDAR Explorer (print3d.py)",
+            "Description": (f"{s.name_de} ({s.key}), exag {s.exag:g}x, datum {datum:g} m NHN, base {s.base_mm:g} mm"
+                            f"{bdesc}; Bambu Studio: {prn}, lower-left corner at plate X {px:g} / Y {py:g} mm"
                             + (" (= centred, as Bambu Studio places it on import)" if s.printer == "stock" else "")),
-            "Copyright": ATTRIBUTION_SL + ("; " + ATTRIBUTION_RLP if src["rlp"] else ""),
+            "Copyright": "; ".join(copy),
             "LicenseTerms": "dl-de/by-2-0", "CreationDate": datetime.now(timezone.utc).strftime("%Y-%m-%d")}
     write_3mf(out / files["3mf"], V, F, tid, meta, place_mm=s.placement_mm)
     stale = out / f"{tid}.stl"
@@ -1560,7 +1939,7 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
         write_stl(out / files["stl"], V, F, f"{tid} {s.key}")
     elif stale.exists():
         stale.unlink()                                   # an older STL would no longer match the 3MF
-    preview_png(out / files["png"], h, z, s.cell_mm)
+    preview_png(out / files["png"], hs, z, s.cell_mm)
     T["write"] = time.time() - t
     solid, typical = filament_g(vol, area, s)
     if z.max() > s.max_height_mm:
@@ -1580,6 +1959,10 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
         base_above = round(min(mins) - c.depth_mm, 3)
         if base_above < c.min_base_mm:
             raise SystemExit(f"{tid}: only {base_above} mm above a key recess")
+    if bstats["enabled"]:
+        print(f"  {tid}: buildings {bstats['kept']}/{bstats['count']} kept (< {s.building_min_feature_mm:g} mm = "
+              f"{bstats['minFeature_cells']} cells dropped), {bstats['raisedVertices']:,} vertices raised, max "
+              f"{bstats['maxAboveGround_m']:.1f} m above ground [{T['buildings']:.1f}s]")
     print(f"  {tid}: z {z.min():.2f}–{z.max():.2f} mm, {len(F):,} tris (max Δz {max_err:.3f} mm), "
           f"{vol / 1000:.0f} cm³, "
           f"{solid:.0f} g solid / {typical:.0f} g typical  [sample {T['sample']:.1f}s simplify {T['simplify']:.1f}s "
@@ -1598,6 +1981,7 @@ def generate_tile(s: Series, e0: int, n0: int, out: Path, fetch: bool = True, st
         "z_mm": {"min": round(float(z.min()), 3), "max": round(float(z.max()), 3), "mean": round(float(z.mean()), 3)},
         "h_m": {"min": round(float(h.min()), 2), "max": round(float(h.max()), 2), "mean": round(float(h.mean()), 2)},
         "clampedVertices": clamped,
+        "buildings": bstats,
         "baseAboveRecess_mm": base_above,
         "volume_cm3": round(vol / 1000.0, 1),
         "surface_cm2": round(area / 100.0, 1),
@@ -1733,6 +2117,8 @@ def main():
     ap.add_argument("--stl", action="store_true", help="also write binary STL (≈ 100 MB per tile; default 3MF only)")
     ap.add_argument("--datum", type=float, default=None, metavar="M",
                     help="datum (m NHN) for tiles of a per-set datum series that are in no named set")
+    ap.add_argument("--no-buildings", action="store_true",
+                    help="bare earth: no LoD2 buildings (default: the series' `buildings` setting, true)")
     ap.add_argument("--layout-only", action="store_true", help="rewrite index summary, key and layout.png")
     ap.add_argument("--out", type=Path, default=None, help=f"output root (default {PRINT_DIR})")
     ap.add_argument("--list", action="store_true", help="list series and sets")
@@ -1776,12 +2162,19 @@ def main():
         print(f"  set {name}: datum {d:g} m")
     write_key(s, out)
     printer = printer_setup(s, out, args.bambu_profiles)
+    with_bldg = s.buildings and not args.no_buildings
+    print(f"  buildings: {'LoD2, min feature ' + format(s.building_min_feature_mm, 'g') + ' mm' if with_bldg else 'none (bare earth)'}")
     new, att = [], [ATTRIBUTION_SL]
+    lod2_cache: dict = {}
     for e0, n0 in tiles:
+        lod2 = (load_lod2((e0, n0, e0 + s.tile_m, n0 + s.tile_m), s, not args.no_fetch, lod2_cache)
+                if with_bldg else None)
         ent = generate_tile(s, e0, n0, out, fetch=not args.no_fetch, stl=args.stl, datum_m=datums[(e0, n0)],
-                            sampled=cache.pop((e0, n0), None))
+                            sampled=cache.pop((e0, n0), None), lod2=lod2)
         if ent["sources"]["rlp"]:
             att.append(ATTRIBUTION_RLP)
+        if ent["buildings"]["enabled"]:
+            att += lod2_attribution(ent["buildings"]["usedSources"])
         new.append(ent)
         write_json(idx_path, merge_index(old, s, new, att, printer, set_datums))   # keep progress on failure
     doc = merge_index(old, s, new, att, printer, set_datums)

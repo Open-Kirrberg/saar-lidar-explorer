@@ -274,6 +274,11 @@ export interface PortalSpec {
    * `porte_fenetre` entry above the entrance storey; `depth` overrides BALCONY.depth.
    */
   balcony_run?: { depth?: number; tag?: TagNote };
+  /**
+   * Wave 10 (audit #8): a `door` drawn as a glazed two-leaf French door (porte-fenêtre joinery, closed) instead of
+   * panelled leaves standing open, e.g. the CdL garden door on Petri's axis. Default false.
+   */
+  glazed?: boolean;
   tag?: TagNote;
 }
 

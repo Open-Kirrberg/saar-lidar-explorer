@@ -23,6 +23,7 @@ import {
   revealAO,
   roofTint,
   SHADE_ATTRIBUTE,
+  STONE_HUES,
   sillGrime,
   wallAO,
   wallBreaks,
@@ -127,7 +128,8 @@ describe('finish variation (KB-I19)', () => {
       expect(c[2] / c[0]).toBeLessThanOrEqual(gr * 1.3);
       if (gr < 1.15) nearRed++;
     }
-    expect(spread).toBeGreaterThan(0.04); // every block varies, across the full ±5 %
+    // every block varies across (nearly) the full ±lumJitter (wave-10 review: 0.03, the mixed stones carry the rest)
+    expect(spread).toBeGreaterThan(STONE_HUES.lumJitter * 0.8);
     expect(nearRed).toBeGreaterThan(150); // most blocks stay close to the base red
   });
   it('ashlar course grid matches the texture mapping (0.30-0.40 m courses, 5 per tile)', () => {

@@ -5,6 +5,7 @@ import { parseEvidenceTags } from '@model/spec.ts';
 import type { Mode } from './controls.ts';
 import { footerParts } from './photoMath.ts';
 import { QUALITY, type QualityPreset } from './quality.ts';
+import type { CloudMode } from './clouds.ts';
 
 /** Display look: Dokumentation (Neutral tone mapping, catalogue colours as authored) or Kino (AgX). */
 export type Look = 'doku' | 'kino';
@@ -29,6 +30,16 @@ export interface UiState {
    * every window of the lit buildings candle-lit and the chandeliers burning (arrangement a hypothesis; night only).
    */
   festival: boolean;
+  /**
+   * Wave 10 (night sky): show the full-moon night nearest 15 Jul 1789 (6 Jul 1789, ephemeris.ts) instead of the
+   * documented date, whose moon (waning, 46 %) rises only at 23:09.
+   */
+  fullMoon: boolean;
+  /**
+   * Wave 10: fair-weather cumulus and their shadows (weather of the day U). Wave-10 review fix: 'air' (default) only
+   * from the air and in the Rundflug's aerial shots, 'on' always, 'off' a cloudless sky (clouds.ts `CloudMode`).
+   */
+  clouds: CloudMode;
 }
 
 /**
@@ -59,6 +70,8 @@ export interface UiOptions {
   onTour?(): void;
   /** KB-I47: take a still with the panel's photo options. */
   onPhoto?(): void;
+  /** Wave 10: date label and moon note for the time panel (ephemeris.ts). */
+  skyNote?(): { date: string; moon: string };
 }
 
 /** Photo options from the panel (KB-I47). */
@@ -98,6 +111,7 @@ export function buildUi(o: UiOptions) {
     <label class="block">Tageszeit <span id="hourv"></span>
       <input id="hour" type="range" min="4" max="23" step="0.25" />
     </label>
+    <div id="moonv" class="note"></div>
     <div class="row presets">${TIME_PRESETS.map((t) => `<button type="button" data-hour="${t.hour}" title="${String(Math.floor(t.hour)).padStart(2, '0')}:${String(Math.round((t.hour % 1) * 60)).padStart(2, '0')} Uhr">${t.label_de}</button>`).join('')}</div>
     <div class="row tourphoto">
       <button id="tourBtn" type="button" title="Automatischer Flug in sechs Einstellungen (Rekonstruktion = Hypothese); Esc oder jede Eingabe beendet ihn">▶ Rundflug</button>
@@ -109,6 +123,10 @@ export function buildUi(o: UiOptions) {
     </div>
     <label><input type="checkbox" id="shadows" /> Schatten</label>
     <label><input type="checkbox" id="haze" /> Dunst</label>
+    <label class="block" title="Schönwetter-Cumulus mit Wolkenschatten (Sommernorm; das Wetter des Tages ist unbekannt). „Aus der Luft“: nur im Flug ab etwa 80 m über Grund und in den Luftbildern des Rundflugs; in Augenhöhe bleibt der Himmel wolkenlos zur Dokumentation">Wolken (Schönwetter, Hypothese)
+      <select id="clouds"><option value="air">aus der Luft</option><option value="on">immer</option><option value="off">aus</option></select>
+    </label>
+    <label title="Der Mond am 15. Juli 1789 nimmt ab (46 %) und geht erst um 23:09 Uhr auf. Diese Option zeigt die nächste Vollmondnacht, den 6. Juli 1789 (Mondstand nach Meeus berechnet)"><input type="checkbox" id="fullMoon" /> Vollmondnacht (6. Juli 1789)</label>
     <label title="Abends brennen gewöhnlich nur Leuchter auf dem Kamin und Wandleuchter; Kronleuchter wurden zu Festen angezündet (Anlass Hypothese)"><input type="checkbox" id="fest" /> Fest: Kronleuchter brennen</label>
     <label title="Illumination nach dem Muster der Hochzeit 1785 (Fürstenwärther 1786) auf den Bau von 1789 übertragen: Lampions auf Gesimsen und Fensterbänken, Feuertöpfe im Ehrenhof, Lichter an Parterres und Bassin; alle Fenster erleuchtet. Die dichten Lichterkränze der Festrotunde von 1785 gehören nur zum Festjahr 1785. Anordnung Hypothese. Nur bei Dunkelheit sichtbar."><input type="checkbox" id="festival" /> Festbeleuchtung (Muster 1785, auf 1789 übertragen; Hypothese)</label>
     <label><input type="checkbox" id="confidenceColours" /> Konfidenz-Farben</label>
@@ -137,7 +155,11 @@ export function buildUi(o: UiOptions) {
   const sync = () => {
     $<HTMLInputElement>('hour').value = String(s.hour);
     const hh = Math.floor(s.hour);
-    $('hourv').textContent = `${hh}:${String(Math.round((s.hour - hh) * 60)).padStart(2, '0')} Uhr (15. Juli 1789)`;
+    const note = o.skyNote?.();
+    $('hourv').textContent = `${hh}:${String(Math.round((s.hour - hh) * 60)).padStart(2, '0')} Uhr (${note?.date ?? '15. Juli 1789'})`;
+    $('moonv').textContent = note?.moon ?? '';
+    $<HTMLSelectElement>('clouds').value = s.clouds;
+    $<HTMLInputElement>('fullMoon').checked = s.fullMoon;
     $<HTMLInputElement>('shadows').checked = s.shadows;
     $<HTMLInputElement>('haze').checked = s.haze;
     $<HTMLInputElement>('fest').checked = s.fest;
@@ -177,7 +199,12 @@ export function buildUi(o: UiOptions) {
     (e.target as HTMLSelectElement).blur();
     o.onChange('look');
   });
-  for (const k of ['shadows', 'confidenceColours', 'roofs', 'interiors', 'haze', 'fest', 'festival', 'autoScale'] as const) {
+  $<HTMLSelectElement>('clouds').addEventListener('change', (e) => {
+    s.clouds = (e.target as HTMLSelectElement).value as CloudMode;
+    (e.target as HTMLSelectElement).blur();
+    o.onChange('clouds');
+  });
+  for (const k of ['shadows', 'confidenceColours', 'roofs', 'interiors', 'haze', 'fest', 'festival', 'autoScale', 'fullMoon'] as const) {
     $<HTMLInputElement>(k).addEventListener('change', (e) => {
       s[k] = (e.target as HTMLInputElement).checked;
       sync();

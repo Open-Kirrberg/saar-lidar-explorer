@@ -43,9 +43,68 @@ ${taps.join(' +\n')}
 				) * 0.2;`;
 }
 
-/** Patch three's `shadowmap_pars_fragment` chunk text; throws if the r187 source moved. */
+/**
+ * The point-light (cube) PCF block of three r187 as in its build (blank lines stripped): five Vogel taps rotated per
+ * pixel, one `vogelDiskSample` (sqrt, cos, sin) per tap. Wave-11 review fix: the candle pool's shadow light
+ * (candleLight.ts) is the only point light that casts. Its five cube-compare taps cost ≈ 0.3 ms at 1080p and ≈ 0.9 ms
+ * at 3024 × 1964 in the Festsaal (pose 07) whatever the radius, so a light with `shadow.radius` 0 (a single flame:
+ * a 1 cm flame throws a near-hard shadow) takes one hardware-filtered tap; a cluster (radius > 0) keeps five, with
+ * constant offsets and one cos / sin pair (as KB-I59 for the sun).
+ */
+export const POINT_PCF5_SOURCE = `			float texelSize = shadowRadius / shadowMapSize.x;
+			vec3 absDir = abs( bd3D );
+			vec3 tangent = absDir.x > absDir.z ? vec3( 0.0, 1.0, 0.0 ) : vec3( 1.0, 0.0, 0.0 );
+			tangent = normalize( cross( bd3D, tangent ) );
+			vec3 bitangent = cross( bd3D, tangent );
+			float phi = interleavedGradientNoise( gl_FragCoord.xy ) * PI2;
+			shadow = 0.0;
+			for ( int i = 0; i < 5; i ++ ) {
+				vec2 offset = vogelDiskSample( i, 5, phi );
+				vec3 direction = bd3D + ( tangent * offset.x + bitangent * offset.y ) * texelSize;
+				vec3 absDirection = abs( direction );
+				float dp = depthA + depthB / max( max( absDirection.x, absDirection.y ), absDirection.z );
+				shadow += texture( shadowMap, vec4( direction, dp ) );
+			}
+			shadow *= 0.2;`;
+
+/** The point block: one tap for radius 0, else five with one rotation (GLSL). */
+export function pointPcf5Rotated(): string {
+  const taps = vogelDiskOffsets(5).map(([x, y]) => `vec2( ${f(x)}, ${f(y)} )`);
+  return `			// wave-11 review fix (shadowTaps.ts): radius 0 = one hardware-filtered tap; else five, one cos / sin pair
+			if ( shadowRadius <= 0.0 ) {
+				vec3 absDir0 = abs( bd3D );
+				shadow = texture( shadowMap, vec4( bd3D, depthA + depthB / max( max( absDir0.x, absDir0.y ), absDir0.z ) ) );
+			} else {
+				float texelSize = shadowRadius / shadowMapSize.x;
+				vec3 absDir = abs( bd3D );
+				vec3 tangent = absDir.x > absDir.z ? vec3( 0.0, 1.0, 0.0 ) : vec3( 1.0, 0.0, 0.0 );
+				tangent = normalize( cross( bd3D, tangent ) );
+				vec3 bitangent = cross( bd3D, tangent );
+				float phi = interleavedGradientNoise( gl_FragCoord.xy ) * PI2;
+				mat2 pcfPRot = mat2( cos( phi ), sin( phi ), - sin( phi ), cos( phi ) );
+				vec2 skbVogel5[ 5 ] = vec2[ 5 ]( ${taps.join(', ')} );
+				shadow = 0.0;
+				for ( int i = 0; i < 5; i ++ ) {
+					vec2 offset = pcfPRot * skbVogel5[ i ];
+					vec3 direction = bd3D + ( tangent * offset.x + bitangent * offset.y ) * texelSize;
+					vec3 absDirection = abs( direction );
+					float dp = depthA + depthB / max( max( absDirection.x, absDirection.y ), absDirection.z );
+					shadow += texture( shadowMap, vec4( direction, dp ) );
+				}
+				shadow *= 0.2;
+			}`;
+}
+
+/** Patch three's `shadowmap_pars_fragment` chunk text (directional and point PCF); throws if the r187 source moved. */
 export function patchShadowChunk(chunk: string): string {
-  if (chunk.includes('pcfRot')) return chunk;
-  if (!chunk.includes(PCF5_SOURCE)) throw new Error('[shadowTaps] three PCF 5-tap source not found (three version changed?)');
-  return chunk.replace(PCF5_SOURCE, pcf5Rotated());
+  let out = chunk;
+  if (!out.includes('pcfRot')) {
+    if (!out.includes(PCF5_SOURCE)) throw new Error('[shadowTaps] three PCF 5-tap source not found (three version changed?)');
+    out = out.replace(PCF5_SOURCE, pcf5Rotated());
+  }
+  if (!out.includes('pcfPRot')) {
+    if (!out.includes(POINT_PCF5_SOURCE)) throw new Error('[shadowTaps] three point PCF loop not found (three version changed?)');
+    out = out.replace(POINT_PCF5_SOURCE, pointPcf5Rotated());
+  }
+  return out;
 }

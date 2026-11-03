@@ -610,6 +610,21 @@ export function herzogsgarten(g: GridFrame): TerrainFeature[] {
     epoch: { from: 1788 },
   });
 
+  // ---- HG-07 garden-front walk (wave-10 review fix, KB-I88): a sanded walk along the outer edge of the garden
+  // terrace TF-09, past both ends of the belt walk (u 53.6, v ±12), on to the corners of the wings (v ±40)
+  const FRONT_U = 46.2 + GARDEN.gardenTerrace.depth + GARDEN.path.frontWalk / 2;
+  out.push({
+    id: 'HG-07',
+    kind: 'path',
+    name: 'Weg an der Gartenterrasse (vor dem Corps de logis)',
+    geometry: { type: 'LineString', coordinates: uvLine(g, [[FRONT_U, -40], [FRONT_U, 40]]) },
+    width: GARDEN.path.frontWalk,
+    surface: 'gravel (Buntsandstein grit), sanded',
+    confidence: 'low',
+    tag: `N a sanded walk 8-12 Fuß wide along the garden front of a palace, joining the walks of the garden (Hirschfeld, Sckell; research/11 §4.4); ${PLAN}: the belt walk starts at the garden front; width 10 Fuß = 3.0 m I (GARDEN.path.frontWalk); course along the terrace edge and length to the wing corners I`,
+    epoch: { from: 1788 },
+  });
+
   // ---- HG-03 serpentine branch down to the Hirschwürzloch Brunnenhaus KB-B80 (fall ≈ 28 m)
   const serpCtl = SERP_CTL;
   const serp = uvLine(g, chaikin(serpCtl, 3));

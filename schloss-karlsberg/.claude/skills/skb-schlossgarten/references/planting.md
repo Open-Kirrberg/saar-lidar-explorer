@@ -94,9 +94,9 @@ Starting colours (sRGB, before the texture multiply) [I unless tagged]:
 | Path gravel (Buntsandstein grit) | `#B79A84` | pinkish ochre, albedo 0.40–0.45 [N d'Argenville red sand; I local] |
 | Parterre fine sand | `#D3BE8A` | yellow sand [N] |
 | Court sand | `#C9B48E` | light, after Le Clerc [D LC] |
-| Lawn | brighter and finer than the meadow | mown |
+| Lawn | brighter and finer than the meadow | mown; Petri's lawn HG-01 only near the house and along the walks, the rest an aftermath meadow (wave 10: `viewer/src/lawnZones.ts`, grammar `PLEASURE_GROUND`) |
 | Hay strips | alternate `#8FA060` and `#B9B07A` | cut and uncut bands along the contours |
-| Field | `#C8B060` gold, with parcel-wise variation | July harvest |
+| Field | `#C8B060` gold, with parcel-wise variation | July harvest; wave 11: Gewann strips along the contour (`landcover.ts` `fieldBlockDirs`) in a three-field rotation per block (rye / spelt / stubble, oats / barley, clover / weedy fallow / ploughed; `FIELD_ROTATION`, `fieldCropOf`), hues `GROUND_COLOURS` `spelt` / `oats` / `clover` / `plough` in `viewer/src/terrain.ts` |
 | Vineyard | rows striped down-slope, 1.1 m apart, over soil | derive the stripe direction from the slope |
 | Kitchen garden | dark soil with bed rows | beds 1.2–1.5 m, paths 0.5 m |
 | Forest floor (under the instanced trees) | keep dark | already class 6 |

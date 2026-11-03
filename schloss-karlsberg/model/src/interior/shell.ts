@@ -7,10 +7,11 @@
 import * as THREE from 'three';
 import { MATERIAL_NAMES, type MaterialLibrary, type MaterialName } from '../context.ts';
 import type { Room, ST } from '../spec.ts';
-import { STATE_ROOM } from '../layout/grammar.ts';
+import { ROOM_ORDER, STATE_ROOM } from '../layout/grammar.ts';
 import { hashString } from '../layout/geom.ts';
-import { borderColour, borderRects, canvasGrid, corniceHeight, damaskFigureOf, silkFields, silkHue, splitField, srgbToLinear, supraportePanels } from './finish.ts';
-import { type Accumulator, type Bucket, type ColliderBucket, O, type PartInfo, type V3, beadProfile, mouldFrame, placeMatrix } from './mesh.ts';
+import { canvasParams, hangOf } from './painting.ts';
+import { borderColour, borderRects, canvasGrid, carvedFields, corniceHeight, corniceProfile, damaskFigureOf, roomOrder, rosetteRadius, silkFields, silkHue, splitField, srgbToLinear, supraportePanels } from './finish.ts';
+import { type Accumulator, type Bucket, type ColliderBucket, O, type PartInfo, type V3, beadProfile, beadProfileLite, carvedHead, mouldFrame, placeMatrix } from './mesh.ts';
 import { type Tints, damaskMaterial, interiorMaterial } from './materials.ts';
 import { type IOpening, LEAF_KINDS, WALK_KINDS } from './openings.ts';
 import type { Grade, RoomType, RoomWall } from './programme.ts';
@@ -43,6 +44,38 @@ export interface ShellInput {
   leavesDone: Set<string>;
   /** KB-I26: plan positions of the room's chandeliers; each gets a stucco ceiling rosette (none without one). */
   rosettes?: ST[];
+  /**
+   * Wave-11 review fix: wall-hung items (pier glasses, trumeaux, pictures, cases) as plan centre on the wall, facing,
+   * width and height range above the floor; no carved head goes on a panel field they cover.
+   */
+  covers?: WallCover[];
+}
+
+/** A wall-hung item seen by the boiserie: centre `pos`, facing `facing` (= the wall's nIn), `width`, [z0, z1] above the floor. */
+export interface WallCover {
+  pos: ST;
+  facing: ST;
+  width: number;
+  z0: number;
+  z1: number;
+}
+
+/**
+ * Wave-11 review fix (pure): the [u0, u1, v0, v1] spans that `covers` occupy on a wall (p0, along `d`, inward normal
+ * `nIn`, length `len`); items facing elsewhere or standing off the wall by more than 0.6 m are not on it.
+ */
+export function wallCoverSpans(covers: readonly WallCover[], w: { p0: ST; d: ST; nIn: ST; len: number }): [number, number, number, number][] {
+  const out: [number, number, number, number][] = [];
+  for (const c of covers) {
+    if (c.facing[0] * w.nIn[0] + c.facing[1] * w.nIn[1] < 0.99) continue;
+    const rx = c.pos[0] - w.p0[0];
+    const ry = c.pos[1] - w.p0[1];
+    const off = rx * w.nIn[0] + ry * w.nIn[1];
+    const u = rx * w.d[0] + ry * w.d[1];
+    if (off < -0.05 || off > 0.6 || u < -c.width / 2 || u > w.len + c.width / 2) continue;
+    out.push([u - c.width / 2, u + c.width / 2, c.z0, c.z1]);
+  }
+  return out;
 }
 
 const FACADE_INSET = 0.012;
@@ -98,8 +131,11 @@ export function buildShell(inp: ShellInput): void {
   const dado = DEFAULT_BOISERIE.dado;
   // wave-5 review: the Bildergalerie's documented arabesques (T1 / T5), a lobed palmette elsewhere [N]
   const figure = damaskFigureOf(room.function);
-  const wallMat = silk && hue ? damaskMaterial(lib, wallName, hue, figure) : lib.get(wallName);
-  const dadoMat = lib.get('wall.boiserie');
+  // wave 11 (audit #9): cornice order and boiserie tone by room rank (finish.ts roomOrder, grammar ROOM_ORDER) [N; I]
+  const order = roomOrder(inp.type);
+  const boiserieMat = order.tone === 'blanc' ? lib.get('wall.boiserie') : inp.tints.get('wall.boiserie', ROOM_ORDER.boiserie[order.tone]);
+  const wallMat = silk && hue ? damaskMaterial(lib, wallName, hue, figure) : wallName === 'wall.boiserie' ? boiserieMat : lib.get(wallName);
+  const dadoMat = boiserieMat;
   // the cornice must clear every opening head below the ceiling
   const corniceH = corniceHeight(walls.flatMap((w) => [...w.holes, ...(w.niches ?? [])]), clear, fancy, inp.vault);
 
@@ -142,26 +178,60 @@ export function buildShell(inp: ShellInput): void {
       const o = hit.opening;
       const depth = o.facade ? Math.max(0.05, hit.depth - inset - 0.12) : hit.depth - inset;
       if (depth <= 0.01) return;
-      const rb = acc.get(lib.get(fancy ? 'wall.boiserie' : wallName), shellInfo('laibung', `${room.name_de} – Laibung`));
+      // wave-10 review (KB-I92): the window embrasures of the panelled rooms take the full sun and sky through the glass
+      // and blew out to white; their boiserie is a shade darker (the reveal is the inside face of a deep wall, painted
+      // like the room but never lit like it [I]) and, where deep and tall enough, panelled (STATE_ROOM.reveal) [N]
+      const rb = acc.get(fancy ? inp.tints.get('wall.boiserie', STATE_ROOM.reveal.colour) : lib.get(wallName), shellInfo('laibung', `${room.name_de} – Laibung`));
       const rise = Math.min(archRise(h.head, h.u1 - h.u0), h.v1 - h.v0);
       const spring = h.v1 - rise;
       const out = -depth;
       const sp = rise > 0.01 ? 0 : (faceHoles[i].u0 < h.u0 ? h.u0 - faceHoles[i].u0 : 0);
       const sq = rise > 0.01 ? 0 : (faceHoles[i].u1 > h.u1 ? faceHoles[i].u1 - h.u1 : 0);
+      const RV = STATE_ROOM.reveal;
+      /** Embrasure panels: a moulded frame on each (possibly splayed) jamb, the folded shutters' panelling [N]. */
+      const panels = (sl: number, sr: number, top: number): void => {
+        if (!fancy || !o.facade || depth < RV.minDepth || top - h.v0 < RV.minHeight) return;
+        const fb = acc.get(gilt ? lib.get('metal.gilt') : inp.tints.get('wall.boiserie', RV.colour), shellInfo('laibung', `${room.name_de} – Laibung (Felder)`, 'N', 'N panelled window embrasures of 1780s state rooms'));
+        const v0 = h.v0 + (h.v0 > 0.4 ? 0.08 : RV.foot);
+        const v1 = top - 0.1;
+        // jamb from the room face (a = 0) to the glass (a = len); e is the relief along the jamb's face normal
+        for (const [u, s, k] of [[h.u0, sl, 1], [h.u1, sr, -1]] as const) {
+          const len = Math.hypot(depth, s);
+          const nu = (k * depth) / len;
+          const nd = s / len;
+          const Pj = (a: number, v: number, e = 0): V3 => P(u - k * s + (k * s * a) / len + e * nu, v, (-depth * a) / len + e * nd);
+          const face: V3 = [along[0] * nu + nIn[0] * nd, 0, along[2] * nu + nIn[2] * nd];
+          const dir: V3 = [(along[0] * k * s - nIn[0] * depth) / len, 0, (along[2] * k * s - nIn[2] * depth) / len];
+          frameBars(fb, Pj, RV.margin, v0, len - RV.margin, v1, RV.bar, RV.relief, face, dir);
+        }
+      };
       if (sp > 0 || sq > 0) {
+        panels(sp, sq, h.v1);
         // splayed jambs, sill and head: room face at u0 - sp / u1 + sq, glass side at u0 / u1
         const nL = norm3([along[0] * depth + nIn[0] * sp, 0, along[2] * depth + nIn[2] * sp]);
         const nR = norm3([-along[0] * depth + nIn[0] * sq, 0, -along[2] * depth + nIn[2] * sq]);
         rb.quad(P(h.u0 - sp, h.v0), P(h.u0, h.v0, out), P(h.u0, h.v1, out), P(h.u0 - sp, h.v1), nL);
         rb.quad(P(h.u1 + sq, h.v0), P(h.u1, h.v0, out), P(h.u1, h.v1, out), P(h.u1 + sq, h.v1), nR);
         if (h.v0 > 0.02) rb.quad(P(h.u0 - sp, h.v0), P(h.u1 + sq, h.v0), P(h.u1, h.v0, out), P(h.u0, h.v0, out), [0, 1, 0]);
+        else {
+          // wave-10 review: a porte-fenêtre's splayed reveal gets its floor (the room floor run out to the glass), so no
+          // strip of whatever lies below shows at the threshold (a pink-blue fringe at 06)
+          const tb = acc.get(lib.get(materialOr(fin?.floor, 'floor.planks')), shellInfo('boden', `${room.name_de} – Boden`));
+          tb.quad(P(h.u0 - sp, 0.001), P(h.u1 + sq, 0.001), P(h.u1, 0.001, out), P(h.u0, 0.001, out), [0, 1, 0]);
+        }
         rb.quad(P(h.u0 - sp, h.v1), P(h.u1 + sq, h.v1), P(h.u1, h.v1, out), P(h.u0, h.v1, out), [0, -1, 0]);
         return;
       }
       rb.quad(P(h.u0, h.v0), P(h.u0, h.v0, out), P(h.u0, spring, out), P(h.u0, spring), along);
       rb.quad(P(h.u1, h.v0), P(h.u1, h.v0, out), P(h.u1, spring, out), P(h.u1, spring), [-along[0], 0, -along[2]]);
+      panels(0, 0, spring);
       if (h.v0 > 0.02) rb.quad(P(h.u0, h.v0), P(h.u1, h.v0), P(h.u1, h.v0, out), P(h.u0, h.v0, out), [0, 1, 0]);
-      else if (!o.facade) {
+      else if (o.facade) {
+        // wave-10 review: a porte-fenêtre's reveal gets its floor (the room floor run out to the glass), so no strip of
+        // whatever lies below shows at the threshold (a pink-blue fringe at 06)
+        const tb = acc.get(lib.get(materialOr(fin?.floor, 'floor.planks')), shellInfo('boden', `${room.name_de} – Boden`));
+        tb.quad(P(h.u0, 0.001), P(h.u1, 0.001), P(h.u1, 0.001, out), P(h.u0, 0.001, out), [0, 1, 0]);
+      } else {
         // threshold of interior doors: floor strip through the wall
         const tb = acc.get(lib.get(materialOr(fin?.floor, 'floor.planks')), shellInfo('boden', `${room.name_de} – Boden`));
         tb.quad(P(h.u0, 0.001), P(h.u1, 0.001), P(h.u1, 0.001, out), P(h.u0, 0.001, out), [0, 1, 0]);
@@ -234,7 +304,7 @@ export function buildShell(inp: ShellInput): void {
       for (let k = 0; k < mid; k++) wb.tri(P(n.u0, n.v1), P(pts[k][0], pts[k][1]), P(pts[k + 1][0], pts[k + 1][1]), nIn);
       for (let k = mid; k < pts.length - 1; k++) wb.tri(P(n.u1, n.v1), P(pts[k][0], pts[k][1]), P(pts[k + 1][0], pts[k + 1][1]), nIn);
       // moulded surround: jamb strips above the skirting and an archivolt (gilt in state rooms)
-      const sur = acc.get(gilt ? lib.get('metal.gilt') : lib.get('wall.boiserie'), shellInfo('nische', `${room.name_de} – Nischenrahmen`, 'N', 'N moulded niche surround (Louis-seize)'));
+      const sur = acc.get(gilt ? lib.get('metal.gilt') : boiserieMat, shellInfo('nische', `${room.name_de} – Nischenrahmen`, 'N', 'N moulded niche surround (Louis-seize)'));
       const bw = 0.07;
       const z = 0.025;
       for (const [u0, u1] of [
@@ -256,7 +326,7 @@ export function buildShell(inp: ShellInput): void {
     }
 
     // skirting, broken at doors
-    const skirtMat = fancy ? lib.get('wall.boiserie') : materialOr(fin?.floor, 'floor.planks') === 'floor.flags' ? lib.get('stone.grey') : lib.get('wood.door');
+    const skirtMat = fancy ? boiserieMat : materialOr(fin?.floor, 'floor.planks') === 'floor.flags' ? lib.get('stone.grey') : lib.get('wood.door');
     const sb = acc.get(skirtMat, shellInfo('sockelleiste', `${room.name_de} – Sockelleiste`, 'N', 'N skirting'));
     for (const [a, b] of freeAlong(w.len, decorHoles, 0.02)) {
       if (b - a < 0.05) continue;
@@ -270,7 +340,7 @@ export function buildShell(inp: ShellInput): void {
     }
     if (fancy && clear > 2.8) {
       // chair rail
-      const cr = acc.get(gilt ? lib.get('metal.gilt') : lib.get('wall.boiserie'), shellInfo('lambris', `${room.name_de} – Lambris (Boiserie)`, 'N', 'N Louis-seize dado and panels; D boiseries by Georges Jacob (research/01 §3.2)'));
+      const cr = acc.get(gilt ? lib.get('metal.gilt') : boiserieMat, shellInfo('lambris', `${room.name_de} – Lambris (Boiserie)`, 'N', 'N Louis-seize dado and panels; D boiseries by Georges Jacob (research/01 §3.2)'));
       for (const [a, b] of freeAlong(w.len, decorHoles, dado - 0.03, dado + 0.03)) {
         if (b - a < 0.1) continue;
         profileStrip(cr, P, a, b, [
@@ -283,13 +353,36 @@ export function buildShell(inp: ShellInput): void {
       }
       // panels: moulding frames (gilt in state rooms, moulded so the gilding catches highlights - KB-I26), fielded
       // dado panels. Silk rooms keep the dado panels only: above the rail the silk fields take their place.
-      const frameB = acc.get(gilt ? lib.get('metal.gilt') : lib.get('wall.boiserie'), shellInfo('boiserie', `${room.name_de} – Boiserie (Felder)`, 'D N', 'D Louis-Seize boiseries (Georges Jacob, 05 §e); panel layout N 02 §2.12'));
-      const panelB = acc.get(lib.get('wall.boiserie'), shellInfo('boiserie-felder', `${room.name_de} – Boiserie`, 'D N', 'D Louis-Seize boiseries; layout N'));
+      const frameB = acc.get(gilt ? lib.get('metal.gilt') : boiserieMat, shellInfo('boiserie', `${room.name_de} – Boiserie (Felder)`, 'D N', 'D Louis-Seize boiseries (Georges Jacob, 05 §e); panel layout N 02 §2.12'));
+      const panelB = acc.get(boiserieMat, shellInfo('boiserie-felder', `${room.name_de} – Boiserie`, 'D N', 'D Louis-Seize boiseries; layout N'));
       const canvasB = acc.get(interiorMaterial(lib, 'interior.canvas'), shellInfo('supraporte', `${room.name_de} – Supraporte (Gemälde, Platzhalter)`, 'N', 'N Supraporte: painted overdoor over the enfilade doors of state rooms (research/09 I3); the canvas is a tonal placeholder, no artwork'));
       const supra: Hole[] = [];
       // the painted overdoors, the same rule the programme's picture hang keeps clear of (finish.ts supraportePanels)
       const paintedAt = supraportePanels(w.len, decorHoles, clear, corniceH, { state: gilt, fancy });
-      for (const p of boiseriePanels(w.len, decorHoles, { ...DEFAULT_BOISERIE, top: clear - corniceH })) {
+      const panels = boiseriePanels(w.len, decorHoles, { ...DEFAULT_BOISERIE, top: clear - corniceH });
+      // wave 11 (audit #9): carved heads (a laurel swag from a bow knot) on every second upper field of the gilt
+      // panelled rooms, symmetric along the wall (finish.ts carvedFields) [N 09 §4.2; I]
+      // wave-11 review fix: never behind (and half out of) a pier glass, trumeau, picture or case; the alternation runs
+      // over the fields that stay free, so a wall keeps its symmetry [ROOM_ORDER.carved, I]
+      const C = ROOM_ORDER.carved;
+      const spans = wallCoverSpans(inp.covers ?? [], w);
+      const free = (p: (typeof panels)[number]) => {
+        const half = Math.min(C.maxWidth * 0.75, (p.u1 - p.u0 - 0.09) * 0.7) / 2 + 0.1;
+        const uc = (p.u0 + p.u1) / 2;
+        const v = p.v1 - 0.105;
+        return !spans.some(([u0, u1, z0, z1]) => u1 > uc - half && u0 < uc + half && z1 > v - 0.3 && z0 < v + 0.1);
+      };
+      const uppers = gilt && !silk ? panels.filter((p) => p.kind === 'upper' && free(p)) : [];
+      const carved = carvedFields(uppers.length);
+      const zx: V3 = [nIn[2], 0, -nIn[0]];
+      uppers.forEach((p, i) => {
+        const fw = p.u1 - p.u0 - 0.09;
+        if (!carved[i] || fw < 0.4 || p.v1 - p.v0 < 1.0) return;
+        const at = P((p.u0 + p.u1) / 2, p.v1 - 0.045 - 0.06, 0.008);
+        const mm = new THREE.Matrix4().makeBasis(new THREE.Vector3(...zx), new THREE.Vector3(0, 1, 0), new THREE.Vector3(...nIn)).setPosition(...at);
+        carvedHead(frameB, mm, Math.min(C.maxWidth * 0.75, fw * 0.7), C.bead, C.sag, true);
+      });
+      for (const p of panels) {
         if (silk && p.kind === 'upper') continue;
         const bw = p.kind === 'dado' ? 0.035 : 0.045;
         const painted = p.kind === 'overdoor' && paintedAt.some((q) => Math.abs(q.u0 - p.u0) < 1e-6 && Math.abs(q.v0 - p.v0) < 1e-6);
@@ -298,11 +391,12 @@ export function buildShell(inp: ShellInput): void {
           const z = p.kind === 'upper' && !silk ? 0.006 : 0.012;
           panelQuad(panelB, P, p.u0 + bw, p.v0 + bw, p.u1 - bw, p.v1 - bw, z, nIn);
         }
-        if (gilt) mouldFrame(frameB, P, Nw, p.u0, p.v0, p.u1, p.v1, beadProfile(bw, 0.024));
+        // wave 11: the small dado frames take the lighter bead (budget for the carved heads and the seat ovals)
+        if (gilt) mouldFrame(frameB, P, Nw, p.u0, p.v0, p.u1, p.v1, p.kind === 'dado' || p.kind === 'allege' ? beadProfileLite(bw, 0.024) : beadProfile(bw, 0.024));
         else frameBars(frameB, P, p.u0, p.v0, p.u1, p.v1, bw, 0.022, nIn, along);
         if (painted) {
           // dessus-de-porte (KB-I26): a varnished canvas in the gilt frame; the picture is a tonal placeholder
-          canvasQuad(canvasB, P, nIn, p.u0 + bw, p.v0 + bw, p.u1 - bw, p.v1 - bw, 0.008, hashString(`${room.id}|${w.index}|${p.u0.toFixed(2)}`));
+          canvasQuad(canvasB, P, nIn, p.u0 + bw, p.v0 + bw, p.u1 - bw, p.v1 - bw, 0.008, hashString(`${room.id}|${w.index}|${p.u0.toFixed(2)}`), acc, `${room.id}|w${w.index}`);
           supra.push({ u0: p.u0 - 0.02, u1: p.u1 + 0.02, v0: p.v0 - 0.02, v1: p.v1 + 0.02 });
         }
       }
@@ -310,7 +404,7 @@ export function buildShell(inp: ShellInput): void {
       // the broad contrasting border just inside it and a gold embroidered line along its inner edge (Mannlich's rule,
       // T1 p. 365 [D]; sizes STATE_ROOM [N])
       if (silk && hue && border) {
-        const lb = acc.get(giltLeiste ? lib.get('metal.gilt') : lib.get('wall.boiserie'), shellInfo('tapetenleiste', `${room.name_de} – Tapetenleisten (vergoldet)`, 'D N', 'D Tapetenleisten by Georges Jacob (research/09 §4.1); gilt fillet 0.045 m N (I1)'));
+        const lb = acc.get(giltLeiste ? lib.get('metal.gilt') : boiserieMat, shellInfo('tapetenleiste', `${room.name_de} – Tapetenleisten (vergoldet)`, 'D N', 'D Tapetenleisten by Georges Jacob (research/09 §4.1); gilt fillet 0.045 m N (I1)'));
         const bb = acc.get(damaskMaterial(lib, wallName, border, figure), shellInfo('bordure', `${room.name_de} – Bordüre (Damast)`, 'D N', 'D damask in contrasting colours with broad borders (Mannlich T1 p. 365 / T5); colour and width N'));
         const gb = acc.get(lib.get('metal.gilt'), shellInfo('bordure', `${room.name_de} – Goldstickerei der Bordüre`, 'D N', 'D gold-embroidered borders (Mannlich T1 p. 365); width N'));
         const L = STATE_ROOM.leiste;
@@ -347,7 +441,7 @@ export function buildShell(inp: ShellInput): void {
       const o = hit.opening;
       if (o.facade || !LEAF_KINDS.has(o.kind) && o.kind !== 'passage') continue;
       const h = hit.hole;
-      const sur = acc.get(fancy ? (gilt ? lib.get('metal.gilt') : lib.get('wall.boiserie')) : lib.get('wood.door'), shellInfo('tuer', `${room.name_de} – Türgewände`, 'N', 'N door surround (chambranle)'));
+      const sur = acc.get(fancy ? (gilt ? lib.get('metal.gilt') : boiserieMat) : lib.get('wood.door'), shellInfo('tuer', `${room.name_de} – Türgewände`, 'N', 'N door surround (chambranle)'));
       const bw = 0.11;
       const rise = archRise(h.head, h.u1 - h.u0);
       if (rise < 0.01) {
@@ -365,18 +459,13 @@ export function buildShell(inp: ShellInput): void {
   if (!inp.vault && !inp.noCeiling) {
     const cb = acc.get(ceilMat, shellInfo('gesims', `${room.name_de} – Deckenkehle / Gesims`, fancy ? 'N' : 'N', 'N stucco cove (Voute) 02 §2.12'));
     const c = corniceH;
+    // wave 10 (audit #9): the cove (Voute) of a state room reaches at least STATE_ROOM.coveReach × the clear height into
+    // the ceiling even where tall windows keep its drop short (a flattened cove) [N 1780s state rooms; I share]
+    const cr = fancy ? Math.max(c * 0.9, Math.min(0.7, clear * STATE_ROOM.coveReach)) : c * 0.9;
+    // wave 11 (audit #9): the section follows the room's rank - grand (salles: architrave step and frieze ovolo under
+    // the cove), state (wave 10) or plain (antichambres, cabinets: fillet and a shorter cove) [N 09 §4.2; I]
     const prof: [number, number][] = fancy
-      ? [
-          [0, ch - c],
-          [0.03, ch - c],
-          [0.035, ch - c + 0.05],
-          [0.06, ch - c + 0.07],
-          ...Array.from({ length: 6 }, (_, k) => {
-            const a = ((k + 1) / 7) * (Math.PI / 2);
-            return [0.06 + (c * 0.9 - 0.06) * (1 - Math.cos(a)), ch - c + 0.07 + (c - 0.07) * Math.sin(a)] as [number, number];
-          }),
-          [c * 0.95, ch],
-        ]
+      ? corniceProfile(order.cornice, c, cr, ch)
       : [
           [0, ch - c],
           [0.02, ch - c],
@@ -386,10 +475,17 @@ export function buildShell(inp: ShellInput): void {
     if (!inp.ceilingRects) cb.profileLoop(room.polygon, prof);
     if (fancy && clear > 3) {
       const gb = acc.get(gilt ? lib.get('metal.gilt') : ceilMat, shellInfo('gesims', `${room.name_de} – Deckenkehle / Gesims`, 'N', 'N'));
+      const top = prof[prof.length - 1][0];
       if (!inp.ceilingRects) gb.profileLoop(room.polygon, [
-        [c * 0.95, ch - 0.004],
-        [c * 0.95 + 0.04, ch - 0.03],
-        [c * 0.95 + 0.08, ch - 0.004],
+        [top, ch - 0.004],
+        [top + 0.04, ch - 0.03],
+        [top + 0.08, ch - 0.004],
+      ]);
+      // grand order: the frieze ovolo carries a second gilt fillet (gilding on the innermost mouldings only, I2) [N]
+      if (gilt && order.cornice === 'grand' && c > 0.3 && !inp.ceilingRects) gb.profileLoop(room.polygon, [
+        [0.051, ch - c + 0.058],
+        [0.068, ch - c + 0.072],
+        [0.076, ch - c + 0.092],
       ]);
     }
   }
@@ -406,16 +502,19 @@ export function buildShell(inp: ShellInput): void {
     if (fancy && clear > 3) {
       // stucco frame and rosette (Louis-seize sobriety: few painted ceilings)
       const [s0, s1, t0, t1] = bbox(room.polygon);
-      const m = corniceH + 0.45;
+      const m = Math.max(corniceH, fancy ? Math.min(0.7, clear * STATE_ROOM.coveReach) : 0) + 0.45; // wave 10: clear of the wider cove
       if (s1 - s0 > 2 * m + 1 && t1 - t0 > 2 * m + 1) {
         // Deckenspiegel: a moulded stucco frame (gilt bead in state rooms) on the ceiling plane [N 02 §2.12]
         const fr = acc.get(gilt ? lib.get('metal.gilt') : ceilMat, shellInfo('decke', `${room.name_de} – Deckenspiegel`, 'N', 'N stucco frame and rosette 02 §2.12'));
         const Fc = (x: number, y: number, z: number): V3 => O(x, y, ch - z);
         const Nc = (x: number, y: number, z: number): V3 => norm3([x, -z, -y]);
         mouldFrame(fr, Fc, Nc, s0 + m, t0 + m, s1 - m, t1 - m, beadProfile(0.07, 0.035));
+        // wave 11 (audit #9): the salles' Deckenspiegel gets a leaf fleuron in each corner [N 09 §4.2; I size]
+        if (order.cornice === 'grand') for (const [x, y, sx, sy] of [[s0 + m, t0 + m, 1, 1], [s1 - m, t0 + m, -1, 1], [s1 - m, t1 - m, -1, -1], [s0 + m, t1 - m, 1, -1]]) fleuron(fr, x + sx * 0.14, y + sy * 0.14, ch, Math.atan2(sy, sx));
       }
       // KB-I26 review: a rosette only where a chandelier hangs (a flat gilt disc without one read as a hole)
-      for (const c of inp.rosettes ?? []) rosette(acc.get(ceilMat, shellInfo('rosette', `${room.name_de} – Deckenrosette (Stuck)`, 'N', 'N stucco ceiling rosette under the chandelier (research/09 §4.2)')), gilt ? acc.get(lib.get('metal.gilt'), shellInfo('rosette', `${room.name_de} – Deckenrosette`, 'N', 'N gilt ring of the rosette')) : null, c, ch);
+      const R = rosetteRadius(Math.min(s1 - s0, t1 - t0));
+      for (const c of inp.rosettes ?? []) rosette(acc.get(ceilMat, shellInfo('rosette', `${room.name_de} – Deckenrosette (Stuck)`, 'N', 'N stucco ceiling rosette under the chandelier (research/09 §4.2)')), gilt ? acc.get(lib.get('metal.gilt'), shellInfo('rosette', `${room.name_de} – Deckenrosette`, 'N', 'N gilt ring of the rosette')) : null, c, ch, R);
     }
   }
 }
@@ -594,19 +693,20 @@ function groinVault(b: Bucket, inp: ShellInput, walls: RoomWall[]): void {
 }
 
 /** Canvas (KB-I26/I27): a colour grid of a varnished picture on the wall plane, `seed` picks the composition. */
-export function canvasQuad(b: Bucket, P: PFn, nIn: V3, u0: number, v0: number, u1: number, v1: number, z: number, seed: number): void {
+export function canvasQuad(b: Bucket, P: PFn, nIn: V3, u0: number, v0: number, u1: number, v1: number, z: number, seed: number, owner: object = b, wall = ''): void {
   if (u1 - u0 < 0.05 || v1 - v0 < 0.05) return;
   const g = canvasGrid(seed, u1 - u0, v1 - v0);
   const lin = (c: [number, number, number]): V3 => [srgbToLinear(c[0]), srgbToLinear(c[1]), srgbToLinear(c[2])];
-  b.colourGrid(P(u0, v0, z), P(u1, v0, z), P(u1, v1, z), P(u0, v1, z), nIn, g.nx, g.ny, (i, j) => lin(g.colours[j * g.nx + i]));
+  // wave 10: a composition of the canvas atlas of the same genre (painting.ts), dealt per wall; the grid stays the fallback
+  const pk = hangOf(owner).pick(wall, g.kind, seed);
+  b.colourGrid(P(u0, v0, z), P(u1, v0, z), P(u1, v1, z), P(u0, v1, z), nIn, g.nx, g.ny, (i, j) => lin(g.colours[j * g.nx + i]), canvasParams(g.kind, pk.tile, pk.mirror, u1 - u0, v1 - v0));
 }
 
 /**
  * Stucco ceiling rosette (KB-I26) of radius STATE_ROOM.rosette.radius at plan point c: a lathed boss with a ring of
  * acanthus leaves; `gilt` gets a thin gilt ring at the rim (state rooms) [N].
  */
-function rosette(b: Bucket, gilt: Bucket | null, c: ST, ch: number): void {
-  const R = STATE_ROOM.rosette.radius;
+function rosette(b: Bucket, gilt: Bucket | null, c: ST, ch: number, R: number = STATE_ROOM.rosette.radius): void {
   const prof: [number, number][] = [
     [0.001, 0.1],
     [0.05, 0.095],
@@ -619,17 +719,38 @@ function rosette(b: Bucket, gilt: Bucket | null, c: ST, ch: number): void {
     [0.38, 0.02],
     [R, 0.0],
   ].map(([r, d]) => [r * (R / 0.42), d] as [number, number]);
-  const lathe = new THREE.LatheGeometry(prof.map(([r, d]) => new THREE.Vector2(r, -d)), 24);
+  // wave 11: 20 sectors, 5×3 leaves and a 3×24 ring (≈ 760 instead of 1,120 triangles; the radius now follows the room)
+  const lathe = new THREE.LatheGeometry(prof.map(([r, d]) => new THREE.Vector2(r, -d)), 20);
   b.geometry(lathe, new THREE.Matrix4().makeTranslation(c[0], ch - 0.001, -c[1]));
   // acanthus leaves: flattened ellipsoids on the ring
   for (let k = 0; k < 12; k++) {
     const a = (k / 12) * Math.PI * 2;
-    const leaf = new THREE.SphereGeometry(1, 6, 4);
+    const leaf = new THREE.SphereGeometry(1, 5, 3);
     const m = new THREE.Matrix4()
       .makeTranslation(c[0] + Math.cos(a) * R * 0.55, ch - 0.035, -c[1] + Math.sin(a) * R * 0.55)
       .multiply(new THREE.Matrix4().makeRotationY(-a))
       .multiply(new THREE.Matrix4().makeScale(R * 0.22, 0.03, R * 0.09));
     b.geometry(leaf, m);
   }
-  if (gilt) gilt.geometry(new THREE.TorusGeometry(R * 0.92, 0.012, 4, 32).rotateX(Math.PI / 2), new THREE.Matrix4().makeTranslation(c[0], ch - 0.012, -c[1]));
+  if (gilt) gilt.geometry(new THREE.TorusGeometry(R * 0.92, 0.012, 3, 24).rotateX(Math.PI / 2), new THREE.Matrix4().makeTranslation(c[0], ch - 0.012, -c[1]));
+}
+
+/**
+ * Wave 11 (audit #9): a stucco leaf fleuron in a corner of the Deckenspiegel at plan point (x, y), its main leaf
+ * pointing along plan angle `a` (towards the room centre): a boss and three leaves (≈ 50 triangles) [N; I size].
+ */
+function fleuron(b: Bucket, x: number, y: number, ch: number, a: number): void {
+  const g = new THREE.SphereGeometry(1, 6, 2);
+  b.geometry(g, new THREE.Matrix4().makeTranslation(x, ch - 0.012, -y).multiply(new THREE.Matrix4().makeScale(0.035, 0.014, 0.035)));
+  for (const da of [-0.75, 0, 0.75]) {
+    const q = a + da;
+    const len = da === 0 ? 0.11 : 0.075;
+    b.geometry(
+      g,
+      new THREE.Matrix4()
+        .makeTranslation(x + Math.cos(q) * len * 0.9, ch - 0.008, -(y + Math.sin(q) * len * 0.9))
+        .multiply(new THREE.Matrix4().makeRotationY(q))
+        .multiply(new THREE.Matrix4().makeScale(len, 0.009, len * 0.32)),
+    );
+  }
 }

@@ -119,6 +119,17 @@ export function plinthAO(h: number, z: WallZones): number {
   return Math.min(1, f.ao + ((1 - f.ao) * Math.max(0, h - z.grade)) / f.fade);
 }
 
+/**
+ * Wave 10 (audit #3): albedo of the plinth stone near the grade - splash water and rising damp darken the lowest course
+ * [N: splash zone of a stone plinth on a sanded court; I amount `albedo`, height `fade` m]. Baked into the vertex
+ * shade, so the explorer light layer shows it too.
+ */
+export const PLINTH_DAMP = { albedo: 0.82, fade: 0.45 } as const;
+export function plinthDamp(h: number, z: WallZones): number {
+  const d = PLINTH_DAMP;
+  return Math.min(1, d.albedo + ((1 - d.albedo) * Math.max(0, h - z.grade)) / d.fade);
+}
+
 /** Albedo grime multiplier of a wall vertex at height h (under the cornice). */
 export function wallGrime(h: number, z: WallZones): number {
   const g = GRIME;
@@ -227,7 +238,7 @@ export const STONE_HUES = {
   yellowGrey: '#C8B38C',
   /** max share of the yellow-grey hue a block can take; the share is blend · r^2 (mean blend / 3) */
   blend: 0.12,
-  lumJitter: 0.05,
+  lumJitter: 0.03,
 } as const;
 
 function srgbToLinear(c: number): number {
@@ -235,19 +246,26 @@ function srgbToLinear(c: number): number {
   return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
 }
 
+/** Linear RGB (0…1) of an sRGB hex colour `#RRGGBB`. */
+export function hexLinear(hex: string): [number, number, number] {
+  return hexRgb(hex).map(srgbToLinear) as [number, number, number];
+}
+
+/** Rec. 709 luminance of a linear RGB triple. */
+export const linearLuma = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+
 /**
  * Albedo multiplier (linear rgb) that turns the base stone colour `base` into this block's hue. `r1`, `r2` are two
  * uniform random numbers of the block (r1: hue step toward yellow-grey, r2: value).
  */
 export function stoneBlockTint(base: string, r1: number, r2: number): [number, number, number] {
-  const b = hexRgb(base).map(srgbToLinear);
-  const t = hexRgb(STONE_HUES.yellowGrey).map(srgbToLinear);
+  const b = hexLinear(base);
+  const t = hexLinear(STONE_HUES.yellowGrey);
   const k = STONE_HUES.blend * r1 * r1;
   const lum = 1 + (r2 * 2 - 1) * STONE_HUES.lumJitter;
   // keep the block's luminance at `lum` × base: only the hue moves toward yellow-grey, not the brightness
   const mixed = [0, 1, 2].map((i) => b[i] + (t[i] - b[i]) * k);
-  const Y = (c: number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-  const norm = Y(b) / Math.max(1e-4, Y(mixed));
+  const norm = linearLuma(b) / Math.max(1e-4, linearLuma(mixed));
   return [0, 1, 2].map((i) => ((mixed[i] * norm) / Math.max(1e-4, b[i])) * lum) as [number, number, number];
 }
 
@@ -314,6 +332,72 @@ export function ashlarBlocks(u0: number, u1: number, h0: number, h1: number): As
     out.push({ u0: start, u1: hi, h0: ch0, h1: ch1, key: `${c}|${key}` });
   }
   return out;
+}
+
+/**
+ * Wave 10 (audit #3): mixed dressed sandstone per block, drawn in the viewer's stone shader (materials/index.ts
+ * `ashlarPatch`) on the ashlar texture's own block grid, so it shows at every LOD and on every red Buntsandstein surface
+ * (plinths, the Orangerie's high basement, terrace walls) [research/09 §1 item 5 "do not use one uniform red", §3.7 and
+ * M5: red `#A65E4A`, yellow-grey `#C8B38C`, grey-white `#CFC8BA`; D local stone, D reuse of Jägersburg / Hohenburg
+ * stone; I mix]. Unlike the wave-3 blend (grey-white mixed INTO red turned mauve), a block takes one stone's hue whole:
+ * `shares` of red (itself stepped up to `redToYellow` toward yellow-grey: the Homburg stone runs "yellow, red and
+ * yellow-red", 09 §2.2 [D]), yellow-grey and grey-white. A pale block moves `mix` of the way from the red to its
+ * stone in linear colour (whole hues at the red's value read olive and khaki in shade: wave-10 first cut), and its
+ * luminance `lumKeep` of the way from the red's toward its own, so the plinth reads as one warm mixed stone, not as
+ * camouflage or patch repairs (wave-3 review). `joint` is the recessed joint (half width m, albedo) and `value` the
+ * per-block value jitter. Shares and amplitudes [I].
+ */
+export const STONE_MIX = {
+  /** catalogue colours drawn as mixed dressed stone (the documented plinth red, D KB-B02; the retaining-wall stone) */
+  colours: ['#A65E4A', '#A0604E'] as readonly string[],
+  shares: { red: 0.45, yellowGrey: 0.35, greyWhite: 0.2 },
+  redToYellow: 0.3,
+  /** wave-10 review: the red blocks lose this share of their saturation (toward red-brown, not orange-red) */
+  redDesat: 0.15,
+  mix: { yellowGrey: 0.45, greyWhite: 0.4 },
+  /**
+   * wave-10 review: pale blocks keep nearly the red's value (≤ ≈ 6 % brighter), so adjacent blocks differ in hue, not
+   * as a checkerboard of light and dark (beds of one quarry differ subtly [N])
+   */
+  lumKeep: { yellowGrey: 0.05, greyWhite: 0.06 },
+  value: 0.02,
+  /** share of the ashlar photo's luminance variation kept on mixed stone (lumaPatch contrast) */
+  textureContrast: 0.45,
+  /**
+   * recessed joint: half width m (a 1.6 cm joint) and albedo; `arris` the lit top edge of the block below a bed joint
+   * (width m, albedo gain). Both fade to their mean once the joint is narrower than a pixel.
+   */
+  joint: { halfWidth: 0.008, albedo: 0.42, arris: { width: 0.012, gain: 1.18 } },
+  greyWhite: '#CFC8BA',
+} as const;
+
+/**
+ * Wave-10 review (TF-08 at pose 49): retaining walls (terraces, scarps, drive walls; site/features.ts) are laid in the
+ * same mixed stone with larger courses, ≈ 0.5 m instead of the plinth's 0.36 m [N larger courses in retaining walls;
+ * I size], and carry a projecting grey-white sandstone coping with a drip [N research/02 terraces; I sizes]. `colour`
+ * is the material key of their stone (the plinth red weathered a little browner [I]).
+ */
+export const RETAINING_ASHLAR = {
+  colour: '#A0604E',
+  courseScale: 1.4,
+  coping: { height: 0.3, overhang: 0.07, bed: 0.06, colour: '#CEC6B6' },
+} as const;
+
+/**
+ * Albedo multipliers (linear) that turn the base stone `base` into a whole yellow-grey and a whole grey-white block at
+ * the STONE_MIX luminance (shader uniforms of `ashlarPatch`).
+ */
+export function stoneMixTints(base: string): { yellowGrey: [number, number, number]; greyWhite: [number, number, number] } {
+  const b = hexLinear(base);
+  const yb = linearLuma(b);
+  const one = (hex: string, mix: number, keep: number): [number, number, number] => {
+    const t = hexLinear(hex).map((v, i) => b[i] + (v - b[i]) * mix);
+    const yt = linearLuma(t);
+    const s = (yb + (yt - yb) * keep) / Math.max(1e-4, yt);
+    return [0, 1, 2].map((i) => (t[i] * s) / Math.max(1e-4, b[i])) as [number, number, number];
+  };
+  const M = STONE_MIX;
+  return { yellowGrey: one(STONE_HUES.yellowGrey, M.mix.yellowGrey, M.lumKeep.yellowGrey), greyWhite: one(M.greyWhite, M.mix.greyWhite, M.lumKeep.greyWhite) };
 }
 
 /** Hue multiplier of an ashlar block of one building (deterministic per building and block key). */

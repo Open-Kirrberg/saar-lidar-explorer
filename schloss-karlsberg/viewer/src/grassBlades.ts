@@ -26,6 +26,7 @@ import { E0, N0 } from '@model/frame.ts';
 import { mulberry32 } from '@model/layout/geom.ts';
 import { GRASS_SWARD } from '@model/layout/grammar.ts';
 import { foliageUniforms } from './foliage.ts';
+import { FIELD_GLSL, ZONE_GLSL } from './landcoverBake.ts';
 import { GROUND_CLASS } from './landcover.ts';
 import type { TerrainData } from './terrain.ts';
 
@@ -37,6 +38,12 @@ export const GRASS = {
   spacing: 0.2,
   /** full density within this distance (m); beyond, the kept share falls as (dense / d)² */
   dense: 6,
+  /**
+   * wave 11 (KB-I94, pose 39 retina over budget): the meadow and hay tufts thin from 4.5 m instead (the lawn keeps 6 m,
+   * so the garden poses do not change): their 15-35 cm cards overlapped ~1.2× over the lower screen at eye height, and
+   * every alpha-tested card fragment is shaded; the survivors widen as before (`keepShare`), ~24 % less card area [I]
+   */
+  meadowDense: 4.5,
   /** CPU window: side (m), texel (m), and how far (m) the camera may move before it is rebuilt */
   window: 64,
   texel: 0.5,
@@ -54,6 +61,15 @@ export const GRASS = {
    */
   lawnRadius: 10,
   lawnFeather: 3,
+  /**
+   * wave-10 review fix: in the standing parcels and uncut margins of the meadow-lawn's aftermath meadow (lawnZones.ts),
+   * this share of the tufts are seeding culms (atlas tile 2, GRASS_SWARD.seeding); the rest are leafy meadow tufts
+   */
+  seedShare: 0.14,
+  /** wave-10 review fix: share of the leafy meadow tufts kept between the seeding culms of a standing parcel (retina fill) */
+  leafKeep: 0.45,
+  /** wave-10 review fix: the straw windrows of scythed parcels and their stubble reach this far (m; between lawn and meadow) */
+  windrowRadius: 14,
 } as const;
 
 /**
@@ -191,24 +207,30 @@ export function fillGrassWindow(
     }
 }
 
+/** Tiles of the tuft atlas, side by side: 0 lawn, 1 meadow, 2 seeding stems (wave-10 review fix). */
+export const TUFT_TILES = 3;
+
 /**
- * Procedural tuft atlas (RGBA8, two tiles side by side, each `tw` × `th` texels, rows bottom-up): tile 0 a lawn tuft
- * (about 70 short, fine, mostly upright blades), tile 1 a meadow tuft (about 34 longer, leaning and curving blades and
- * three seed stems). RGB is a grey shade, darker toward the roots (0.5 → 1.0); transparent texels carry the mean grey.
- * Deterministic.
+ * Procedural tuft atlas (RGBA8, TUFT_TILES tiles side by side, each `tw` × `th` texels, rows bottom-up): tile 0 a lawn
+ * tuft (about 70 short, fine, mostly upright blades), tile 1 a meadow tuft (about 34 longer, leaning and curving blades
+ * and three seed stems), tile 2 (wave-10 review fix) seeding grass: a few basal leaves and long thin culms with loose
+ * panicles. RGB is a grey shade, darker toward the roots (0.5 → 1.0); transparent texels carry the mean grey. The
+ * panicle texels of tile 2 carry G = 0.75 · R (a head marker the shader tints pinkish-buff, `headMark`); everywhere
+ * else R = G = B. Deterministic; tiles 0 and 1 are drawn first, so they are unchanged by tile 2.
  */
 export function grassTuftAtlas(tw = 256, th = 128, seed = 1789): Uint8Array {
-  const W = tw * 2;
+  const W = tw * TUFT_TILES;
   const out = new Uint8Array(W * th * 4);
   // KB-I78: the lawn tile is nearly flat in shade (a scythed sward has no dark tuft bases at 1:1), the meadow keeps its
   // darker roots
-  const MEAN = [LAWN_SHADE[1], 0.88];
+  const MEAN = [LAWN_SHADE[1], 0.88, 0.88];
   for (let i = 0; i < W * th; i++) {
-    const m = MEAN[i % W < tw ? 0 : 1];
+    const m = MEAN[Math.min(TUFT_TILES - 1, Math.floor((i % W) / tw))];
     out[i * 4] = out[i * 4 + 1] = out[i * 4 + 2] = Math.round(m * 255);
   }
   const cov = new Float32Array(W * th);
   const sh = new Float32Array(W * th);
+  const hd = new Float32Array(W * th);
   const blade = (tile: number, root: number, height: number, lean: number, curve: number, hw: number, shade: number, head = 0) => {
     // centre line x(t) = root + lean·t + curve·t² (tile units), y = t·height; half-width tapers to the tip
     const rows = Math.max(2, Math.round(height * th));
@@ -216,7 +238,7 @@ export function grassTuftAtlas(tw = 256, th = 128, seed = 1789): Uint8Array {
       const tt = (ry + 0.5) / rows;
       const xc = root + lean * tt + curve * tt * tt;
       let w = hw * Math.pow(1 - tt, 0.6) + 0.0012;
-      if (head && tt > 1 - head) w = Math.max(w, hw * 1.6 * Math.sin((Math.PI * (tt - 1 + head)) / head));
+      if (head && tt > 1 - head) w = Math.max(w, hw * (tile === 2 ? 2.8 : 1.6) * Math.sin((Math.PI * (tt - 1 + head)) / head));
       const xa = (xc - w) * tw;
       const xb = (xc + w) * tw;
       for (let px = Math.max(0, Math.floor(xa)); px <= Math.min(tw - 1, Math.ceil(xb)); px++) {
@@ -234,6 +256,8 @@ export function grassTuftAtlas(tw = 256, th = 128, seed = 1789): Uint8Array {
         // speckle at 1:1); the meadow tile keeps its look (46 / 47)
         if (tile === 0) sh[k] += s * c * (1 - cov[k]);
         else sh[k] = sh[k] * (1 - c) + s * c;
+        // the panicle of a seeding culm (tile 2): head marker, painted over what lies below
+        if (tile === 2) hd[k] = hd[k] * (1 - c) + (head && tt > 1 - head ? c : 0);
         cov[k] = cov[k] + c * (1 - cov[k]);
       }
     }
@@ -255,11 +279,23 @@ export function grassTuftAtlas(tw = 256, th = 128, seed = 1789): Uint8Array {
     blade(1, root, 0.4 + 0.6 * rnd(), side * rnd() * 0.16, side * rnd() * 0.12, 0.011 + 0.005 * rnd(), 0.8 + 0.2 * rnd());
   }
   for (let b = 0; b < 3; b++) blade(1, 0.25 + 0.5 * rnd(), 0.92 + 0.08 * rnd(), (rnd() - 0.5) * 0.08, (rnd() - 0.5) * 0.04, 0.004, 0.95, 0.16);
+  // tile 2 (wave-10 review fix): seeding grass of the uncut aftermath meadow: basal leaves to ~40 % of the card, then
+  // 9 culms from three tussocks, 70-100 % high, slightly nodding, each with a loose panicle over its top 18-30 %
+  const rnd2 = mulberry32(seed ^ 0x5eed);
+  for (let b = 0; b < 26; b++) {
+    const side = rnd2() < 0.5 ? -1 : 1;
+    blade(2, 0.15 + 0.7 * rnd2(), 0.18 + 0.24 * rnd2(), side * rnd2() * 0.2, side * rnd2() * 0.14, 0.012 + 0.006 * rnd2(), 0.8 + 0.2 * rnd2());
+  }
+  const tus = [0.25 + 0.1 * rnd2(), 0.5 + 0.08 * rnd2(), 0.72 + 0.1 * rnd2()];
+  for (let b = 0; b < 9; b++) {
+    const lean = (rnd2() - 0.5) * 0.22;
+    blade(2, tus[b % 3] + (rnd2() - 0.5) * 0.08, 0.7 + 0.3 * rnd2(), lean, lean * 0.6 + (rnd2() - 0.5) * 0.05, 0.005, 0.9 + 0.1 * rnd2(), 0.2 + 0.12 * rnd2());
+  }
   for (let k = 0; k < W * th; k++) {
     if (cov[k] <= 0) continue;
     const g = Math.round(Math.min(1, k % W < tw ? sh[k] / cov[k] : sh[k]) * 255);
     out[k * 4] = g;
-    out[k * 4 + 1] = g;
+    out[k * 4 + 1] = Math.round(g * (1 - 0.25 * Math.min(1, hd[k] / cov[k])));
     out[k * 4 + 2] = g;
     out[k * 4 + 3] = Math.round(Math.min(1, cov[k]) * 255);
   }
@@ -273,7 +309,7 @@ export function tuftShade(atlas: Uint8Array, tw: number, th: number, tile: numbe
   let min = 1;
   for (let y = 0; y < th; y++)
     for (let x = 0; x < tw; x++) {
-      const k = (y * tw * 2 + tile * tw + x) * 4;
+      const k = (y * tw * TUFT_TILES + tile * tw + x) * 4;
       if (atlas[k + 3] < 128) continue;
       const v = atlas[k] / 255;
       sum += v;
@@ -283,10 +319,24 @@ export function tuftShade(atlas: Uint8Array, tw: number, th: number, tile: numbe
   return { mean: n ? sum / n : 0, min };
 }
 
+/** Share of the opaque texels (alpha ≥ 128) of tile `tile` that carry the panicle marker G < R (tests). */
+export function tuftHeadShare(atlas: Uint8Array, tw: number, th: number, tile: number): number {
+  let n = 0;
+  let h = 0;
+  for (let y = 0; y < th; y++)
+    for (let x = 0; x < tw; x++) {
+      const k = (y * tw * TUFT_TILES + tile * tw + x) * 4;
+      if (atlas[k + 3] < 128) continue;
+      n++;
+      if (atlas[k + 1] < atlas[k] - 4) h++;
+    }
+  return n ? h / n : 0;
+}
+
 /** Share of the texels of tile `tile` with alpha ≥ 128 (tests). */
 export function tuftCoverage(atlas: Uint8Array, tw: number, th: number, tile: number): number {
   let n = 0;
-  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) if (atlas[(y * tw * 2 + tile * tw + x) * 4 + 3] >= 128) n++;
+  for (let y = 0; y < th; y++) for (let x = 0; x < tw; x++) if (atlas[(y * tw * TUFT_TILES + tile * tw + x) * 4 + 3] >= 128) n++;
   return n / (tw * th);
 }
 
@@ -296,6 +346,7 @@ uniform vec2 uSnap;
 uniform float uGS;
 uniform float uGR;
 uniform float uGDense;
+uniform float uGDenseM;
 uniform vec3 uGCam;
 uniform sampler2D tGWin;
 uniform vec3 uGWin; // x0, z0 (texel 0 corner), texel
@@ -311,8 +362,22 @@ uniform float uFolWind;
 uniform float uGFeather;
 uniform vec2 uGLawnR; // lawn radius, lawn feather
 uniform float uGLawnJ;
+// wave-10 review fix: the meadow-lawn's aftermath meadow (macro B of the terrain, lawnZones.ts; ZONE_GLSL)
+uniform sampler2D tGMacro;
+uniform sampler2D tGNoise;
+uniform vec2 uGGridU;
+uniform vec3 uGStraw;
+uniform float uGZone;
+uniform vec4 uGSeed; // seeding height h0, h1, card aspect, share
+uniform vec4 uGCut; // windrow h0, h1, stubble h0, h1
+uniform float uGWindR;
+uniform float uGLeafKeep;
 varying vec3 vGCol;
+varying vec3 vGSeed;
 varying float vGFade;
+float zn( vec2 p ) { vec2 i = floor( p ); vec2 f = fract( p ); return textureLod( tGNoise, ( i + f * f * ( 3.0 - 2.0 * f ) + 0.5 ) / 256.0, 0.0 ).r; }
+${FIELD_GLSL}
+${ZONE_GLSL}
 vec4 gHash( vec2 p ) {
 	vec4 p4 = fract( vec4( p.xyxy ) * vec4( 0.1031, 0.1030, 0.0973, 0.1099 ) );
 	p4 += dot( p4, p4.wzxy + 33.33 );
@@ -345,20 +410,68 @@ vec3 objectNormal;
 	vec4 w = gWin( xz );
 	objectNormal = normalize( vec3( w.r - gWin( xz + vec2( 0.5, 0.0 ) ).r, 0.5, w.r - gWin( xz + vec2( 0.0, 0.5 ) ).r ) );
 	float dh = distance( vec3( xz.x, w.r, xz.y ), uGCam );
-	float keep = dh <= uGDense ? 1.0 : max( 0.04, ( uGDense / dh ) * ( uGDense / dh ) );
+	float lawnF = w.g / max( w.g + w.b, 1e-3 );
+	float isLawn = step( 0.5, lawnF );
+	// wave 11 (KB-I94): meadow tufts thin from uGDenseM (GRASS.meadowDense), lawn tufts from uGDense
+	float gDense = mix( uGDenseM, uGDense, isLawn );
+	float keep = dh <= gDense ? 1.0 : max( 0.04, ( gDense / dh ) * ( gDense / dh ) );
 	float widen = min( 2.5, sqrt( 1.0 / keep ) );
 	float grassW = clamp( ( w.g + w.b ) * w.a, 0.0, 1.0 );
 	// a tuft stands where its random is under the grass weight (soft class edges fray) and the density share
 	float present = step( hr.z, smoothstep( 0.3, 0.7, grassW ) ) * step( hr2.x, keep ) * uGOn;
-	float lawnF = w.g / max( w.g + w.b, 1e-3 );
-	float isLawn = step( 0.5, lawnF );
-	float H = mix( mix( uGH.z, uGH.w, hr.w ), mix( uGH.x, uGH.y, hr.w ), isLawn );
-	// KB-I78: no shrinking band at the disc edge (it read as a ring at 39); the outer uGFeather m dissolve per pixel
+	float tile = 1.0 - isLawn; // atlas tile: 0 lawn, 1 meadow, 2 seeding culms
+	vec2 hR = mix( uGH.zw, uGH.xy, isLawn );
+	float aspect = mix( uGAspect.y, uGAspect.x, isLawn );
 	float gR = mix( uGR, uGLawnR.x, isLawn );
 	float gF = mix( uGFeather, uGLawnR.y, isLawn );
+	float strawW = 0.0;
+	// wave-10 review fix (04 / 16 / 33: no standing height, no swath within 30 m): on the meadow-lawn's aftermath meadow
+	// the tufts follow the parcel's mowing state (aftermathSwath, the same frame as the bake and the terrain shader):
+	// standing seeding grass in uncut parcels and along the uncut margins (leafy meadow tufts and seeding culms with
+	// panicles), straw windrows and short stubble in scythed parcels, short regrowth elsewhere [N July aftermath, research/11 §3.1; I]
+	if ( uGZone > 0.5 && isLawn > 0.5 && present > 0.0 ) {
+		vec4 hr3 = gHash( cellI + 71.0 );
+		float gm = lawnMeadowAt( textureLod( tGMacro, ( xz - uGLandO ) / uGLandS, 0.0 ).b, xz, zn( xz / 1.6 + 23.0 ), zn( xz / 7.0 + 5.0 ) );
+		if ( hr3.x < gm ) {
+			Swath S = aftermathSwath( xz, uGGridU );
+			bool cut = S.st >= 0.45 && S.st < 0.8;
+			float standing = S.st < 0.45 ? 1.0 : ( cut ? 1.0 - smoothstep( 0.6, 1.6, S.edge ) : 0.0 );
+			if ( hr3.y < standing ) {
+				isLawn = 0.0;
+				gR = uGR;
+				gF = uGFeather;
+				if ( hr3.z < uGSeed.w ) {
+					tile = 2.0;
+					hR = uGSeed.xy;
+					aspect = uGSeed.z;
+				} else {
+					// leafy meadow tufts, thinned to uGLeafKeep and only within uGWindR m (the bake's seeding tone and the
+					// darker sward depth of the terrain shader fill between them; retina fill cost), the culms reach uGR
+					tile = 1.0;
+					hR = uGH.zw;
+					aspect = uGAspect.y;
+					gR = uGWindR;
+					present *= step( hr3.z, uGSeed.w + uGLeafKeep * ( 1.0 - uGSeed.w ) );
+				}
+			} else if ( cut ) {
+				gR = uGWindR;
+				if ( hr3.w < S.wr * 1.6 ) {
+					strawW = 1.0;
+					tile = 1.0;
+					hR = uGCut.xy;
+					aspect = uGAspect.y;
+				} else {
+					hR = uGCut.zw;
+				}
+			} else {
+				hR = uGH.xy * 1.35;
+			}
+		}
+	}
+	float H = mix( hR.x, hR.y, hr.w );
+	// KB-I78: no shrinking band at the disc edge (it read as a ring at 39); the outer uGFeather m dissolve per pixel
 	H *= present * step( dh, gR ) * smoothstep( 0.3, 0.6, grassW );
 	vGFade = 1.0 - smoothstep( gR - gF, gR, dh );
-	float aspect = mix( uGAspect.y, uGAspect.x, isLawn );
 	float Wd = H * aspect * widen * ( 0.85 + 0.3 * hr2.y );
 	// camera-facing about the vertical, ±25° of jitter
 	vec2 toC = uGCam.xz - xz;
@@ -375,7 +488,7 @@ vec3 objectNormal;
 		// tile 0 lawn, tile 1 meadow; mirrored per tuft
 		float u = position.x + 0.5;
 		u = hr2.w < 0.5 ? u : 1.0 - u;
-		vMapUv = vec2( ( u + 1.0 - isLawn ) * 0.5, cy );
+		vMapUv = vec2( ( u + tile ) / ${TUFT_TILES.toFixed(1)}, cy );
 	#endif
 	// the ground's own albedo at the root (land-cover bake, sqrt-encoded linear), with a per-tuft jitter
 	vec4 lc = textureLod( tGLand, ( xz - uGLandO ) / uGLandS, 0.0 );
@@ -383,7 +496,18 @@ vec3 objectNormal;
 	// KB-I78: on the lawn the blades keep the ground's own colour within ±uGLawnJ (no dark speckle at 1:1)
 	vec3 meadowC = ( 0.88 + 0.2 * hr2.y ) * vec3( 0.93 + 0.06 * ( hr.w - 0.5 ), 1.0, 0.9 - 0.08 * ( hr2.z - 0.5 ) );
 	vec3 lawnC = vec3( 1.0 + uGLawnJ * ( 2.0 * hr2.y - 1.0 ) ) * vec3( 0.99 + 0.02 * ( hr.w - 0.5 ), 1.0, 0.98 - 0.02 * ( hr2.z - 0.5 ) );
-	vGCol = lc.rgb * lc.rgb * mix( meadowC, lawnC, isLawn );
+	vec3 g0 = lc.rgb * lc.rgb;
+	vGCol = g0 * mix( meadowC, lawnC, isLawn );
+	// wave-10 review fix: straw windrow tufts (pale, warm), and the panicle colour of the seeding culms: pinkish-buff
+	// (Holcus), purplish-brown (Agrostis) or green-buff (Dactylis, Festuca) per tuft, muted [N July meadow grasses; I hues]
+	float gL = dot( g0, vec3( 0.2126, 0.7152, 0.0722 ) );
+	// (drying hay: straw with a grey-green cast, not a dead orange-brown)
+	vec3 strawT = mix( uGStraw, g0 * ( dot( uGStraw, vec3( 0.2126, 0.7152, 0.0722 ) ) / max( gL, 1e-4 ) ), 0.35 );
+	vec3 strawC = strawT * ( gL * 1.28 / max( dot( strawT, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-4 ) ) * ( 0.9 + 0.2 * hr2.y );
+	vGCol = mix( vGCol, strawC, strawW );
+	vec3 seedC = hr.z < 0.3 ? vec3( 0.46, 0.38, 0.3 ) : hr.z < 0.55 ? vec3( 0.34, 0.26, 0.23 ) : vec3( 0.48, 0.45, 0.26 );
+	float seedL = hr.z < 0.3 ? 1.15 : hr.z < 0.55 ? 0.95 : 1.12;
+	vGSeed = seedC * ( gL * seedL / dot( seedC, vec3( 0.2126, 0.7152, 0.0722 ) ) ) * ( 0.9 + 0.2 * hr2.y );
 }
 `;
 
@@ -392,7 +516,7 @@ function tuftTexture(): THREE.DataTexture {
   if (!atlasTex) {
     const tw = 256;
     const th = 128;
-    atlasTex = new THREE.DataTexture(grassTuftAtlas(tw, th), tw * 2, th, THREE.RGBAFormat);
+    atlasTex = new THREE.DataTexture(grassTuftAtlas(tw, th), tw * TUFT_TILES, th, THREE.RGBAFormat);
     atlasTex.colorSpace = THREE.NoColorSpace; // linear shade factors around 1
     atlasTex.generateMipmaps = true;
     atlasTex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -407,7 +531,16 @@ function tuftTexture(): THREE.DataTexture {
 
 export interface GrassOptions {
   /** land-cover bake (terrain material uniforms tLand / uGroundOrigin / uGroundSize) */
-  land: { tLand: { value: THREE.Texture }; uGroundOrigin: { value: THREE.Vector2 }; uGroundSize: { value: THREE.Vector2 } };
+  land: {
+    tLand: { value: THREE.Texture };
+    uGroundOrigin: { value: THREE.Vector2 };
+    uGroundSize: { value: THREE.Vector2 };
+    /** wave-10 review fix: the meadow-lawn's mowing zones (macro B), the noise lattice, the palace grid and the straw colour */
+    tMacro?: { value: THREE.Texture };
+    tNoise?: { value: THREE.Texture };
+    uGridU?: { value: THREE.Vector2 };
+    uHayStraw?: { value: THREE.Vector3 };
+  };
   walks?: GrassWalk[];
   /** extra material patch (sky SH diffuse) */
   patch?: (m: THREE.MeshStandardMaterial) => void;
@@ -453,6 +586,7 @@ export class GrassBlades {
       uGS: { value: GRASS.spacing },
       uGR: { value: GRASS.radius },
       uGDense: { value: GRASS.dense },
+      uGDenseM: { value: GRASS.meadowDense },
       uGCam: { value: new THREE.Vector3() },
       tGWin: { value: this.win },
       uGWin: { value: new THREE.Vector3(0, 0, GRASS.texel) },
@@ -466,10 +600,18 @@ export class GrassBlades {
       uGFeather: { value: GRASS.feather },
       uGLawnR: { value: new THREE.Vector2(GRASS.lawnRadius, GRASS.lawnFeather) },
       uGLawnJ: { value: GRASS.lawnJitter },
+      tGMacro: opts.land.tMacro ?? { value: null },
+      tGNoise: opts.land.tNoise ?? { value: null },
+      uGGridU: opts.land.uGridU ?? { value: new THREE.Vector2(1, 0) },
+      uGStraw: opts.land.uHayStraw ?? { value: new THREE.Vector3(0.485, 0.431, 0.195) },
+      /** 1 = the aftermath meadow of the meadow-lawn shapes the tufts (A/B: `skb.grass.uniforms.uGZone.value = 0`) */
+      uGZone: { value: opts.land.tMacro && opts.land.tNoise ? 1 : 0 },
+      uGSeed: { value: new THREE.Vector4(S.seeding.height[0], S.seeding.height[1], S.seeding.card, GRASS.seedShare) },
+      uGCut: { value: new THREE.Vector4(S.windrow.height[0], S.windrow.height[1], S.stubble.height[0], S.stubble.height[1]) },
+      uGWindR: { value: GRASS.windrowRadius },
+      uGLeafKeep: { value: GRASS.leafKeep },
       /** blade albedo gain against the land bake (the photo detail of the ground averages ~1) */
       uGGain: { value: 1.0 },
-      /** debug view: 1 = view-space normal·(0,1,0), 2 = the root albedo */
-      uGDbg: { value: 0 },
     };
     const m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, metalness: 0, map: tuftTexture(), alphaTest: 0.5, alphaToCoverage: true });
     m.name = 'vegetation.grass';
@@ -481,24 +623,25 @@ export class GrassBlades {
         .replace('#include <beginnormal_vertex>', VERT_BEGIN)
         .replace('#include <begin_vertex>', '');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vGCol;\nvarying float vGFade;\nuniform float uGGain;\nuniform float uGDbg;')
-        .replace('#include <dithering_fragment>', '#include <dithering_fragment>\nif ( uGDbg > 0.5 ) gl_FragColor.rgb = uGDbg > 1.5 ? vec3( vGCol ) : vec3( dot( normal, vec3( 0.0, 1.0, 0.0 ) ) );')
+        .replace('#include <common>', '#include <common>\nvarying vec3 vGCol;\nvarying vec3 vGSeed;\nvarying float vGFade;\nuniform float uGGain;')
         .replace(
           '#include <map_fragment>',
           `#include <map_fragment>
-diffuseColor.rgb *= vGCol * uGGain;
+// wave-10 review fix: the panicle texels of the seeding tile carry G < R (grassTuftAtlas headMark); elsewhere R = G = B
+float gHead = clamp( ( sampledDiffuseColor.r - sampledDiffuseColor.g ) / max( sampledDiffuseColor.r, 1e-3 ) * 4.0, 0.0, 1.0 );
+diffuseColor.rgb = vec3( sampledDiffuseColor.r ) * mix( vGCol, vGSeed, gHead ) * uGGain;
 // KB-I78: the disc edge dissolves per pixel (interleaved gradient noise), so no tuft-sized band marks it
 if ( fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2( 0.06711056, 0.00583715 ) ) ) ) > vGFade ) discard;
 {
 	// thin blades lose alpha in the coarser mips: compensate as the leaf cards do (atlas 512 × 128)
-	vec2 gdx = dFdx( vMapUv * vec2( 512.0, 128.0 ) );
-	vec2 gdy = dFdy( vMapUv * vec2( 512.0, 128.0 ) );
+	vec2 gdx = dFdx( vMapUv * vec2( ${256 * TUFT_TILES}.0, 128.0 ) );
+	vec2 gdy = dFdy( vMapUv * vec2( ${256 * TUFT_TILES}.0, 128.0 ) );
 	float glod = 0.5 * log2( max( max( dot( gdx, gdx ), dot( gdy, gdy ) ), 1e-6 ) );
 	diffuseColor.a *= 1.0 + max( 0.0, glod ) * 0.35;
 }`,
         );
     };
-    m.customProgramCacheKey = () => 'grass-blades-3';
+    m.customProgramCacheKey = () => 'grass-blades-5';
     // no depth write: the screen-space AO (post.ts, ≥ 0.9 m radius) read the 5-20 cm cards as walls and drew each tuft
     // as a dark clump; the ground's depth stays in the buffer, and the cards draw far to near (discLattice order) over it
     m.depthWrite = false;

@@ -118,7 +118,11 @@ export function rectRoof(g: GeoBuilder, section: RoofSection, o: RectRoofOptions
  * circle (wave-4 review: the faceted lead dome read as polished metal) and, for domes (`smoothProfile`), also along the
  * profile; a cone keeps its straight slope normal.
  */
-export function roundRoof(g: GeoBuilder, section: RoofSection, radius: number, key: MatKey, sc = 0, tc = 0, segments = 32, smoothProfile = section.type === 'dome'): void {
+export function roundRoof(g: GeoBuilder, section: RoofSection, radius: number, key: MatKey, sc = 0, tc = 0, segments = 32, smoothProfile = section.type === 'dome', gores?: { count: number; keys: readonly MatKey[] }): void {
+  // wave-10 review: optional gores (sheet-lead panels between roll seams at angles (j + 0.5) / count): segment j takes
+  // gore key floor((j / perGore) + 0.5) - `segments` must be a multiple of 2 · count for the edges to meet the seams
+  const perGore = gores ? segments / gores.count : 0;
+  const keyOf = (j: number): MatKey => (gores && perGore >= 2 ? gores.keys[Math.floor(j / perGore + 0.5) % gores.keys.length] : key);
   const prof = halfProfile(section).map(([d, h]): [number, number] => [radius * (1 - d / (section.depth / 2)), h]);
   // outward profile normals (radial, vertical) per segment, then per ring
   const segN = prof.slice(1).map(([r1, h1], i): [number, number] => {
@@ -155,8 +159,9 @@ export function roundRoof(g: GeoBuilder, section: RoofSection, radius: number, k
       const p10 = P(r0, c1, s1, h0);
       const p11 = P(r1, c1, s1, h1);
       const p01 = P(r1, c0, s0, h1);
-      g.tri(key, p00, p10, p11, [nrm(nb, c0, s0), nrm(nb, c1, s1), nrm(nt, c1, s1)]);
-      g.tri(key, p00, p11, p01, [nrm(nb, c0, s0), nrm(nt, c1, s1), nrm(nt, c0, s0)]);
+      const k = keyOf(j);
+      g.tri(k, p00, p10, p11, [nrm(nb, c0, s0), nrm(nb, c1, s1), nrm(nt, c1, s1)]);
+      g.tri(k, p00, p11, p01, [nrm(nb, c0, s0), nrm(nt, c1, s1), nrm(nt, c0, s0)]);
     }
   }
 }

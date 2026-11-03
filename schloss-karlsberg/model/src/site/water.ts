@@ -12,7 +12,12 @@
  * - **Jet spray** (`jetSpray`): droplets falling from a fountain jet's crown on ballistic paths, animated by the shared
  *   `waterTime` (seconds), so the static jet meshes (features.ts) get motion and a soft spray edge [I look; jet heights
  *   are catalogue facts, GARDEN.basin.jet N].
- * - `offsetRing` and `sprayPoint` are pure (tests: model/tests/water.test.ts).
+ * - **Jet look** (wave 10, `jetPartMaterial`): the jet parts (features.ts `jetMesh`) are translucent water, not a frosted
+ *   cone on a white rod: the rising column is clear in the middle with bright aerated rims and upward-running streaks,
+ *   the falling curtain is broken into strands running down, the crown and the drift haze fade at their silhouettes,
+ *   and the foam is a churned ring where the curtain lands; the falling water and the droplets drift down-wind
+ *   (`jetDrift`, the prevailing south-west wind of the grass and foliage) [I look].
+ * - `offsetRing`, `sprayPoint`, `jetFallTime` and `jetDrift` are pure (tests: model/tests/water.test.ts).
  */
 import * as THREE from 'three';
 import { hashString, mulberry32 } from '../layout/geom.ts';
@@ -197,7 +202,26 @@ export function sprayPoint(seed: [number, number, number], h: number, t: number)
   const spread = JET_SPRAY.spread[0] + (JET_SPRAY.spread[1] - JET_SPRAY.spread[0]) * seed[2];
   const r = 0.1 + (spread * h * tt) / T;
   const a = seed[1] * Math.PI * 2;
-  return [Math.cos(a) * r, Math.max(0, h - 0.3 + vu * tt - 0.5 * G * tt * tt), Math.sin(a) * r];
+  const d = jetDrift(tt);
+  return [Math.cos(a) * r + JET_WIND.dir[0] * d, Math.max(0, h - 0.3 + vu * tt - 0.5 * G * tt * tt), Math.sin(a) * r + JET_WIND.dir[1] * d];
+}
+
+/**
+ * Wind on the falling water: the direction it drifts toward (local x, z) is the prevailing south-west wind's, as the
+ * grass and foliage bend (toward the north-east) [N Saarland climate]; `speed` (m/s) is a light breeze's pull on the
+ * drops after `tau` (s) of drag relaxation [I look: a 5 m jet leans ≈ 0.6 m at the water].
+ */
+export const JET_WIND = { dir: [0.8, -0.6] as readonly [number, number], speed: 0.9, tau: 0.5 } as const;
+
+/** Time (s) water takes to fall from the crown of a jet of height h down to height y (free fall). */
+export function jetFallTime(h: number, y: number): number {
+  return Math.sqrt((2 * Math.max(0, h - y)) / G);
+}
+
+/** Horizontal drift (m, along JET_WIND.dir) of water that has fallen for `tt` s: quadratic at first, then the breeze's speed. */
+export function jetDrift(tt: number): number {
+  const t = Math.max(0, tt);
+  return (JET_WIND.speed * t * t) / (t + JET_WIND.tau);
 }
 
 /** Light of the spray droplets (linear, pre-exposed): the viewer sets it per hour (atmosphere.ts); white by default. */
@@ -221,7 +245,8 @@ function sprayMaterial(): THREE.PointsMaterial {
   float spread = ${JET_SPRAY.spread[0].toFixed(3)} + ${(JET_SPRAY.spread[1] - JET_SPRAY.spread[0]).toFixed(3)} * aSeed.z;
   float rr = 0.1 + spread * aH * tt / T;
   float ang = aSeed.y * 6.2831853;
-  vec3 transformed = vec3( cos( ang ) * rr, max( 0.0, aH - 0.3 + vu * tt - ${(0.5 * G).toFixed(4)} * tt * tt ), sin( ang ) * rr );`,
+  float dr = ${JET_WIND.speed.toFixed(3)} * tt * tt / ( tt + ${JET_WIND.tau.toFixed(3)} );
+  vec3 transformed = vec3( cos( ang ) * rr + ${JET_WIND.dir[0].toFixed(3)} * dr, max( 0.0, aH - 0.3 + vu * tt - ${(0.5 * G).toFixed(4)} * tt * tt ), sin( ang ) * rr + ${JET_WIND.dir[1].toFixed(3)} * dr );`,
       );
     // round, soft droplets
     sh.fragmentShader = sh.fragmentShader.replace(
@@ -254,4 +279,112 @@ export function jetSpray(h: number, id: string): THREE.Points {
   p.renderOrder = 3;
   p.userData = { part: 'water' };
   return p;
+}
+
+// ---------------------------------------------------------------- jet look
+
+/** The translucent parts of a fountain jet (features.ts `jetMesh`). */
+export type JetPart = 'column' | 'crown' | 'sheath' | 'haze' | 'foam';
+
+/**
+ * Opacity of each jet part at its densest, and the speeds (m/s) of the streak patterns: up the column, down the
+ * curtain [I look; the curtain runs at roughly the speed of water that has fallen half the jet].
+ */
+export const JET_LOOK = {
+  opacity: { column: 0.8, crown: 0.42, sheath: 0.5, haze: 0.07, foam: 0.75 } as Record<JetPart, number>,
+  rise: 6,
+  fall: 4,
+  /** strands round the curtain and the column */
+  strands: { sheath: 26, column: 7 },
+} as const;
+
+const JET_GLSL = /* glsl */ `
+uniform float uWaterTime;
+uniform float uJetH;
+varying vec3 vJetP;
+float jetHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+// value noise, periodic in x with period n (strands round a cylinder)
+float jetNoise( vec2 p, float n ) {
+  vec2 i = floor( p );
+  vec2 f = fract( p );
+  vec2 u = f * f * ( 3.0 - 2.0 * f );
+  float x0 = mod( i.x, n );
+  float x1 = mod( i.x + 1.0, n );
+  float a = jetHash( vec2( x0, i.y ) );
+  float b = jetHash( vec2( x1, i.y ) );
+  float c = jetHash( vec2( x0, i.y + 1.0 ) );
+  float d = jetHash( vec2( x1, i.y + 1.0 ) );
+  return mix( mix( a, b, u.x ), mix( c, d, u.x ), u.y );
+}
+`;
+
+/** Alpha of each part (object-space position vJetP, view-space normal `normal`, view direction `vd`). */
+const JET_ALPHA: Record<JetPart, string> = {
+  // clear in the middle, aerated white at the rims, streaks running up
+  column: `
+    float ang = atan( vJetP.z, vJetP.x ) / 6.2831853 + 0.5;
+    float s = jetNoise( vec2( ang * ${JET_LOOK.strands.column.toFixed(1)}, vJetP.y * 1.6 - uWaterTime * ${JET_LOOK.rise.toFixed(1)} * 1.6 ), ${JET_LOOK.strands.column.toFixed(1)} );
+    float rim = 1.0 - abs( dot( normal, vd ) );
+    ja = mix( 0.3, 0.95, rim ) * mix( 0.55, 1.0, s ) * ( 1.0 - 0.35 * smoothstep( 0.7, 1.0, vJetP.y / uJetH ) );`,
+  // a ball of spray: dense in the middle, gone at the silhouette, churning
+  crown: `
+    float s = jetNoise( vec2( atan( vJetP.z, vJetP.x ) * 2.0, vJetP.y * 4.0 + uWaterTime * 3.0 ), 12.566 );
+    ja = pow( abs( dot( normal, vd ) ), 1.6 ) * mix( 0.5, 1.0, s );`,
+  // strands of falling water running down; seen edge-on a curtain is denser; fades in below the crown and into the foam
+  sheath: `
+    float ang = atan( vJetP.z, vJetP.x ) / 6.2831853 + 0.5;
+    float yy = vJetP.y / uJetH;
+    float s = jetNoise( vec2( ang * ${JET_LOOK.strands.sheath.toFixed(1)}, vJetP.y * 1.3 + uWaterTime * ${JET_LOOK.fall.toFixed(1)} * 1.3 ), ${JET_LOOK.strands.sheath.toFixed(1)} );
+    float s2 = jetNoise( vec2( ang * ${(JET_LOOK.strands.sheath * 2).toFixed(1)} + 7.0, vJetP.y * 3.1 + uWaterTime * ${JET_LOOK.fall.toFixed(1)} * 3.1 ), ${(JET_LOOK.strands.sheath * 2).toFixed(1)} );
+    float strand = smoothstep( 0.4, 0.8, 0.65 * s + 0.35 * s2 );
+    float edge = clamp( 0.3 / max( abs( dot( normal, vd ) ), 0.25 ), 0.45, 1.0 );
+    ja = strand * edge * smoothstep( 1.0, 0.82, yy ) * mix( 0.55, 1.0, smoothstep( 0.0, 0.25, yy ) );`,
+  // drift: only a whisper at the silhouette's inside, rising off the water
+  haze: `
+    ja = pow( abs( dot( normal, vd ) ), 2.0 ) * smoothstep( 1.0, 0.2, vJetP.y / ( 0.3 * uJetH ) );`,
+  // a churned ring where the curtain lands: blobs of foam drifting outward, clear water beyond
+  foam: `
+    float r = length( vJetP.xz );
+    float rl = 0.15 * uJetH;
+    float ring = exp( -pow( ( r - rl ) / ( 0.45 * rl ), 2.0 ) ) + 0.45 * ( 1.0 - smoothstep( 0.0, rl, r ) );
+    float ang = atan( vJetP.z, vJetP.x ) / 6.2831853 + 0.5;
+    float b = jetNoise( vec2( ang * 22.0, r * 5.0 - uWaterTime * 0.8 ), 22.0 );
+    float b2 = jetNoise( vec2( ang * 47.0 + 3.0, r * 11.0 - uWaterTime * 1.3 ), 47.0 );
+    ja = ring * smoothstep( 0.3, 0.75, 0.6 * b + 0.4 * b2 ) * ( 1.0 - smoothstep( 0.8, 1.0, r / ( 0.24 * uJetH ) ) );`,
+};
+
+const jetPartMats = new Map<string, THREE.MeshStandardMaterial>();
+/**
+ * Material of one jet part for a jet of height h: white aerated water with a little self-light (it scatters light,
+ * so it stays white in shade) [I render]; its alpha comes from the part's pattern above (`JET_ALPHA`).
+ */
+export function jetPartMaterial(part: JetPart, h: number): THREE.MeshStandardMaterial {
+  const key = `${part}:${h.toFixed(2)}`;
+  let m = jetPartMats.get(key);
+  if (m) return m;
+  m = new THREE.MeshStandardMaterial({ color: '#F6FAFA', emissive: '#DDE6E8', emissiveIntensity: 0.18, roughness: 0.35, transparent: true, opacity: JET_LOOK.opacity[part], depthWrite: false, side: part === 'foam' ? THREE.FrontSide : THREE.DoubleSide });
+  m.name = 'water.jet';
+  const jetH = { value: h };
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.uWaterTime = waterTime;
+    sh.uniforms.uJetH = jetH;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vJetP;`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n\tvJetP = position;`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\n${JET_GLSL}`)
+      .replace(
+        '#include <opaque_fragment>',
+        `{
+    vec3 vd = normalize( vViewPosition );
+    float ja = 1.0;
+    ${JET_ALPHA[part]}
+    diffuseColor.a *= clamp( ja, 0.0, 1.0 );
+  }
+  #include <opaque_fragment>`,
+      );
+  };
+  m.customProgramCacheKey = () => `water.jet.${part}`;
+  jetPartMats.set(key, m);
+  return m;
 }

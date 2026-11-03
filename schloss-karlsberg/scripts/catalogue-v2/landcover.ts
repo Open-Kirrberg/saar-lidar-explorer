@@ -23,6 +23,13 @@ import { mulberry32 } from '../../model/src/layout/geom.ts';
 import type { EN, LandcoverArea, RingEN } from '../../model/src/spec.ts';
 import { ring } from './common.ts';
 
+/**
+ * Wave 11 (KB-I84): field areas that fill open meadow between the first-cut parcels. The open Gewannflur had no hedges
+ * between its strips (KB-I57 decision [N]), so viewer/src/hinterland.ts walks no hedgerow along these outlines (the
+ * same list is mirrored there as GEWANN_FILL).
+ */
+export const GEWANN_FILL_IDS = ['LC-06', 'LC-07', 'LC-08'] as const;
+
 // Types live in the spec (validated by model/src/validate.ts); re-exported for the builder's callers.
 export { LANDCOVER_COVERS, type LandcoverArea, type LandcoverCover } from '../../model/src/spec.ts';
 
@@ -163,7 +170,58 @@ export function landcoverAreas(g: GridFrame): LandcoverArea[] {
       [381100, 5466330],
     ]),
     confidence: 'low',
-    tag: 'cover D PV 1791 (meadows in the valley below the palace), research/11 §6.3 "the valley floor"; extent I',
+    tag: 'cover D PV 1791 (meadows in the valley below the palace), research/11 §6.3 "the valley floor"; extent I; wave-11 review: the N lobe above the valley floor (N of ≈ 5466300, 7.9 ha) is painted over by the LC-07 Gewann (I), so the hay renders only S of it',
+  });
+  // wave 11 (garden, audit #2 / KB-I84): the Gewannflur reaches the open meadow (class 0) N and NE of the service row,
+  // N of the Carlsberger Hof and S of the Herzogsgarten belt. Painted right after the first-cut fields, so the forest,
+  // hay, garden and kitchen-garden areas below still win where they overlap; existing polygons keep their outlines (the
+  // hinterland hedgerows walk those edges). GEWANN_FILL_IDS have no hedges of their own (open strip fields, KB-I57).
+  add({
+    id: 'LC-06',
+    cover: 'field',
+    name_de: 'Gewannflur auf dem Nordplateau hinter der Marstallreihe',
+    geometry: en([
+      [382275, 5466520],
+      [382460, 5466480],
+      [382650, 5466470],
+      [382820, 5466520],
+      [382900, 5466700],
+      [382900, 5467150],
+      [382275, 5467150],
+    ]),
+    confidence: 'low',
+    tag: 'cover I (research/11 §3.1 / §6.3 "farm land N and NE of the service row"; HMS field parcels on both sides of the service row, research/06 §3.1); parcel layout I; three-field rotation N; extent I ±50 m',
+  });
+  add({
+    id: 'LC-07',
+    cover: 'field',
+    name_de: 'Gewannflur nördlich des Carlsberger Hofs',
+    geometry: en([
+      [381150, 5466300],
+      [381500, 5466300],
+      [381660, 5466340],
+      [381700, 5466620],
+      [381560, 5466640],
+      [381430, 5466600],
+      [381340, 5466420],
+      [381150, 5466340],
+    ]),
+    confidence: 'low',
+    tag: 'cover I (research/11 §3.1 / §6.3 "around the Carlsberger Hof"; gentle slope 4-12 %, D DTM); lies over the N lobe of the LC-05 hay outline (7.9 ha; LC-05 extent is I, its D cover claim is the valley floor below, which stays hay); parcel layout I; three-field rotation N; extent I ±50 m',
+  });
+  add({
+    id: 'LC-08',
+    cover: 'field',
+    name_de: 'Gewannflur südlich des Herzogsgartens (zum Südplateau)',
+    geometry: en([
+      [382400, 5465700],
+      [382560, 5465700],
+      [382600, 5465890],
+      [382570, 5465935],
+      [382410, 5465935],
+    ]),
+    confidence: 'low',
+    tag: 'cover I (the gentle plateau between the Orangerie and the Hirschwürzloch, slope 5-10 %, D DTM, joins the LC-03 field land; HMS checkerboard fields), kept ≥ 110 m E of the Orangerie and its Komödienhaus so the meadow round the Orangerie garden stays; parcel layout I; three-field rotation N; extent I ±50 m',
   });
 
   // ---- 2. steep valley sides stay wooded (slope rule) -------------------------------------------------------------

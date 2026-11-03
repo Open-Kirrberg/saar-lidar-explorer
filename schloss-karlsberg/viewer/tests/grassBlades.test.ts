@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { GRASS_SWARD } from '@model/layout/grammar.ts';
-import { GRASS, LAWN_SHADE, discLattice, fillGrassWindow, grassClassWeights, grassTuftAtlas, keepShare, triHeight, tuftCoverage, tuftShade } from '../src/grassBlades.ts';
+import { GRASS, LAWN_SHADE, TUFT_TILES, discLattice, fillGrassWindow, grassClassWeights, grassTuftAtlas, keepShare, triHeight, tuftCoverage, tuftHeadShare, tuftShade } from '../src/grassBlades.ts';
 import { GROUND_CLASS } from '../src/landcover.ts';
 
 describe('grass blade field', () => {
@@ -121,5 +121,25 @@ describe('grass blade field', () => {
     expect(GRASS_SWARD.lawn.height[1]).toBeLessThan(GRASS_SWARD.meadow.height[1]);
     expect(GRASS_SWARD.lawn.height[0]).toBeGreaterThan(0.02);
     expect(GRASS_SWARD.meadow.height[1]).toBeLessThan(0.3);
+  });
+  it('wave-10 review fix: a third tile of seeding culms with marked panicles; the lawn and meadow tiles carry no marker', () => {
+    const tw = 128;
+    const th = 64;
+    const a = grassTuftAtlas(tw, th);
+    expect(a.length).toBe(tw * TUFT_TILES * th * 4);
+    expect(tuftHeadShare(a, tw, th, 0)).toBe(0);
+    expect(tuftHeadShare(a, tw, th, 1)).toBe(0);
+    const heads = tuftHeadShare(a, tw, th, 2);
+    expect(heads).toBeGreaterThan(0.03);
+    expect(heads).toBeLessThan(0.6);
+    // sparse culms: less coverage than the meadow tile
+    expect(tuftCoverage(a, tw, th, 2)).toBeGreaterThan(0.02);
+    expect(tuftCoverage(a, tw, th, 2)).toBeLessThan(tuftCoverage(a, tw, th, 1));
+    // seeding grass stands well above the aftermath sward, windrows above the stubble
+    expect(GRASS_SWARD.seeding.height[0]).toBeGreaterThan(GRASS_SWARD.meadow.height[1]);
+    expect(GRASS_SWARD.windrow.height[0]).toBeGreaterThan(GRASS_SWARD.stubble.height[1]);
+    expect(GRASS.seedShare).toBeLessThan(0.3);
+    expect(GRASS.windrowRadius).toBeGreaterThan(GRASS.lawnRadius);
+    expect(GRASS.windrowRadius).toBeLessThan(GRASS.radius);
   });
 });

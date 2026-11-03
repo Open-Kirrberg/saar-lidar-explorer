@@ -23,10 +23,13 @@ from print3d import (  # noqa: E402
     simplify_heightfield, slicer_from_config, slicer_meta, slicer_note_de, source_box, stock_clearance,
     stock_max_tile_mm, stock_profile_problems, text_geometry, tile_filament, tile_id, tiles_in_bbox, validate_index,
     vertex_coords, write_3mf, write_catalog, write_stl, z_from_h, STOCK_PROCESS, Slicer,
+    Lod2, building_surface, building_triangles, disk_offsets, feature_cells, grid_coords, lod2_attribution,
+    lod2_file_buildings, open_mask, grey_open, rasterize_roofs, ATTRIBUTION_SL, ROLES, title_problem,
 )
 
 S8 = load_series("saarpfalz-9200")      # main series (name kept short: "the 2 km series")
 S2 = load_series("detail-2300")
+SK = load_series("kirrberg-11050")     # single showpiece: the village of Kirrberg on one tile
 # the optional 250 mm series (commented out in print3d.toml) — same maths, user printer preset
 SC = replace(S8, key="saarpfalz-8000-custom-preset", scale=8000, tile_mm=250.0, printer="sle-250", sets={})
 
@@ -55,8 +58,8 @@ def test_series_config():
     assert (S2.scale, S2.tile_m, S2.cell_m, S2.datum_m, S2.exag, S2.datum_mode, S2.datum_margin_m, S2.role) == \
         (2300, 500, 0.5, None, 1.5, "set", 5.0, "detail")
     assert S2.tile_mm == pytest.approx(S8.tile_mm) and S2.placement_mm == S8.placement_mm   # 4 × the main scale
-    assert (S8.max_error_mm, S8.max_triangles) == (S2.max_error_mm, S2.max_triangles) == (0.03, 500_000)
-    assert set(list_series()) == {"saarpfalz-9200", "detail-2300"}     # 8000 custom preset only commented out
+    assert (S8.max_error_mm, S8.max_triangles) == (S2.max_error_mm, S2.max_triangles) == (0.03, 900_000)
+    assert set(list_series()) == {"saarpfalz-9200", "detail-2300", "kirrberg-11050"}   # 8000 preset commented out
     check_series(SC)
     with pytest.raises(ValueError):
         check_series(replace(S8, tile_m=2100))                      # 247.06 mm ≠ tile_mm
@@ -496,6 +499,9 @@ def test_slicer_note_de_and_meta():
                              "top_shell_layers": 6, "top_shell_thickness": 1.2}
     assert slicer_meta(replace(S8, slicer=None)) is None
     assert "≈ 5–20 % weniger Druckzeit" in slicer_note_de(Slicer(time_saving_pct=(5, 20)))
+    one = slicer_note_de(Slicer(saving_pct=(12, 12), time_saving_pct=(-9, -9)))   # a single measured tile
+    assert "spart ≈ 12 % Filament, ≈ 9 % längere Druckzeit als" in one and "12–12" not in one
+    assert "≈ 3–9 % längere Druckzeit" in slicer_note_de(Slicer(time_saving_pct=(-9, -3)))
 
 
 def test_tile_filament_recommended():
@@ -636,7 +642,7 @@ def test_index_schema_and_merge():
     doc2 = merge_index(doc, S8, [fake_entry("E380_N5460") | {"volume_cm3": 2.0}, fake_entry("E376_N5462")], ["b"])
     assert [t["id"] for t in doc2["tiles"]] == ["E376_N5462", "E380_N5460", "E382_N5460"]   # N desc, E asc
     assert next(t for t in doc2["tiles"] if t["id"] == "E380_N5460")["volume_cm3"] == 2.0
-    assert doc2["attribution"] == "a; b"
+    assert doc2["attribution"] == f"b; {ATTRIBUTION_SL}"     # passed strings + derived from the tiles
     bad = json.loads(json.dumps(doc2))
     bad["tiles"][0]["bboxUTM"][0] += 1
     del bad["tiles"][1]["files"]
@@ -681,6 +687,157 @@ def test_series_catalog(tmp_path):
     assert cat["series"][1]["datum_m"] is None and cat["series"][1]["datumMode"] == "set"
 
 
+# ------------------------------------------------------------------------------------- buildings (LoD2)
+def box_tris(x0, y0, x1, y1, z) -> np.ndarray:
+    """Flat roof over an axis-aligned rectangle as two triangles (E, N, h)."""
+    return np.array([[(x0, y0, z), (x1, y0, z), (x1, y1, z)], [(x0, y0, z), (x1, y1, z), (x0, y1, z)]], float)
+
+
+def lod2_of(*buildings) -> Lod2:
+    tris = [np.asarray(t, float) for t in buildings]
+    return Lod2(tris=np.concatenate(tris), bidx=np.concatenate([np.full(len(t), i) for i, t in enumerate(tris)]),
+                ids=[f"B{i}" for i in range(len(tris))], source=["sl"] * len(tris),
+                centroid=np.array([t[:, :, :2].reshape(-1, 2).mean(0) for t in tris]), files={"sl": ["x"]})
+
+
+def test_grid_coords_global_index():
+    for tile_m, n in ((2000, 1001), (500, 1001), (20, 11)):
+        assert np.array_equal(grid_coords(380000, 0, tile_m, n, 0, n - 1), vertex_coords(380000, tile_m, n))
+        a = grid_coords(380000, 0, tile_m, n, -7, n - 1 + 7)          # tile A extended by 7 vertices
+        b = grid_coords(380000 + tile_m, 0, tile_m, n, -7, n - 1 + 7)  # its east neighbour
+        assert np.array_equal(a[n - 1:], b[:len(a) - (n - 1)])        # overlapping global vertices: equal bits
+    assert grid_coords(10, 4, 6, 4, -1, 1).tolist() == [8.0, 10.0, 12.0]   # origin ≠ 0: g = (10 − 4)·3/6 = 3
+
+
+def test_feature_cells_and_disk():
+    s8 = load_series("saarpfalz-9200")
+    assert s8.buildings and s8.building_min_feature_mm == 0.8 and S2.buildings
+    assert feature_cells(0.8, s8.cell_mm) == 4 and feature_cells(0.8, S2.cell_mm) == 4   # 0.87 mm: 8 m / 2 m
+    assert feature_cells(0.0, 0.2) == 0 and feature_cells(0.6, 0.2) == 3 and feature_cells(0.61, 0.2) == 4
+    assert len(disk_offsets(4)) == 12 and len(disk_offsets(3)) == 9 and disk_offsets(1) == [(0, 0)]
+    with pytest.raises(ValueError):
+        check_series(replace(S8, building_min_feature_mm=-1))
+
+
+def test_open_mask_drops_narrow_parts():
+    m = np.zeros((20, 30), bool)
+    m[2:5, 2:28] = True          # 3 cells wide strip → dropped by a 4-cell disk
+    m[8:12, 2:28] = True         # 4 cells wide → kept (interior; the disk has no corners: end corners go)
+    m[14:18, 2:6] = True         # 4 × 4 block → the disk itself (12 cells) survives
+    m[15:16, 6:20] = True        # 1-cell spur attached to the block → dropped
+    o = open_mask(m, 4)
+    assert not o[2:5].any() and o[8:12, 4:26].all() and not o[15, 7:20].any()
+    assert o[14:18, 2:6].sum() == 12 and not (o & ~m).any()     # anti-extensive
+    assert np.array_equal(open_mask(o, 4), o)                    # idempotent
+    assert np.array_equal(open_mask(m, 1), m) and np.array_equal(open_mask(m, 0), m)
+
+
+def test_grey_open_cuts_thin_upper_parts():
+    g = np.full((16, 16), -np.inf)
+    g[2:12, 2:12] = 300.0              # wide low block
+    g[5:7, 5:12] = 330.0               # 2-cell wide tall wing on it → cut down to the block
+    g[8:12, 8:12] = 320.0              # 4 × 4 tall part → only the 12-cell disk keeps 320
+    g[13:15, 2:9] = 310.0              # 2-cell wide building alone → removed
+    o = grey_open(g, 4)
+    assert (o <= g).all() and np.array_equal(grey_open(o, 4), o)            # anti-extensive, idempotent
+    assert (o[5:7, 5:12] == 300.0).all() and not np.isfinite(o[13:15]).any()
+    assert (o == 320.0).sum() == 12 and o[8, 8] == 300.0 and o[2, 3] == 300.0      # tall part's corner → block
+    assert o[2, 2] == o[11, 11] == -np.inf                                   # the disk has no corner cells
+    assert np.array_equal(np.isfinite(o), open_mask(np.isfinite(g), 4))      # support = binary opening
+
+
+def test_rasterize_roofs_heights_edges_and_max():
+    xs = ys = np.arange(0.0, 11.0)                               # 11 × 11 points, 1 m
+    flat = box_tris(2, 2, 6, 6, 300.0)                           # edges on grid points: closed → included
+    gable = np.array([[(4, 3, 310.0), (8, 3, 310.0), (8, 5, 314.0)], [(4, 3, 310.0), (8, 5, 314.0), (4, 5, 314.0)],
+                      [(4, 5, 314.0), (8, 5, 314.0), (8, 7, 310.0)], [(4, 5, 314.0), (8, 7, 310.0), (4, 7, 310.0)]])
+    roof, pt, pp = rasterize_roofs(np.concatenate([flat, gable]), xs, ys)
+    assert np.isnan(roof[0, 0]) and np.isnan(roof[1, 2]) and roof[2, 2] == 300.0 and roof[6, 6] == 312.0
+    assert roof[2, 3] == 300.0                                   # flat roof only (y = 2 < 3)
+    assert roof[4, 5] == 312.0 and roof[5, 4] == 314.0 and roof[7, 8] == 310.0   # gable plane heights (row = y)
+    assert roof[3, 3] == 300.0 and roof[3, 4] == 310.0           # overlap → maximum
+    assert np.isfinite(roof).sum() == 25 + 25 - 12               # 5 × 5 flat + 5 × 5 gable − 3 × 4 shared
+    assert set(pp.tolist()) == set(np.flatnonzero(np.isfinite(roof.ravel())).tolist()) and len(pt) == len(pp)
+    r2, _, _ = rasterize_roofs(np.concatenate([gable, flat])[::-1], xs, ys)    # order-independent
+    assert np.array_equal(np.nan_to_num(r2), np.nan_to_num(roof))
+    empty, a, b = rasterize_roofs(np.zeros((0, 3, 3)), xs, ys)
+    assert np.isnan(empty).all() and len(a) == len(b) == 0
+
+
+def test_building_triangles_drop_walls():
+    wall = [np.array([(0, 0, 0), (4, 0, 0), (4, 0, 3), (0, 0, 3), (0, 0, 0)], float)]
+    roof = [np.array([(0, 0, 3), (4, 0, 3), (4, 4, 5), (0, 4, 5), (0, 0, 3)], float)]
+    t = building_triangles([(wall, 1), (roof, 2)])
+    assert t.shape == (2, 3, 3) and t[:, :, 2].max() == 5 and building_triangles([(wall, 1)]).shape == (0, 3, 3)
+
+
+def _bsurface(s, lod2, e0, n0, h0=250.0):
+    return building_surface(s, e0, n0, np.full((s.vertices, s.vertices), h0), lod2)
+
+
+def test_buildings_in_heightfield_seams_and_min_feature():
+    """2 m cells, opening disk 3 cells: a 20 m wide hall across the A|B edge, a 4 m narrow shed, a building on the
+    datum side; shared edges bit-identical, the cut building identical on both sides, z by the terrain formula."""
+    s = small_series(tile_m=40, vertices=21, building_min_feature_mm=37.5)   # cell 2 m = 12.5 mm → k = 3
+    assert feature_cells(s.building_min_feature_mm, s.cell_mm) == 3
+    hall = box_tris(30.3, 10.2, 51.7, 30.1, 262.0)        # crosses E = 40 (the A | B edge)
+    shed = box_tris(5.1, 5.1, 9.0, 20.0, 258.0)           # 3.9 m wide → 2 vertex columns → dropped
+    tower = box_tris(10.5, 25.5, 17.5, 33.0, 300.0)       # 7 m → 3–4 vertices → kept
+    lod2 = lod2_of(hall, shed, tower)
+    hA, stA = _bsurface(s, lod2, 0, 0)
+    hB, stB = _bsurface(s, lod2, 40, 0)
+    assert np.array_equal(hA[:, -1], hB[:, 0])                  # shared edge bit-identical
+    assert (hA[:, -1] == 262.0).sum() == 10                      # N 12 … 30 → 10 vertices of the cut wall
+    assert (hA == 262.0).sum() == 10 * 5 and (hB == 262.0).sum() == 10 * 6   # E 32 … 40 | 40 … 50
+    assert not (hA == 258.0).any() and (hA == 300.0).sum() == 4 * 3          # shed dropped, tower kept
+    assert (stA["count"], stA["kept"], stA["dropped"]) == (2, 1, 1)          # centroids in A: shed, tower
+    assert (stB["count"], stB["kept"], stB["usedSources"]) == (1, 1, ["sl"])  # hall centroid E 41 → B
+    za, _ = z_from_h(hA, s)
+    zb, _ = z_from_h(hB, s)
+    assert np.array_equal(za[:, -1], zb[:, 0])
+    assert za.max() == s.base_mm + (300.0 - s.datum_m) / s.scale * 1000 * s.exag   # same formula as the terrain
+    # without opening (min feature 0) the shed survives; terrain above a roof wins (max)
+    h0, st0 = _bsurface(replace(s, building_min_feature_mm=0.0), lod2, 0, 0)
+    assert (h0 == 258.0).sum() == 2 * 8 and st0["dropped"] == 0
+    hi, _ = _bsurface(s, lod2, 0, 0, h0=280.0)
+    assert (hi == 300.0).sum() == 12 and hi.min() == 280.0      # roofs below the terrain leave it unchanged
+    # no buildings → unchanged terrain
+    h1, st1 = _bsurface(s, Lod2(), 0, 0)
+    assert (h1 == 250.0).all() and st1["count"] == 0 and st1["usedSources"] == []
+
+
+def test_lod2_attribution_in_index():
+    from buildings import ATTRIBUTION_LOD2_RLP, ATTRIBUTION_LOD2_SL
+    assert lod2_attribution(["sl"]) == [ATTRIBUTION_LOD2_SL] and lod2_attribution([]) == []
+    with_b = fake_entry("E380_N5460") | {"buildings": {"enabled": True, "usedSources": ["sl", "rlp"]}}
+    doc = merge_index(None, S8, [with_b, fake_entry("E382_N5460")], [])
+    assert doc["attribution"].split("; ") == [ATTRIBUTION_SL, ATTRIBUTION_LOD2_SL, ATTRIBUTION_LOD2_RLP]
+    bare = merge_index(doc, S8, [fake_entry("E380_N5460") | {"buildings": {"enabled": False}}], [])
+    assert bare["attribution"] == ATTRIBUTION_SL                  # a re-generated bare tile drops LoD2
+    assert doc["series"]["buildings"]["minFeature_mm"] == 0.8 and doc["series"]["buildings"]["default"] is True
+    assert validate_index(doc) == []
+
+
+def test_lod2_file_buildings(tmp_path):
+    import gzip
+    from tests.test_buildings import CITYGML, _pl
+    e, n = 380000.0, 5460000.0
+    g = [(e + x, n + y, 300.0) for x, y in [(0, 0), (10, 0), (10, 10), (0, 10), (0, 0)]]
+    w = [(e, n, 300), (e + 10, n, 300), (e + 10, n, 306), (e, n, 306), (e, n, 300)]
+    r = [(e, n, 306), (e + 10, n, 306), (e, n + 10, 309)]
+    xml = CITYGML.format(g=_pl(g), h=_pl([(e + 2, n + 2, 300), (e + 2, n + 3, 300), (e + 3, n + 3, 300),
+                                          (e + 2, n + 2, 300)]), w=_pl(w),
+                         r0="%s %s %s" % r[0], r1="%s %s %s" % r[1], r2="%s %s %s" % r[2],
+                         g2=_pl([(e - 600 + x, n + y, 301.0) for x, y in [(0, 0), (5, 0), (5, 5), (0, 5), (0, 0)]]))
+    p = tmp_path / "LoD2_32_380_5460_1_SL.gml.gz"
+    with gzip.open(p, "wt") as f:
+        f.write(xml)
+    bl = lod2_file_buildings(p, "sl", (e, n, e + 1000, n + 1000))
+    assert [b["id"] for b in bl] == ["B1", "B2"]
+    assert bl[0]["tris"].shape == (1, 3, 3) and bl[0]["tris"][:, :, 2].max() == 309.0 and bl[0]["overhang"] == 0
+    assert bl[1]["overhang"] == pytest.approx(600.0)            # load_lod2 refuses > LOD2_MARGIN_M (seams)
+
+
 # ------------------------------------------------------------------------------------- generated data
 def generated():
     return sorted(PRINT_DIR.glob("*/index.json")) if PRINT_DIR.exists() else []
@@ -704,6 +861,11 @@ def test_generated_print_index(idx):
         assert t["watertight"] and t["z_mm"]["min"] >= s.base_mm - 1e-6
         if s.datum_mode == "set":
             assert t["datum_m"] <= t["h_m"]["min"] and t["clampedVertices"] == 0
+        b = t.get("buildings") or {"enabled": False}             # optional: absent = bare earth (older tiles)
+        if b["enabled"]:
+            assert 0 <= b["kept"] <= b["count"] and b["kept"] + b["dropped"] == b["count"], t["id"]
+            assert b["minFeature_mm"] == s.building_min_feature_mm and b["raisedVertices"] <= b["vertices"]
+            assert all(a in doc["attribution"] for a in lod2_attribution(b["usedSources"])), t["id"]
         for f in t["files"].values():
             assert (idx.parent / f).exists(), f
         if "stl" in t["files"]:
@@ -751,3 +913,50 @@ def test_generated_tiles_open_in_bambu_studio(idx):
         if s.printer == "stock":
             assert stock_clearance(*bambu_import_position(w), w, margin=STOCK_MARGIN_MM) == [], t["id"]
             assert stock_clearance(tr[9], tr[10], w, margin=STOCK_MARGIN_MM) == [], t["id"]
+
+
+# ------------------------------------------------------------------------------------- single showpiece (Kirrberg)
+KIRRBERG_VILLAGE = (380553, 5461407, 382467, 5463480)   # LoD2 building cluster around the church (≈ OSM residential)
+KIRRBERG_PLACES = {"Kirche": (381455, 5462119), "Fischweiher": (381863, 5463533), "Merburg": (381964, 5463453),
+                   "Bunkerruine": (382118, 5461504)}
+
+
+def test_kirrberg_single_series():
+    """One standalone tile framing the built-up village with a margin: stock P1S (GUI-centred) safe, own origin so
+    the global grid of the series has the village tile at col/row 0, datum per set, no keys, name engraved."""
+    s = SK
+    assert (s.role, s.title, s.scale, s.tile_m, s.exag, s.datum_mode, s.buildings) == \
+        ("single", "Kirrberg", 11050, 2400, 1.5, "set", True)
+    assert s.tile_mm == pytest.approx(217.195, abs=1e-3) and s.tile_mm < stock_max_tile_mm()
+    x, y = s.placement_mm
+    assert (x, y) == pytest.approx(bambu_import_position(s.tile_mm), abs=1e-4)
+    assert stock_clearance(x, y, s.tile_mm, margin=STOCK_MARGIN_MM) == []
+    assert not s.connectors.enabled and keys_needed(s, [{"id": "E380.3_N5461.25", "datum_m": 230.0}]) == 0
+    assert s.sets == {"kirrberg": ["E380.3_N5461.25"]}
+    e0, n0 = parse_tile_id("E380.3_N5461.25", s)
+    assert (e0, n0) == tuple(s.origin) and tiles_in_bbox(s, *KIRRBERG_VILLAGE) == [(e0, n0)]   # one tile only
+    e1, n1 = e0 + s.tile_m, n0 + s.tile_m
+    v = KIRRBERG_VILLAGE
+    margins = (v[0] - e0, v[1] - n0, e1 - v[2], n1 - v[3])
+    assert min(margins) >= 150 and max(margins) <= 300, margins          # village + fields/forest around it
+    assert abs((v[0] + v[2]) / 2 - (e0 + e1) / 2) <= 25 and abs((v[1] + v[3]) / 2 - (n0 + n1) / 2) <= 25
+    for name, (e, n) in KIRRBERG_PLACES.items():
+        assert e0 + 100 <= e <= e1 - 100 and n0 + 100 <= n <= n1 - 100, name
+    # name engraved large, readable, clear of the border
+    lines = label_lines(s, "E380.3_N5461.25", 230.0)
+    assert lines[:3] == [("N↑", 16.0), ("Kirrberg", 18.0), ("E380.3 N5461.25", 7.0)]
+    check_text_clearance(text_geometry(lines, s.tile_mm), s.tile_mm, s.connectors)
+    assert "Kirrberg" not in [t for t, _ in label_lines(S8, "E380_N5460")]
+    assert label_lines(S8, "E380_N5460")[1] == ("E380 N5460", 13.0)                     # untitled series unchanged
+
+
+def test_role_and_title_validation():
+    assert ROLES == ("main", "detail", "single") and S8.role == "main" and S2.role == "detail"
+    with pytest.raises(ValueError, match="role"):
+        check_series(replace(SK, role="showpiece"))
+    assert title_problem("Kirrberg") is None and title_problem("E380 N5461 1:11050") is not None   # > 16 chars
+    assert "Ö" in title_problem("Mörsbach")                                  # stroke font has no umlauts
+    with pytest.raises(ValueError, match="glyph"):
+        check_series(replace(SK, title="Mörsbach"))
+    check_series(replace(SK, title="Moersbach"))
+    check_series(replace(SK, title=""))

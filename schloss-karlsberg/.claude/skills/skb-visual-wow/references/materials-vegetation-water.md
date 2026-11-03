@@ -85,7 +85,12 @@ and §5.6–5.9. Colour *values* are history: change them only through the evide
 
 **Candles** (I2: today white dots, black chandelier):
 - Flames emissive ≥ 5× the bloom threshold, so they bloom.
-- One shadowless `PointLight` per cluster, physically correct decay 2, at the 1850 K colour.
+- Wave 11 (`viewer/src/candleLight.ts`, maths in `candleMath.ts`): the lit flames of the visitor's room are clustered
+  (`CLUSTER_MERGE_M` 0.9 m); the `CANDLE_POOL` (4) clusters brightest at the eye are `PointLight`s at the 1850 K colour
+  with a sphere falloff 1 / (d² + r²) (`sphereDecay`: decay > 2 carries r², `installCandleFalloff`); the lead cluster
+  casts a 512² cube shadow redrawn only when it moves (`CANDLE_SHADOW`); the rooms' own lights are off meanwhile, and
+  the room ambient is the second-bounce light plus the far clusters (`roomCandleLux`). `skb.candles` (`stats()`,
+  `enabled` for A/B).
 - Flicker `intensity *= 1 + 0.06·noise(t·8)`, deterministic under `skb.step`.
 - Normal evening: candelabra only. Fest: chandeliers and sconces (`look-and-period.md` §5).
 - Keep the cap of a few lights per building (`updateInteriorBudget`).

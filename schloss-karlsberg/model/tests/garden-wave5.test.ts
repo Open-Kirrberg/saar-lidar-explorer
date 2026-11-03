@@ -267,7 +267,7 @@ describe('features build the wave-5 garden detail', () => {
     const names = meshes(f.group, /site\/garden-detail/).map((m) => m.name);
     expect(names).toContain('site/garden-detail/wood.shutter'); // benches + tubs (green)
     expect(names).toContain('site/garden-detail/wood.frame'); // treillage, frames
-    expect(names).toContain('site/garden-detail/glass.crown'); // hotbed lights
+    expect(names).not.toContain('site/garden-detail/glass.crown'); // wave 10: hotbed lights are no mirror glass (wood.frame panes)
     expect(names).toContain('site/garden-detail/stone.yellow'); // Flora herm
   });
   it('the grove and the parterre yews / citrus are instanced trees', () => {

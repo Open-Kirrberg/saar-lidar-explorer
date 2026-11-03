@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { PARQUET_GLSL } from './parquet.ts';
 import { granitePatch } from './granite.ts';
+import { ashlarPatch, isMixedAshlar } from './ashlar.ts';
 import { MATERIAL_NAMES, MATERIAL_TEXTURE, type MaterialLibrary, type MaterialName } from '../context.ts';
 import { ASHLAR, SHADE_RGB_MAX } from '../exterior/shade.ts';
 import { ROOF_COVER } from '../layout/grammar.ts';
@@ -644,6 +645,8 @@ export class Materials implements MaterialLibrary {
     if (name === 'glass.crown') glassPatch(m);
     if (name === 'water') waterPatch(m);
     if (name === 'wall.granite') granitePatch(m); // KB-I70
+    // wave 10 (audit #3): mixed red / yellow-grey / grey-white dressed stone with joints on the plinth red (architecture)
+    if (name === 'stone.red' && m.map && isMixedAshlar(colour ?? b.color)) ashlarPatch(m, (colour ?? b.color).toUpperCase());
     m.userData.materialName = name;
     return m;
   }

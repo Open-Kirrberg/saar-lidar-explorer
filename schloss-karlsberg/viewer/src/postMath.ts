@@ -58,6 +58,19 @@ export function skyScale(pixels: number): number {
 export const SKY_CUBE_SIZE = 1024;
 /** Cube faces shaded per frame while the cache refreshes (the per-frame low-resolution sky shows meanwhile). */
 export const SKY_CUBE_FACES_PER_FRAME = 1;
+/**
+ * Wave-10 review fix (sky-refresh frames +1.2 ms with the cumulus march): each face is shaded in this many horizontal
+ * strips, one strip per frame (scissored), so an hour change spreads over 6 × tiles frames instead of spiking.
+ */
+export const SKY_CUBE_TILES = 4;
+
+/** Face and scissor strip (pixels, y from the bottom) of refresh step k (0 … 6 · tiles − 1). */
+export function skyCubeTile(k: number, size: number = SKY_CUBE_SIZE, tiles: number = SKY_CUBE_TILES): { face: number; y: number; h: number } {
+  const face = Math.floor(k / tiles);
+  const j = k - face * tiles;
+  const y = Math.round((j * size) / tiles);
+  return { face, y, h: Math.round(((j + 1) * size) / tiles) - y };
+}
 
 /** Flattens uniform values (numbers, booleans, vectors, colours, matrices, arrays) into numbers; textures etc. → NaN. */
 export function uniformNumbers(values: readonly unknown[]): number[] {

@@ -100,7 +100,8 @@ ground cells are too coarse for a 1 m footpath: draw footpaths as thin draped me
 | Cascade | Große Kaskade: 10 steps × 1.5 m, 310.5 → 271.6 m over 150 m, 8–12 m wide | [D] research/02 §2.14, research/03 §4.5 |
 | Stables basin | at the end of the Lambsborn aqueduct (PV S), rectangular ≈ 12 × 8 m | presence [D]; size [U] |
 
-A jet is a tapered translucent cone or a few crossed alpha cards at LOD1. Its animation is viewer-side. Water material is
+A jet is a translucent column with a crown, a curtain of falling strands and a foam ring (wave 10: `site/water.ts`
+`JET_LOOK`, `jetPartMaterial`, drift `JET_WIND`; `site/features.ts` `jetMesh`). Its animation is viewer-side. Water material is
 `water` (`ctx.materials.get('water')`). Reflections are `skb-visual-wow` work (visual-audit P15).
 
 ## Sculpture, benches, aviaries

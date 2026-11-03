@@ -51,6 +51,7 @@ Run (explorer pipeline env, isolated mode):
 """
 
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -70,7 +71,8 @@ DTM_OV = REPO / "data" / "work" / "overall" / "dtm.tif"
 CHM_KB = REPO / "data" / "work" / "karlsberg" / "chm.tif"
 CHM_OV = REPO / "data" / "work" / "overall" / "chm.tif"
 CATALOGUE = SK / "model" / "catalogue.json"
-OUT = SK / "viewer" / "public" / "terrain"
+# SKB_TERRAIN_OUT: write to another directory (A/B against the shipped terrain); default the viewer's public folder
+OUT = Path(os.environ["SKB_TERRAIN_OUT"]) if os.environ.get("SKB_TERRAIN_OUT") else SK / "viewer" / "public" / "terrain"
 
 # Crop (cell edges, EPSG:25832): palace, Orangerie, north terrace, Baumagazin / Carlsdorf in the
 # valley (W), Schaeferei (N) and the Karlslust (S, from the overall raster).
@@ -98,6 +100,12 @@ CLASSES = {
 # landcover `cover` -> ground class (research/11 S1; 0 meadow stays the generic pasture / meadow)
 COVER_CLASS = {"meadow": 0, "lawn": 1, "forest": 6, "field": 8, "vineyard": 9, "kitchen_garden": 10, "nursery": 10, "hay": 11}
 SCENE_YEAR = 1789
+# KB-I96 (wave-11 review fix): land-cover areas painted over the open land after the seeded tree planners were frozen
+# (wave 11 Gewann fill, mirrors scripts/catalogue-v2/landcover.ts GEWANN_FILL_IDS). The ground is also painted without
+# them; meta.json ground.plannerBase lists the cells where that base differs as runs [row, col0, length, class]. The
+# viewer's tree planners take their seeded order from the base (viewer/src/forest.ts), so painting a fill area hides
+# trees (ghosts) but never re-rolls the looks of the others. Add later land-cover edits of the open land here too.
+PLANNER_BASE_SKIP = ("LC-06", "LC-07", "LC-08")
 FOREST_EDGE_NOISE_M = 7.0  # amplitude of the irregular forest edge (research/11 S1: noise 6-10 m) [N]
 FOREST_CLEAR_BUILDING_M = 14.0  # clearing around buildings inside the forest (KB-B28: clearing D 40-50 m, D Schneider)
 FOREST_CLEAR_WAY_M = 3.0  # verge beside paths and avenues through the forest
@@ -513,6 +521,46 @@ def open_land_relief(h, g, hard, any_fp, feats, shape, tr):
     return out, rep
 
 
+def paint_1789(cat, gshape, gtr, slope, blds_g, feats_g, paint_features, skip):
+    """1789 ground classes: land cover polygons (KB-I09) in array order except the ids in `skip`, irregular forest edge,
+    clearings, then the features. Returns (ground, report)."""
+    g = np.zeros(gshape, dtype=np.uint8)
+    lc_report = []
+    for a in cat.get("landcover", []):
+        if not in_epoch(a) or a["cover"] not in COVER_CLASS or a["id"] in skip:
+            continue
+        m = mask_of([poly(a["geometry"]["coordinates"][0])], gshape, gtr)
+        if a.get("min_slope") is not None:
+            m &= slope >= float(a["min_slope"])
+            m = ndimage.binary_opening(ndimage.binary_closing(m, iterations=3), iterations=2)
+            lab, n = ndimage.label(m)
+            if n:
+                sizes = ndimage.sum(m, lab, index=np.arange(1, n + 1)) * GROUND_CELL**2
+                m &= np.isin(lab, 1 + np.nonzero(sizes >= SLOPE_RULE_MIN_AREA_M2)[0])
+        g[m] = COVER_CLASS[a["cover"]]
+        lc_report.append(f"{a['id']} {a['cover']}: {int(m.sum()) * GROUND_CELL**2 / 1e4:.1f} ha painted")
+    # irregular forest edge: move the boundary by smooth seeded noise (two scales), only into open land
+    forest = g == 6
+    sd = (ndimage.distance_transform_edt(forest) - ndimage.distance_transform_edt(~forest)) * GROUND_CELL
+    noise = (0.75 * smooth_noise(gshape, 7.0, 1789) + 0.25 * smooth_noise(gshape, 2.0, 1790)) * FOREST_EDGE_NOISE_M
+    grown = (sd + noise > 0) & ~forest & np.isin(g, (0, 8, 11))
+    shrunk = forest & (sd + noise <= 0)
+    _, idx_open = ndimage.distance_transform_edt(forest, return_distances=True, return_indices=True)
+    g[shrunk] = g[tuple(idx_open)][shrunk]
+    g[grown] = 6
+    # clearings: around buildings (and the path verges) inside the forest
+    bmask = mask_of([poly(b["footprint"]) for b in blds_g if b.get("footprint")], gshape, gtr)
+    wmask = np.zeros(gshape, dtype=bool)
+    for f in feats_g:
+        if f["geometry"]["type"] == "LineString" and f["kind"] in ("avenue", "path", "walk"):
+            wmask |= mask_of(buffer_polyline(f["geometry"]["coordinates"], (f.get("width") or 4) / 2 + FOREST_CLEAR_WAY_M), gshape, gtr)
+    clear = (ndimage.distance_transform_edt(~bmask) * GROUND_CELL < FOREST_CLEAR_BUILDING_M) | wmask
+    g[(g == 6) & clear] = 0
+    paint_features(g, feats_g, blds_g)
+    lc_report.append(f"forest edge noise +-{FOREST_EDGE_NOISE_M} m: {int(grown.sum())} cells grown, {int(shrunk.sum())} shrunk")
+    return g, lc_report
+
+
 def main():
     t0 = time.time()
     if not DTM_KB.exists():
@@ -916,43 +964,25 @@ def main():
     paint_features(g25, feats, blds)
 
     # 1789: land cover polygons (KB-I09), irregular forest edge, clearings, then the features
-    g = np.zeros(gshape, dtype=np.uint8)
     h2 = h[: grows * 2, : gcols * 2].reshape(grows, 2, gcols, 2).mean(axis=(1, 3))
     gy, gx = np.gradient(ndimage.gaussian_filter(h2, 2.0), GROUND_CELL)
     slope = np.hypot(gx, gy)
-    lc_report = []
-    for a in cat.get("landcover", []):
-        if not in_epoch(a) or a["cover"] not in COVER_CLASS:
-            continue
-        m = mask_of([poly(a["geometry"]["coordinates"][0])], gshape, gtr)
-        if a.get("min_slope") is not None:
-            m &= slope >= float(a["min_slope"])
-            m = ndimage.binary_opening(ndimage.binary_closing(m, iterations=3), iterations=2)
-            lab, n = ndimage.label(m)
-            if n:
-                sizes = ndimage.sum(m, lab, index=np.arange(1, n + 1)) * GROUND_CELL**2
-                m &= np.isin(lab, 1 + np.nonzero(sizes >= SLOPE_RULE_MIN_AREA_M2)[0])
-        g[m] = COVER_CLASS[a["cover"]]
-        lc_report.append(f"{a['id']} {a['cover']}: {int(m.sum()) * GROUND_CELL**2 / 1e4:.1f} ha painted")
-    # irregular forest edge: move the boundary by smooth seeded noise (two scales), only into open land
-    forest = g == 6
-    sd = (ndimage.distance_transform_edt(forest) - ndimage.distance_transform_edt(~forest)) * GROUND_CELL
-    noise = (0.75 * smooth_noise(gshape, 7.0, 1789) + 0.25 * smooth_noise(gshape, 2.0, 1790)) * FOREST_EDGE_NOISE_M
-    grown = (sd + noise > 0) & ~forest & np.isin(g, (0, 8, 11))
-    shrunk = forest & (sd + noise <= 0)
-    _, idx_open = ndimage.distance_transform_edt(forest, return_distances=True, return_indices=True)
-    g[shrunk] = g[tuple(idx_open)][shrunk]
-    g[grown] = 6
-    # clearings: around buildings (and the path verges) inside the forest
-    bmask = mask_of([poly(b["footprint"]) for b in blds_g if b.get("footprint")], gshape, gtr)
-    wmask = np.zeros(gshape, dtype=bool)
-    for f in feats_g:
-        if f["geometry"]["type"] == "LineString" and f["kind"] in ("avenue", "path", "walk"):
-            wmask |= mask_of(buffer_polyline(f["geometry"]["coordinates"], (f.get("width") or 4) / 2 + FOREST_CLEAR_WAY_M), gshape, gtr)
-    clear = (ndimage.distance_transform_edt(~bmask) * GROUND_CELL < FOREST_CLEAR_BUILDING_M) | wmask
-    g[(g == 6) & clear] = 0
-    paint_features(g, feats_g, blds_g)
-    lc_report.append(f"forest edge noise +-{FOREST_EDGE_NOISE_M} m: {int(grown.sum())} cells grown, {int(shrunk.sum())} shrunk")
+    g, lc_report = paint_1789(cat, gshape, gtr, slope, blds_g, feats_g, paint_features, ())
+    # KB-I96: the planners' base (see PLANNER_BASE_SKIP) as runs of the cells where it differs
+    gb, _ = paint_1789(cat, gshape, gtr, slope, blds_g, feats_g, paint_features, PLANNER_BASE_SKIP)
+    planner_base = []
+    for r in np.nonzero((gb != g).any(axis=1))[0]:
+        diff = gb[r] != g[r]
+        c = 0
+        while c < gcols:
+            if not diff[c]:
+                c += 1
+                continue
+            c0, k = c, int(gb[r, c])
+            while c < gcols and diff[c] and gb[r, c] == k:
+                c += 1
+            planner_base.append([int(r), int(c0), int(c - c0), k])
+    lc_report.append(f"planner base without {', '.join(PLANNER_BASE_SKIP)}: {int((gb != g).sum())} cells in {len(planner_base)} runs")
     print("[terrain] 1789 land cover: " + "; ".join(lc_report))
 
     # ---- 1789 open-land relief (wave-2 review) -------------------------------------------------
@@ -1003,6 +1033,11 @@ def main():
             "counts": counts,
             "counts2025": counts2025,
             "landcover": lc_report,
+            "plannerBase": {
+                "skip": list(PLANNER_BASE_SKIP),
+                "runs": planner_base,
+                "rule": "KB-I96: ground.u8 painted without the `skip` land-cover areas differs only in these runs [row, col0, length, class]; the viewer's seeded tree planners take their order from that base",
+            },
             "tag": "1789 (ground.u8): catalogue landcover polygons (research/11 S1, scripts/catalogue-v2/landcover.ts; D PV 1791, D Petri plan, D LP06; extents I +-30 m) with a seeded irregular forest edge, then the terrain features; 2025 (ground2025.u8): today's canopy > 8 m more than 40 m from any residence feature",
         },
         "h_range": [float(np.nanmin(h)), float(np.nanmax(h))],

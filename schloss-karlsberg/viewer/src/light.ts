@@ -87,6 +87,25 @@ export function skyIlluminance(elDeg: number): number {
 /** Night floor of the sky illuminance (lux), so the scene never goes black [I]. */
 export const NIGHT_FLOOR_LUX = 0.03;
 
+/**
+ * Wave-10 review fix (pose 60: the lower 45 % of a moonless night frame was a black void): extra diffuse sky light on
+ * the land (terrain, lawn, vegetation; through their SH probe, not the buildings or the sky) at full night, as a
+ * multiple of the sky's own, and its cool tint (luminance 1). It stands for airglow and starlight (≈ 0.001 lx on a real
+ * moonless night) seen by the dark-adapted eye, which adapts locally to the dim ground under a much brighter twilight
+ * sky, so lawn, paths and the lie of the land separate faintly [I, art direction; same never-black spirit as
+ * NIGHT_FLOOR_LUX]. `env`: the same lift, smaller, on the buildings' sky light (scene.environmentIntensity), so a
+ * limewashed façade stays lighter than the lawn in front of it.
+ */
+export const NIGHT_GROUND_FILL = { gain: 0.9, tint: [0.84, 1.0, 1.3] as RGB, env: 0.6 };
+
+/** Per-channel multiplier of the land's SH sky light at night strength `night` (0 by day … 1 at night). */
+export function nightGroundFill(night: number): RGB {
+  const n = clamp(night, 0, 1);
+  const t = NIGHT_GROUND_FILL.tint;
+  const l = 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2];
+  return [0, 1, 2].map((i) => 1 + NIGHT_GROUND_FILL.gain * n * (t[i] / l)) as RGB;
+}
+
 /** Global horizontal illuminance (sun + sky), lux. */
 export function globalIlluminance(elDeg: number): number {
   return sunIlluminance(elDeg) * Math.max(0, Math.sin(elDeg * DEG)) + skyIlluminance(elDeg);
@@ -604,13 +623,19 @@ export const INDOOR_DAY_HEADROOM_EV = 0.25;
 /**
  * Adapted EV100 inside a room [I]: by day metered on the room's ambient daylight with INDOOR_DAY_HEADROOM_EV of headroom, so the
  * shaded white boiserie reads light but the sun patches through the windows stay near the shoulder (wave-1 review,
- * pose 06); by candle light metered for the pools near the candles (≈ 5 lx), so the far end of the room drops
- * into the dark.
+ * pose 06); by candle light metered for the pools near the candles (CANDLE_KEY_LUX), so the far end of the room
+ * drops into the dark.
  */
 export function evIndoor(elDeg: number): number {
   const day = smoothstep(-4, 6, elDeg);
-  return evFromLux(roomIlluminance(elDeg) + 5 * (1 - day)) + INDOOR_DAY_HEADROOM_EV * day;
+  return evFromLux(roomIlluminance(elDeg) + CANDLE_KEY_LUX * (1 - day)) + INDOOR_DAY_HEADROOM_EV * day;
 }
+/**
+ * Illuminance (lux) the eye adapts to in a candle-lit room [I]. Wave 1–10: 5 lx. Wave 11 (look): the room is lit by
+ * its own candle clusters now (candleLight.ts) and no longer by a light under the floor; 3 lx (+0.7 EV) keeps the pool
+ * round a single guéridon candle and the parquet readable at pose 07 (a 1 cd flame gives 3 lx at 0.58 m).
+ */
+export const CANDLE_KEY_LUX = 3;
 
 /**
  * Pre-exposure for an adapted EV100: display value = luminance (cd/m²) × preExposure (Lagarde & de Rousiers,

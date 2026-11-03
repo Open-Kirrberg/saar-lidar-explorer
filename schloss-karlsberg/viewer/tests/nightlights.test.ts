@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CANDELABRUM_CD, groupPanes, litShare, mantelCandelabra, windowGlow, windowLight, type P3 } from '../src/nightlights.ts';
+import { CANDELABRUM_CD, TABLE_CANDLES, groupPanes, litShare, mantelCandelabra, tableCandelabra, windowGlow, windowLight, type P3 } from '../src/nightlights.ts';
 
 describe('night lights (wave-1 review of KB-I06)', () => {
   it('lit share: Corps de logis most, walls none, service buildings few', () => {
@@ -59,5 +59,24 @@ describe('night lights (wave-1 review of KB-I06)', () => {
     expect(mantelCandelabra({ min: [0, 0, 0], max: [5, 1, 0.5] })).toEqual([]); // too wide
     expect(mantelCandelabra({ min: [0, 0, 0], max: [2, 1, 2] })).toEqual([]); // too deep
     expect(CANDELABRUM_CD).toBe(3); // three candles of ≈ 1 cd
+  });
+});
+
+describe('wave 10: candles in view (table candelabra)', () => {
+  it('a laid table carries 2–3 candelabra on its centre line, along its long axis, on the top', () => {
+    const along = tableCandelabra({ min: [0, 0.7, 0], max: [5, 0.75, 1.2] });
+    expect(along.length).toBe(2);
+    for (const p of along) {
+      expect(p[1]).toBe(0.75);
+      expect(p[2]).toBeCloseTo(0.6, 9);
+      expect(p[0]).toBeGreaterThan(0);
+      expect(p[0]).toBeLessThan(5);
+    }
+    expect(along[0][0] + along[1][0]).toBeCloseTo(5, 9);
+    const across = tableCandelabra({ min: [0, 0.7, 0], max: [1.4, 0.75, 8] });
+    expect(across.length).toBe(TABLE_CANDLES.max);
+    for (const p of across) expect(p[0]).toBeCloseTo(0.7, 9);
+    // too small for a laid table: none
+    expect(tableCandelabra({ min: [0, 0.7, 0], max: [0.8, 0.75, 0.6] })).toEqual([]);
   });
 });

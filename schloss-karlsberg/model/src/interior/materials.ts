@@ -11,6 +11,8 @@ import * as THREE from 'three';
 import { MATERIAL_NAMES, type MaterialLibrary, type MaterialName } from '../context.ts';
 import { STATE_ROOM } from '../layout/grammar.ts';
 import { DAMASK_GLSL, type DamaskFigure } from './finish.ts';
+import { paintingPatch } from './painting.ts';
+import { paintingAtlas } from './paintingArt.ts';
 
 const FALLBACK: Record<MaterialName, { color: string; roughness?: number; metalness?: number; opacity?: number }> = {
   'render.lime': { color: '#ECE8DF', roughness: 0.92 },
@@ -105,6 +107,9 @@ export function interiorMaterial(lib: MaterialLibrary, name: InteriorExtra): THR
     else if (name === 'interior.canvas') {
       // KB-I26/I27: varnished oil canvas, colours per vertex (finish.ts canvasGrid); the varnish gives a soft sheen [N]
       m = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, metalness: 0, roughness: 0.42 });
+      // wave 10 (audit #4) review fix: the compositions painted once into an atlas (paintingArt.ts), fetched per pixel
+      const atlas = paintingAtlas();
+      if (atlas) paintingPatch(m, atlas);
     }
     else if (name === 'interior.vitrine') {
       // KB-I27: display-case glass seen from inside the room: clear and thin (the facade's green crown glass at

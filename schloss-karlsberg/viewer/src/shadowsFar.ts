@@ -13,6 +13,17 @@
  */
 import * as THREE from 'three';
 import { FAR_SHADOW, type FarBox, farLightExtent, farRedrawDue } from './shadowsFarMath.ts';
+import { CLOUD_PARS_GLSL, CLOUD_SUN_PARS_GLSL, CLOUD_TEX, cloudData, cloudGrid } from './clouds.ts';
+
+/**
+ * Wave 10 (clouds.ts): the cumulus shadow on the sun (directional light 0), for every material that lights through
+ * `lights_fragment_begin` (the terrain's per-vertex sun included). World position from the view-space fragment.
+ */
+const CLOUD_SUN_GLSL = `
+		#if UNROLLED_LOOP_INDEX == 0
+		// only where the sun still reaches (rooms and shaded ground skip the lookup)
+		if ( directLight.color.r + directLight.color.g + directLight.color.b > 0.0 ) directLight.color *= skbCloudSun( ( vec4( geometryPosition - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz );
+		#endif`;
 
 const SHADOW_LINE =
   'directLight.color *= ( directLight.visible && receiveShadow ) ? getShadow( directionalShadowMap[ i ], directionalLightShadow.shadowMapSize, directionalLightShadow.shadowIntensity, directionalLightShadow.shadowBias, directionalLightShadow.shadowRadius, vDirectionalShadowCoord[ i ] ) : 1.0;';
@@ -40,7 +51,7 @@ function sunShadowGlsl(fade: number): string {
 		// KB-I50: the far light carries no light; its map is read through light 0
 		#else
 		${SHADOW_LINE}
-		#endif`;
+		#endif${CLOUD_SUN_GLSL}`;
 }
 
 /** Patch a `lights_fragment_begin` chunk text (pure string work; throws if three's source moved). */
@@ -62,6 +73,39 @@ export function patchFarShadowChunk(chunk: string, fade: number = FAR_SHADOW.fad
 export function installFarShadowChunk(): void {
   const chunks = THREE.ShaderChunk as unknown as Record<string, string>;
   chunks.lights_fragment_begin = patchFarShadowChunk(chunks.lights_fragment_begin);
+  // wave 10: the cloud field and its uniform block (shared by reference, as the fog's uFog) for every lit material
+  if (!chunks.lights_pars_begin.includes('SKB_CLOUD_PARS')) chunks.lights_pars_begin = `${chunks.lights_pars_begin}\n${CLOUD_PARS_GLSL}\n${CLOUD_SUN_PARS_GLSL}`;
+  for (const lib of Object.values(THREE.ShaderLib) as { uniforms: Record<string, THREE.IUniform> }[]) {
+    if (lib.uniforms.directionalLights) {
+      lib.uniforms.uCloud = { value: cloudData };
+      lib.uniforms.uCloudTex = cloudTexUniform;
+    }
+  }
+}
+
+/** The baked coverage noise of the cloud shadows (clouds.ts CLOUD_TEX), shared by reference; a 1² placeholder until set. */
+const cloudTexUniform: { value: THREE.Texture } = { value: new THREE.DataTexture(new Uint8Array([0, 0]), 1, 1, THREE.RGFormat) };
+let cloudTexKey = '';
+
+/**
+ * Bake the coverage field round the clearing centre (once per centre; ≈ 20–40 ms of CPU). The shadows read it with
+ * one bilinear fetch (`skbCloudSun`).
+ */
+export function setCloudTexture(centre: readonly [number, number]): void {
+  const key = `${centre[0]},${centre[1]}`;
+  if (key === cloudTexKey) return;
+  cloudTexKey = key;
+  const n = CLOUD_TEX.size;
+  const t = new THREE.DataTexture(cloudGrid(centre[0], centre[1]), n, n, THREE.RGFormat, THREE.UnsignedByteType);
+  t.magFilter = THREE.LinearFilter;
+  t.minFilter = THREE.LinearFilter;
+  t.wrapS = THREE.ClampToEdgeWrapping;
+  t.wrapT = THREE.ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  t.colorSpace = THREE.NoColorSpace;
+  t.needsUpdate = true;
+  cloudTexUniform.value.dispose();
+  cloudTexUniform.value = t;
 }
 
 /**

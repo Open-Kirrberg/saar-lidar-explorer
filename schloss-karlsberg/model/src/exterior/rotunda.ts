@@ -36,6 +36,15 @@ const SEAT = matKey('wall.silk.crimson'); // upholstery colour U (N crimson silk
 const GILT = matKey('metal.gilt');
 /** KB-I70: bench frames painted white and picked out in gilt (Louis-seize "peint en blanc, rechampi d'or") [N]. */
 const BENCH_FRAME = matKey('wood.frame', '#ECE9E1');
+/**
+ * Wave 10 (audit #10): the three garden steps [D T5 "drei Stufen"] in grey-white sandstone, a harder, paler stone than
+ * the podium courses [research/09 §3.7 M5 grey-white #CFC8BA; I which stone where].
+ */
+const STEP_STONE = matKey('stone.grey', ROTUNDA.baseStone);
+/** Wave-10 review: the whole base (drum plinth, podium, step cheeks, colonnade floor) in the same grey-white stone. */
+const BASE_STONE = STEP_STONE;
+/** Wave-10 review: the lead roll seams in a paler, oxidised tone that catches the light (grammar ROTUNDA.leadSeam). */
+const SEAM = matKey('roof.lead', ROTUNDA.leadSeam);
 
 const add = (p: ST, v: ST, k: number): ST => [p[0] + v[0] * k, p[1] + v[1] * k];
 
@@ -143,12 +152,25 @@ function column(g: GeoBuilder, c: RotundaColumn, order: RotundaLayout['order']['
   const r1 = (D / 2) * o.taper;
   const h0 = c.foot_h + baseH;
   const h1 = c.top_h - capH;
+  // wave 10 (audit #10): entasis - the shaft stays full up to ROTUNDA.entasisFrom of its height, then curves into the
+  // taper (radius ∝ 1 − k·u^1.6 over the upper part) [N Vignola diminution 1/6; I curve]
+  const prof: [number, number][] = [[h0, r0]];
+  const hA = h0 + (h1 - h0) * ROTUNDA.entasisFrom;
+  const steps = lod >= 2 ? 4 : 2;
+  for (let j = 0; j <= steps; j++) {
+    const u = j / steps;
+    prof.push([hA + (h1 - hA) * u, r0 - (r0 - r1) * u ** 1.6]);
+  }
   for (let i = 0; i < n; i++) {
     const a0 = (i / n) * Math.PI * 2;
     const a1 = ((i + 1) / n) * Math.PI * 2;
     const P = (r: number, a: number, h: number): P3 => [s + r * Math.cos(a), t + r * Math.sin(a), h];
     const m = (a0 + a1) / 2;
-    g.quadFacing(shaft, P(r0, a0, h0), P(r0, a1, h0), P(r1, a1, h1), P(r1, a0, h1), [Math.cos(m), Math.sin(m), 0]);
+    for (let j = 1; j < prof.length; j++) {
+      const [ha, ra] = prof[j - 1];
+      const [hb, rb] = prof[j];
+      g.quadFacing(shaft, P(ra, a0, ha), P(ra, a1, ha), P(rb, a1, hb), P(rb, a0, hb), [Math.cos(m), Math.sin(m), 0]);
+    }
   }
   // base: square plinth + a round torus (octagon) [N Attic base]
   g.box(shaft, s - D * 0.62, s + D * 0.62, t - D * 0.62, t + D * 0.62, c.foot_h, c.foot_h + baseH * 0.45);
@@ -179,7 +201,9 @@ function column(g: GeoBuilder, c: RotundaColumn, order: RotundaLayout['order']['
     const m = (a0 + a1) / 2;
     g.quadFacing(shaft, P(r1, a0, h1), P(r1, a1, h1), P(r1 * 1.2, a1, h1 + capH * 0.45), P(r1 * 1.2, a0, h1 + capH * 0.45), [Math.cos(m), Math.sin(m), 0.4]);
   }
-  const vr = 0.2 * D;
+  // wave 10 (audit #10): volutes a little larger and the abacus no deeper than the volute faces, so the scrolls show
+  // from below instead of hiding behind a square slab [N Vignola volute ≈ 0.44 D across]
+  const vr = 0.22 * D;
   const vx = 0.52 * D;
   const vd = 0.42 * D;
   const vh = ab0 - vr;
@@ -206,8 +230,8 @@ function column(g: GeoBuilder, c: RotundaColumn, order: RotundaLayout['order']['
       voluteDisc(g, shaft, [ctr[0], ctr[1], vh], [side[0] * sg, side[1] * sg], f, vr, lod);
     }
   }
-  // abacus (thin, square with the volutes reaching just past it)
-  g.box(shaft, s - D * 0.6, s + D * 0.6, t - D * 0.6, t + D * 0.6, ab0, c.top_h);
+  // abacus (thin; as wide as the volute pair, as deep as the volute faces)
+  g.orientedBox(shaft, c.at, side, facing, -D * 0.62, D * 0.62, -vd - 0.02, vd + 0.02, ab0, c.top_h, false);
 }
 
 /**
@@ -220,8 +244,9 @@ function domeRibs(g: GeoBuilder, L: BuildingLayout, k: MatKey, radius: number, l
   const sec = domeSection({ ...L.roof, type: 'dome' }, 12);
   const prof = halfProfile(sec).map(([d, h]): [number, number] => [radius * (1 - d / (sec.depth / 2)), h]);
   const ribs = ROTUNDA.domeRibs;
-  const hw = 0.035;
-  const up = 0.03;
+  // wave 10 (audit #10): rolls wide and high enough to read as a lead covering at garden distance [N lead rolls ≈ 5 cm]
+  const hw = 0.05;
+  const up = 0.055;
   const rMin = 0.45;
   for (let j = 0; j < ribs; j++) {
     const a = ((j + 0.5) / ribs) * Math.PI * 2;
@@ -251,6 +276,67 @@ function domeRibs(g: GeoBuilder, L: BuildingLayout, k: MatKey, radius: number, l
     const q = ring[(i + 1) % n];
     const m = ((i + 1) / n) * Math.PI * 2;
     g.quadFacing(k, p, q, [q[0], q[1], top + 0.06], [p[0], p[1], top + 0.06], [Math.cos(m), Math.sin(m), 0]);
+  }
+}
+
+/**
+ * Wave-10 review: the portico's gabled roof closed against the drum and dome - a lead ridge roll from the pediment back
+ * to where the ridge meets the dome, and a lead saddle flashing dressed onto the dome round that joint (the roof stands
+ * 0.5 m above the attic, so its ridge runs into the low dome) [N sheet-lead flashing; I sizes].
+ */
+/** Outward axis direction of the portico (x / y of Q(0, 1) - Q(0, 0)). */
+const ax0 = (Q: (a: number, d: number, h: number) => P3): number => Q(0, 1, 0)[0] - Q(0, 0, 0)[0];
+const ax1 = (Q: (a: number, d: number, h: number) => P3): number => Q(0, 1, 0)[1] - Q(0, 0, 0)[1];
+
+function porticoRidge(g: GeoBuilder, L: BuildingLayout, Q: (a: number, d: number, h: number) => P3, front: number, roofBack: number, w: number, e1: number, apex: number, Ro: number): void {
+  if (L.roof.type !== 'dome') return;
+  const ridge = apex + 0.07;
+  // dome radius at height h (the smooth profile buildRoof draws)
+  const sec = domeSection({ ...L.roof, type: 'dome' }, 12);
+  const prof = halfProfile(sec).map(([d, h]): [number, number] => [Ro * (1 - d / (sec.depth / 2)), h]);
+  const rAt = (h: number): number => {
+    if (h <= prof[0][1]) return prof[0][0];
+    for (let i = 1; i < prof.length; i++) {
+      const [r0, h0] = prof[i - 1];
+      const [r1, h1] = prof[i];
+      if (h <= h1) return r0 + ((r1 - r0) * (h - h0)) / Math.max(1e-6, h1 - h0);
+    }
+    return 0;
+  };
+  // where the ridge meets the dome (or the attic face below the eaves)
+  const meet = Math.max(roofBack, ridge <= L.stack.eaves_h ? Ro : rAt(ridge));
+  // the roll starts behind the raking cornice (wave-10 review: from the front edge it stood above the pediment apex as
+  // a dark spike in silhouette) and is low (≈ 4 cm), with a closed front end
+  const roll = 0.04;
+  const top = ridge + roll;
+  const d0 = front;
+  const pts: P3[] = [Q(-roll, d0, ridge), Q(roll, d0, ridge), Q(roll, meet, ridge), Q(-roll, meet, ridge)];
+  const up = (p: P3): P3 => [p[0], p[1], top];
+  g.quadFacing(SEAM, up(pts[0]), up(pts[1]), up(pts[2]), up(pts[3]), [0, 0, 1]);
+  g.quadFacing(SEAM, pts[0], pts[1], up(pts[1]), up(pts[0]), [ax0(Q), ax1(Q), 0.2]);
+  for (const sg of [-1, 1]) {
+    const a0 = Q(sg * roll, d0, ridge);
+    const a1 = Q(sg * roll, meet, ridge);
+    g.quadFacing(SEAM, a0, a1, up(a1), up(a0), [a0[0] - Q(0, d0, 0)[0], a0[1] - Q(0, d0, 0)[1], 0.3]);
+  }
+  // saddle flashing on the dome: a band following the dome surface just above the roof planes, 0.6 m to each side
+  const slope = (ridge - e1 - 0.02) / (w + 0.05);
+  const roofAt = (u: number) => ridge - slope * Math.abs(u);
+  const span = Math.min(w, 0.9);
+  const n = 8;
+  for (let i = 0; i < n; i++) {
+    const u0 = -span + (2 * span * i) / n;
+    const u1 = -span + (2 * span * (i + 1)) / n;
+    const lo0 = roofAt(u0) - 0.02;
+    const lo1 = roofAt(u1) - 0.02;
+    const up = 0.22;
+    const dep = (u: number, h: number) => {
+      const r = h <= L.stack.eaves_h ? Ro + 0.02 : rAt(h) + 0.02;
+      return Math.sqrt(Math.max(0, r * r - u * u));
+    };
+    if (dep(u0, lo0 + up) < roofBack || dep(u1, lo1 + up) < roofBack) continue;
+    const um = (u0 + u1) / 2;
+    g.quadFacing(SEAM, Q(u0, dep(u0, lo0), lo0), Q(u1, dep(u1, lo1), lo1), Q(u1, dep(u1, lo1 + up), lo1 + up), Q(u0, dep(u0, lo0 + up), lo0 + up), [Q(um, 1, 0)[0] - Q(um, 0, 0)[0], Q(um, 1, 0)[1] - Q(um, 0, 0)[1], 0.6]);
   }
 }
 
@@ -391,8 +477,8 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
   const innerMember = detail ? MARBLE : pal.members;
 
   // ---- plinth (sandstone) with the floor threshold ring
-  arc(g, pal.plinth, Ro + 0.08, 0, Math.PI * 2, info.plinthBottom, fl, segs, true);
-  annulus(g, pal.plinth, Ro, Ro + 0.08, 0, Math.PI * 2, fl, true, segs);
+  arc(g, BASE_STONE, Ro + 0.08, 0, Math.PI * 2, info.plinthBottom, fl, segs, true);
+  annulus(g, BASE_STONE, Ro, Ro + 0.08, 0, Math.PI * 2, fl, true, segs);
 
   // ---- drum: piers, lintels and openings between the pilasters
   for (const bay of R.bays) {
@@ -417,7 +503,7 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
       jamb(g, pal.members, a - op.half, back, Ro, op.bottom_h, op.top_h, 1);
       jamb(g, pal.members, a + op.half, back, Ro, op.bottom_h, op.top_h, -1);
       annulus(g, pal.members, back, Ro, a - op.half, a + op.half, op.top_h, false, segs);
-      annulus(g, pal.plinth, back, Ro + 0.05, a - op.half, a + op.half, op.bottom_h, true, segs);
+      annulus(g, BASE_STONE, back, Ro + 0.05, a - op.half, a + op.half, op.bottom_h, true, segs);
       arc(g, innerWall, Ri, a - dIn, a + dIn, fl, op.top_h, segs, false);
       continue;
     }
@@ -429,7 +515,7 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
     const dO = Math.sqrt(Math.max(0, Ro * Ro - hw * hw));
     reveal(g, pal.members, a, hw, dI, dO, op.bottom_h, op.top_h);
     revealCap(g, pal.members, a, hw, Ri, Ro, op.top_h, false, segs);
-    revealCap(g, pal.plinth, a, hw, Ri, Ro + 0.08, op.bottom_h + 0.02, true, segs);
+    revealCap(g, BASE_STONE, a, hw, Ri, Ro + 0.08, op.bottom_h + 0.02, true, segs);
     glazedDoor(g, a, op.width, (dI + dO) / 2, op.bottom_h + 0.02, op.top_h, lod);
     // surround (flat render band) round the door head and jambs [N]
     const sw = 0.16;
@@ -498,7 +584,30 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
     [0.42, e1],
   ]);
   annulus(g, pal.members, Ro, Ro + 0.42, 0, Math.PI * 2, e1, true, segs);
-  arc(g, innerMember, Ri, 0, Math.PI * 2, e0, e1, segs, false);
+  if (detail) {
+    // wave 10 (review leftover, pose 19): the inner Ionic pilasters carry a real entablature under the ceiling -
+    // three-fascia architrave flush with the pilaster faces, a plain frieze, and a cornice with bed moulding and
+    // corona projecting into the room [N Vignola Ionic proportions 0.4 / 0.3 / 0.3 E, as the portico outside]
+    const inRing: ST[] = Array.from({ length: ringN }, (_, i) => drumPoint(-(i / ringN) * Math.PI * 2, Ri));
+    const pi = proj + 0.02;
+    profileRing(g, innerMember, inRing, [
+      [0, e0],
+      [pi, e0],
+      [pi, e0 + E * 0.13],
+      [pi + 0.02, e0 + E * 0.13],
+      [pi + 0.02, e0 + E * 0.26],
+      [pi + 0.04, e0 + E * 0.26],
+      [pi + 0.04, e0 + E * 0.37],
+      [pi + 0.07, e0 + E * 0.4],
+      [pi, e0 + E * 0.42],
+      [pi, e0 + E * 0.68],
+      [pi + 0.08, e0 + E * 0.72],
+      [pi + 0.14, e0 + E * 0.8],
+      [pi + 0.34, e0 + E * 0.88],
+      [pi + 0.36, e0 + E * 0.95],
+      [pi + 0.3, e1 - 0.015],
+    ]);
+  } else arc(g, innerMember, Ri, 0, Math.PI * 2, e0, e1, segs, false);
 
   // ---- attic (plain parapet ring) with a coping [N]; the dome springs at its top (buildRoof)
   arc(g, pal.wall, Ro, 0, Math.PI * 2, e1, eaves - 0.12, segs, true);
@@ -508,14 +617,14 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
   annulus(g, pal.members, Ro + 0.08, Ro + 0.0, 0, Math.PI * 2, eaves - 0.14, false, segs);
   annulus(g, pal.members, Ro - 0.1, Ro + 0.08, 0, Math.PI * 2, eaves + 0.05, true, segs);
   // lead roll seams (ribs) on the low dome, LOD2 [N sheet-lead practice]
-  domeRibs(g, L, pal.roof, Ro, lod);
+  domeRibs(g, L, SEAM, Ro, lod);
 
   // ---- inside: floor and a flat stucco ceiling at the top of the order (the dome is a roof shell over it)
-  annulus(g, detail ? FLOOR : pal.plinth, 0.001, Ri, 0, Math.PI * 2, fl + 0.005, true, segs);
+  annulus(g, detail ? FLOOR : BASE_STONE, 0.001, Ri, 0, Math.PI * 2, fl + 0.005, true, segs);
   annulus(g, detail ? STUCCO : pal.wall, 0.001, Ri, 0, Math.PI * 2, e1 - 0.01, false, segs);
   if (detail) {
     // shallow coffered-dome reading: a stepped stucco ring under the ceiling [N]
-    annulus(g, MARBLE, Ri - 0.35, Ri, 0, Math.PI * 2, e1 - 0.02, false, segs);
+    annulus(g, MARBLE, Ri - proj - 0.32 - 0.35, Ri - proj - 0.32, 0, Math.PI * 2, e1 - 0.02, false, segs);
     // two upholstered benches against the niches beside the colonnade door [D T5 "zwei gepolsterte Bänke"; position I]:
     // curved Louis-seize banquettes following the wall (KB-I70) [N form]
     for (const bay of R.bays.filter((x) => x.kind === 'niche')) banquette(g, bay.angle, Ri - 0.06 - 0.5, 1.8, fl, lod);
@@ -527,10 +636,10 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
     const ax = R.axis;
     const tan: ST = [-ax[1], ax[0]];
     const back = Math.sqrt(Math.max(0, Ro * Ro - P.halfWidth * P.halfWidth)) - 0.25;
-    g.orientedBox(pal.plinth, [0, 0], tan, ax, -P.halfWidth, P.halfWidth, back, P.podiumFront, info.plinthBottom, P.floor_h);
-    steps(g, pal.plinth, P.steps, info.plinthBottom);
+    g.orientedBox(BASE_STONE, [0, 0], tan, ax, -P.halfWidth, P.halfWidth, back, P.podiumFront, info.plinthBottom, P.floor_h);
+    steps(g, STEP_STONE, P.steps, info.plinthBottom);
     // columns in the painted grey of the order (research/10 §c.1 members #BDBAB2 [N]); the faux granite of 1789 is
-    // documented for the room inside only [D T5]; red sandstone stays for podium and steps (wave-4 review)
+    // documented for the room inside only [D T5]; podium and steps in the grey-white base stone (wave-10 review)
     for (const c of P.columns) column(g, c, R.order.name, pal.members, lod, ax);
     // antae (flat pilasters) where the portico meets the drum
     const antaBack = Math.sqrt(Math.max(0, Ro * Ro - P.halfSpan * P.halfSpan));
@@ -556,7 +665,9 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
       };
       // the portico roof ends against the raised attic block (wave-4 review: it ran into the dome)
       const B = P.atticBlock;
-      const roofBack = B ? B.front : back - 0.3;
+      // wave 10 (audit #10): without the block the slopes run into the drum (their back edge inside the attic wall at
+      // the eaves corners, so the attic and the dome hide it) and a lead collar is dressed up the attic over the line
+      const roofBack = B ? B.front : Math.sqrt(Math.max(0, Ro * Ro - (w + 0.05) ** 2)) - 0.15;
       // tympanum (render) and raking cornice (members)
       g.polygonFacing(pal.wall, [Q(-hw, front - 0.12, e1), Q(hw, front - 0.12, e1), Q(0, front - 0.12, apex - 0.25)], [ax[0], ax[1], 0]);
       for (const sg of [-1, 1]) {
@@ -569,6 +680,26 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
         g.quadFacing(pal.members, Q(sg * (w + 0.05), front + 0.32, e1), Q(sg * (w + 0.05), roofBack, e1), Q(sg * (w + 0.05), roofBack, e1 + 0.02), Q(sg * (w + 0.05), front + 0.32, e1 + 0.02), [tan[0] * sg, tan[1] * sg, 0]);
       }
       g.quadFacing(pal.members, Q(-hw, back, e0), Q(hw, back, e0), Q(hw, front, e0), Q(-hw, front, e0), [0, 0, -1]);
+      if (!B) porticoRidge(g, L, Q, front, roofBack, w, e1, apex, Ro);
+      if (!B) {
+        // lead flashing collar on the attic face along the roof line [N; ROTUNDA.collar], up to the attic coping
+        const ridge = apex + 0.07;
+        const roofAt = (u: number) => e1 + 0.02 + (ridge - e1 - 0.02) * Math.max(0, 1 - Math.abs(u) / (w + 0.05));
+        const cap = eaves - 0.14;
+        const nC = lod >= 2 ? 16 : 8;
+        for (let i = 0; i < nC; i++) {
+          const u0 = -(w + 0.05) + (2 * (w + 0.05) * i) / nC;
+          const u1 = -(w + 0.05) + (2 * (w + 0.05) * (i + 1)) / nC;
+          const r0 = roofAt(u0);
+          const r1 = roofAt(u1);
+          if (Math.min(r0, r1) >= cap) continue;
+          const dep = (u: number) => Math.sqrt(Math.max(0, (Ro + 0.02) ** 2 - u * u));
+          const um = (u0 + u1) / 2;
+          const nm = add(add([0, 0], tan, um), ax, dep(um));
+          const len = Math.hypot(nm[0], nm[1]) || 1;
+          g.quadFacing(pal.roof, Q(u0, dep(u0), r0 - 0.03), Q(u1, dep(u1), r1 - 0.03), Q(u1, dep(u1), Math.min(cap, r1 + ROTUNDA.collar)), Q(u0, dep(u0), Math.min(cap, r0 + ROTUNDA.collar)), [nm[0] / len, nm[1] / len, 0.2]);
+        }
+      }
       if (B) {
         // raised attic block: rendered faces, a members coping band and a lead top running back under the dome [N]
         g.orientedBox(pal.wall, [0, 0], tan, ax, -B.halfWidth, B.halfWidth, B.back, B.front, e1, B.top_h - 0.16, true);
@@ -584,12 +715,12 @@ export function buildRotunda(g: GeoBuilder, L: BuildingLayout, pal: ExteriorPale
     const bk: ST = [-R.axis[0], -R.axis[1]];
     const tan: ST = [-bk[1], bk[0]];
     const [c0, c1] = C.entablature;
-    g.orientedBox(pal.plinth, [0, 0], tan, bk, -C.halfWidth, C.halfWidth, C.from, C.to, info.plinthBottom, C.floor_h);
+    g.orientedBox(BASE_STONE, [0, 0], tan, bk, -C.halfWidth, C.halfWidth, C.from, C.to, info.plinthBottom, C.floor_h);
     if (detail) g.orientedBox(FLOOR, [0, 0], tan, bk, -C.halfWidth + 0.15, C.halfWidth - 0.15, C.from, C.to, C.floor_h, C.floor_h + 0.005);
     if (C.steps) {
       // landing at the rotunda floor inside the wall, then the flight down to the colonnade floor
-      g.orientedBox(pal.plinth, [0, 0], tan, bk, -C.steps.halfWidth, C.steps.halfWidth, C.from, C.steps.from, C.floor_h, C.steps.top_h);
-      steps(g, pal.plinth, C.steps, C.floor_h);
+      g.orientedBox(BASE_STONE, [0, 0], tan, bk, -C.steps.halfWidth, C.steps.halfWidth, C.from, C.steps.from, C.floor_h, C.steps.top_h);
+      steps(g, BASE_STONE, C.steps, C.floor_h);
     }
     for (const c of C.columns) column(g, c, R.order.name, pal.members, lod, tan);
     const cD = C.columns[0]?.D ?? D;

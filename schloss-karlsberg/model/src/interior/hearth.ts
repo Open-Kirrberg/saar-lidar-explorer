@@ -92,7 +92,7 @@ export function chimneypiece(k: HearthKit, w: number, d: number, h: number, stat
       k.geo(k.gilt, cyl(0.018, 0.018, 0.022, 10), T(xx + (xx === a ? -0.01 : 0.01), oh - 0.07, zf + 0.03).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2)));
     }
     // acanthus leaf down the console belly (gilt-bronze in state rooms, carved in private ones)
-    k.geo(state ? k.gilt : mb, new THREE.SphereGeometry(1, 8, 6), T((a + b) / 2, oh - 0.2, zf + 0.07).multiply(new THREE.Matrix4().makeScale((b - a) * 0.32, 0.09, 0.018)));
+    k.geo(state ? k.gilt : mb, new THREE.SphereGeometry(1, 6, 4), T((a + b) / 2, oh - 0.2, zf + 0.07).multiply(new THREE.Matrix4().makeScale((b - a) * 0.32, 0.09, 0.018)));
   }
   // frieze: body, fluted inlay fields left and right, centre tablet with a gilt garland, corner blocks with paterae
   const fy0 = oh;
@@ -103,7 +103,8 @@ export function chimneypiece(k: HearthKit, w: number, d: number, h: number, stat
     const xa = sx > 0 ? tab + 0.03 : -jx + 0.02;
     const xb = sx > 0 ? jx - 0.02 : -tab - 0.03;
     k.box(inl, [xa, fy0 + 0.03, zf - 0.01], [xb, fy1 - 0.03, zf - 0.004]);
-    for (let x = xa + 0.035; x < xb - 0.02; x += 0.05) k.box(mb, [x - 0.008, fy0 + 0.04, zf - 0.004], [x + 0.008, fy1 - 0.04, zf + 0.002]);
+    // wave 11 (budget): the 6 mm flutes keep their front and side faces only
+    for (let x = xa + 0.035; x < xb - 0.02; x += 0.05) k.box(mb, [x - 0.008, fy0 + 0.04, zf - 0.004], [x + 0.008, fy1 - 0.04, zf + 0.002], ['-z', '-y', '+y']);
     k.box(mb, [sx > 0 ? jx + 0.005 : -w / 2 - 0.01, fy0, zf - 0.01], [sx > 0 ? w / 2 + 0.01 : -jx - 0.005, fy1, zf + 0.03], ['-z']);
     const px = sx * (jx + (w / 2 - jx) / 2);
     k.geo(k.gilt, cyl(0.04, 0.04, 0.012, 14), T(px, (fy0 + fy1) / 2, zf + 0.036).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
@@ -112,8 +113,8 @@ export function chimneypiece(k: HearthKit, w: number, d: number, h: number, stat
   k.box(mb, [-tab, fy0 + 0.015, zf - 0.01], [tab, fy1 - 0.015, zf + 0.02], ['-z']);
   // gilt-bronze garland (festoon) on the tablet, tied with a bow
   k.geo(k.gilt, new THREE.TorusGeometry(tab * 0.62, 0.012, 5, 14, Math.PI), T(0, fy1 - 0.035, zf + 0.026).multiply(new THREE.Matrix4().makeRotationZ(Math.PI)).multiply(new THREE.Matrix4().makeScale(1, 0.55, 1)));
-  for (const sx of [-1, 1]) k.geo(k.gilt, new THREE.SphereGeometry(0.018, 8, 6), T(sx * tab * 0.62, fy1 - 0.035, zf + 0.026));
-  k.geo(k.gilt, new THREE.SphereGeometry(1, 8, 6), T(0, fy1 - 0.03, zf + 0.026).multiply(new THREE.Matrix4().makeScale(0.03, 0.016, 0.01)));
+  for (const sx of [-1, 1]) k.geo(k.gilt, new THREE.SphereGeometry(0.018, 6, 4), T(sx * tab * 0.62, fy1 - 0.035, zf + 0.026));
+  k.geo(k.gilt, new THREE.SphereGeometry(1, 6, 4), T(0, fy1 - 0.03, zf + 0.026).multiply(new THREE.Matrix4().makeScale(0.03, 0.016, 0.01)));
   // shelf: fillet, cavetto and the slab with a rounded nose, returning at both ends
   const sh0 = fy1;
   const prof: [number, number][] = [[0, sh0], [0.03, sh0], [0.03, sh0 + 0.015], [0.045, sh0 + 0.025], [0.062, sh0 + 0.04], [0.07, sh0 + 0.055], [0.09, sh0 + 0.058], [0.1, sh0 + 0.07], [0.098, shelf - 0.012], [0.09, shelf], [0, shelf]];
@@ -126,7 +127,7 @@ export function chimneypiece(k: HearthKit, w: number, d: number, h: number, stat
   k.geo(iron, new THREE.CylinderGeometry(fb, fb, 0.025, 16, 1, false, -Math.PI / 2, Math.PI), T(0, 0.46, zb + 0.0525).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
   for (const sx of [-1, 1]) k.box(iron, [sx * fb - (sx > 0 ? 0.025 : 0), 0.03, zb + 0.065], [sx * fb + (sx < 0 ? 0.025 : 0), 0.46, zb + 0.078]);
   k.geo(iron, new THREE.TorusGeometry(fb - 0.012, 0.012, 4, 14, Math.PI), T(0, 0.46, zb + 0.072));
-  k.geo(iron, new THREE.SphereGeometry(1, 12, 8), T(0, 0.36, zb + 0.07).multiply(new THREE.Matrix4().makeScale(0.11, 0.14, 0.015)));
+  k.geo(iron, new THREE.SphereGeometry(1, 10, 5), T(0, 0.36, zb + 0.07).multiply(new THREE.Matrix4().makeScale(0.11, 0.14, 0.015)));
   k.geo(iron, cyl(0.05, 0.06, 0.05, 6), T(0, 0.53, zb + 0.07));
   // chenets: gilt-bronze plinth on toupie feet with an urn and a flame finial; an iron log bar back to a rear foot
   for (const sx of [-1, 1]) {
@@ -134,7 +135,7 @@ export function chimneypiece(k: HearthKit, w: number, d: number, h: number, stat
     const zc = zf + 0.02;
     k.box(k.gilt, [x - 0.11, 0.05, zc - 0.045], [x + 0.11, 0.1, zc + 0.045]);
     k.box(k.gilt, [x - 0.12, 0.1, zc - 0.05], [x + 0.12, 0.115, zc + 0.05]);
-    for (const fx of [-0.085, 0.085]) k.geo(k.gilt, new THREE.SphereGeometry(1, 8, 6), T(x + fx, 0.04, zc).multiply(new THREE.Matrix4().makeScale(0.03, 0.025, 0.03)));
+    for (const fx of [-0.085, 0.085]) k.geo(k.gilt, new THREE.SphereGeometry(1, 6, 4), T(x + fx, 0.04, zc).multiply(new THREE.Matrix4().makeScale(0.03, 0.025, 0.03)));
     k.geo(k.gilt, lathe([[0.001, 0], [0.035, 0], [0.025, 0.02], [0.05, 0.07], [0.055, 0.1], [0.035, 0.14], [0.02, 0.15], [0.03, 0.16], [0.001, 0.2]], 12), T(x, 0.115, zc));
     k.geo(k.gilt, cyl(0.012, 0, 0.06, 6), T(x, 0.345, zc));
     const bx = x - sx * 0.04;
@@ -215,7 +216,8 @@ export function faienceStove(k: HearthKit, w: number, d: number, h: number): voi
   const shaft = new THREE.ExtrudeGeometry(new THREE.Shape(flutedSection(r, F.flutes, 0.022).map(([x, y]) => new THREE.Vector2(x, y))), { depth: s1 - s0, bevelEnabled: false, curveSegments: 2 });
   k.geo(fa, shaft, T(0, s0, 0).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2)));
   for (const y of [s0 + 0.02, s1 - 0.02]) k.geo(brass, new THREE.TorusGeometry(r + 0.004, 0.012, 4, 28), T(0, y, 0).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
-  for (let y = s0 + t; y < s1 - 0.1; y += t) k.geo(joint, new THREE.TorusGeometry(r - 0.004, 0.0035, 3, 32), T(0, y, 0).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
+  // wave 11 (budget): the course joints as thin open bands proud of the flutes instead of 32 × 3 tori [I]
+  for (let y = s0 + t; y < s1 - 0.1; y += t) k.geo(joint, new THREE.CylinderGeometry(r + 0.001, r + 0.001, 0.007, 24, 1, true), T(0, y, 0));
   k.geo(fa, lathe([[0.001, 0], [r, 0], [r + 0.02, 0.03], [r + 0.015, 0.06], [r + 0.07, 0.17], [r + 0.09, 0.2], [0.001, 0.2]], 24), T(0, s1, 0));
   // entablature: a blue-grey frieze band and a projecting cornice
   k.geo(band, cyl(r + 0.08, r + 0.08, 0.1, 24), T(0, top + 0.05, 0));
@@ -225,7 +227,7 @@ export function faienceStove(k: HearthKit, w: number, d: number, h: number): voi
   k.geo(fa, lathe([[0.001, 0], [0.1, 0], [0.1, 0.025], [0.06, 0.045], [0.08, 0.07], [0.19, 0.12], [0.21, 0.16], [0.17, 0.2], [0.11, 0.215], [0.001, 0.215]], 16), T(0, u0, 0));
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
-    k.geo(fa, new THREE.SphereGeometry(1, 6, 4), T(Math.sin(a) * 0.17, u0 + 0.12, Math.cos(a) * 0.17).multiply(new THREE.Matrix4().makeRotationY(a)).multiply(new THREE.Matrix4().makeScale(0.025, 0.05, 0.02)));
+    k.geo(fa, new THREE.SphereGeometry(1, 5, 3), T(Math.sin(a) * 0.17, u0 + 0.12, Math.cos(a) * 0.17).multiply(new THREE.Matrix4().makeRotationY(a)).multiply(new THREE.Matrix4().makeScale(0.025, 0.05, 0.02)));
   }
   k.geo(brass, new THREE.TorusGeometry(0.2, 0.008, 4, 20), T(0, u0 + 0.16, 0).multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2)));
   k.geo(brass, lathe([[0.001, 0], [0.035, 0.01], [0.045, 0.05], [0.03, 0.1], [0.001, 0.13]], 10), T(0, u0 + 0.215, 0));

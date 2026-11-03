@@ -287,6 +287,24 @@ describe('displayCells', () => {
       expect(a.row > b.row || (a.row === b.row && a.col < b.col)).toBe(true);
     }
   });
+
+  it('role "single": only the piece itself (own origin), no AOI grid or ring', () => {
+    const id = 'E380.3_N5461.25';
+    const t = { ...tile(id, 2400), grid: { col: 0, row: 0 } };
+    const ix = parsePrintIndex(
+      index({ series: { ...index().series, key: 'kirrberg-11050', role: 'single', scale: 11050, tile_m: 2400, tile_mm: 217.195, origin: [380300, 5461250], datum_m: null, datumMode: 'set', connectors: { enabled: false } }, sets: { kirrberg: [id] } }, [t]),
+    ).value;
+    expect(ix.series.role).toBe('single');
+    const cells = displayCells(ix, [378000, 5460000, 384000, 5468000], 1);
+    expect(cells.map((c) => c.id)).toEqual([id]);
+    expect(cells[0].bbox).toEqual([380300, 5461250, 382700, 5463650]);
+    expect(cells[0].tile?.id).toBe(id);
+    expect(cells[0].sets).toEqual(['kirrberg']);
+    expect(cellCommand(ix, id).cmd).toBe('uv run python print3d.py --series kirrberg-11050 --tiles E380.3_N5461.25');
+    // the same series as "main" would draw the whole AOI grid around it
+    const asMain = parsePrintIndex({ ...index({ sets: {} }, [t]), series: { ...ix.series, role: 'main', connectors: { enabled: false } } }).value;
+    expect(displayCells(asMain, [378000, 5460000, 384000, 5468000], 1).length).toBeGreaterThan(9);
+  });
 });
 
 describe('outlineRuns', () => {

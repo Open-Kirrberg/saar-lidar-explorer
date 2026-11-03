@@ -11,13 +11,21 @@
  */
 import * as THREE from 'three';
 import { E0, N0 } from '@model/frame.ts';
-import { VINEYARD } from '@model/layout/grammar.ts';
-import { DIST_SCALE, GROUND_CLASS, MAX_PARCEL_SEGMENTS, gridNormal, meanDownslope, noiseLattice, packGround, ringSegments, smoothWeights } from './landcover.ts';
-import { FIELD_GLSL, LandBake, VINE_GLSL } from './landcoverBake.ts';
+import { PLEASURE_GROUND, VINEYARD } from '@model/layout/grammar.ts';
+import { DIST_SCALE, FIELD_DIR, GROUND_CLASS, MAX_PARCEL_SEGMENTS, fieldBlockDirs, gridNormal, meanDownslope, noiseLattice, packGround, ringSegments, smoothWeights } from './landcover.ts';
+import { FIELD_GLSL, LandBake, VINE_GLSL, WINDROW_MEAN, ZONE_GLSL, ZONE_WARP } from './landcoverBake.ts';
+import { type LawnZoneInput, ZONE_SCALE, encodeZone, inRing, lawnZoneField } from './lawnZones.ts';
 
 export interface TerrainMeta {
   grid: { west: number; north: number; east: number; south: number; cell: number; cols: number; rows: number };
-  ground: { cell: number; cols: number; rows: number; classes: Record<string, { name: string; label_de: string }> };
+  ground: {
+    cell: number;
+    cols: number;
+    rows: number;
+    classes: Record<string, { name: string; label_de: string }>;
+    /** KB-I96: cells where the tree planners' base ground differs from ground.u8 (landcover.ts plannerBaseGround) */
+    plannerBase?: { skip: string[]; runs: [number, number, number, number][] };
+  };
   /** ground = summer 1789 (land cover, KB-I09); ground2025 = today's canopy (absent in pre-KB-I09 terrain) */
   files: { dtm2025: string; dtm1789: string; ground: string; ground2025?: string };
   attribution: string;
@@ -102,6 +110,10 @@ export async function loadTerrain(base = './terrain/'): Promise<TerrainData> {
  *   [I hues, research/11 S15; N mowing practice];
  * - fields (class 8), three-field rotation in July [N Dreifelderwirtschaft]: ripe winter grain gold `#C8B060`
  *   (research/11 S1), summer grain still green-yellow `#A9AA62`, fallow / clover `#8A9757`, cut stubble `#D2C28C` [I];
+ *   wave 11 (KB-I84, audit #2: three crop tones in strips from the air): ripe spelt straw gold `#C2A86A` (wave-11
+ *   review fix: `#C69D58` turned orange in the Kino grade), oats still blue-green `#86985E`, clover in the fallow deep
+ *   green `#5D7A40`, the freshly ploughed fallow brown Buntsandstein soil `#7E6852` (darker and less red than the hoed
+ *   vineyard soil) [N crops; I hues]; one crop per Gewann block (landcover.ts fieldCropOf);
  * - vineyard (class 9): vine rows `#7A9C4C` 1.1 m apart down the slope over hoed red-brown Buntsandstein soil `#A0684E`
  *   (PV "red-brown vine rows"); from afar the July area average, ~58 % leaf (landcoverBake.ts VINE_GLSL) [D PV; N/I
  *   research/11 S10]. Wave 3: the leaf `#5E7A34`, then `#6A8A3C` over greyed `#8C6A52` soil, read as a cloud shadow
@@ -127,6 +139,10 @@ export const GROUND_COLOURS = {
   fieldGreen: '#A9AA62',
   fallow: '#8A9757',
   stubble: '#D2C28C',
+  spelt: '#C2A86A',
+  oats: '#86985E',
+  clover: '#5D7A40',
+  plough: '#7E6852',
   vine: '#7A9C4C',
   soil: '#A0684E',
   gardenSoil: '#5E4A3A',
@@ -149,17 +165,6 @@ function dataTexture(data: Uint8Array, cols: number, rows: number, mips = false)
   tex.flipY = false;
   tex.needsUpdate = true;
   return tex;
-}
-
-/** Ray-casting point-in-polygon on a local [x, z] ring. */
-function inRing(x: number, z: number, ring: readonly (readonly [number, number])[]): boolean {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, zi] = ring[i];
-    const [xj, zj] = ring[j];
-    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
-  }
-  return inside;
 }
 
 /** Unit direction of the longest edge of a ring (the court's long axis) and the ring's vertex centroid. */
@@ -205,7 +210,7 @@ export function courtMacro(distToBuildingCells: number, distToLaneM: number): nu
  * weights use the blurred-weight encoding (landcover.ts smoothWeights): their 0.5 iso-line is a smooth curve instead
  * of the 2 m raster staircase, and the shaders re-sharpen around it.
  */
-function groundTextures(t: TerrainData, sandCourts: readonly (readonly (readonly [number, number])[])[] = []): Record<'weights' | 'hard' | 'cult' | 'macro' | 'dist', THREE.DataTexture> {
+function groundTextures(t: TerrainData, sandCourts: readonly (readonly (readonly [number, number])[])[] = [], lawnZones?: LawnZoneInput): Record<'weights' | 'hard' | 'cult' | 'macro' | 'dist', THREE.DataTexture> {
   const g = t.meta.ground;
   const grid = t.meta.grid;
   const cellX = (c: number) => grid.west + (c + 0.5) * g.cell - E0;
@@ -236,6 +241,12 @@ function groundTextures(t: TerrainData, sandCourts: readonly (readonly (readonly
     return lane;
   };
   const p = packGround({ ground: t.ground, cols: g.cols, rows: g.rows, cell: g.cell }, court, courtMacro);
+  // wave 10 (garden, audit #1): macro B = the mowing zones of the meadow-lawn (lawnZones.ts; 128 + 8 · signed distance,
+  // negative = close-mown); without zones every lawn cell is close-mown (0)
+  if (lawnZones) {
+    const zf = lawnZoneField({ ground: t.ground, cols: g.cols, rows: g.rows, cell: g.cell, x0: cellX(0), z0: cellZ(0) }, lawnZones);
+    for (let i = 0; i < zf.length; i++) p.macro[i * 4 + 2] = encodeZone(zf[i]);
+  }
   return {
     weights: dataTexture(smoothWeights(p.weights, g.cols, g.rows, 1, true), g.cols, g.rows, true),
     hard: dataTexture(p.hard, g.cols, g.rows), // only the mix inside hard surfaces: raw is enough
@@ -279,6 +290,8 @@ export interface TerrainMaterialOptions {
    * staked-out parcel edge from them instead of the blurred class raster (wave-3 review fix)
    */
   vineyards?: [number, number][][];
+  /** wave 10: mowing zones of the meadow-lawn (HG-01): close-mown pleasure ground vs aftermath meadow (lawnZones.ts) */
+  lawnZones?: LawnZoneInput;
 }
 
 let noiseTex: THREE.DataTexture | null = null;
@@ -309,7 +322,7 @@ export function terrainMaterial(t: TerrainData, opts: TerrainMaterialOptions = {
   const m = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.95, metalness: 0 });
   m.name = 'terrain';
   const g = t.meta.ground;
-  const gt = groundTextures(t, opts.sandCourts ?? []);
+  const gt = groundTextures(t, opts.sandCourts ?? [], opts.lawnZones);
   const courtAxis = opts.sandCourts?.length ? ringAxis(opts.sandCourts[0]) : { dir: [1, 0] as [number, number], centre: [0, 0] as [number, number] };
   // KB-I45 (wave 8): the axis points from the gate (W) to the portal (E), and the half length places the coaches'
   // turning ground in front of the portal
@@ -363,6 +376,12 @@ export function terrainMaterial(t: TerrainData, opts: TerrainMaterialOptions = {
     uFieldGreen: { value: linear(C.fieldGreen) },
     uFallow: { value: linear(C.fallow) },
     uStubble: { value: linear(C.stubble) },
+    uSpelt: { value: linear(C.spelt) },
+    uOats: { value: linear(C.oats) },
+    uClover: { value: linear(C.clover) },
+    uPlough: { value: linear(C.plough) },
+    // wave 11 (KB-I84): the strips of each field block run along its contour (landcover.ts fieldBlockDirs)
+    tFieldDir: { value: fieldDirTexture(t, gu) },
     uVine: { value: linear(C.vine) },
     uSoil: { value: linear(C.soil) },
     uGardenSoil: { value: linear(C.gardenSoil) },
@@ -377,6 +396,8 @@ export function terrainMaterial(t: TerrainData, opts: TerrainMaterialOptions = {
     uGroundOrigin: { value: new THREE.Vector2(t.meta.grid.west - E0, -(t.meta.grid.north - N0)) },
     uGroundSize: { value: new THREE.Vector2(g.cols * g.cell, g.rows * g.cell) },
     uShowClasses: { value: 1 },
+    /** wave 11: m per pixel along a grid axis below which the Gewann lines are drawn (A/B: 0 = none) */
+    uFieldGate: { value: 6 },
     // raking and wheel tracks run along the court's long axis (gate → portal)
     uCourtDir: { value: new THREE.Vector2(courtAxis.dir[0], courtAxis.dir[1]) },
     uCourtC: { value: new THREE.Vector2(courtAxis.centre[0], courtAxis.centre[1]) },
@@ -404,7 +425,7 @@ export function terrainMaterial(t: TerrainData, opts: TerrainMaterialOptions = {
   m.userData.rebake = rebake;
   /** Swap the splat textures after an epoch change (1789 land cover ↔ today's canopy). */
   m.userData.refreshGround = () => {
-    const nt = groundTextures(t, opts.sandCourts ?? []);
+    const nt = groundTextures(t, opts.sandCourts ?? [], opts.lawnZones);
     for (const k of ['weights', 'hard', 'cult', 'macro', 'dist'] as const) {
       const u = uniforms[`t${k[0].toUpperCase()}${k.slice(1)}` as 'tWeights' | 'tHard' | 'tCult' | 'tMacro' | 'tDist'];
       u.value.dispose();
@@ -419,8 +440,25 @@ export function terrainMaterial(t: TerrainData, opts: TerrainMaterialOptions = {
       .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvWorldPosT = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>\n${SPLAT_COMMON}`).replace('#include <map_fragment>', SPLAT_MAP);
   };
-  m.customProgramCacheKey = () => 'terrain-splat-10';
+  m.customProgramCacheKey = () => 'terrain-splat-14';
   return m;
+}
+
+/** Contour direction per field block (landcover.ts fieldBlockDirs) as a nearest-sampled FIELD_DIR² texture, 1789 heights. */
+function fieldDirTexture(t: TerrainData, gu: readonly [number, number]): THREE.DataTexture {
+  const g = t.meta.ground;
+  const e = t.epoch;
+  t.epoch = '1789';
+  const dirs = fieldBlockDirs({ ground: t.ground1789, cols: g.cols, rows: g.rows, cell: g.cell, west: t.meta.grid.west, north: t.meta.grid.north }, (x, z) => t.sample(x, z), gu, E0, N0);
+  t.epoch = e;
+  const tex = new THREE.DataTexture(dirs, FIELD_DIR, FIELD_DIR, THREE.RGBAFormat);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.flipY = false;
+  tex.colorSpace = THREE.NoColorSpace;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 /** Vineyard outline as a fixed-size vec4 uniform array (landcover.ts ringSegments); n = 0 falls back to the raster. */
@@ -447,7 +485,7 @@ uniform sampler2D tGrass; uniform sampler2D tGravel;
 uniform vec3 uGravelMean; uniform vec3 uGrassMean;
 uniform vec3 uGravelCol; uniform vec3 uSandCol; uniform vec3 uParterreCol; uniform vec3 uCobbleCol;
 uniform vec3 uVine; uniform vec3 uSoil;
-uniform vec2 uGroundOrigin; uniform vec2 uGroundSize; uniform float uShowClasses;
+uniform vec2 uGroundOrigin; uniform vec2 uGroundSize; uniform float uShowClasses; uniform float uFieldGate;
 uniform vec2 uCourtDir; uniform vec2 uCourtC; uniform float uCourtHalf; uniform vec2 uVineAcross;
 uniform vec4 uVineSeg[${MAX_PARCEL_SEGMENTS}]; uniform int uVineSegN; uniform float uVinePlants;
 #define VINE_FADE ${VINEYARD.fade.toFixed(1)}
@@ -479,6 +517,15 @@ float vnoise0(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); return textureLod(t
 float aaFade(float coord, float a, float b){ return 1.0 - smoothstep(a, b, fwidth(coord)); }
 ${VINE_GLSL}
 ${FIELD_GLSL}
+float zn(vec2 p){ return vnoise0(p); }
+${ZONE_GLSL}
+// the dither moves the edge by at most ±2.1 m (+0.5 m smoothstep) plus the one-sided aerial warp (ZONE_WARP): cells
+// farther from it skip the noise fetches
+float lawnMeadow(float b, vec2 xz){
+  float sd = (b * 255.0 - 128.0) / ${ZONE_SCALE.toFixed(1)};
+  if (sd > 2.7 + ${ZONE_WARP[1].toFixed(2)} || sd < -2.7 - ${ZONE_WARP[0].toFixed(2)}) return step(0.0, sd);
+  return lawnMeadowAt(b, xz, vnoise(xz / 1.6 + 23.0), vnoise(xz / 7.0 + 5.0));
+}
 `;
 
 /**
@@ -539,6 +586,11 @@ const SPLAT_MAP = /* glsl */ `{
   vec3 det = vec3(1.0);
   float grain = 1.0;
   vec4 wts = texture2D(tWeights, guv);
+  // wave 10 (garden, audit #1): the meadow-lawn's aftermath meadow (macro B, lawnZones.ts) beyond the close-mown
+  // pleasure ground, with a ragged scythe edge (the same dither as the bake's, landcoverBake.ts ZONE_GLSL)
+  float gmz = 0.0;
+  if (wts.r > 0.01 && camD < 700.0) gmz = lawnMeadow(texture2D(tMacro, guv).b, xz);
+  float lawnZ = clamp(wts.r * 1.6 - 0.3, 0.0, 1.0) * (1.0 - gmz);
   if (camD < 700.0) {
     vec3 gFar = texture2D(tGrass, xz / 23.0).rgb;
     vec3 gr = gFar;
@@ -554,7 +606,7 @@ const SPLAT_MAP = /* glsl */ `{
     // are the bright tail of its luminance, so that tail is compressed (meadow to 40 %, the mown pleasure-ground lawn
     // to 20 % with less grain overall and a cooler tint), and the lawn gets a fine, isotropic mottling instead [N
     // scythed and rolled lawns of the 1780s, research/11 §4; I amounts]
-    float lawnW = clamp(wts.r * 1.6 - 0.3, 0.0, 1.0) * (1.0 - smoothstep(0.02, 0.2, lc.a));
+    float lawnW = lawnZ * (1.0 - smoothstep(0.02, 0.2, lc.a));
     float dl = dot(det, vec3(0.2126, 0.7152, 0.0722));
     // wave-8 review fix (44 / 46 / 47 still read as straw-strewn hay): the pale tail is compressed to 22 % on meadow
     // and hay too; the tonal life it carried comes back as regrowth patches below
@@ -591,11 +643,36 @@ const SPLAT_MAP = /* glsl */ `{
   // patches of darker, greener regrowth (Grummet, 2-6 m) and paler seeding tufts (1-2 m), instead of the straw
   // scratches of the photo texture [N July meadows mown in turns; I amounts]. Not on lawn, fields, vines or hard ground
   if (camD < 160.0) {
-    float mw = (1.0 - clamp(wts.r * 1.6 - 0.3, 0.0, 1.0)) * (1.0 - smoothstep(0.3, 0.6, cultT.g)) * (1.0 - vineW) * (1.0 - smoothstep(0.3, 0.6, wts.g)) * (1.0 - smoothstep(0.3, 0.6, wts.b)) * (1.0 - smoothstep(110.0, 160.0, camD)) * uShowClasses;
+    float mw = (1.0 - lawnZ) * (1.0 - smoothstep(0.3, 0.6, cultT.g)) * (1.0 - vineW) * (1.0 - smoothstep(0.3, 0.6, wts.g)) * (1.0 - smoothstep(0.3, 0.6, wts.b)) * (1.0 - smoothstep(110.0, 160.0, camD)) * uShowClasses;
     if (mw > 0.01) {
       float rg = smoothstep(0.52, 0.78, vnoise(xz / 2.3 + 13.1) * 0.6 + vnoise(xz / 6.1 + 3.3) * 0.4);
       float tuft = smoothstep(0.62, 0.85, vnoise(xz / 1.1 + 41.7)) * (1.0 - rg);
       col *= mix(vec3(1.0), mix(vec3(1.0), vec3(0.84, 0.93, 0.8), rg) * mix(vec3(1.0), vec3(1.07, 1.04, 0.93), tuft), mw);
+    }
+  }
+  // wave 10 (garden, audit #1): the scythed aftermath parcels near the camera: straw windrows and swath steps over the
+  // bake's mean (aftermathSwath, the same frame as the bake). Wave-10 review fix (02 / 62: the swaths read as ride-on
+  // mower stripes from the air): the bake carries only their mean; here they are drawn at full strength while a swath
+  // pair (3.4 m) spans ≥ 6 px across and fade to the mean by 3 px (the pixel footprint across the swaths), and in any
+  // case between 60 and 110 m: from the air a scythed parcel reads as one paler tone (hand-raked windrows are too
+  // low and too uneven to stripe a park seen from 100 m up)
+  if (gmz > 0.01 && camD < 110.0) {
+    vec2 gVs = vec2(-uGridU.y, uGridU.x);
+    float fpA = abs(dot(dxzX, gVs)) + abs(dot(dxzY, gVs));
+    float sP = 2.0 * ${PLEASURE_GROUND.swath.toFixed(2)};
+    float ns = gmz * (1.0 - smoothstep(sP / 6.0, sP / 3.0, fpA)) * (1.0 - smoothstep(60.0, 110.0, camD)) * uShowClasses;
+    // standing seeding grass within the grass-card disc (grassBlades.ts, ≤ 22 m): the ground between the cards is the
+    // shaded depth of the sward, darker than the bake's area mean, which the sunlit cards bring back [I]
+    float standN = gmz * (1.0 - smoothstep(14.0, 22.0, camD)) * uShowClasses;
+    if (ns > 0.01 || standN > 0.01) {
+      Swath S = aftermathSwath(xz, uGridU);
+      float stP = S.st < 0.45 ? 1.0 : (S.st < 0.8 ? 1.0 - smoothstep(0.6, 1.6, S.edge) : 0.0);
+      col *= 1.0 - 0.16 * standN * stP;
+      float cutP = step(0.45, S.st) * step(S.st, 0.8) * smoothstep(0.6, 1.6, S.edge);
+      // straw windrow (pale, warm) against the cut, greener stubble; alternate swaths ±2.5 % (the cut direction)
+      vec3 straw = vec3(1.16, 1.1, 0.86);
+      vec3 sw = mix(vec3(1.0 + 0.025 * S.alt), straw, 0.75 * S.wr) / mix(vec3(1.0), straw, 0.75 * ${WINDROW_MEAN.toFixed(2)});
+      col *= mix(vec3(1.0), sw, ns * cutP);
     }
   }
   // Gewann strips (wave-3 review fix): balk and furrow lines per pixel, at least ~1 px wide, so the strip pattern
@@ -605,7 +682,9 @@ const SPLAT_MAP = /* glsl */ `{
   // direction is one of the two grid axes, so far pixels skip the field frame and the tCult fetch exactly
   float fpU = abs(dot(dxzX, uGridU)) + abs(dot(dxzY, uGridU));
   float fpV = abs(dot(dxzX, vec2(-uGridU.y, uGridU.x))) + abs(dot(dxzY, vec2(-uGridU.y, uGridU.x)));
-  if (cultW > 0.01 && min(fpU, fpV) < 4.0) {
+  // wave 11: the strips may run at any angle (contour), so the gate (uFieldGate, 6 m) is looser than the 4 m across a
+  // grid axis
+  if (cultW > 0.01 && min(fpU, fpV) < uFieldGate) {
     float fW = smoothstep(0.28, 0.72, cultT.g) * uShowClasses;
     if (fW > 0.01) {
       FieldFrame F = fieldFrame(xz, uGridU, vec2(vnoise0(xz / 160.0), vnoise0(xz / 160.0 + 7.3)));
@@ -617,7 +696,7 @@ const SPLAT_MAP = /* glsl */ `{
       float ln = 1.0 - smoothstep(hwE - 0.5 * fp, hwE + 0.5 * fp, bd);
       ln *= (1.0 - smoothstep(F.sw / 12.0, F.sw / 6.0, fp)) * mix(1.0, hwl / hwE, 0.4);
       float eb = min(min(F.fb.x, FIELD_B.x - F.fb.x), min(F.fb.y, FIELD_B.y - F.fb.y));
-      ln *= smoothstep(1.5, 3.0, eb) * fW;
+      ln *= smoothstep(2.0, 3.4, eb) * fW; // ends at the 4-6 m headland (landcoverBake.ts)
       vec3 lineC = balk > 0.5 ? uBalk * (0.88 + 0.12 * grain) : col * 0.74;
       col = mix(col, lineC, ln * 0.85);
     }
@@ -737,7 +816,15 @@ const SPLAT_MAP = /* glsl */ `{
       float rq = (rr - 8.5) / 4.2;
       float sweep = max(exp(-rq * rq), 0.45 * (1.0 - smoothstep(6.0, 9.0, rr))) * (0.6 + 0.4 * smoothstep(-2.0, 6.0, tc.y - rp.y)) * (0.6 + 0.4 * vnoise(xz / 3.7 + 1.3));
       float trod = (1.0 - smoothstep(2.0, 6.5, abs(rp.x) + 2.5 * (vnoise(xz / 4.1 + 3.7) - 0.5))) * (0.45 + 0.55 * vnoise(xz / 2.3));
-      float comp = clamp(max(max(min(tracks, 1.0), 0.75 * sweep), 0.5 * trod), 0.0, 1.0);
+      // wave 10 (garden, audit #6: the court floor read as one flat plane): the court is a working surface, raked in
+      // sections on different days and trodden in between, so broad 10-30 m patches of fresh, lighter raked sand (crisper
+      // tine marks) alternate with darker, smoother trodden sand; the turning sweep in front of the perron and the packed
+      // bands beside the causeway are firmer than before [I amounts; N raked court sand, research/07 §3.2]
+      float rk = smoothstep(0.38, 0.62, vnoise(xz / 23.0 + 61.0) * 0.7 + vnoise(xz / 8.5 + 67.0) * 0.3);
+      rake = 1.0 + (rake - 1.0) * (0.6 + 0.9 * rk);
+      patchy *= mix(0.93, 1.05, rk);
+      sweep *= 1.25;
+      float comp = clamp(max(max(min(tracks * 1.15, 1.0), 0.8 * sweep), 0.5 * trod) + 0.4 * (1.0 - rk) * (0.5 + 0.5 * vnoise(xz / 4.9 + 71.0)), 0.0, 1.0);
       float near = mac.g;
       float splash = smoothstep(0.5, 0.95, near + 0.15 * (vnoise(xz * 0.8 + 2.0) - 0.5));
       float dust = smoothstep(0.2, 0.55, near) * (1.0 - splash) * (0.5 + 0.5 * vnoise(xz * 0.7 + 9.1));

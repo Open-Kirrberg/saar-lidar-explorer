@@ -9,6 +9,7 @@ import {
   MAX_PARCEL_SEGMENTS,
   fieldBlockCoord,
   fieldStrip,
+  FIELD_ROTATION,
   hayCockPlan,
   hayParcel,
   luminance,
@@ -23,7 +24,7 @@ const lat = noiseLattice(256, 1789);
 const GU: [number, number] = [0.98629, -0.16505];
 
 describe('fieldStrip (Gewann strips, mirror of FIELD_GLSL)', () => {
-  it('neighbouring strips of a block differ by at least 8 % in value', () => {
+  it('neighbouring strips of a block differ by 1-15 % in value (wave-11 review fix: no flag stripes)', () => {
     let pairs = 0;
     // walk across many blocks along both axes; compare each strip with the next one in the same block
     for (let z = -3000; z < 3000; z += 211)
@@ -38,7 +39,8 @@ describe('fieldStrip (Gewann strips, mirror of FIELD_GLSL)', () => {
           const f = fieldStrip(lat, x, zz, GU);
           if (prev && prev.block[0] === f.block[0] && prev.block[1] === f.block[1] && prev.sid !== f.sid && Math.abs(prev.sid - f.sid) === 1) {
             const r = Math.max(prev.value, f.value) / Math.min(prev.value, f.value);
-            expect(r).toBeGreaterThanOrEqual(1.08);
+            expect(r).toBeGreaterThanOrEqual(1.01);
+            expect(r).toBeLessThanOrEqual(1.15);
             pairs++;
           }
           prev = f;
@@ -46,8 +48,8 @@ describe('fieldStrip (Gewann strips, mirror of FIELD_GLSL)', () => {
       }
     expect(pairs).toBeGreaterThan(500);
   });
-  it('strips are 12-24 m wide, crops keep the rotation shares, half the edges carry a balk', () => {
-    const crops = [0, 0, 0, 0];
+  it('strips are 12-24 m wide, every crop occurs, half the edges carry a balk', () => {
+    const crops = [0, 0, 0, 0, 0, 0, 0, 0];
     let balks = 0;
     let n = 0;
     for (let x = -4000; x < 4000; x += 13.7)
@@ -61,11 +63,38 @@ describe('fieldStrip (Gewann strips, mirror of FIELD_GLSL)', () => {
         if (f.balk) balks++;
         n++;
       }
-    expect(crops[0] / n).toBeCloseTo(0.4, 1);
-    expect(crops[1] / n).toBeCloseTo(0.24, 1);
-    expect(crops[2] / n).toBeCloseTo(0.2, 1);
-    expect(crops[3] / n).toBeCloseTo(0.16, 1);
+    // wave-11 review fix: one crop per block, so the shares follow the (few) blocks: each crop between 2 and 30 %
+    crops.forEach((c) => {
+      expect(c / n).toBeGreaterThan(0.02);
+      expect(c / n).toBeLessThan(0.3);
+    });
     expect(balks / n).toBeCloseTo(0.5, 1);
+  });
+  it('one crop per block; only the reapers\' / plough\'s run of strips from one side differs (Flurzwang)', () => {
+    const R = FIELD_ROTATION;
+    // block → strips (sid → crop)
+    const blocks = new Map<string, Map<number, number>>();
+    for (let x = -3000; x < 3000; x += 3.1)
+      for (let z = -3000; z < 3000; z += 37.7) {
+        const f = fieldStrip(lat, x, z, GU);
+        const k = f.block.join(',');
+        let m = blocks.get(k);
+        if (!m) blocks.set(k, (m = new Map()));
+        m.set(f.sid, f.crop);
+      }
+    let runs = 0;
+    for (const m of blocks.values()) {
+      const sids = [...m.keys()].sort((a, b) => a - b);
+      const main = new Set([...m.values()].filter((c) => c !== 2 && c !== 7));
+      expect(main.size).toBeLessThanOrEqual(1);
+      // cut strips (2 stubble / 7 ploughed) form one run at one end of the block
+      const cut = sids.map((s) => m.get(s) === 2 || m.get(s) === 7);
+      const changes = cut.slice(1).filter((c, i) => c !== cut[i]).length;
+      expect(changes).toBeLessThanOrEqual(1);
+      if (changes === 1) runs++;
+    }
+    expect(runs).toBeGreaterThan(5);
+    expect(R.winterCut[0]).toBeGreaterThan(0);
   });
   it('uses the block frame of fieldBlockCoord and is deterministic', () => {
     for (const [x, z] of [

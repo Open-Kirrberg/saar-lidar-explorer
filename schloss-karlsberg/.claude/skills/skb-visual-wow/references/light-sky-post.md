@@ -148,7 +148,9 @@ Bruneton & Neyret, CGF 27(4), 2008; Hillaire, CGF 39(4), 2020).
   twilight with a blue-violet tint. Preetham goes black too early, so blend toward a twilight gradient
   (zenith deep blue, horizon toward the sun warm) as elevation falls [I].
 - **Night floor:** a cool, low-intensity fill (moonlight stand-in) plus slight desaturation ("day for night") so the
-  scene never goes black [I]. The moon phase of 15 Jul 1789 is computable later [U].
+  scene never goes black [I]. Wave 10 computes the moon (`viewer/src/ephemeris.ts`, Meeus): on 15 Jul 1789 it is
+  46 % waning and rises only at 23:09; "Vollmondnacht" shows 6 Jul 1789. Moonlight takes over the sun's directional
+  light after sunset; stars and the Milky Way are `viewer/src/nightSky.ts`.
 - Then the warm points carry the image: lit windows, candles, lanterns, Fest
   (`look-and-period.md` §5, `materials-vegetation-water.md` §4).
 - Check on poses 10 (21:00) and 07 (22:00).

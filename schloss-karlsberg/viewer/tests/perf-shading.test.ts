@@ -38,8 +38,10 @@ describe('PCF tap rotation (shadowTaps)', () => {
     expect(out).toContain('pcfRot');
     expect(out.match(/texture\( shadowMap, vec3\( shadowCoord\.xy \+ pcfRot/g)?.length).toBe(5);
     expect(patchShadowChunk(out)).toBe(out); // idempotent
-    // the point-light (cube) PCF path is untouched
-    expect(out).toContain('vogelDiskSample( i, 5, phi )');
+    // wave-11 review fix: the point-light (cube) PCF loop gets the same constant offsets and one rotation
+    expect(out).not.toContain('vogelDiskSample( i, 5, phi )');
+    expect(out).toContain('vec2 offset = pcfPRot * skbVogel5[ i ];');
+    expect(out.match(/pcfPRot = mat2/g)?.length).toBe(1);
     expect(pcf5Rotated()).toContain(') * 0.2;');
   });
 

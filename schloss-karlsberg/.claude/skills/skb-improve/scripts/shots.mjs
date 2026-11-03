@@ -117,6 +117,24 @@ const POSES = [
   ['46-barriere-eye', 'Barrière zwischen den Wachhäusern am Taleingang, Augenhöhe, 10:30 (Lage Hypothese)', `skb.set('festival', false); skb.set('lowConfidence', 'show'); skb.set('hour', 10.5); pose(472, gr(472, -897) + 1.7, -897, 497, gr(497, -899) + 1.2, -899, 'walk')`],
   ['47-ehrenhofmuendung-zaun', 'Lattenzaun und Vorplatz an der Ehrenhofmündung, Augenhöhe, 17:30', `skb.set('festival', false); skb.set('lowConfidence', 'show'); skb.set('hour', 17.5); pose(1150, gr(1150, -1104) + 1.7, -1104, 1178, gr(1178, -1113) + 1.6, -1113, 'walk')`],
   ['48-karlsbergweiher-transluzent', 'Karlsbergweiher West: Monopteros und Felsenpfad, Hypothesen transluzent, 40 m über Grund, 10:30', `skb.set('festival', false); skb.set('lowConfidence', 'translucent'); skb.set('hour', 10.5); pose(905, gr(905, -800) + 40, -800, 858, gr(858, -880), -880)`],
+  // Wave 10 (garden, 54): audit #1, the mowing zones of Petri's lawn at eye level from the S belt walk (palace grid
+  // u ≈ 145, v ≈ −66), looking W along the walk to the garden front: the walk and its close-mown verge in front, a
+  // bench in its mown bay, the aftermath meadow beyond. Sets every state it uses.
+  ['54-beltwalk-maehzonen', 'Herzogsgarten: Beltwalk, gemähter Saum und Nachmahd-Wiese, Augenhöhe, 10:30', `skb.set('festival', false); skb.set('lowConfidence', 'show'); skb.set('fullMoon', false); skb.set('clouds', false); skb.set('hour', 10.5); (() => { const x = 1392, z = -1079; pose(x, gr(x, z) + 1.7, z, G.x, 349, G.z, 'walk'); })()`],
+  // Wave-10 review fix (garden, 55): the audit's re-aimed garden-front view (04 itself stays as it is). Eye level on the
+  // meadow beside the S arm of the belt walk (palace grid u 100, v −36), looking at the CdL (u 40, v 0): the walk and its
+  // mown verge cut the lower third, scythed and standing parcels beyond, the garden-front walk HG-07 at the terrace.
+  ['55-gartenfront-beltwalk', 'Gartenseite CdL vom Beltwalk, Augenhöhe, 10:30 (Mähzonen, Weg an der Gartenterrasse)', `skb.set('festival', false); skb.set('lowConfidence', 'show'); skb.set('fullMoon', false); skb.set('clouds', false); skb.set('hour', 10.5); (() => { const x = G.x + 104.5, z = G.z + 19.0; pose(x, gr(x, z) + 1.7, z, G.x + 39.4, 351, G.z - 6.6, 'walk'); })()`],
+  // Wave 10 (look, 60-62). The night sky and the clouds; each sets every state it uses (fullMoon, clouds, festival).
+  // 60: the audit's custom c3, pose 04's camera at 23:00 on the documented 15 Jul 1789 (waning moon, 46 %, rises 23:09,
+  // still below the horizon: stars only). 61: the same camera on the full-moon night 6 Jul 1789 (moon 20° high in the
+  // S, moon shadows). 62: fair-weather cumulus and their shadows from view-west at 18:30 (Abendsonne).
+  ['60-gartenseite-nacht-23', 'Gartenseite CdL, Augenhöhe 95 m E, 23:00, 15. Juli 1789 (Mond unter dem Horizont)', `skb.set('festival', false); skb.set('lowConfidence', 'show'); skb.set('fullMoon', false); skb.set('hour', 23); (() => { const x = G.x + 95, z = G.z - 14; pose(x, gr(x, z) + 1.65, z, G.x, 351, G.z, 'walk'); })()`],
+  ['61-gartenseite-vollmond', 'Gartenseite CdL, Augenhöhe 95 m E, 23:00, Vollmondnacht 6. Juli 1789', `skb.set('festival', false); skb.set('lowConfidence', 'show'); skb.set('fullMoon', true); skb.set('hour', 23); (() => { const x = G.x + 95, z = G.z - 14; pose(x, gr(x, z) + 1.65, z, G.x, 351, G.z, 'walk'); })()`],
+  ['62-abendsonne-wolken', 'Übersicht West, 18:30 (Abendsonne, Schönwetterwolken)', `skb.set('festival', false); skb.set('lowConfidence', 'show'); skb.set('fullMoon', false); skb.set('clouds', true); skb.set('hour', 18.5); skb.goto('view-west'); skb.step(60)`],
+  // Wave 11 (architecture, 66-68). 66: the CdL garden-front centre at eye level, 26 m in front of the garden door on
+  // the axis (palace grid +u = local (0.986, -0.165); the risalit face is 9.5 m from the CdL centre), 08:00.
+  ['66-gartentuer-mitte', 'Gartenseite CdL: Mittelrisalit und Gartentür, Augenhöhe 26 m E, 08:00', `skb.set('festival', false); skb.set('lowConfidence', 'show'); skb.set('fullMoon', false); skb.set('clouds', false); skb.set('hour', 8.0); (() => { const c = skb.entries.get('KB-B01').centre; const x = c.x + 0.986 * 35.5, z = c.z - 0.165 * 35.5; pose(x, gr(x, z) + 1.7, z, c.x + 0.986 * 9.5, 349.5, c.z - 0.165 * 9.5, 'walk'); })()`],
 ];
 
 const args = process.argv.slice(2);

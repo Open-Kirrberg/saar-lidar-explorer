@@ -11,6 +11,31 @@ newly found problems under "Discovered". Never renumber: new items get the next 
 
 **Status:** `[ ]` open · `[~]` partial · `[x]` done (hash) · `[-]` dropped (reason) · `[?]` needs a user decision.
 
+**Open after wave 11.** Waves 0–11 are committed (the last is `9b2f545`) and the improvement rounds are paused. What
+is left, in index order (details in each item):
+- KB-I03, KB-I13, KB-I15, KB-I24: implemented; only the light-layer re-export into `../app` waits for the user's go.
+- KB-I23: Marstall basin and Küchenhof pump need located sources.
+- KB-I33: aviaries (U).
+- KB-I35: the vineyard's cost at pose 40 is not yet shown within budget.
+- KB-I37: Schwanenweiher jet and Findlinge.
+- KB-I40: blocked, no located Wildzaun line.
+- KB-I58: roadside avenues need a located source.
+- KB-I48: the "Dezember 1785" scene year.
+- KB-I49: physically based atmosphere.
+- KB-I54: source acquisition (requests from research/09–11), a user decision.
+- KB-I65: sky and post cost at retina and CPU per frame (partial).
+- KB-I78: the meadow blades' cost at pose 39.
+- KB-I79: end-side orientation audit for rotated `axisRect` buildings.
+- KB-I83: Ehrenhof ruts, camber, lane end and staffage.
+- KB-I90: a non-mirror glass material for hotbed and glasshouse lights.
+- KB-I91: foliage back-light rim under cloud and moon shadow.
+- KB-I92: the exterior reveals at 20 / 29 (→ KB-I98).
+- KB-I94: an idle-machine retina bench is owed.
+- KB-I98: shaded window reveals (interior laibung to the glass or baked AO, 20 / 29).
+- KB-I100: plan elevations draw the KB-B01 garden-front relief.
+- KB-I93 is done on the castle side; the HYG entry in the release licence audit (`../scripts/release/`) is the
+  release owner's (release note in the item).
+
 **Field key.** *Why* = the evidence, with project tags (D, D→, I, N, U, HMS, measured). *Payoff* = history / visual,
 ★ local … ★★★ changes how the whole site reads. *Effort* S (≤ ½ day of agent work), M, L. *Perf* = expected GPU
 change at 1080p on the M5 Pro. *Poses* = ids from `.claude/skills/skb-improve/scripts/shots.mjs --list` (01–11 reproduce the audit
@@ -194,6 +219,52 @@ KB-I78. Interiors fell at retina (06 6.3 → 3.6, 22 7.4 → 3.7, 27 7.0 → 3.6
 single `wave8-final` interior numbers were noise. All 52 poses byte-identical over the three runs. Tests: 852 passing
 in 93 files. Light layer (temp export): **4.32 MB**, 117 nodes (103 buildings + 14 site), 422,389 triangles.
 
+**After wave 10 (2026-11-02, `shots.mjs --bench`, all 56 poses, three runs in one session (min / median), load 14–17;
+before = `wave9-final`, a single run under load 19–39; full table in the README changelog):**
+
+| Pose | 1080p GPU ms before → after | 3024×1964 GPU ms before → after | Calls | Triangles |
+|---|---|---|---|---|
+| 01 | 5.6 → 6.0 / 6.0 | 7.5 → 7.7 / 7.9 | 853 → 860 | 2.73 → 2.73 M |
+| 08 | 5.6 → 5.8 / 5.9 | 7.4 → 7.7 / 7.9 | 853 → 860 | 2.73 → 2.73 M |
+| 16 | 4.4 → 4.6 / 4.6 | 5.1 → 5.6 / 5.6 | 776 → 782 | 3.15 → 3.20 M |
+| 22 | 2.5 → 2.7 / 2.7 | 5.9 → 7.0 / 7.6 | 815 → 815 | 1.00 → 1.02 M |
+| 28 | 2.3 → 2.8 / 2.8 | 5.9 → 7.2 / 7.2 | 466 → 466 | 1.08 → 1.09 M |
+| 33 | 4.5 → 4.8 / 4.8 | 6.1 → 6.9 / 6.9 | 674 → 675 | 2.77 → 2.77 M |
+| 39 | 3.5 → 3.7 / 3.7 | 7.8 → 8.0 / 8.2 | 392 → 392 | 1.63 → 1.63 M |
+| 47 | 5.3 → 5.5 / 5.5 | 7.5 → 7.9 / 8.0 | 722 → 729 | 2.99 → 2.99 M |
+| 48 | 3.6 → 3.7 / 3.8 | 9.5 → 7.1 / 9.6 | 571 → 571 | 1.54 → 1.54 M |
+| 62 (new) | 5.7 / 5.7 | 7.7 / 7.8 | 860 | 2.73 M |
+
+At 1080p every pose is within 0…+0.5 ms of `wave9-final` (median), mostly +0.1…+0.3 (the cloud-shadow fetch on
+every lit pixel, the meadow zones, the canvases at 22 / 28 +0.2 / +0.5) although this run's load was lower. At
+3024×1964 the 8 ms eye-level target is missed at 39 (8.0 / 8.2, meadow blades, KB-I78) and 48 (median 9.6, swinging
+7.1…9.6 as in wave 9), and met only just at 47 (8.0 median), 01 / 08 / 41 / 43 / 46 (7.9) → KB-I94. The aerial
+budget (12 ms) holds. All 56 poses byte-identical over the three runs. Tests: 907 passing (1 skipped) in 101 files.
+Light layer (temp export): **4.33 MB**, 118 nodes (103 buildings + 15 site), 423,007 triangles.
+
+**After wave 11 (2026-11-02, `shots.mjs --bench`, all 58 poses, three runs in one session (min / median), load
+13–20 with other owners' Chrome instances on the GPU; before = `wave10-final`, a single run; full table in the README
+changelog):**
+
+| Pose | 1080p GPU ms before → after | 3024×1964 GPU ms before → after | Calls | Triangles |
+|---|---|---|---|---|
+| 01 | 6.0 → 5.9 / 5.9 | 7.9 → 7.9 / 8.0 | 865 → 866 | 2.74 → 2.73 M |
+| 07 | 2.2 → 2.1 / 2.1 | 3.1 → 2.9 / 3.1 | 903 → 903 | 1.26 → 1.27 M |
+| 20 | 2.3 → 2.3 / 2.3 | 3.1 → 3.2 / 3.2 | 827 → 827 | 1.07 → 1.07 M |
+| 39 | 3.6 → 3.2 / 3.3 | 8.3 → 7.6 / 7.6 | 392 → 391 | 1.63 → 1.62 M |
+| 41 | 5.5 → 4.5 / 5.1 | 8.2 → 7.6 / 7.8 | 374 → 374 | 1.56 → 1.56 M |
+| 47 | 5.5 → 5.2 / 5.3 | 7.9 → 7.6 / 7.8 | 738 → 738 | 3.00 → 3.00 M |
+| 48 | 3.8 → 3.6 / 3.6 | 9.7 → 5.4 / 6.1 | 571 → 569 | 1.54 → 1.54 M |
+| 50 | 3.9 → 3.8 / 3.8 | 6.0 → 6.2 / 6.3 | 264 → 259 | 2.72 → 2.71 M |
+| 62 | 5.9 → 5.3 / 5.3 | 7.8 → 7.8 / 7.9 | 865 → 866 | 2.74 → 2.73 M |
+| 66 (new) | 3.8 / 3.8 | 5.2 / 5.2 | 889 | 2.77 M |
+
+Median change over the 57 common poses −0.1 ms at both sizes (range −0.6…+0.1 ms at 1080p, −3.7…+0.3 ms retina;
+the single-run `wave10-final` was taken under a different load, so these are within noise). At 3024×1964 every pose
+is ≤ 8.0 ms (median): 01 8.0, 62 7.9, 41 / 47 7.8, 08 7.8, 43 / 46 7.7, 39 7.6; 48 6.1 (it swung 7.1…9.6 in wave 10).
+The aerial budget (12 ms) holds. All 58 poses byte-identical over the three runs. Tests: 965 passing (1 skipped) in
+108 files. Light layer (temp export): **4.37 MB**, 118 nodes (103 buildings + 15 site), 427,539 triangles.
+
 **Shots.** The wave-1 `after-*.jpg` in `docs/shots/KB-I03…I15/` show the final wave-1 state (`wave1-final`, the
 "before" of wave 2), not the first wave-1 run. Wave-2 follow-ups on wave-1 items are `after-wave2-<pose>.jpg` in the
 same folder; their "before" is that folder's `after-<pose>.jpg`. The wave-2 `after-*.jpg` (KB-I09…I13) and all
@@ -218,7 +289,14 @@ folders get `*-wave8-*` (`KB-I14`, `I22`, `I32`, `I35`, `I39`, `I45`, `I66`, `I6
 `docs/review/wave8-look/`. Wave-9 pairs compare `wave8-final` with `wave9-after` (1280 px; crops 1:1): new folders
 `docs/shots/KB-I75`, `I76`, `I77` use `before-*` / `after-*`; existing folders get `*-wave9-*` (`KB-I12`, `I43`, `I45`,
 `I71`, `I72`); the architecture owner's side-by-side crops are `wave9-*-before-after.jpg` in `KB-I22`, `I24`, `I32`,
-`I72`. No new poses in wave 9 (next free pose number 56; reserved 54–62 unused).
+`I72`. No new poses in wave 9 (next free pose number 56; reserved 54–62 unused). Wave-10 pairs compare `wave9-final` with
+`wave10-after` (1280 px; crops 1:1): new folders `docs/shots/KB-I80`…`I89` use `before-*` / `after-*`; existing folders
+get `*-wave10-*` (`KB-I24`, `I26`, `I27`, `I37`, `I43`). Poses 54 (garden), 60–62 (look) are new (`after-*` only); the
+look owner's composites are in `docs/review/wave10-look/`. Wave-11 pairs compare `wave10-final` with `wave11-after`
+(1280 px; crops 1:1): new folders `docs/shots/KB-I84`, `I92`, `I93`, `I94`, `I95` use `before-*` / `after-*`;
+existing folders get `*-wave11-*` (`KB-I37` jet crop, `I43` 07, `I81` avenue and tree crops). Pose 66 is new
+(`after-*` only); the look owner's composites are in `docs/review/wave11-look/`. Next free pose numbers: 56–59, 63–65
+(garden), 67–68 (architecture), 69–71 (look), then 72.
 
 **Budgets.** Aerial ≤ 12 ms GPU at 3024×1964 after the polish wave; any single item ≤ +1 ms at 1080p unless the item
 says otherwise; light layer ≤ 6 MB; triangles net ≤ +0.5 M at pose 01 for garden work (research/11 §6.4).
@@ -229,96 +307,120 @@ says otherwise; light layer ≤ 6 MB; triangles net ≤ +0.5 M at pose 01 for ga
 
 | Id | Title | Wave | Domain skill | Payoff hist/vis | Effort | Perf | Status |
 |---|---|---|---|---|---|---|---|
-| KB-I01 | Viewer pose and look hooks for reproducible reviews | 0 | visual-wow | – / ★ | S | 0 | [x] (uncommitted) |
-| KB-I02 | Catalogue fact fixes (names, dates, tags, sources) | 0 | historic-architecture | ★★ / – | S | 0 | [x] (uncommitted) |
+| KB-I01 | Viewer pose and look hooks for reproducible reviews | 0 | visual-wow | – / ★ | S | 0 | [x] |
+| KB-I02 | Catalogue fact fixes (names, dates, tags, sources) | 0 | historic-architecture | ★★ / – | S | 0 | [x] |
 | KB-I03 | Epoch field: show the summer-1789 state only | 0 | historic-architecture | ★★ / ★ | M | 0 | [~] re-export pending |
-| KB-I04 | Shadow caching and soft radius | 1 | visual-wow | – / ★ | S | −1…−4 ms | [x] (uncommitted) |
-| KB-I05 | Render scale and quality presets | 1 | visual-wow | – / ★ | S | −30…−45 % retina | [x] (uncommitted) |
-| KB-I06 | Calibrated light budget (sun, sky IBL, exposure, twilight) | 1 | visual-wow | – / ★★★ | M | ~0 | [x] (uncommitted; shade ratio met in the wave-2 review fix; wave 7: Kino golden hour) |
-| KB-I07 | Height fog and sky-matched haze | 1 | visual-wow | – / ★★★ | S | ~0 | [x] (uncommitted) |
-| KB-I08 | Hero hour and time presets | 1 | visual-wow | – / ★★ | S | 0 | [x] (uncommitted) |
+| KB-I04 | Shadow caching and soft radius | 1 | visual-wow | – / ★ | S | −1…−4 ms | [x] |
+| KB-I05 | Render scale and quality presets | 1 | visual-wow | – / ★ | S | −30…−45 % retina | [x] |
+| KB-I06 | Calibrated light budget (sun, sky IBL, exposure, twilight) | 1 | visual-wow | – / ★★★ | M | ~0 | [x] (shade ratio met in the wave-2 review fix; wave 7: Kino golden hour) |
+| KB-I07 | Height fog and sky-matched haze | 1 | visual-wow | – / ★★★ | S | ~0 | [x] |
+| KB-I08 | Hero hour and time presets | 1 | visual-wow | – / ★★ | S | 0 | [x] |
 | KB-I15 | Exterior palette: blue-grey shutters, bluer slate, painted render members | 1 (quick win) | historic-architecture | ★★ / ★★ | S | 0 | [~] re-export pending |
-| KB-I14 | Ground colours: Buntsandstein gravel, sand, hay, fields | 1 (quick win) | schlossgarten | ★ / ★★ | S | 0 | [x] (uncommitted; wave 8: class 12 in use, 748 cells; yellow parterre sand) |
-| KB-I55 | Wave-1 aerial GPU regression: diffuse sky via SH probe, PMREM on glossy only | 1 (follow-up) | visual-wow | – / ★ | S-M | −5…−12 ms retina aerial | [x] (uncommitted; goal met via KB-I59, PMREM split not done: no A/B gain) |
-| KB-I59 | Terrain and ground shading cost at retina | 1 (follow-up) | visual-wow | – / ★ | M | −5…−10 ms retina aerial | [x] (uncommitted; review fix: static pre-pass bound + frozen matrices, −0.5…−0.9 ms CPU) |
-| KB-I09 | 1789 land cover instead of today's forest | 2 | schlossgarten | ★★★ / ★★★ | L | −2…−6 ms | [x] (uncommitted) |
-| KB-I10 | Forest tiling, culling and impostors | 2 | visual-wow | – / ★ | M | −3…−9 ms aerial | [x] (uncommitted; aerial budget met via KB-I59) |
-| KB-I11 | Tree species, shapes and young avenue trees | 2 | schlossgarten | ★★ / ★★ | M | +0…0.3 ms | [x] (uncommitted) |
-| KB-I12 | Herzogsgarten: Petri's lawn garden replaces the TF-09 parterre | 2 | schlossgarten | ★★★ / ★★★ | L | +0.3 ms | [x] (uncommitted; wave 9: Petri framing groups TF-45…49, hypothetical / low, poses 16 / 17 / 33; wave-9 review fix: Heister limes, green tall shrubs, conifer at the 16/17 edge, poplars 7 m off the jet sightline) |
+| KB-I14 | Ground colours: Buntsandstein gravel, sand, hay, fields | 1 (quick win) | schlossgarten | ★ / ★★ | S | 0 | [x] (wave 8: class 12 in use, 748 cells; yellow parterre sand) |
+| KB-I55 | Wave-1 aerial GPU regression: diffuse sky via SH probe, PMREM on glossy only | 1 (follow-up) | visual-wow | – / ★ | S-M | −5…−12 ms retina aerial | [x] (goal met via KB-I59, PMREM split not done: no A/B gain) |
+| KB-I59 | Terrain and ground shading cost at retina | 1 (follow-up) | visual-wow | – / ★ | M | −5…−10 ms retina aerial | [x] (review fix: static pre-pass bound + frozen matrices, −0.5…−0.9 ms CPU) |
+| KB-I09 | 1789 land cover instead of today's forest | 2 | schlossgarten | ★★★ / ★★★ | L | −2…−6 ms | [x] |
+| KB-I10 | Forest tiling, culling and impostors | 2 | visual-wow | – / ★ | M | −3…−9 ms aerial | [x] (aerial budget met via KB-I59) |
+| KB-I11 | Tree species, shapes and young avenue trees | 2 | schlossgarten | ★★ / ★★ | M | +0…0.3 ms | [x] |
+| KB-I12 | Herzogsgarten: Petri's lawn garden replaces the TF-09 parterre | 2 | schlossgarten | ★★★ / ★★★ | L | +0.3 ms | [x] (wave 9: Petri framing groups TF-45…49, hypothetical / low, poses 16 / 17 / 33; wave-9 review fix: Heister limes, green tall shrubs, conifer at the 16/17 edge, poplars 7 m off the jet sightline) |
 | KB-I13 | Axial basin with fountain and two stag heads | 2 | schlossgarten | ★★ / ★★★ | S | +0.1 ms | [~] re-export pending |
-| KB-I56 | Land-cover look: soft class edges, meadow and lawn, fields, micro-relief | 2 (follow-up) | schlossgarten + visual-wow | ★ / ★★ | M | ~0 (re-bench) | [x] (uncommitted; wave-8 review fix: meadow / lawn near detail and the far vineyard, see KB-I45 / KB-I73) |
-| KB-I57 | Hinterland hedgerows and farmstead orchards | 2 (follow-up) | schlossgarten | ★ / ★★ | M | ≤ +0.9 ms (all site vegetation) | [x] (uncommitted) |
-| KB-I16 | French two-leaf casements and class-aware glazing | 3 | historic-architecture | ★★ / ★★ | M | +0.1 ms | [x] (uncommitted) |
-| KB-I17 | Plain wings: surrounds, flat Lisenen, no string course | 3 | historic-architecture | ★★ / ★ | S | 0 | [x] (uncommitted) |
-| KB-I18 | Roof detail: Biberschwanz scale, lead decks, pavilion covers | 3 | historic-architecture | ★ / ★ | S | 0 | [x] (uncommitted; lead-deck rule inert, see Discovered) |
-| KB-I19 | Limewash, stone and slate variation; light weathering | 3 | visual-wow | ★ / ★★ | M | ~0 | [x] (uncommitted) |
-| KB-I20 | Baked vertex AO in the generator | 3 | visual-wow | – / ★★★ | M | 0 | [x] (uncommitted) |
-| KB-I21 | Fachwerk flag for timber-framed buildings | 3 | historic-architecture | ★★ / ★ | M | 0 | [x] (uncommitted) |
-| KB-I22 | Roof furniture: Hemmer rods, downpipes, weather vanes | 3 | historic-architecture | ★★ / ★★ | M | +0.1 ms | [x] (uncommitted; wave 8 + review fix: ridge-end masts only, scaled to the roof, level NDB Fünfspitz head, none on chimneys or huts; wave 9: gilt knob with spike and four short points, masts 1.2–3.0 m, 0.5 m points under 120 m²) |
+| KB-I56 | Land-cover look: soft class edges, meadow and lawn, fields, micro-relief | 2 (follow-up) | schlossgarten + visual-wow | ★ / ★★ | M | ~0 (re-bench) | [x] (wave-8 review fix: meadow / lawn near detail and the far vineyard, see KB-I45 / KB-I73) |
+| KB-I57 | Hinterland hedgerows and farmstead orchards | 2 (follow-up) | schlossgarten | ★ / ★★ | M | ≤ +0.9 ms (all site vegetation) | [x] |
+| KB-I16 | French two-leaf casements and class-aware glazing | 3 | historic-architecture | ★★ / ★★ | M | +0.1 ms | [x] |
+| KB-I17 | Plain wings: surrounds, flat Lisenen, no string course | 3 | historic-architecture | ★★ / ★ | S | 0 | [x] |
+| KB-I18 | Roof detail: Biberschwanz scale, lead decks, pavilion covers | 3 | historic-architecture | ★ / ★ | S | 0 | [x] (lead-deck rule inert, see Discovered) |
+| KB-I19 | Limewash, stone and slate variation; light weathering | 3 | visual-wow | ★ / ★★ | M | ~0 | [x] |
+| KB-I20 | Baked vertex AO in the generator | 3 | visual-wow | – / ★★★ | M | 0 | [x] |
+| KB-I21 | Fachwerk flag for timber-framed buildings | 3 | historic-architecture | ★★ / ★ | M | 0 | [x] |
+| KB-I22 | Roof furniture: Hemmer rods, downpipes, weather vanes | 3 | historic-architecture | ★★ / ★★ | M | +0.1 ms | [x] (wave 8 + review fix: ridge-end masts only, scaled to the roof, level NDB Fünfspitz head, none on chimneys or huts; wave 9: gilt knob with spike and four short points, masts 1.2–3.0 m, 0.5 m points under 120 m²); wave 10: larger gilt knob, shorter level points |
 | KB-I23 | Court furniture: Ehrenhof grille, cobbles, sentry boxes, basins | 3 | historic-architecture | ★★ / ★★ | M | +0.1 ms | [~] Marstall basin, Küchenhof pump need located sources |
-| KB-I24 | Gallery 97 m, Ionic Tempelzimmer rotunda, colonnade, library pavilion | 4 | historic-architecture | ★★★ / ★★ | L | +0.1 ms | [~] re-export pending (+ KB-I60); wave 9: Ionic bases and capitals on the inner pilasters (19) |
-| KB-I25 | Room programme moves (B02, B03, B04, B05) | 4 | historic-architecture | ★★★ / ★ | L | 0 | [x] (uncommitted) |
-| KB-I60 | Exposure inside glazed garden rooms (Tempelzimmer) | 4 (follow-up) | visual-wow | – / ★★ | S | 0 | [x] (uncommitted) indoor look only with an interior model; shell lift |
-| KB-I61 | 1789 terrain re-run for the rotunda, colonnade and Bibliothekspavillon | 4 (follow-up) | schlossgarten | ★ / ★★ | S | 0 | [x] (uncommitted) |
-| KB-I26 | State-room finish system (Tapetenleisten, dado, parquet, supraportes) | 4 | historic-architecture | ★★ / ★★★ | M | +0.2 ms | [x] (uncommitted; wave 6: Louis-seize chimneypieces, faience column stove) |
-| KB-I27 | Named room colours, collection rooms, gallery interior | 4 | historic-architecture | ★★★ / ★★ | M | +0.3 ms | [x] (uncommitted) |
-| KB-I28 | Orangerie: white joinery, Komödienhaus annex, workshops | 4 | historic-architecture | ★★ / ★ | M | 0 | [x] (uncommitted, wave-6 review fix) |
-| KB-I29 | Menagerie: 19 slate-roofed houses, terrace rows, island pavilion | 4 | historic-architecture | ★★ / ★★ | M | +0.1 ms | [x] (uncommitted, wave-6 review fix) |
-| KB-I30 | Unplaced items and new staffage entries (zones only) | 4 | historic-architecture | ★★ / ★ | M | 0 | [x] (uncommitted) KB-B89/90/91 placed as hypotheses, UP-19…25 as zones; wave-7 review fix: Monopteros order and dome; wave 8 (garden): Felsenpfad KB-W8 and the translucent aerial (pose 48); Sammelbecken not drawn (no LiDAR basin) |
-| KB-I31 | S-wing Altan | 4 | historic-architecture | ★ / ★ | S | 0 | [x] (uncommitted) KB-B02a hypothetical; pose 42; wave-7 review fix: portes-fenêtres, 2 axes, base courses, entablature |
-| KB-I32 | Garden pavilions behind the palace | 5 | schlossgarten | ★★ / ★★ | M | +0.1 ms | [x] (uncommitted) 2 round pavilions hypothetical; KB-B87 stepped dome + setting (review fix); wave 8: KB-B28 Pavillon zu Carlsberg + apse KB-B28a, pose 50; octagon not placed (U); wave 9: KB-B28 sides fixed (door and windows W, blank E wall behind the apse), flatter calotte |
-| KB-I33 | Benches, sculpture, aviaries | 5 | schlossgarten | ★ / ★★ | S | +0.1 ms | [~] (uncommitted) 19 benches + Flora herm; aviaries U |
-| KB-I34 | Parterre à l'angloise for TF-08 and TF-15, treillage, tubs | 5 | schlossgarten | ★★ / ★★ | M | +0.2 ms | [x] (uncommitted; review fix: treillage, thinning; pose 30; wave 6: framed treillage joinery, sparse plantings; wave-6 review fix: clipped glossy citrus with fruit) |
-| KB-I35 | Vineyard (LP06 30) | 5 | schlossgarten | ★★ / ★★ | M | +0.1 ms | [~] (uncommitted) 3D stakes and vines within 170 m, crisp edge; wave-7 review fix: one material at the hand-over, slim grey stakes, smooth close clumps; +0.9…1.45 ms (min) at 1080p at pose 40 under load ~28, budget still not shown; wave 8: row groups, lighter far parcel, still a dark decal from the air → KB-I73 |
-| KB-I36 | Kitchen gardens and the Holländische Gärtnerei | 5 | schlossgarten | ★★ / ★★ | M | +0.2 ms | [x] (uncommitted; review fix: lean-to glasshouses, lighter crops; pose 32; wave-7 review fix: lapped crown-glass panes, chimneys, night-mats; hotbeds open) |
-| KB-I37 | Water: pond edges, jets, reflections | 5 | schlossgarten + visual-wow | ★ / ★★ | M | +0.5…2 ms when active | [~] (uncommitted) SSR, wet banks, jet spray, pose 39 done; SSR comb stripes (KB-I69), Schwanenweiher jet and Findlinge open |
-| KB-I38 | Herzogskastanien grove | 5 | schlossgarten | ★ / ★ | S | +0.05 ms | [x] (uncommitted) |
-| KB-I39 | Karlslust follies of 1789 | 5 | schlossgarten | ★★ / ★★ | M | +0.1 ms | [x] (uncommitted) KL-B50…53 hypothetical; Eremitage not 1789; poses 43, 44; wave-7 review fix: finial, tent palette, hay load; wave 8: KL-B50 double up-swept roof, folly facades without shutters |
+| KB-I24 | Gallery 97 m, Ionic Tempelzimmer rotunda, colonnade, library pavilion | 4 | historic-architecture | ★★★ / ★★ | L | +0.1 ms | [~] re-export pending (+ KB-I60); wave 9: Ionic bases and capitals on the inner pilasters (19); wave 10: portico roof into the drum with a lead collar (no attic block), entasis, grey steps, inner entablature ring |
+| KB-I25 | Room programme moves (B02, B03, B04, B05) | 4 | historic-architecture | ★★★ / ★ | L | 0 | [x] |
+| KB-I60 | Exposure inside glazed garden rooms (Tempelzimmer) | 4 (follow-up) | visual-wow | – / ★★ | S | 0 | [x] indoor look only with an interior model; shell lift |
+| KB-I61 | 1789 terrain re-run for the rotunda, colonnade and Bibliothekspavillon | 4 (follow-up) | schlossgarten | ★ / ★★ | S | 0 | [x] |
+| KB-I26 | State-room finish system (Tapetenleisten, dado, parquet, supraportes) | 4 | historic-architecture | ★★ / ★★★ | M | +0.2 ms | [x] (wave 6: Louis-seize chimneypieces, faience column stove); wave 10: Louis-seize medallion seats, deeper cove (trophies open) |
+| KB-I27 | Named room colours, collection rooms, gallery interior | 4 | historic-architecture | ★★★ / ★★ | M | +0.3 ms | [x] wave 10: Hofbibliothek wire doors over pleated taffeta, some open |
+| KB-I28 | Orangerie: white joinery, Komödienhaus annex, workshops | 4 | historic-architecture | ★★ / ★ | M | 0 | [x] (wave-6 review fix) |
+| KB-I29 | Menagerie: 19 slate-roofed houses, terrace rows, island pavilion | 4 | historic-architecture | ★★ / ★★ | M | +0.1 ms | [x] (wave-6 review fix) |
+| KB-I30 | Unplaced items and new staffage entries (zones only) | 4 | historic-architecture | ★★ / ★ | M | 0 | [x] KB-B89/90/91 placed as hypotheses, UP-19…25 as zones; wave-7 review fix: Monopteros order and dome; wave 8 (garden): Felsenpfad KB-W8 and the translucent aerial (pose 48); Sammelbecken not drawn (no LiDAR basin) |
+| KB-I31 | S-wing Altan | 4 | historic-architecture | ★ / ★ | S | 0 | [x] KB-B02a hypothetical; pose 42; wave-7 review fix: portes-fenêtres, 2 axes, base courses, entablature |
+| KB-I32 | Garden pavilions behind the palace | 5 | schlossgarten | ★★ / ★★ | M | +0.1 ms | [x] 2 round pavilions hypothetical; KB-B87 stepped dome + setting (review fix); wave 8: KB-B28 Pavillon zu Carlsberg + apse KB-B28a, pose 50; octagon not placed (U); wave 9: KB-B28 sides fixed (door and windows W, blank E wall behind the apse), flatter calotte |
+| KB-I33 | Benches, sculpture, aviaries | 5 | schlossgarten | ★ / ★★ | S | +0.1 ms | [~] 19 benches + Flora herm; aviaries U |
+| KB-I34 | Parterre à l'angloise for TF-08 and TF-15, treillage, tubs | 5 | schlossgarten | ★★ / ★★ | M | +0.2 ms | [x] (review fix: treillage, thinning; pose 30; wave 6: framed treillage joinery, sparse plantings; wave-6 review fix: clipped glossy citrus with fruit) |
+| KB-I35 | Vineyard (LP06 30) | 5 | schlossgarten | ★★ / ★★ | M | +0.1 ms | [~] 3D stakes and vines within 170 m, crisp edge; wave-7 review fix: one material at the hand-over, slim grey stakes, smooth close clumps; +0.9…1.45 ms (min) at 1080p at pose 40 under load ~28, budget still not shown; wave 8: row groups, lighter far parcel, still a dark decal from the air → KB-I73 |
+| KB-I36 | Kitchen gardens and the Holländische Gärtnerei | 5 | schlossgarten | ★★ / ★★ | M | +0.2 ms | [x] (review fix: lean-to glasshouses, lighter crops; pose 32; wave-7 review fix: lapped crown-glass panes, chimneys, night-mats; hotbeds open); wave 10: hotbeds done → KB-I82 |
+| KB-I37 | Water: pond edges, jets, reflections | 5 | schlossgarten + visual-wow | ★ / ★★ | M | +0.5…2 ms when active | [~] SSR, wet banks, jet spray, pose 39 done; SSR comb stripes (KB-I69), Schwanenweiher jet and Findlinge open; wave 10: the basin jet reads as water (column, curtain strands, foam, drift); wave 11: the jet holds its opacity at 20–70 m (17) |
+| KB-I38 | Herzogskastanien grove | 5 | schlossgarten | ★ / ★ | S | +0.05 ms | [x] |
+| KB-I39 | Karlslust follies of 1789 | 5 | schlossgarten | ★★ / ★★ | M | +0.1 ms | [x] KL-B50…53 hypothetical; Eremitage not 1789; poses 43, 44; wave-7 review fix: finial, tent palette, hay load; wave 8: KL-B50 double up-swept roof, folly facades without shutters |
 | KB-I40 | Park boundary: Wildzaun and gatehouses | 5 | schlossgarten | ★ / ★ | S | 0 | [ ] blocked: no located Wildzaun line; evidenced barrière → KB-I68 |
 | KB-I58 | Roadside avenues on the chaussée to Homburg and the Homburg–Erbach road | 5 | schlossgarten | ★ / ★ | S | +0.1 ms | [ ] needs a located source |
-| KB-I63 | Garden detail at eye level: flowers, bean rows, herm, shrub limbs; garden shot poses | 5 (follow-up) | schlossgarten | ★ / ★★ | S-M | ~0 | [x] (uncommitted) poses 30–34, rounded flowers, lighter beans; wave 6: lathed herm, shrubs without limbs |
-| KB-I41 | Post chain: AO, SMAA, bloom, tone mapping, looks | 6 | visual-wow | – / ★★★ | M | +2…3.5 ms | [x] (uncommitted) own chain, +1.0…1.4 ms |
-| KB-I42 | Glass: crown-glass tint and jitter, far reflections, interior mapping | 6 | visual-wow | ★ / ★★★ | M | +0.2 ms | [x] (uncommitted; wave 7: interior mapping, review fix: catalogue rooms, inside view restored; far reflections stay env-only) |
-| KB-I43 | Night: lit windows, lanterns, candles, Fest chandeliers | 6 | visual-wow | ★ / ★★★ | M | +0.3 ms | [x] (uncommitted; review fix: scotopic shift, chandeliers only with "Fest", flames on all candles; wave 6: lantern pools, glass-dressed chandeliers; wave 9: night sky seam at 52 fixed) |
-| KB-I44 | Tree look near the camera | 6 | visual-wow | – / ★★ | M-L | +0.5…1.5 ms | [x] (uncommitted; wave 6: leaf cards with procedural atlas) |
-| KB-I45 | Ground detail: wear masks, lawn variation, hedge bevels | 6 | visual-wow | – / ★★ | M | ~0 | [x] (uncommitted) lawn variation, worn verges, hedge bevels; wave 8: Ehrenhof wear bands, turning sweep, plinth damp, polished track cobbles; wave-8 review fix: near lawn / meadow grain within 32 m, meadow regrowth patches, KB-L2 rotunda lawn; wave 9: grass blades within 22 m, isotropic Ehrenhof wear (lawn look and retina cost → KB-I78) |
-| KB-I46 | Rundflug (scripted fly-around) | 6 | visual-wow | – / ★★★ | M | 0 | [x] (uncommitted; review fix: higher Anflug, Galerie arc, W golden hour, Kino grade, occlusion test; wave 6: Kino low-sun grade) |
-| KB-I47 | Photo mode | 6 | visual-wow | – / ★★ | S-M | stills | [x] (uncommitted; review fix: full footer credit burned in; wave-7 fix: DOF capped, credit research/01–11) |
-| KB-I48 | Festbeleuchtung and the "Dezember 1785" scene | later | visual-wow + historic-architecture | ★★ / ★★★ | L | +0.3 ms | [~] (uncommitted, wave 8: Festbeleuchtung mode done; review fix: rotunda rings only on KB-B13 in 1785; the 1785 scene year open; wave 9: logged as not cheap, Decisions log) |
+| KB-I63 | Garden detail at eye level: flowers, bean rows, herm, shrub limbs; garden shot poses | 5 (follow-up) | schlossgarten | ★ / ★★ | S-M | ~0 | [x] poses 30–34, rounded flowers, lighter beans; wave 6: lathed herm, shrubs without limbs |
+| KB-I41 | Post chain: AO, SMAA, bloom, tone mapping, looks | 6 | visual-wow | – / ★★★ | M | +2…3.5 ms | [x] own chain, +1.0…1.4 ms |
+| KB-I42 | Glass: crown-glass tint and jitter, far reflections, interior mapping | 6 | visual-wow | ★ / ★★★ | M | +0.2 ms | [x] (wave 7: interior mapping, review fix: catalogue rooms, inside view restored; far reflections stay env-only) |
+| KB-I43 | Night: lit windows, lanterns, candles, Fest chandeliers | 6 | visual-wow | ★ / ★★★ | M | +0.3 ms | [x] (review fix: scotopic shift, chandeliers only with "Fest", flames on all candles; wave 6: lantern pools, glass-dressed chandeliers; wave 9: night sky seam at 52 fixed); wave 10: candles on guéridons and laid tables in the 07 / 25 views; review fix: the table candles light the table, room lights on other storeys off; wave 11: the room lit by its own flames (clusters, 4 sphere lights, inter-reflection ambient); wave-11 review fix: even ambient = later bounces only (0.34 → 0.15 lx at 07), one cube shadow for the brightest cluster in view with the furniture casting at night, night shoulder on the peak channel (tabletop ≤ 0.84 display) |
+| KB-I44 | Tree look near the camera | 6 | visual-wow | – / ★★ | M-L | +0.5…1.5 ms | [x] (wave 6: leaf cards with procedural atlas) |
+| KB-I45 | Ground detail: wear masks, lawn variation, hedge bevels | 6 | visual-wow | – / ★★ | M | ~0 | [x] lawn variation, worn verges, hedge bevels; wave 8: Ehrenhof wear bands, turning sweep, plinth damp, polished track cobbles; wave-8 review fix: near lawn / meadow grain within 32 m, meadow regrowth patches, KB-L2 rotunda lawn; wave 9: grass blades within 22 m, isotropic Ehrenhof wear (lawn look and retina cost → KB-I78) |
+| KB-I46 | Rundflug (scripted fly-around) | 6 | visual-wow | – / ★★★ | M | 0 | [x] (review fix: higher Anflug, Galerie arc, W golden hour, Kino grade, occlusion test; wave 6: Kino low-sun grade) |
+| KB-I47 | Photo mode | 6 | visual-wow | – / ★★ | S-M | stills | [x] (review fix: full footer credit burned in; wave-7 fix: DOF capped, credit research/01–11) |
+| KB-I48 | Festbeleuchtung and the "Dezember 1785" scene | later | visual-wow + historic-architecture | ★★ / ★★★ | L | +0.3 ms | [~] (wave 8: Festbeleuchtung mode done; review fix: rotunda rings only on KB-B13 in 1785; the 1785 scene year open; wave 9: logged as not cheap, Decisions log) |
 | KB-I49 | Physically based atmosphere | later | visual-wow | – / ★★ | L | +1…2 ms | [ ] |
-| KB-I50 | Static far shadow map or CSM | later | visual-wow | – / ★★ | M-L | +1…3 ms | [x] (uncommitted, wave 8: static far map, ≤ +0.45 ms) |
+| KB-I50 | Static far shadow map or CSM | later | visual-wow | – / ★★ | M-L | +1…3 ms | [x] (wave 8: static far map, ≤ +0.45 ms) |
 | KB-I51 | WebGPU / TSL migration | parked | visual-wow | – / ★★★ | L | ? | [-] |
-| KB-I52 | Review-1 leftovers | any | – | ★ / ★ | S | 0 | [x] (uncommitted; wave 8: `warn` [] everywhere, SC-02 title, TF-08 wall foot, B02 forecourt pad; pose 49) |
-| KB-I53 | CdL massing check and concealed stair | later | historic-architecture | ★★ / ★ | M | 0 | [x] (uncommitted) massing kept, research/10 §d.4 |
+| KB-I52 | Review-1 leftovers | any | – | ★ / ★ | S | 0 | [x] (wave 8: `warn` [] everywhere, SC-02 title, TF-08 wall foot, B02 forecourt pad; pose 49) |
+| KB-I53 | CdL massing check and concealed stair | later | historic-architecture | ★★ / ★ | M | 0 | [x] massing kept, research/10 §d.4 |
 | KB-I54 | Source acquisition (requests from research/09–11) | any | historic-architecture | ★★★ / – | – | – | [?] |
-| KB-I62 | Light-layer headroom before more exported geometry | any | – | – / ★ | S | 0 | [x] (uncommitted) int16 positions: 5.88 → 4.11 MB; 4.17 MB after wave 7 |
-| KB-I64 | Deterministic shots again (animation clocks, a lighting flake at 21) | any | visual-wow | – / ★ | S | 0 | [x] (uncommitted) review clock, stale shadow fixed |
-| KB-I65 | Sky and post cost at retina (eye level, interiors) and CPU per frame | 6 (follow-up) | visual-wow | – / ★ | M | −2…−5 ms retina eye level | [~] (uncommitted; wave 7: lights only when burning, shell interiors from outside, sky cube; wave 8: `flat`-varying retina regression fixed; 19/21/33 ≤ 6 ms retina (median), 34 6.2 / 6.6, aerials 7.2–7.8 ms; wave 9: all poses ≤ 7.8 ms retina, 34 6.7 / 6.7, 33 7.2 with the grass blades) |
-| KB-I66 | Forest crowns at 150–300 m and conifer whorls | 6 (follow-up) | visual-wow | – / ★★ | M | ≤ +0.5 ms | [x] (uncommitted; wave-6 review fix + wave 7: mid-crown leaf relief and silhouette fringe; wave 8: the ≈ 320 m band softened) |
-| KB-I67 | Menagerie setting: terrace ground, beech wood, island pavilion as hypothesis | 4 (follow-up) | schlossgarten | ★ / ★ | S | 0 | [x] (uncommitted, wave-6 review fix) |
-| KB-I68 | Barrière at the valley entrance and the court-mouth post-and-rail fence | 5 (follow-up) | schlossgarten + historic-architecture | ★ / ★ | S | 0 | [x] (uncommitted; wave 8: KB-F1 post-and-rail, KB-F2 barrière, poses 46 / 47; wave 9: KB-V1 forecourt low-passed; wave-9 review fix: graded walled carriage drive KB-V2 (9.8 %) to the grille, KB-V1 a planar forecourt strip, humps gone) |
-| KB-I69 | Water SSR comb stripes | 6 (follow-up) | visual-wow | – / ★★ | S | ≤ +0.2 ms | [x] (uncommitted; wave-7 fix: DDA march + ripple LOD) |
-| KB-I70 | Tempelzimmer from inside: see-through glass doors, closed openings | 4 (follow-up) | historic-architecture + visual-wow | ★ / ★★ | S | 0 | [x] (uncommitted; look: glass doors + exposure; wave 8 architecture: doors fill the openings, single outward glass, Granitsaal, banquette) |
-| KB-I71 | Setting of the wave-7 follies and the V23 terrain items | 5 (follow-up) | schlossgarten | ★ / ★★ | M | ~0 | [x] (uncommitted) serpentine walks, shrub backdrops, Monopteros lawn, KB-B91 well and track; wave 8: Felsenpfad KB-W8, translucent aerial pose 48; Sammelbecken and Vogeltränke not drawn (reasoned); wave-8 review fix: Felsenpfad a trodden earth footpath on the contour with Buntsandstein outcrops, not painted into the ground, no tree moved (test); wave 9: loose edge stones, breathing tread |
-| KB-I72 | CdL emphasis: court portal frame, N-wing porch, Festsaal garden balcony | 3 (follow-up) | historic-architecture | ★★ / ★★ | M | +0.1 ms | [x] (uncommitted; wave 8 frame + review fix: 10-step perron, sentries at its foot, N-wing porch, wing-centre and Festsaal balconies, AN-01/02 + GR; wave 9: perron across the three centre axes in grey-pink treads with pale nosings; wave-9 review fix: back to frame + 0.9 m with no LC tag (HMS short stair, N width), darker risers + step-corner AO, sentries on the piers) |
-| KB-I73 | Vineyard far parcel reads as a dark decal from the air | 5 (follow-up) | schlossgarten + visual-wow | – / ★★ | S | ~0 | [x] (uncommitted; wave-8 review fix: far rows as box-filtered stripes over red-brown soil, parcel 0.91 of the meadow at 01, soft edge) |
-| KB-I74 | Low-sun warmth and sky fill (golden hour, both looks) | 6 (follow-up) | visual-wow | – / ★★ | S-M | 0 | [x] (uncommitted; wave-8 review fix: 3100–3500 K at 5–10°, sky fill 0.72, lilac shade, warm sun-side haze) |
-| KB-I75 | Interior whites and mirror reflections | 6 (follow-up) | visual-wow | – / ★★ | M | ≤ +0.3 ms | [x] (uncommitted; wave 9: window pull, indoor shoulder, parquet bounce, box-projected room mirrors; review fix: same-session CPU A/B ±0.15 ms (no cost), capture debounced on light changes, O(1) steady state) |
-| KB-I76 | Leaf scale on leaf cards and forest crowns | 6 (follow-up) | schlossgarten + visual-wow | – / ★★ | S-M | ~0 | [x] (uncommitted; wave 9: fine leaf atlas on cards ≥ 0.9 m within ~32 m, ≤ +0.09 ms) |
-| KB-I77 | Pond shores: smoothed outline, depth fade, banks (water-mesh contract with the SSR) | 5 (follow-up) | schlossgarten + visual-wow | ★ / ★★ | M | ≤ +0.2 ms | [x] (uncommitted; wave 9: graded natural shores, water on the terrain's own vertices, TF-21 island; ≤ +0.18 ms; wave-9 review fix: depth fade over 0.3 m, 1:4 island bank, dam / outline decision recorded) |
-| KB-I78 | Lawn and meadow blades: finer, denser lawn, no disc edge, retina cost | 6 (follow-up) | schlossgarten + visual-wow | – / ★★ | S-M | −0.5…−1 ms retina | [~] (uncommitted; wave-9 review fix: lawn speckle gone, disc edge dithered, retina ≤ +0.4 ms at 16 / 33 / 47; 39 meadow +1.7 ms open) |
+| KB-I62 | Light-layer headroom before more exported geometry | any | – | – / ★ | S | 0 | [x] int16 positions: 5.88 → 4.11 MB; 4.17 MB after wave 7 |
+| KB-I64 | Deterministic shots again (animation clocks, a lighting flake at 21) | any | visual-wow | – / ★ | S | 0 | [x] review clock, stale shadow fixed |
+| KB-I65 | Sky and post cost at retina (eye level, interiors) and CPU per frame | 6 (follow-up) | visual-wow | – / ★ | M | −2…−5 ms retina eye level | [~] (wave 7: lights only when burning, shell interiors from outside, sky cube; wave 8: `flat`-varying retina regression fixed; 19/21/33 ≤ 6 ms retina (median), 34 6.2 / 6.6, aerials 7.2–7.8 ms; wave 9: all poses ≤ 7.8 ms retina, 34 6.7 / 6.7, 33 7.2 with the grass blades) |
+| KB-I66 | Forest crowns at 150–300 m and conifer whorls | 6 (follow-up) | visual-wow | – / ★★ | M | ≤ +0.5 ms | [x] (wave-6 review fix + wave 7: mid-crown leaf relief and silhouette fringe; wave 8: the ≈ 320 m band softened) |
+| KB-I67 | Menagerie setting: terrace ground, beech wood, island pavilion as hypothesis | 4 (follow-up) | schlossgarten | ★ / ★ | S | 0 | [x] (wave-6 review fix) |
+| KB-I68 | Barrière at the valley entrance and the court-mouth post-and-rail fence | 5 (follow-up) | schlossgarten + historic-architecture | ★ / ★ | S | 0 | [x] (wave 8: KB-F1 post-and-rail, KB-F2 barrière, poses 46 / 47; wave 9: KB-V1 forecourt low-passed; wave-9 review fix: graded walled carriage drive KB-V2 (9.8 %) to the grille, KB-V1 a planar forecourt strip, humps gone) |
+| KB-I69 | Water SSR comb stripes | 6 (follow-up) | visual-wow | – / ★★ | S | ≤ +0.2 ms | [x] (wave-7 fix: DDA march + ripple LOD) |
+| KB-I70 | Tempelzimmer from inside: see-through glass doors, closed openings | 4 (follow-up) | historic-architecture + visual-wow | ★ / ★★ | S | 0 | [x] (look: glass doors + exposure; wave 8 architecture: doors fill the openings, single outward glass, Granitsaal, banquette) |
+| KB-I71 | Setting of the wave-7 follies and the V23 terrain items | 5 (follow-up) | schlossgarten | ★ / ★★ | M | ~0 | [x] serpentine walks, shrub backdrops, Monopteros lawn, KB-B91 well and track; wave 8: Felsenpfad KB-W8, translucent aerial pose 48; Sammelbecken and Vogeltränke not drawn (reasoned); wave-8 review fix: Felsenpfad a trodden earth footpath on the contour with Buntsandstein outcrops, not painted into the ground, no tree moved (test); wave 9: loose edge stones, breathing tread |
+| KB-I72 | CdL emphasis: court portal frame, N-wing porch, Festsaal garden balcony | 3 (follow-up) | historic-architecture | ★★ / ★★ | M | +0.1 ms | [x] (wave 8 frame + review fix: 10-step perron, sentries at its foot, N-wing porch, wing-centre and Festsaal balconies, AN-01/02 + GR; wave 9: perron across the three centre axes in grey-pink treads with pale nosings; wave-9 review fix: back to frame + 0.9 m with no LC tag (HMS short stair, N width), darker risers + step-corner AO, sentries on the piers); wave 10: perron re-checked at 03 / 10, no change |
+| KB-I73 | Vineyard far parcel reads as a dark decal from the air | 5 (follow-up) | schlossgarten + visual-wow | – / ★★ | S | ~0 | [x] (wave-8 review fix: far rows as box-filtered stripes over red-brown soil, parcel 0.91 of the meadow at 01, soft edge) |
+| KB-I74 | Low-sun warmth and sky fill (golden hour, both looks) | 6 (follow-up) | visual-wow | – / ★★ | S-M | 0 | [x] (wave-8 review fix: 3100–3500 K at 5–10°, sky fill 0.72, lilac shade, warm sun-side haze) |
+| KB-I75 | Interior whites and mirror reflections | 6 (follow-up) | visual-wow | – / ★★ | M | ≤ +0.3 ms | [x] (wave 9: window pull, indoor shoulder, parquet bounce, box-projected room mirrors; review fix: same-session CPU A/B ±0.15 ms (no cost), capture debounced on light changes, O(1) steady state); wave 10: interior CPU at 27–29 within +0.15 ms of wave 8 |
+| KB-I76 | Leaf scale on leaf cards and forest crowns | 6 (follow-up) | schlossgarten + visual-wow | – / ★★ | S-M | ~0 | [x] (wave 9: fine leaf atlas on cards ≥ 0.9 m within ~32 m, ≤ +0.09 ms) |
+| KB-I77 | Pond shores: smoothed outline, depth fade, banks (water-mesh contract with the SSR) | 5 (follow-up) | schlossgarten + visual-wow | ★ / ★★ | M | ≤ +0.2 ms | [x] (wave 9: graded natural shores, water on the terrain's own vertices, TF-21 island; ≤ +0.18 ms; wave-9 review fix: depth fade over 0.3 m, 1:4 island bank, dam / outline decision recorded) |
+| KB-I78 | Lawn and meadow blades: finer, denser lawn, no disc edge, retina cost | 6 (follow-up) | schlossgarten + visual-wow | – / ★★ | S-M | −0.5…−1 ms retina | [~] (wave-9 review fix: lawn speckle gone, disc edge dithered, retina ≤ +0.4 ms at 16 / 33 / 47; 39 meadow +1.7 ms open) |
 | KB-I79 | End-side orientation audit for rotated `axisRect` buildings | 4 (follow-up) | historic-architecture | ★ / ★ | S | 0 | [ ] |
+| KB-I80 | Mowing zones: pleasure ground along the walks, aftermath meadow beyond | 10 | schlossgarten | ★ / ★★ | M | ≤ +1 ms retina | [x] (wave 10 + review fix: verges incl. walks inside the lawn, terrace band, rondell ring, bench bays; meadow parcels; 3D seed heads / windrows / stubble; no aerial stripes; poses 54, 55) |
+| KB-I81 | Avenue rows: size, crown and lean variation, young replants | 10 | schlossgarten | – / ★ | S | 0 | [x] (wave 10; wave 11: out-of-round crowns, per-tree leaf tone) |
+| KB-I82 | Hotbed lights: timber sashes, propped, off or limewashed | 10 | schlossgarten | ★ / ★ | S | 0 | [x] (wave 10) |
+| KB-I83 | Ehrenhof sand: raked and trodden ground, ruts, camber, lane end | 10 | schlossgarten + visual-wow | ★ / ★★ | M | ~0 | [~] (wave 10: raked / trodden patches; ruts, camber, lane end, staffage open) |
+| KB-I84 | Gewannflur: open strip fields instead of hinterland trees | 10 | schlossgarten | ★★ / ★★ | M | ~0 | [x] (wave 11: LC-06…08, contour strips, three-field rotation, field trees in context and seeded groups; review fix: one crop per Gewann, ±6.5 % strips, balks and 4-6 m headlands, straw spelt, old boundary trees kept (12), no group behind the Barrière guard house (46); 50 → KB-I96 fixed) |
+| KB-I85 | Night sky: real 1789 moon, stars, moonlight | 10 | visual-wow | ★ / ★★★ | M-L | night only | [x] (wave 10: Meeus moon, 1,604 BSC5 stars, moon shadows, "Vollmondnacht"; poses 60 / 61; licence → KB-I93; review fix: Milky Way, brighter stars, night fill on the land) |
+| KB-I86 | Fair-weather cumulus and cloud shadows | 10 | visual-wow | – / ★★ | M-L | ≤ +0.1 ms steady | [x] (wave 10: shadows good from the air (62); review fix: domed billowed cumulus, default "aus der Luft", strip refresh +0.2 ms) |
+| KB-I87 | Mixed dressed-stone plinths and plinth damp | 10 | historic-architecture | ★ / ★★ | S-M | ≈ 0 | [x] (wave 10) |
+| KB-I88 | CdL garden door as a glazed porte-fenêtre; terrace walk | 10 | historic-architecture + schlossgarten | ★ / ★ | S | 0 | [x] (wave 10: door; review fix: terrace walk HG-07) |
+| KB-I89 | Procedural old-master canvases instead of colour grids | 10 | historic-architecture + visual-wow | ★ / ★★ | M | −0.3 / −1 ms at 28 (atlas, review fix) | [x] (wave 10 + review fix; real BStGS works [?] licence) |
+| KB-I90 | A non-mirror glass material for hotbed and glasshouse lights | 10 (follow-up) | visual-wow | – / ★ | S | 0 | [ ] |
+| KB-I91 | Foliage back-light rim under cloud and moon shadow | 10 (follow-up) | visual-wow | – / ★ | S | 0 | [ ] |
+| KB-I92 | Interior reveal highlights and the TF-08 coping | 10 (follow-up) | visual-wow + schlossgarten | ★ / ★ | S | 0 | [~] (wave-10 review: architecture part; wave 11 look: second shoulder stage, ≥ 240 sRGB pixels 20 4.5 → 0.4 %, 28 6.3 → 3.1 %, 29 10.1 → 6.2 %; exterior reveals at 20 / 29 need geometry or AO → KB-I98) |
+| KB-I93 | Licence audit of the Yale Bright Star Catalogue table | 10 (follow-up) | – | – / – | S | 0 | [x] (wave 11: table regenerated from HYG 4.4, CC BY-SA 4.0, footer credit; release-audit entry outside the castle tree open) |
+| KB-I94 | Retina headroom after wave 10 (meadow, aerials, picture galleries) | 10 (follow-up) | visual-wow | – / ★ | M | −0.5…−1 ms retina | [~] (review fix (look): no cloud cost at eye level and indoors by default; wave 11: meadow tufts thin from 4.5 m; lead 3 runs at load 13–20: every pose ≤ 8.0 ms retina median (01 8.0, 39 7.6, 48 6.1); idle-machine bench still owed) |
+| KB-I95 | Wave 11 (architecture): garden-front relief, room hierarchy, carved heads, fine seat ovals | 11 | historic-architecture | ★ / ★★ | M | ≈ 0 | [x] (wave 11; pose 66; review fix: shutter leaves sized to the pier beside the Lisenen, leafy swags clear of the pier glasses) |
+| KB-I96 | Forest look streams stable under land-cover edits (pose 50 re-rolled by KB-I84) | 11 (follow-up) | schlossgarten + visual-wow | – / ★ | S-M | 0 | [x] (wave-11 review fix: planners ordered on the pre-fill base ground (`meta.json` `ground.plannerBase`), changed trees are ghosts; 50 back to `wave10-final`, 0.5 grey) |
+| KB-I97 | Menagerie: broad KL-B43 watercourse and a softer house finish (36 / 38) | 11 (follow-up) | historic-architecture | ★ / ★★ | M | ≈ 0 | [x] (wave-11 review fix: 4.5 m trough of level reaches with weirs, limewash houses; no terrain carve needed) |
+| KB-I98 | Shaded window reveals: interior laibung to the glass or baked AO (20 / 29) | 11 (follow-up) | historic-architecture + visual-wow | – / ★ | S | 0 | [ ] |
+| KB-I99 | Near-facade shadow quality: speckled, detached balcony shadow (66) | 11 (follow-up) | visual-wow | – / ★ | S | ≤ +0.2 ms | [x] (wave-11 review fix: the near map's depth bias in metres, 1.16 m → 6 cm in walk mode; also ends the sun leaks on the upper walls at 06 / 22 / 29) |
+| KB-I100 | Plan elevations draw the KB-B01 garden-front relief (Lisenen, keystones, croisée-porte) | 11 (follow-up) | historic-architecture (plans) | ★ / – | S | 0 | [ ] |
 
 Waves: **0** foundations · **1** headroom and light (audit pass 1), closed by two cheap, well-evidenced quick wins
 (KB-I15 palette, KB-I14 ground colours) that need the calibrated light to be judged · **2** the 1789 landscape, the biggest truth and
 "wow" lever · **3** facade truth · **4** building and room corrections · **5** garden detail · **6** cinematic
-polish (audit passes 2–3) · **later** needs headroom or a decision.
+polish (audit passes 2–3) · **10** an audit-driven look and truth pass over `wave9-final` (ranked audit; garden, look,
+architecture) with its follow-ups KB-I90…I94 · **11** the next audit pass (Gewannflur, candle light, star licence,
+garden-front relief, room hierarchy; KB-I84, KB-I93, KB-I95 and parts of KB-I43 / I81 / I92 / I94) with its follow-ups
+KB-I96…I100 · **later** needs headroom or a decision.
 
 ---
 
 ## Wave 0: foundations
 
-### KB-I01 · Viewer pose and look hooks for reproducible reviews `[x] (uncommitted)`
+### KB-I01 · Viewer pose and look hooks for reproducible reviews `[x]`
 - **Why:** before/after pairs only mean something at identical cameras. The audit asks for `skb.pose`, `skb.look`,
   `skb.quality` and `skb.tour` (visual-audit §7). Today the poses live only in the skill's `scripts/shots.mjs`.
 - **Payoff:** – / ★ (enables every later check). **Effort:** S. **Perf:** 0.
@@ -336,7 +438,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `skb.look()` sets the display look ('doku' / 'kino', KB-I06), not a camera target. `skb.quality` exists;
   `skb.tour` (visual-audit §7) is still missing → KB-I46.
 
-### KB-I02 · Catalogue fact fixes (names, dates, tags, sources) `[x] (uncommitted)`
+### KB-I02 · Catalogue fact fixes (names, dates, tags, sources) `[x]`
 - **Why:** cheap corrections with no geometry, all documented:
   - KB-B23 → "Hundezwinger", kennel for the pack, **D** (Mannlich: "ein Zwinger für tausend Hunde"; research/10 §b.3).
   - KB-B11 → "Orangerie, Nordflügel"; KB-B12 → "Orangerie, Südflügel mit Komödienhaus (ab 1783)" (10 §b.2, D).
@@ -420,7 +522,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 
 ## Wave 1: headroom and light (visual-audit pass 1)
 
-### KB-I04 · Shadow caching and soft radius `[x] (uncommitted)`
+### KB-I04 · Shadow caching and soft radius `[x]`
 - **Why:** every caster is static, yet the shadow map is redrawn every frame (+1.95 M triangles at view-west); r187
   removed `PCFSoftShadowMap`, so the setting at `viewer/src/main.ts:38` is a no-op and edges are hard (console
   warning; visual-audit §3, §5.5, P2) [measured].
@@ -443,7 +545,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   4.36 M to 2.40 M, because the shadow pass is skipped. The bench at 01/03 is in the KB-I05 table. Pose 01's GPU time
   rose for reasons outside this item (see KB-I55).
 
-### KB-I05 · Render scale and quality presets `[x] (uncommitted)`
+### KB-I05 · Render scale and quality presets `[x]`
 - **Why:** full retina (DPR 2) already misses 60 fps in aerials: 13–21 ms at 3024×1964 (visual-audit §3, P7)
   [measured]. `preserveDrawingBuffer: true` (`main.ts:32`) costs bandwidth on tile GPUs and is not needed for
   screenshots (CDP capture works).
@@ -473,7 +575,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   because headless timings drift between sessions.
   Not verified: the adaptive scale on a real retina display (headless DPR 1 makes it inert), and real rAF pacing.
 
-### KB-I06 · Calibrated light budget (sun, sky IBL, exposure, twilight) `[x] (uncommitted; wave 7: Kino golden hour)`
+### KB-I06 · Calibrated light budget (sun, sky IBL, exposure, twilight) `[x] (wave 7: Kino golden hour)`
 - **Why:** image-based light is effectively off (`environmentIntensity` 0.02–0.07, `main.ts:104`); the env map is
   built from the unscaled Preetham sky while the visible sky is scaled ×0.3, so gilding reads olive and glass empty.
   Naively raising it blew the image out to cyan and lit interiors with sky (visual-audit §4.1, §5.2, P3; `ab-*.jpg`).
@@ -577,7 +679,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   fix (4.6 / 5.9 / 7.2 at 10:30 / 17:30 / 19:00, within ≤ 6 / ≤ 8) and Dokumentation light is unchanged since; the
   ratios were not re-measured in this session.
 
-### KB-I07 · Height fog and sky-matched haze `[x] (uncommitted)`
+### KB-I07 · Height fog and sky-matched haze `[x]`
 - **Why:** distance haze is a fixed cool hue (`main.ts:43`, `:105`) that does not match the sky; golden-hour aerials
   get a brown horizon band (visual-audit §4.1, §5.4 level 1, P4).
 - **Payoff:** – / ★★★ (aerial depth). **Effort:** S. **Perf:** ~0.
@@ -598,7 +700,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   show layered blue distance (`docs/shots/KB-I07/`). The fog switch costs nothing measurable in A/B.
   `docs/architecture.md` doesn't describe the chunk override yet (see Discovered).
 
-### KB-I08 · Hero hour and time presets `[x] (uncommitted)`
+### KB-I08 · Hero hour and time presets `[x]`
 - **Why:** the default 10:30 (56° sun) gives flat light. The Ehrenhof front faces west, so its hero hour is about
   17:30 (sun 22° from 278°); the garden front wants about 07:00 (25° from 85°) (visual-audit §2 sun table, P6;
   research/02 §3.3 N).
@@ -615,7 +717,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   Wave 2: the hero-hour light was retuned under KB-I06 (warmer mid-band sun, paler sky);
   `docs/shots/KB-I08/after-wave2-14-ehrenhof-hero.jpg` and `after-wave2-15-garden-hero.jpg`.
 
-### KB-I55 · Wave-1 aerial GPU regression: diffuse sky via SH probe, PMREM on glossy only `[x] (uncommitted)`
+### KB-I55 · Wave-1 aerial GPU regression: diffuse sky via SH probe, PMREM on glossy only `[x]`
 - **Why:** after wave 1, aerial poses at 3024×1964 roughly doubled: 01 10.5 → 22.8 ms, 02 12.5 → 20.5, 08 13.5 →
   23.5, 12 12.2 → 19.7, 13 14.6 → 23.6 [measured, `shots.mjs --bench`; before and after are from different
   sessions]. At 1080p, 01, 02 and 08 rose +2.3 to +3.8 ms, which breaks the +1 ms-per-item budget. This happened
@@ -648,7 +750,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   - Acceptance "01 and 08 back to ≈ 10–14 ms retina in a same-session A/B": met, see the KB-I59 table (01 4.5–6.6,
     08 4.9–7.4 ms medians). Grey-card ratio untouched (no light-budget change).
 
-### KB-I59 · Terrain and ground shading cost at retina `[x] (uncommitted)`
+### KB-I59 · Terrain and ground shading cost at retina `[x]`
 - **Why:** promoted from Discovered (wave 2, perf). Wave 3 (same-session A/B by the vegetation implementer): hiding
   the terrain takes pose 01 at 3024×1964 from 21.4 to 7.9 ms with the forest still drawn, so ~13 ms is terrain and
   ground shading; forest full vs lite detail differs by ≤ 0.3 ms. KB-I56 cut per-pixel grass taps, but the bench
@@ -781,7 +883,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 
 ## Wave 2: the 1789 landscape
 
-### KB-I09 · 1789 land cover instead of today's forest `[x] (uncommitted)`
+### KB-I09 · 1789 land cover instead of today's forest `[x]`
 - **Why:** the forest is "today's canopy > 8 m and > 40 m from features" (`scripts/prepare-terrain.py` ~l. 281–282,
   class 6), so the palace sits in a clearing. The Pleine vue 1791, Petri's plan (BSB Cod.icon. 180 h, 26r) and HMS
   show an open, cultivated ridge: meadows, fields, a vineyard, avenues, forest only as belts and on the E plateau
@@ -836,7 +938,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   The look follow-ups (soft class edges, meadow, fields, micro-relief) are KB-I56. `viewer/src/main.ts` still reads
   the parcels through an `as unknown as { landcover? }` cast (Discovered, wave 3).
 
-### KB-I10 · Forest tiling, culling and impostors `[x] (uncommitted; aerial budget met via KB-I59)`
+### KB-I10 · Forest tiling, culling and impostors `[x] (aerial budget met via KB-I59)`
 - **Why:** 28,381 trees in 4 InstancedMeshes with ~2.15 km bounding spheres are never culled and are drawn in the
   main and shadow passes; hiding them took view-west from ~13 to 4.1 ms (visual-audit §3, P1) [measured].
 - **Payoff:** – / ★. **Effort:** M. **Perf:** −3 to −9 ms aerial.
@@ -869,7 +971,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   3024×1964 in 4.3 / 4.0 / 4.0 ms (1080p 2.9 / 2.7 / 2.6), so the ≤ 12 ms aerial budget this item missed is met.
   The low-poly far tier stands in for impostors (Decisions log); closed.
 
-### KB-I11 · Tree species, shapes and young avenue trees `[x] (uncommitted)`
+### KB-I11 · Tree species, shapes and young avenue trees `[x]`
 - **Why:** only tilia, malus, aesculus, forest and citrus exist, every crown is a lobed icosahedron, and
   `speciesFor()` (`model/src/site/trees.ts:32–36`) maps every "kastanie" to *Aesculus*, although the Herzogskastanien
   were sweet chestnuts (research/11 G5, S4) [D de.wikipedia "Esskastanien"]. Avenues and clumps were young in 1789
@@ -897,7 +999,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   the standard poses (implementer close-up only), and their presence at lod ≤ 1 is tested (TF-10 in the site build).
   Shots 03 and 04 show no trees near the camera. Note: a conifer in deep shade reads almost black at 02.
 
-### KB-I12 · Herzogsgarten: Petri's lawn garden replaces the TF-09 parterre `[x] (uncommitted)`
+### KB-I12 · Herzogsgarten: Petri's lawn garden replaces the TF-09 parterre `[x]`
 - **Why:** Petri's c. 1788 plan shows an English lawn E of the CdL with a belt walk, clumps, conifers, benches,
   sculpture and four pavilions, and no parterre; Schneider finds no evidence of a Rasenparterre (research/11 §1.2,
   G2, S2) [D BSB 26r via Schneider]. From 1788 Petri began "nach der allerneuesten englischen Mode" (10 §b.7, D).
@@ -985,7 +1087,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   the light layer build. **Missing:** `pnpm run export:explorer` into `../app` and the explorer notice
   (coordinator's step at commit, with KB-I03 and KB-I15).
 
-### KB-I14 · Ground colours: Buntsandstein gravel, sand, hay, fields `[x] (uncommitted; wave 8)`
+### KB-I14 · Ground colours: Buntsandstein gravel, sand, hay, fields `[x] (wave 8)`
 - **Order:** pulled forward into wave 1 as a quick win (index); do it after KB-I06 so the colours are judged under
   calibrated light. The hay and field colours wait for KB-I09's classes.
 - **Why:** gravel is a uniform grey-ochre; period courts used pinkish Buntsandstein grit and yellow parterre sand
@@ -1028,7 +1130,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   (`docs/shots/KB-I14/*-wave8-42-…`, `*-wave8-31-…`): the TF-08 and TF-15 parterre ground reads yellow-sanded instead
   of grey-beige; nothing else in those frames changed beyond the wave-8 lawn and rods. Done.
 
-### KB-I56 · Land-cover look: soft class edges, meadow and lawn, fields, micro-relief `[x] (uncommitted)`
+### KB-I56 · Land-cover look: soft class edges, meadow and lawn, fields, micro-relief `[x]`
 - **Why:** wave-2 review: the 2 m class raster showed as stair steps at field and meadow edges near the camera,
   field and balk fringes read neon, lawn and meadow were too saturated (lawn saturation ≈ 0.42), "regrowth" hay read
   as ploughed soil, the Orangerie foot had an orange fringe, and the DTM micro-relief read as lumpy turf beside
@@ -1097,7 +1199,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   retina median, inside the noise; the wave-3 retina rise at 12 / 13 is not from the ground work. Tests
   `viewer/tests/landcover-review3.test.ts` (10).
 
-### KB-I57 · Hinterland hedgerows and farmstead orchards `[x] (uncommitted)`
+### KB-I57 · Hinterland hedgerows and farmstead orchards `[x]`
 - **Why:** the 1789 hinterland read as bare parcels. The Pleine vue 1791 draws schematic hedge bands [D]; the open
   Gewannflur itself had no hedges [N]; orchards beside farmsteads are typical [N]; the Apfelallee TF-14 is
   documented [D]. All placements are low-confidence hypotheses.
@@ -1170,7 +1272,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   **Missing:** the light-layer re-export (vertex colours change) and the explorer notice. This is the coordinator's
   step at commit, together with KB-I03.
 
-### KB-I16 · French two-leaf casements and class-aware glazing `[x] (uncommitted)`
+### KB-I16 · French two-leaf casements and class-aware glazing `[x]`
 - **Why:** today one glazing rule (~0.42 × 0.48 m panes) applies everywhere and LOD1 draws "one mullion + transom",
   which reads as a Kreuzstock or a late-19th-century T-window. 1780s practice: two leaves on a meeting stile with an
   espagnolette, a transom only on tall windows; HMS shows 2 × 4 panes per sash (09 §3.1, G1–G3, E1)
@@ -1199,7 +1301,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   the Orangerie too far away to judge panes; checked at 03 and 14). Perf: all buildings shown vs hidden at 14 cost
   0–1 ms within noise (implementer A/B); palace group LOD2 543 k → 568 k triangles for KB-I16/I17/I19/I20 together.
 
-### KB-I17 · Plain wings: surrounds, flat Lisenen, no string course `[x] (uncommitted)`
+### KB-I17 · Plain wings: surrounds, flat Lisenen, no string course `[x]`
 - **Why:** HMS and Hautt's practice show plain wings: flat 0.20 m surrounds without hoods, flat 0.6 m corner strips,
   no Gurtgesims; one continuous cornice across the palace group (09 §3.4, G7–G9) [HMS; D Schneider 1988].
 - **Payoff:** ★★ / ★. **Effort:** S. **Perf:** 0.
@@ -1221,7 +1323,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   13 shows the galerie only from 60 m, where the change is too small to judge. **Acceptance met.** AN-01: wings
   without string course.
 
-### KB-I18 · Roof detail: Biberschwanz scale, lead decks, pavilion covers `[x] (uncommitted)`
+### KB-I18 · Roof detail: Biberschwanz scale, lead decks, pavilion covers `[x]`
 - **Why:** the cover split itself is already in the catalogue: slate on the palace group (CdL, B02–B06, Orangerie),
   red tile on stables, farm and service ranges (history-check H18 DONE, 2026-11-02; 09 §2.7, E8 [D PV 1791 colour
   code, HMS]; slate on the main house D via Mannlich, 10 §c.1). What remains: the south-German tile is 38 × 18 cm with a
@@ -1253,7 +1355,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   Biberschwanz rows. At poses 01, 02 and 13 the tile scale is not visible (`before|after-13-galerie-garden-crop-roofs`
   are equal). **Acceptance met** (lead-deck clause vacuous until the catalogue has a flat deck). Perf 0.
 
-### KB-I19 · Limewash, stone and slate variation; light weathering `[x] (uncommitted)`
+### KB-I19 · Limewash, stone and slate variation; light weathering `[x]`
 - **Why:** a fast, additive site had uneven finish: warm limewash for 1778–82 work, cool for 1785–88, streaks under
   sills and cornices (09 §2.4, M3, C2) [D dates; N; I]; recycled Jägersburg/Hohenburg stone varies red to
   yellow-grey to grey-white (M5) [D reuse; I]; slate jitter and lead (visual-audit §5.8, P16).
@@ -1291,7 +1393,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   calm red masonry with faint courses instead of patches. Cost: stone.red ≈ +20 k LOD2 triangles in view at 14 (more
   courses), within noise.
 
-### KB-I20 · Baked vertex AO in the generator `[x] (uncommitted)`
+### KB-I20 · Baked vertex AO in the generator `[x]`
 - **Why:** no AO or contact darkening anywhere; a per-vertex `_AO` on reveals, cornice undersides and the wall foot
   costs nothing at runtime and survives glb export (visual-audit §4.3, §5.8, P9) [I].
 - **Payoff:** – / ★★★. **Effort:** M. **Perf:** 0.
@@ -1326,7 +1428,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   AO 0.94 against a wall-foot AO of 0.62). Shots `docs/shots/KB-I20/before|after-14-ehrenhof-hero-crop-wave4-plinth`:
   the cellar reveals read as dark recesses; the sunlit left jamb is still a little warmer than the face.
 
-### KB-I21 · Fachwerk flag for timber-framed buildings `[x] (uncommitted)`
+### KB-I21 · Fachwerk flag for timber-framed buildings `[x]`
 - **Why:** the 1793 fire record names timber-framed buildings; the gallery grew from a wooden passage (March 1788)
   (09 §2.3, G4, C1; 10 §b.1 KB-B06) [D existence; I selection].
 - **Payoff:** ★★ / ★. **Effort:** M. **Perf:** 0.
@@ -1352,7 +1454,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   chain; the architecture A/B puts 13 at −0.2 / 28 at +0.1–0.2 ms). Light layer: the flagged nodes grew 0.1–1 k
   triangles each (KB-B06 2.3 → 2.7 k, Wachhäuser 1.2 → 1.5 k against the deployed layer).
 
-### KB-I22 · Roof furniture: Hemmer rods, downpipes, weather vanes `[x] (uncommitted; wave 8: masts on the high points)`
+### KB-I22 · Roof furniture: Hemmer rods, downpipes, weather vanes `[x] (wave 8: masts on the high points)`
 - **Why:** lightning rods "auf allen Gebäuden" (10 §c.1, D); Kurpfalz order Feb 1776, Hemmer's five-point rod on
   Schwetzingen 17 Jul 1776 (09 §2.8, G6, E4) [D; geometry N/U]; downpipes one per ≤ 18 m of eaves (G5, E3) [N];
   vanes on the CdL Dachreiter and pavilion roofs (E5) [HMS].
@@ -1429,6 +1531,11 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `wave9-after`: the guard-house masts are short gilt finials, the palace and Orangerie masts shorter with a spike
   and a small star, no crossbar. Iron stays out of the light layer; against the wave-8 lead export the smaller gilt heads
   take 28–192 triangles off each exported building. Bench 46 / 47 1080p 4.1 / 4.1, 4.5 / 4.7 ms. Done.
+
+- **Wave 10 (architecture):** `HEMMER_ROD` knob 0.055 → 0.07 m, point 0.17 → 0.11 m, `pointRadius` 0.024 m, so the
+  head reads as a knob with short points rather than a star; the points stay level [D NDB]. Grammar only; the rod tests
+  pass. The light layer's `index.json` heights rise by 0.01 m on the buildings with a mast (iron still dropped).
+- **Lead check (wave 10):** at 03 / 14 the heads are small gilt knobs; too small at the standard poses for a pair. Done.
 
 ### KB-I23 · Court furniture: Ehrenhof grille, cobbles, sentry boxes, basins `[~] Marstall basin, Küchenhof pump need located sources`
 - **Why:** Ehrenhof grille with gilt tips on the gate only, cobbled carriage lanes and sandstone gutters in the gravel
@@ -1548,7 +1655,25 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   under the entablature instead of plain strips. The bench shows 2.32 → 2.42 M triangles at 19 (the architecture
   owner's count without the grass blades was unchanged); 1080p 3.7 → 3.5 / 3.6, retina 5.6 → 5.0 / 5.2 ms. Done.
 
-### KB-I25 · Room programme moves (B02, B03, B04, B05) `[x] (uncommitted)`
+- **Wave 10 (architecture, audit #10):** `ROTUNDA.porticoCollar` (with `collar` 0.16, `entasisFrom` 0.33): the attic block
+  is gone (`rotundaLayout().atticBlock` null), the portico roof runs into the drum under a lead flashing collar; columns
+  with entasis, volutes 0.22 D with a flush abacus, the three portico steps in grey-white stone `#CFC8BA`, stronger
+  dome rib rolls; at LOD2 a profiled entablature ring inside (architrave, frieze, cornice) with the marble ceiling ring
+  set inside the cornice [N forms; D T5 Ionic]. Test in `rotunda.exterior.test.ts` (the old attic-block test is
+  `skipIf(porticoCollar)`). Light layer: `KB-B07` 5,859 → 6,125 triangles.
+- **Wave-10 review fix (architecture, audit #10):** the dome read as one grey cap with a spike at the pediment apex and a
+  red-brown podium. `roundRoof(..., gores)` alternates two lead shades per gore (`ROTUNDA.leadGores` `#586066` /
+  `#737B80`, `domeRibs · 4` segments at LOD ≥ 1) with paler roll seams (`leadSeam` `#899095`); the drum plinth, niche
+  sills, reveal caps, podium, colonnade floor and steps are grey-white stone (`ROTUNDA.baseStone` `#CFC8BA`); a lead
+  ridge roll (4 cm, starting behind the raking cornice, closed end) and a saddle flashing where the portico roof meets
+  the dome replace the bare junction; Ionic shaft taper 5/6 [N Vignola; I colours]. Shots 18 / 19 in
+  `scratchpad/wave10-fix-architecture`: gores and seams read, the spike is gone, the base is stone. Bench 18 1080p 4.1 / 4.1, retina 5.2 / 5.2 ms
+  (`wave10-after` 4.1 / 5.1). Light layer: `verify.sh export` 4.37 MB.
+- **Lead check (wave 10):** `docs/shots/KB-I24/*-wave10-18-…` / `*-wave10-19-…`: the box over the portico is gone, the
+  pediment roof meets the drum, the steps are grey stone, and the entablature ring shows inside. 18 1080p 4.1 / 4.1,
+  retina 5.1 / 5.1 ms (min / median of 3; `wave9-final` 3.9 / 4.8). Done.
+
+### KB-I25 · Room programme moves (B02, B03, B04, B05) `[x]`
 - **Why:** the N wing (Duke) held the Silberkammer, a Tanzsaal and a small and large Bildersaal on the 1st OG; the
   Großer Speisesaal was on the upper floor of the kitchen wing KB-B05 with two stove niches; the library was four
   rooms ≈ 52 m on the KB-B04 ground floor, with the Naturalienkabinett and Waffensammlung on the 1st OG; the S wing EG
@@ -1614,7 +1739,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
       `warn.ts` equals the baseline (B04 2, B05 1).
     - Open: GR-15 does not draw the niches, because the plans read the catalogue, not the interior model.
 
-### KB-I60 · Exposure inside glazed garden rooms (Tempelzimmer) `[x] (uncommitted)`
+### KB-I60 · Exposure inside glazed garden rooms (Tempelzimmer) `[x]`
 - **Why:** wave-4 lead check. Pose 19 (inside the KB-B07 rotunda, 08:00) is washed out to near white: `cameraInside()`
   in `viewer/src/main.ts` applies the indoor EV (+1.4 by day, KB-I06) and the candle ambient inside every building
   footprint, but KB-B07 has `interior: 'none'` and five glass doors, so it is lit like the outside [measured, shot
@@ -1642,7 +1767,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   outside test always fires); the flat door leaves leave gaps to the curved openings, with the garden visible beside
   them; the "Granitsaal" walls read grey-mauve and the bench is a two-colour box.
 
-### KB-I61 · 1789 terrain re-run for the rotunda, colonnade and Bibliothekspavillon `[x] (uncommitted)`
+### KB-I61 · 1789 terrain re-run for the rotunda, colonnade and Bibliothekspavillon `[x]`
 - **Why:** wave-4 lead check. `viewer/public/terrain/` was prepared before KB-I24, so the 1789 terrain still carries
   the levelled square pad of the old KB-B07 pavilion: a pale pad around the colonnade at 13 and a hollow beside the
   portico at 18; KB-B06a, the new portico and the colonnade have no pads [measured, shots `docs/shots/KB-I24/`].
@@ -1665,7 +1790,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   (`docs/shots/KB-I61/`) the plinth sits on the lawn, and the GARD wall behind now shows piers and stepped bays
   instead of a blank slab (`site/gardenWall.ts`).
 
-### KB-I26 · State-room finish system (Tapetenleisten, dado, parquet, supraportes) `[x] (uncommitted)`
+### KB-I26 · State-room finish system (Tapetenleisten, dado, parquet, supraportes) `[x]`
 - **Why:** silk panels framed by gilt Tapetenleisten above a 0.9 m dado; Jacob's panelling and gilt silk-frame mouldings
   (5 March 1782 suite); Lyon silks; parquet de Versailles (~0.97 m panels) in state rooms; supraportes over enfilade
   doors; candle-only light (09 §4, I1–I5, I7, G12) [D; N sizes]; "Antichambre Nr. 8" with 2 bergères + a Jacob set
@@ -1776,7 +1901,29 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   of the plain white pedestal stove. Cost: the architecture A/B gives 29 +0.18 ms median at 1080p but +2.6 ms median
   (+1.7 min) at retina; this session 29 is 2.0 → 2.8–3.0 / 3.4 → 4.6–5.2 ms (cross-session, post chain included).
 
-### KB-I27 · Named room colours, collection rooms, gallery interior `[x] (uncommitted)`
+- **Wave 10 (architecture, audit #9, partial):** Louis-seize seat furniture (`interior/furniture.ts`): `lsLeg` (box dé,
+  fluted 8-gon shaft, toupie foot) and `seat()` with a bowed front rail, oval medallion backs on chairs and fauteuils,
+  an arched top rail on the canapé, arm supports with manchettes and a domed squab; the cove reaches further
+  (`shell.ts`: `cr = max(c · 0.9, min(0.7, clear · STATE_ROOM.coveReach))`, `coveReach` 0.09) with the gilt bead and the
+  Deckenspiegel margin adjusted [N; I]. Interior triangles per building after slimming: B01 181,064, B02 283,992, B03
+  239,204, B04 178,538, B05 61,396, B06 285,536 (all ≤ 300 k; B02 was 372,960 in a first cut). Not done: carved
+  trophies and garlands on the panel fields (no source for the motifs; geometry budget).
+- **Lead check (wave 10):** `docs/shots/KB-I26/*-wave10-20-…`, `*-wave10-29-…` and 07: medallion-back chairs and canapés
+  instead of boxes; the deeper cove reads at 20. 20 1080p 2.5 / 2.5, retina 3.5 / 3.5 ms (`wave9-final` 2.3 / 3.3). The reveal blow-out at
+  20 / 28 / 29 is KB-I92. Partial (trophies).
+- **Wave-10 review fix (architecture):** seats: a slim moulded oval (`TubeGeometry` on an ellipse, 16 × 3) instead of
+  the 12-gon ring, a carved ribbon knot on the crest (noeud de ruban) [N], a half-ellipsoid domed squab, the medallion
+  upholstery as an 18-gon disc, the canapé on six legs with a padded back following the arched top rail (rail
+  undersides and hidden dé tops dropped to stay in budget). The copper candelabra at 07 came from `night.ts` picking the
+  first material named `metal.gilt`, which was the Küchenbau's copper pans (`tint('metal.gilt', '#b87333')`); the pans
+  are now `tint('metal.iron', '#b87333')`, so the candelabra and chandelier are gilt again (07). `STATE_ROOM.coveReach`
+  0.09 → 0.14: the cove drops 0.26 m in the B01 state rooms (window heads 3.80 m of 4.10 m clear), 0.49 m in B02 / B03 /
+  B05 and 0.72 m in B06; it applies to every panelled / silk room with a flat ceiling [I]. Interior triangles: B01
+  188,584, B02 299,418, B03 248,162, B04 183,664, B05 64,442, B06 287,862 (≤ 300 k; a first cut of the review chairs had
+  B02 at 375 k). Shots 06 / 07 / 20 / 29 in `scratchpad/wave10-fix-architecture`. Bench 20 1080p 2.3 / 2.4, retina 3.1 / 4.4 ms (three runs,
+  min / median; `wave10-after` 2.5 / 3.6), 06 2.4 / 3.1, 3.4 / 4.3 ms (2.6 / 6.0).
+
+### KB-I27 · Named room colours, collection rooms, gallery interior `[x]`
 - **Why:** documented room names carry colours (Gelber Salon, Blauer Salon, Grauer Salon, Grünes Schlafzimmer…;
   10 §c.2) [D names; N hues; U positions]; damask in three contrasting colours with broad gold borders (Mannlich) [D];
   gallery green damask with arabesques, 20 crystal chandeliers, 104 gilt curule chairs; library oak cases with a
@@ -1829,7 +1976,14 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
     form N]. At distance the X still reads a little like a folding stool.
   - Gelber Salon suite: pearl silk cover, see KB-I26.
 
-### KB-I28 · Orangerie: white joinery, Komödienhaus annex, workshops `[x] (uncommitted)`
+- **Wave 10 (architecture, review-1 leftover 21):** the Hofbibliothek cases (`fixtures.ts` `oakBookcase`): each bay is a
+  framed door with a lozenge brass-wire lattice over pleated crimson taffeta (two alternating fold depths), books
+  behind; a seeded ≈ 25 % of the doors stand open at right angles and show the shelves (`mulberry32(seed ^ 0x51ed27)`);
+  grammar `STATE_ROOM.library` (`taffetaFold`, `doorFrame`, `openShare`) [D-> wire-door library cases; N forms].
+- **Lead check (wave 10):** `docs/shots/KB-I27/*-wave10-21-…`: wire doors over pleated taffeta with one open case,
+  instead of flat red gingham. 21 1080p 3.0 / 3.0, retina 4.7 / 4.9 ms (`wave9-final` 2.8 / 4.2); 1,025 calls (1,015), 1.39 M triangles. Done.
+
+### KB-I28 · Orangerie: white joinery, Komödienhaus annex, workshops `[x]`
 - **Why:** "meterhohen, weiß gestrichenen Fenstern und Toren", a bright hall; no louvred shutters on the hall tier
   [I]; the 1783 Komödienhaus with boxes was attached to the S side wing (KB-B12), with a floor convertible for dancing;
   gunsmith's and clockmaker's workshops in a side wing (10 §b.2, §c.1) [D; I form].
@@ -1863,7 +2017,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 - **Decision:** the Orangerie has no louvred shutters on any tier or wing; the upper tier has sill windows, not
   French doors.
 
-### KB-I29 · Menagerie: 19 slate-roofed houses, terrace rows, island pavilion `[x] (uncommitted)`
+### KB-I29 · Menagerie: 19 slate-roofed houses, terrace rows, island pavilion `[x]`
 - **Why:** KL-B40 was a circular layout of 19 square, slate-roofed, separated houses around a moat (T20); KL-B43 had
   straight rows of single-storey heated houses with grilles, a water channel and an 11-foot (~3.6 m) net; KL-B41 island
   pavilion foundations were found in 2016 (10 §b.4) [D; I details]. Modern Cor-Ten consolidation must not enter the
@@ -1900,7 +2054,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   ms, retina 5.6 / 6.4 ms, 126 calls; 38 (new) 1080p 5.8 / 5.9 ms, retina 6.8 / 7.0 ms, 980 calls, 3.65 M tris (beech
   wood in view).
 
-### KB-I30 · Unplaced items and new staffage entries (zones only) `[x] (uncommitted; garden residuals done in wave 8 via KB-I71)`
+### KB-I30 · Unplaced items and new staffage entries (zones only) `[x] (garden residuals done in wave 8 via KB-I71)`
 - **Why:** UP-08 Chinoiserie belongs to the Karlslust S of the Schwanenweiher (V23 no. 31; HM_1950_108); UP-05 and UP-09
   lie in a zone SE of the Orangerie; UP-06 Ananashaus → the Treibhäuser KB-B54–56; new entries: Wintervogelhaus,
   Monopteros (W end of the Karlsbergweiher), Felsenpfad, Wassermaschine (NW slope), Seidenhasenhaus / Schießhaus /
@@ -1932,7 +2086,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   the rod (`FOLLY.monopteros`, N). Shots 45, 39 and close-up 95 in scratchpad `wave7-fix-architecture/` (close-ups in `close/`). KB-B91 being visible at 11 / 13 (review
   note) is a lead-check correction, not a geometry change.
 
-### KB-I31 · S-wing Altan `[x] (uncommitted)`
+### KB-I31 · S-wing Altan `[x]`
 - **Why:** "Mauerrest des südlichen Schlossflügels mit Fundamenten des Altans" (T5 Abb. 11; 10 §b.1) [D existence;
   U position].
 - **Payoff:** ★ / ★. **Effort:** S. **Perf:** 0.
@@ -1967,7 +2121,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 
 ## Wave 5: garden detail (research/11)
 
-### KB-I32 · Garden pavilions behind the palace `[x] (uncommitted; KB-B28 and its apse in wave 8; octagon U)`
+### KB-I32 · Garden pavilions behind the palace `[x] (KB-B28 and its apse in wave 8; octagon U)`
 - **Why:** Petri's plan shows four pavilions: a round double-domed pavilion SE of the CdL (1785–1792, then the
   Karlslust "Eremitage"), the square "Pavillon zu Carlsberg" with an E apse in a circular clearing ~250 m E of the
   Küchenflügel, a round pavilion above the Hirschwürzloch, an octagonal point de vue (11 §1.2, G8, S5 1–4)
@@ -2028,7 +2182,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   half-dome sits on a blank E wall and cuts no window. The blank 10 × 8 m wall reads plain (blind-window articulation
   optional, Discovered). Other rotated `axisRect` buildings may share the side mix-up → KB-I79. Done.
 
-### KB-I33 · Benches, sculpture, aviaries `[~] (uncommitted)`
+### KB-I33 · Benches, sculpture, aviaries `[~]`
 - **Why:** 52 green-painted garden benches in the Orangerie cellar (Schügens damage list via Schneider; 11 §0, §1.3,
   S6) [D colour]; a yellowish sandstone Flora herm survives
   (O1; 10 §b.7) [D]; aviaries documented (11 S6) [D presence].
@@ -2051,7 +2205,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   - Light layer: new node `site:HG-41` (herm, 132 triangles, stone); the benches are not exported.
   - **Partial.**
 
-### KB-I34 · Parterre à l'angloise for TF-08 and TF-15, treillage, tubs `[x] (uncommitted; TF-08 pose → KB-I63)`
+### KB-I34 · Parterre à l'angloise for TF-08 and TF-15, treillage, tubs `[x] (TF-08 pose → KB-I63)`
 - **Why:** today's 0.45 m hedge boxes read as kerbs (review screenshots; 11 G3, G9, G10). d'Argenville's parterre à
   l'angloise (lawn panels, 1.0–2.0 m plates-bandes with 0.2 m box edges, sanded sentiers, yew cones every 3.9 m); 2.2 m
   green treillage with arched portals around TF-08 (Le Clerc via Schneider fn 27; HMS) (11 S7, S8) [N; D].
@@ -2108,7 +2262,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   Shots 35, 31, p3 and o1 (scratchpad `wave6-fix-vegetation/final`): round dark glossy heads with fruit on slim
   stems, uniform rows. **Residual:** bright sheen patches on the head tops in full sun.
 
-### KB-I35 · Vineyard (LP06 30) `[~] (uncommitted; 3D stakes done, over the +1 ms budget at pose 40)`
+### KB-I35 · Vineyard (LP06 30) `[~] (3D stakes done, over the +1 ms budget at pose 40)`
 - **Why:** the Pleine vue draws red-brown vine rows, legend "x. La vigne"; LP06 30 (11 S10; 10 §b.6 V23 no. 6)
   [D; N/I dimensions].
 - **Payoff:** ★★ / ★★. **Effort:** M. **Perf:** +0.1 ms (stakes at LOD0 only).
@@ -2177,7 +2331,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   KB-I73. Bench 41: 1080p 3.8 (single run) → 5.0 / 5.2, retina 14.8 → 7.1 / 7.4 ms (the retina drop is the KB-I65
   glass fix); 40 1080p 4.2 → 3.8 / 4.1. Status stays partial (budget at 40 and the far parcel).
 
-### KB-I36 · Kitchen gardens and the Holländische Gärtnerei `[x] (uncommitted)`
+### KB-I36 · Kitchen gardens and the Holländische Gärtnerei `[x]`
 - **Why:** LP06 11, 34, 45, 47 and K05 parcels; Mistbeet frames; espaliers; Petri's two S-facing greenhouses; the
   Treibhäuser grew figs, peaches, coffee, papaya, pineapple and melons (11 G12, S11; 10 §b.3) [D; N].
 - **Payoff:** ★★ / ★★. **Effort:** M. **Perf:** +0.2 ms.
@@ -2230,7 +2384,9 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   **Open (garden owner, `site/gardenDetail.ts`):** the hotbed frames in front still read as blue PV strips at 32 / 13;
   the same inward-facing pane trick would fix them.
 
-### KB-I37 · Water: pond edges, jets, reflections `[~] (uncommitted; pose 39 done; SSR stripes → KB-I69, Schwanenweiher jet and Findlinge open)`
+- **Wave 10:** the hotbed lights are done as KB-I82 (timber sashes, propped / off / limewashed).
+
+### KB-I37 · Water: pond edges, jets, reflections `[~] (pose 39 done; SSR stripes → KB-I69, Schwanenweiher jet and Findlinge open)`
 - **Why:** ponds are flat planes; Findlinge on the Schwanenweiher dams and tumulus, a fountain jet there, a shell
   niche (11 G13, S12) [D]; water reflects nothing (visual-audit §5.7, P15).
 - **Payoff:** ★ / ★★. **Effort:** M. **Perf:** +0.5…2 ms when a reflector is active.
@@ -2273,7 +2429,21 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   bank on the left reads as a steep faceted cut (Discovered). Still open: SSR stripes (KB-I69), `fountain_h` on TF-32,
   the Findlinge (KB-I54).
 
-### KB-I38 · Herzogskastanien grove `[x] (uncommitted)`
+- **Wave 10 (look, wave-9 leftover):** the basin jet reads as water: a thinner, tapered column, clear in the middle
+  with aerated rims and rising streaks; a 32-segment curtain breaking into strands, denser edge-on; a soft crown, a
+  faint haze dome and a churned foam ring where the curtain lands (`water.ts` `jetPartMaterial`, per-part alpha
+  animated by `waterTime`); curtain, foam and droplets drift down-wind (`jetDrift` / `jetFallTime`, ≈ 0.6 m at the water
+  for the 5 m jet, toward local (0.8, −0.6) like grass and foliage). Tests `water.test.ts` (+2). Close-ups in
+  `docs/review/wave10-look/jet-*.jpg`.
+- **Lead check (wave 10):** `docs/shots/KB-I37/*-wave10-16-…-crop-jet.jpg`: a slim translucent column and curtain instead
+  of a frosted cone on a white rod. The Schwanenweiher jet and Findlinge stay open. Item stays partial.
+- **Wave 11 (garden) and lead check:** column, crown and curtain gain up to 60 % opacity at 20–70 m (`GARDEN.basinLook.jetFar`
+  / `jetFarGain`, `features.ts` `keepFarOpacity`) [I]. Measured in the jet region (1080p, `wave10-final` → `wave11-after`):
+  mean grey 170.6 → 172.4 at 17 and 154.1 → 155.1 at 16, 8–11 % of the pixels change by more than 8 levels; at full
+  frame the change is subtle (`docs/shots/KB-I37/*-wave11-17-…-crop-jet.jpg`). Done for 17; the item stays partial
+  (Schwanenweiher jet, Findlinge).
+
+### KB-I38 · Herzogskastanien grove `[x]`
 - **Why:** sweet chestnuts above the Hirschwürzloch (11 G17, S13) [D species and place; I layout].
 - **Payoff:** ★ / ★. **Effort:** S. **Perf:** +0.05 ms.
 - **Files:** `scripts/catalogue-v2/terrain.ts` (`clump` with `mix`), needs KB-I11.
@@ -2284,7 +2454,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 - **Lead check (wave 5):** the data and tests meet the acceptance (25 trees, 9 m grid, 6–8 m). At 02 the grove cannot
   be told apart from the surrounding clumps, so the shot evidence is weak; there is no pair in `docs/shots/`.
 
-### KB-I39 · Karlslust follies of 1789 `[x] (uncommitted; wave 8: KL-B50 double roof)`
+### KB-I39 · Karlslust follies of 1789 `[x] (wave 8: KL-B50 double roof)`
 - **Why:** a Chinese pavilion, a Turkish pavilion and tent, a hay-wagon folly and an aviary are documented but not
   located; KL-12 has no Eremitage before 1792 (11 G16, S14; 10 §b.4) [D presence; U positions].
 - **Payoff:** ★★ / ★★. **Effort:** M. **Perf:** +0.1 ms.
@@ -2346,7 +2516,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 - **Acceptance:** blocked until a georeferenced historic map gives the road line (KB-I54); then avenue trees with
   tags and low or medium confidence; shots 01, 13.
 
-### KB-I63 · Garden detail at eye level: flowers, bean rows, herm, shrub limbs; garden shot poses `[x] (uncommitted)`
+### KB-I63 · Garden detail at eye level: flowers, bean rows, herm, shrub limbs; garden shot poses `[x]`
 - **Why:** wave-5 lead check of the garden implementer's eye-level views (`docs/shots/KB-I33/after-eye-herm-bench.jpg`,
   `KB-I34/after-eye-tf08.jpg`, `KB-I36/after-12m-kitchen-garden.jpg`) [measured]:
   - The border flowers of the plates-bandes read as coloured cubes, and the standard roses as lollipops.
@@ -2383,7 +2553,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 
 ## Wave 6: cinematic polish (visual-audit passes 2–3)
 
-### KB-I41 · Post chain: AO, SMAA, bloom, tone mapping, looks `[x] (uncommitted)`
+### KB-I41 · Post chain: AO, SMAA, bloom, tone mapping, looks `[x]`
 - **Why:** no post-processing at all (visual-audit §4, §5.1, §5.3, P5). Options: pmndrs `postprocessing` 6.39.6 +
   `n8ao` 2.0.1 (peer three ≥ 0.168 < 0.188) or r187's built-in `setEffects`. Neutral tone mapping keeps catalogue
   colours as authored ("Dokumentation"); AgX + LUT for "Kino".
@@ -2439,7 +2609,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `scratchpad/wave6-fix-look/tour/`. Dokumentation grading unchanged (exterior poses differ from `wave6-after` by
   the low-resolution sky and by other owners' wave-6 fixes).
 
-### KB-I42 · Glass: crown-glass tint and jitter, far reflections, interior mapping `[x] (uncommitted; wave 7: interior mapping; wave-7 review fix)`
+### KB-I42 · Glass: crown-glass tint and jitter, far reflections, interior mapping `[x] (wave 7: interior mapping; wave-7 review fix)`
 - **Why:** windows read as white frames round empty holes (visual-audit §4.3, §5.9, P8); crown glass was green-grey with
   per-pane waviness, 0.5–1.5° normal jitter catches low sun (09 M6) [N]; regional glassworks in the Warndt [D].
 - **Payoff:** ★ / ★★★. **Effort:** M. **Perf:** +0.2 ms.
@@ -2494,7 +2664,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   - Cost (same session, load ≈ 28, 3 alternations, mapping off by zeroing the mode): 01 1080p min 5.45 vs 5.08,
     retina med ≈ 16 either way; 03 1080p min 4.35 vs 4.55 ms → within noise.
 
-### KB-I43 · Night: lit windows, lanterns, candles, Fest chandeliers `[x] (uncommitted; review fix wave 5)`
+### KB-I43 · Night: lit windows, lanterns, candles, Fest chandeliers `[x] (review fix wave 5)`
 - **Why:** the night Festsaal has non-glowing candles and a black chandelier (shot 07); flames ~1800–1930 K, ~13 lm;
   ordinary evenings lit by table candelabra, chandeliers only for celebrations (SPSG) (visual-audit §5.9, P11; 09 I7;
   Knigge [D]). Lit-window share 10–20 % is U (audit §8 Q4).
@@ -2595,7 +2765,77 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 - **Lead check (wave 9):** 52 (`docs/shots/KB-I43/*-wave9-52-…`): the seam is gone, no NaN blocks. Day poses: the
   sky is unchanged (12 / 30 / 35 / 42 differ only in the ground). Done.
 
-### KB-I44 · Tree look near the camera `[x] (uncommitted)`
+- **Wave 10 (look):** candles in the 07 / 25 default views: a candlestick on each guéridon and 2–3 three-light
+  candelabra on a laid table in the candle-lit rooms (`night.ts` `addTableCandles`, pure `nightlights.ts`
+  `tableCandelabra`); the flames burn with the other candles, no new lights. 25 by day gains the unlit candelabra.
+  Tests `nightlights.test.ts` (+1).
+- **Lead check (wave 10):** `docs/shots/KB-I43/*-wave10-07-…`, `*-wave10-25-…`: a burning candle on the guéridon in the
+  Festsaal by night, candelabra on the Speisesaal table. Done.
+- **Wave-10 review fix (look, 07):** the review asked why the bright floor glint at 07 outshone the candle. It was the
+  Prunktreppe (EG) point light 14 m away, shining through the Festsaal floor and wall from the storey below. Room lights
+  now burn only on the visitor's storey, or within 6 m of it (`indoor.ts` `LIGHT_SPILL_M`, `lightOnStorey`). The visitor's
+  storey is the storey of the nearest burning light. Inside, the post lamp pool uses the table candles
+  (`night.ts` `tableCandleLamps`, candle colour and intensity; `LampSpot.cd`) in place of the outdoor lanterns, so the
+  guéridon top gets its warm pool. At 07 the glint is gone, and the table-to-floor luminance ratio is 61
+  (wave10-after 2.4). A sconce in the 07 frame would need a re-aimed pose, but the poses are frozen and the mantel
+  candelabra sit 0.8 m behind the camera, so the sconces stay architecture's programme. GPU 07 1080p / retina
+  2.1 / 3.3 ms (unchanged). Tests `wave10-look-fix.test.ts`.
+- **Wave 11 (look, 07 "the candles light nothing"):** the room ambient lit every wall alike, the vestibule light on
+  the storey below lit the floor through the ceiling, and the table lamp was a screen-space wash on grey albedo. Now
+  the visitor's room is lit by its own flames (`viewer/src/candleMath.ts` pure, `candleLight.ts`): every lit flame
+  (guéridon candlestick, table and mantel candelabra, sconces, the chandeliers on a Fest night; `night.ts`
+  `flameMeshes` / `flameCentres`) is 1 cd at 1850 K [I: ≈ 13 lm]; flames ≤ 0.9 m apart form a cluster; the four
+  clusters that light the eye most become shadowless inverse-square sphere lights (radius = the cluster's spread,
+  carried in `decay` through a patched `getDistanceAttenuation`, every other light keeps decay 2 exactly); the rest
+  plus the inter-reflected flux Φρ / A(1−ρ) (ρ 0.45) set the room ambient (never below the former
+  `CANDLE_AMBIENT_LUX`). Flameless model room lights (stair halls) keep their own cd. The indoor exposure key is
+  3 lx (`light.ts` `CANDLE_KEY_LUX`, was 5) and the scotopic grade runs at 0.35 indoors (`INDOOR_NIGHT_VISION`), so
+  the warm pools stay warm. Results: 07 ordinary night clusters 5 / 5 / 1 cd, ambient 0.34 lx, a warm pool on the
+  guéridon and parquet, the walls falling off with distance; 07 Fest 14 chandelier flames, ambient 0.78 lx, the
+  ceiling lit; 20 night candelabra pools on the linen with gilt glints; 28 night the window candelabra. The fixed pool
+  of four lights never changes the lit programs; by day it is off (zero lights, no cost). GPU A/B in one session
+  (6 interleaved rounds, load ≈ 19, min / median, pool vs wave-10 lights): 07 night 1080p 2.13 / 2.27 vs
+  2.07 / 2.21 ms, retina 2.92 / 3.23 vs 2.95 / 3.27 ms; 07 Fest 1080p 2.32 / 2.52 vs 2.32 / 2.46, retina
+  3.33 / 3.53 vs 3.25 / 3.41 ms (≤ +0.12 ms; budget +0.5 ms). Tests `candleMath.test.ts`, `wave10-look-fix.test.ts`,
+  `light.test.ts`. Shots `docs/review/wave11-look/`.
+- **Lead check (wave 11):** 07 (`docs/shots/KB-I43/*-wave11-07-…`): the room reads now: a warm pool on the guéridon top
+  and the parquet round it, the wall panels, carved heads and chandelier visible, instead of a near-black floor with one
+  lit table top (mean grey difference 23 against `wave10-final`). The falloff with distance is gentle; the frame reads
+  as a lit room rather than a single candle, which matches four clusters of 5 / 5 / 1 cd plus the inter-reflection.
+  Lead bench (3 full runs, load 13–20): 07 1080p 2.2 → 2.1 / 2.1, retina 3.1 → 2.9 / 3.1 ms. Not verified: walking
+  between rooms at night (the pool updates every 8 frames). Done.
+- **Wave-11 review fix (look, 07 and photo mode: "one candle lights the whole Festsaal evenly, nothing casts a shadow,
+  the tabletop clips to a flat cream disc"):** measured first: at 07 the light on the walls comes from the two
+  five-light mantel candelabra 1 m beside the camera (a flash: their falloff runs away from the eye), plus a room
+  ambient of 0.34 lx; the guéridon candle lights only its top. The top was not over-exposed in luminance (≈ 0.7) but in
+  red (≈ 1.8 exposed): Neutral compresses on the largest channel, so its 1 : 1.75 falloff showed as 1 : 1.07. Changes:
+  - Ambient (`candleMath.ts`): only the second and later bounces fill the room evenly, Φρ² / (A(1−ρ)) =
+    ρ · bounceLux (`diffuseBounceLux`); the first bounce leaves the table, parquet and chimneypiece next to the flames
+    and stays a pool [I]. Floor while the pool burns `POOL_FLOOR_LUX` 0.05 lx (was 0.15). 07: 0.34 → 0.15 lx, so a
+    1 cd flame's pool reaches ≈ 2.5 m before the ambient takes over; Fest night 14 + 11 flames ≈ 0.35 lx.
+  - Shadows (`candleLight.ts`, `CANDLE_SHADOW`): pool light 0 is the brightest cluster in view (`shadowClusterIndex`,
+    within ≈ 55° of the view direction; a light behind the viewer throws its shadows behind the objects) and casts a
+    512² cube shadow, drawn again only when that cluster moves. The furniture of the visitor's interior (instanced
+    furniture except chandeliers and lanterns, laid tables, candlesticks) casts into it only while the pool burns, so
+    day views and the sun map are as before; a flame's own candlestick does not cast (its true shadow falls under the
+    foot; the PCF filter drew a hard ring). A single flame takes one hardware-filtered tap (`shadow.radius` 0, near-hard
+    as a 1 cm flame gives), a spread cluster (candelabrum, chandelier) five taps at radius 8 (`shadowTaps.ts` patches
+    three's point PCF block: one tap at radius 0, else constant offsets with one cos / sin pair). At 07 the guéridon
+    top now throws its ellipse on the parquet round the foot and the chairs their shadows on the wainscot; the
+    blob-shadow alternative was not needed.
+  - Tone (`interiorGrade.ts` `indoorToneParams`, post.ts): the indoor shoulder also runs by candle light, measured on
+    the largest channel (knee 0.35, s 0.15, second stage off; blended from the day curve by the night factor; the AO
+    bright fade keeps its day-only weight). 07 tabletop red 244–251 → 197–213 on screen (≤ 0.84), its falloff
+    visible; the flame stays at 254; walls 87 → 65, parquet 32 → 23 (mean grey).
+  - Not done here (architecture's file): the guéridon top is a 16-gon (`model/src/interior/furniture.ts`
+    `cyl(0.36, 0.36, 0.04, 16)`); its facets show at 1:1 and in the 2× photo → raise to 32 segments (cross-owner).
+  - GPU, same session, 4–5 interleaved rounds (load 2–4), shadow on / off: 07 single-flame shadow 1080p 2.40 / 2.20 ms
+    (+0.2), retina 3.55 / 3.41 (+0.15); with a five-tap cluster shadow (Fest chandelier) +0.3 / +0.7 ms. Full run
+    `wave11-fix-look`: 07 2.3 / 3.5 ms. Photo 3840 × 2160, 16 samples, 0.41 s. Tests `candleMath.test.ts`,
+    `interiorGrade.test.ts`, `shadowsNear.test.ts`, `perf-shading.test.ts`. Not verified: walking room to room at night
+    (the shadow map redraws when the casting cluster changes: 6 faces once).
+
+### KB-I44 · Tree look near the camera `[x]`
 - **Why:** toy-like trees with black trunks (shots 01, 11): leaf-card crowns near the camera (EZ-Tree 1.1.0 variants,
   seeded), inner-crown AO, wrap and back-light, wind sway, lighter beech bark, forest-edge band (visual-audit §5.6,
   P10; research/02 §3.2). Atlases must be CC0.
@@ -2700,7 +2940,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   33 1080p 2.2 → 3.5–3.9 ms and retina 3.2 → 8.0–8.2 ms, 34 2.5 → 3.9–4.2 / 13.5 → 9.7–10.1 ms (cross-session, post
   chain included; KB-I65).
 
-### KB-I45 · Ground detail: wear masks, lawn variation, hedge bevels `[x] (uncommitted; Ehrenhof wear in wave 8)`
+### KB-I45 · Ground detail: wear masks, lawn variation, hedge bevels `[x] (Ehrenhof wear in wave 8)`
 - **Why:** visual-audit §5.6 items 6–7, §5.7, P12.
 - **Payoff:** – / ★★. **Effort:** M. **Perf:** ~0.
 - **Files:** `viewer/src/terrain.ts`, `model/src/site/features.ts`.
@@ -2775,7 +3015,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   straight end on the court axis is older (Discovered). Retina in the full bench (three runs): 33 6.6 / 7.2, 39 6.7 /
   7.4, 47 7.1 / 7.5 ms, within 8 ms but the largest rise of the wave. Done (look follow-up KB-I78).
 
-### KB-I46 · Rundflug (scripted fly-around) `[x] (uncommitted)`
+### KB-I46 · Rundflug (scripted fly-around) `[x]`
 - **Why:** the main "wow" moment; 6 deterministic shots with a `skb.tour(id, t)` capture hook (visual-audit §5.11, P13).
 - **Payoff:** – / ★★★. **Effort:** M. **Perf:** 0.
 - **Files:** new `viewer/src/tour.ts`, `viewer/src/ui.ts`.
@@ -2829,7 +3069,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `docs/shots/KB-I46/*-wave6-goldene-stunde-0.7.jpg` (`skb.tour('goldene-stunde', 0.7)`): warmer key and deeper,
   more legible shade; the horizon sky toward the sun is still pale beige. Dokumentation unchanged.
 
-### KB-I47 · Photo mode `[x] (uncommitted)`
+### KB-I47 · Photo mode `[x]`
 - **Why:** stills with TAA accumulation, 2–3× scale, DOF and burned-in attribution and "Hypothese" label
   (visual-audit §5.11, P14).
 - **Payoff:** – / ★★. **Effort:** S-M. **Perf:** stills only.
@@ -2867,7 +3107,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 
 ## Later, parked, cross-cutting
 
-### KB-I48 · Festbeleuchtung and the "Dezember 1785" scene `[~] (uncommitted; mode done, 1785 scene open)`
+### KB-I48 · Festbeleuchtung and the "Dezember 1785" scene `[~] (mode done, 1785 scene open)`
 - **Why:** the 1785 wedding festivities had illuminations (Fürstenwärther 1786) and fireworks (Mannlich) (research/01
   §4.2; visual-audit §5.9, P17); Mannlich's 1785 rotunda section (Darmstadt Mappe 27/4/4, CC0) gives a spec: steep
   timber truss over a painted sky dome, pink Ionic arcades, green-and-gold piers, lampions (10 §c.4) [D]. With
@@ -2912,7 +3152,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 - **Acceptance:** after KB-I46/KB-I47; flag off by default; exact pin with the reason in the commit; shots 01, 08
   with the flag on; the ECEF↔local transform has a round-trip test (< 1 m at the palace).
 
-### KB-I50 · Static far shadow map or CSM `[x] (uncommitted, wave 8)`
+### KB-I50 · Static far shadow map or CSM `[x] (wave 8)`
 - **Why:** aerial palace shadows (visual-audit §5.5, P19); prefer a static far map.
 - **Payoff:** – / ★★. **Effort:** M-L. **Perf:** +1…3 ms (CSM).
 - **Acceptance:** after KB-I04; palace shadows visible at pose 01 and 08 without acne or swimming while flying;
@@ -2936,7 +3176,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 ### KB-I51 · WebGPU / TSL migration `[-]`
 - Parked: only after the look is settled (visual-audit P20); requires porting `onBeforeCompile` patches and the splat.
 
-### KB-I52 · Review-1 leftovers `[x] (uncommitted; wave 8, architecture)`
+### KB-I52 · Review-1 leftovers `[x] (wave 8, architecture)`
 - SC-02 "Querschnitt B–B" title (review-1 #21); B04 (2 doors) and B05 (1 door) not served by their stairs
   (#18, `verify.sh warn`); jagged foot of the TF-08 retaining wall S of B02; the B02 portico mound (#6 residual; the
   1789 forecourt level is U).
@@ -2958,7 +3198,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   (`docs/shots/KB-I52/after-49-…`): the wall foot runs as a near-straight line; at its W end the terrain dips slightly
   under the wall, and a pale strip marks the ramp at the E end. Bench 49 1080p 4.6 / 4.7, retina 5.8 / 5.8 ms. Done.
 
-### KB-I53 · CdL massing check and concealed stair `[x] (uncommitted; massing kept)`
+### KB-I53 · CdL massing check and concealed stair `[x] (massing kept)`
 - **Why:** Mannlich and Molitor describe the core as a one-storey-plus-mansard country house with projecting wings,
   which argues for a modest CdL rather than the HMS centre pavilion at 366.2 + lantern (10 §b.1) [D text; I massing];
   an optional secret service stair in a cabinet (10 §b.1, T5) [D].
@@ -2991,7 +3231,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   speaks of "eine offene, durch eine Kolonnade abgeschlossene Rotunde", which fits a separate open Rotunde beyond the
   colonnade (KB-B07 alternative). The question needs the Schwan 2012 figures and the T7 inventory order.
 
-### KB-I62 · Light-layer headroom before more exported geometry `[x] (uncommitted)`
+### KB-I62 · Light-layer headroom before more exported geometry `[x]`
 - **Why:** the temp export is 5.93 MB of the 6 MB budget after wave 5: 104 nodes (92 buildings + 12 site), 405,696
   triangles, 695,642 vertices [measured, `verify.sh export`]. Since the deployed 2026-11-01 layer (4.65 MB, 340 k
   triangles), most building nodes have grown by 10–30 % in triangles (the cause has not been split per item; likely the wave-3/4 exterior detail). The GARD walls,
@@ -3026,7 +3266,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   the explorer-side render of the quantised layer (the round trip checks bboxes only). The re-export into `../app`
   still waits for the user's go.
 
-### KB-I64 · Deterministic shots again (animation clocks, a lighting flake at 21) `[x] (uncommitted)`
+### KB-I64 · Deterministic shots again (animation clocks, a lighting flake at 21) `[x]`
 - **Why:** until wave 5 an unchanged scene gave byte-identical JPEGs, which the reviews use to prove "no visual
   change" (verification §2). In `wave6-after` and two repeat runs (same session) the outdoor poses differ run to run
   by mean |Δ| 0.07–0.3/255 in up to ~400 pixels (01, 12, 32, 33, 34, 36; 03 and 06 stay identical) [measured]. The
@@ -3059,7 +3299,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `wave7-after-r2`, `wave7-after-r3`) gave byte-identical JPEGs at every pose, so that acceptance is now met. Not run:
   20 repeats of 19 / 21 (no flake in the 3 runs).
 
-### KB-I65 · Sky and post cost at retina (eye level, interiors) and CPU per frame `[~] (uncommitted; wave 8: retina regression fixed)`
+### KB-I65 · Sky and post cost at retina (eye level, interiors) and CPU per frame `[~] (wave 8: retina regression fixed; wave-10 review: sky-cube refresh in 24 strips + fast fallback, see KB-I86)`
 - **Why:** after wave 6 the aerial budget holds (≤ 7.3 ms at 3024×1964), but eye-level and interior poses got
   expensive at retina: 19 3.1 → 7.1, 33 3.2 → 8.0, 21 5.6 → 7.5–9.3, 34 9.7–10.1 ms (three runs, `wave6-after*`);
   pose 29 +2.6 ms median at retina in the architecture A/B (chimneypiece and stove). The vegetation A/B puts 5–6 ms of
@@ -3130,7 +3370,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   ≤ 6.5), with the new grass blades in the frame (KB-I78). Every pose is ≤ 7.8 ms at retina (median); the aerials 01 /
   08 7.4 / 7.5 ms. Still partial.
 
-### KB-I66 · Forest crowns at 150–300 m and conifer whorls `[x] (uncommitted)`
+### KB-I66 · Forest crowns at 150–300 m and conifer whorls `[x]`
 - **Why:** the wave-6 leaf cards fade out by 220 m, so at 150–300 m (aerials 01, 08, the Rundflug Anflug and Goldene
   Stunde) the mid and close forest crowns still read as faceted polyhedra; the conifer whorls (34, right edge) still
   look like stacked plates (vegetation report, lead check) [measured].
@@ -3189,7 +3429,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 - **Lead check (wave 8):** 01, 08 (`docs/shots/KB-I66/*-wave8-01-…`, `*-wave8-08-…`): the light band of smooth
   domes beyond ≈ 320 m is gone; the far forest reads slightly darker and continuous. Done.
 
-### KB-I67 · Menagerie setting: terrace ground, beech wood, island pavilion as hypothesis `[x] (uncommitted)`
+### KB-I67 · Menagerie setting: terrace ground, beech wood, island pavilion as hypothesis `[x]`
 - **Why:** pose 36 shows the KL-B43 terrace rows on a large bare brown apron, open meadow round the ring and a hedge
   belt N of it, while T1 p. 383 places the menagerie "in Buchenwald" [D]; the island building in the KL-B40 moat
   (KL-B41, PAV, low confidence) reads as a finished pavilion although only its foundations and spiral stair are
@@ -3216,7 +3456,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   so the documented quay/stair stay visible when hypotheses are hidden; terraces without a level keep their LiDAR
   steps (no flattening) and the menagerie's slope ground is meadow under beech, not an apron.
 
-### KB-I68 · Barrière at the valley entrance and the court-mouth post-and-rail fence `[x] (uncommitted; wave 8, garden)`
+### KB-I68 · Barrière at the valley entrance and the court-mouth post-and-rail fence `[x] (wave 8, garden)`
 - **Why:** PV legend 1 "deux petites maisons … pour le corps de garde et la barrière" places a barrier between the
   guard houses KB-B63 / KB-B64 at the valley entrance (LP06 37) [D existence; N/I form]; Le Clerc 1790 draws a
   post-and-rail fence in front of the court-mouth guard houses (research/11 §1.5) [D]. The ≈ 100 km Wildzaun has no
@@ -3268,7 +3508,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `…/scratchpad/wave9-fix-garden/final/`: 47 (a gravel drive rising between the guard houses to the gate), 26, 03, 14, `tour-ehrenhof-0.25.jpg` (the
   Rundflug now reads a walled ramp, no humps). Bench 47 1080p 5.4, retina 7.5 ms.
 
-### KB-I69 · Water SSR comb stripes `[x] (uncommitted; wave-7 review fix, look)`
+### KB-I69 · Water SSR comb stripes `[x] (wave-7 review fix, look)`
 - **Why:** the screen-space reflections (KB-I37) mirror bank trees and buildings as horizontal comb stripes: the
   Karlsbergweiher at pose 39 (`docs/shots/KB-I37/after-wave7-39-…`), the pond in 40, and the wave-6 custom view
   [measured]. Likely the ripple normal sampled per march step, or a step-quantised hit (look and garden reports).
@@ -3288,7 +3528,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   noise; at 01 new min 5.25 / 6.35 vs old 5.92 / 11.9 ms. Not mine: the faceted W bank at 39 comes from
   `scripts/prepare-terrain.py` (garden).
 
-### KB-I70 · Tempelzimmer from inside: see-through glass doors, closed openings `[x] (uncommitted; architecture part in wave 8)`
+### KB-I70 · Tempelzimmer from inside: see-through glass doors, closed openings `[x] (architecture part in wave 8)`
 - **Why:** after KB-I60 pose 19 is legible, but (a) the rotunda's glazed doors are box glass (`exterior/rotunda.ts`,
   `orientedBox` with faces on both sides), so `glassPatch`'s outside test always fires and they read as dark proxy panes
   from inside; (b) the flat door leaves leave gaps to the curved openings, with the garden visible beside them; (c) the
@@ -3319,7 +3559,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   lawn, rods and B02 forecourt pad; the architecture owner's isolated A/B gives 0.29/255 (the door glass now reads as
   slightly darker proxy glass). Bench 19 1080p 5.6 → 3.6 / 3.7, retina 4.9 → 5.7 / 6.0 ms. Done.
 
-### KB-I71 · Setting of the wave-7 follies and the V23 terrain items `[x] (uncommitted; residuals in wave 8)`
+### KB-I71 · Setting of the wave-7 follies and the V23 terrain items `[x] (residuals in wave 8)`
 - **Why:** KL-B50…53, KB-B89, KB-B90 and KB-B91 stand on bare meadow without paths, clearings or planting (43, 44, 45)
   [measured]; V23 also names the Felsenpfad, a Sammelbecken and the Vogeltränke (UP-23 is a placeholder) (10 §b.6) [D→;
   U positions]. Requested by the architecture owner in wave 7.
@@ -3395,7 +3635,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   edges; the width change is hard to see at these distances. The outcrops and edge stones are `stone.red`, so the
   light layer carries a node `site:KB-W8` (2,040 triangles; new against the wave-8 lead export). Trees at 39 / 40 / 41 unchanged. Done.
 
-### KB-I72 · CdL emphasis: court portal frame, N-wing porch, Festsaal garden balcony `[x] (uncommitted; portal frame in wave 8, the rest in the wave-8 review fix)`
+### KB-I72 · CdL emphasis: court portal frame, N-wing porch, Festsaal garden balcony `[x] (portal frame in wave 8, the rest in the wave-8 review fix)`
 - **Why:** the wave-8 visual audit (rank 3) found the CdL centre under-accented: a plain court portal, no N-wing
   (KB-B03) court porch or wing-centre balconies (the architecture owner reads both in Le Clerc 1790 / the Pleine vue),
   no continuous garden balcony for the three Festsaal portes-fenêtres. Cite the exact sheet (research/10) for each
@@ -3470,7 +3710,10 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `scratchpad/wave9-fix-architecture` 03, 09, 10, 14, 26, 47 (47 unchanged). Bench 03 / 14: GPU 1080p 4.7 / 4.8 ms,
   retina 5.7 / 5.8 ms (= wave9-after), +1 call (the riser tint), +≈ 100 triangles. Light layer 4.32 MB.
 
-### KB-I73 · Vineyard far parcel reads as a dark decal from the air `[x] (uncommitted; wave-8 review fix)`
+- **Wave 10 (architecture):** the CdL court perron of the wave-9 review fix was re-checked in the 03 / 10 crops: the
+  risers are distinct and the flight reads; no change.
+
+### KB-I73 · Vineyard far parcel reads as a dark decal from the air `[x] (wave-8 review fix)`
 - **Why:** at 01, 02, 08, 41, 48 and 52 the LP06 30 vineyard beyond the 3D tier is a flat dark-olive quadrilateral with
   hard straight edges, darker than any field around it; the look owner first took it for a shadow artefact (it stays
   with both shadow maps off). The wave-8 far-lightening (220–480 m) barely shows because the aerial cameras see the
@@ -3500,7 +3743,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   → 5.14 / 5.20, retina 7.14 / 7.15 → 7.76 / 7.83; 48 1080p 3.41 / 3.45 → 3.57 / 3.58, retina 7.14 / 8.12 → 8.72 /
   8.88 ms: ≤ +0.2 ms at 1080p for both blocks together. Done; KB-I35 keeps only its budget note at 40.
 
-### KB-I74 · Low-sun warmth and sky fill (golden hour, both looks) `[x] (uncommitted; wave-8 review fix)`
+### KB-I74 · Low-sun warmth and sky fill (golden hour, both looks) `[x] (wave-8 review fix)`
 - **Why:** wave-8 visual audit rank 6 (low-sun warmth). The look owner's intended direction: ≈ 3000–3500 K at 6° sun
   elevation and less sky fill at low sun, in both looks, plus the haze toward the sun. Not done in wave 8.
 - **Payoff:** – / ★★. **Effort:** S-M. **Perf:** 0.
@@ -3534,7 +3777,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   Rundflug 'goldene-stunde' at 0.5: the low sun reads warm in both looks (salmon-cream S wing, warm sunlit sand,
   lilac-grey shade), Kino warmer and more saturated; no change made. The "Not met" above stands.
 
-### KB-I75 · Interior whites and mirror reflections `[x] (uncommitted; wave 9)`
+### KB-I75 · Interior whites and mirror reflections `[x] (wave 9)`
 - **Why:** wave-8 visual audit rank 5 (interior whites, mirror reflections). Not done in wave 8 (the look owner's time
   went to the retina regression and KB-I50); re-shoot 06, 21, 27, 29 to pin the faults before changing anything.
 - **Payoff:** – / ★★. **Effort:** M. **Perf:** ≤ +0.3 ms indoors.
@@ -3602,7 +3845,11 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `viewer/tests/mirrors.test.ts` "capture debounce". Lead checks should report fhd `cpuMs` next to the GPU times
   (shots.mjs already prints it in the table's CPU column).
 
-### KB-I76 · Leaf scale on leaf cards and forest crowns `[x] (uncommitted; wave 9)`
+- **Wave 10 (look):** the interior CPU at 27 / 28 / 29 was re-measured: fhd CPU min 3.10 / 2.04 / 3.30 ms (median
+  3.14 / 2.05 / 3.34) against `wave8-final` 2.95 / 1.93 / 3.25, i.e. ≤ +0.15 ms, within the +0.3 ms target; the wave-9
+  review fix holds. The lead's three full runs give fhd CPU min 27 3.1, 28 2.2, 29 3.4 ms (`wave9-final` single run 3.1 / 2.1 / 3.4).
+
+### KB-I76 · Leaf scale on leaf cards and forest crowns `[x] (wave 9)`
 - **Why:** wave-8 visual audit rank 9 (leaf scale on the leaf cards and forest crowns). Not done in wave 8: the files
   belong to the garden owner, and the look owner passed it on.
 - **Payoff:** – / ★★. **Effort:** S-M. **Perf:** ~0.
@@ -3622,7 +3869,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   6.7 / 6.7 ms (min / median), above the 6 ms target of KB-I65, with the grass blades in the frame; the fine tiles
   themselves cost ≤ 0.1 ms. Done.
 
-### KB-I77 · Pond shores: smoothed outline, depth fade, banks `[x] (uncommitted; wave 9)`
+### KB-I77 · Pond shores: smoothed outline, depth fade, banks `[x] (wave 9)`
 - **Why:** the Karlsbergweiher reads as a straight-edged rectangle from the air (48, 41) and its W bank is a steep cut
   with visible terrain triangles (39); wave-8 audit #7, skipped by the garden owner because the water mesh is shared
   with the look's SSR [measured].
@@ -3668,7 +3915,7 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   single `wave9-after` run (9.12), but 4.9–5.0 in `wave9-after-r2/r3`: bimodal headless timing, not this change.
   The stepped edge of the reflected bank at 39 is the SSR's (look; not changed).
 
-### KB-I78 · Lawn and meadow blades: finer, denser lawn, no disc edge, retina cost `[ ]`
+### KB-I78 · Lawn and meadow blades: finer, denser lawn, no disc edge, retina cost `[~] (wave-9 review fix; meadow retina → KB-I94)`
 - **Why:** wave-9 lead check. The grass blades (KB-I45, wave 9) make the meadow at 46 / 47 read as grass, but on the
   scythed lawn (04, 16, 33) they read as scattered dark speckles in a regular grain at 1:1, the disc's start shows as
   a band at 39 (fly mode), and they carry the wave's largest retina rise (+0.6…+1.6 ms; 33 7.2, 39 7.4, 47 7.5 ms
@@ -3704,9 +3951,638 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   checked against the entries' descriptions and sources; fixes only where the description or a source names the side;
   `verify.sh catalogue` reproduces after the deliberate rebuild; plans regenerated where a side changed.
 
+
+## Wave 10: audit-driven look and truth pass (2026-11-02)
+
+Wave 10 worked from a ranked visual audit of `wave9-final` (ranks quoted in the items) with three owners (garden,
+look, architecture). All uncommitted. Items that extend an existing item are recorded there (KB-I22 Hemmer heads,
+KB-I24 Tempelzimmer collar, KB-I26 seat furniture and cove, KB-I27 library wire doors, KB-I36 hotbeds → KB-I82,
+KB-I37 fountain jet, KB-I43 candles in view, KB-I72 perron re-check, KB-I75 interior CPU). Lead check numbers come from
+`wave10-after`, `-r2`, `-r3` (three full `shots.mjs --bench` runs, load 14–17) against the single `wave9-final` run;
+pairs are in `docs/shots/KB-I80…I89/` and `*-wave10-*` in the older folders.
+
+### KB-I80 · Mowing zones: pleasure ground along the walks, aftermath meadow beyond `[x] (wave 10)`
+- **Why:** audit rank 1. Petri's lawn HG-01 read as one evenly mown carpet; around 1789 only the pleasure ground near
+  the house and along the walks was scythed short, the open lawn was hay meadow; in July a patchwork of mown strips and seeding grass [N
+  research/11 planting table "Meadow grass / hay"; widths I].
+- **Payoff:** ★ / ★★. **Effort:** M. **Perf:** ≤ +0.3 ms retina (measured +0.18…+0.75).
+- **Files:** `viewer/src/lawnZones.ts` (new, pure), `viewer/src/landcoverBake.ts` (`ZONE_GLSL`), `viewer/src/terrain.ts`,
+  `viewer/src/landcover.ts` (macro B), grammar `PLEASURE_GROUND`, pose 54.
+- **Acceptance:** close-mown verge along the walks, a band before the terrace TF-09, a ring round the rondell HG-05 and
+  bays round benches and herm; standing / freshly scythed / regrowth parcels beyond; no seeded tree moved; ≤ +1 ms.
+- **Wave 10 (garden):** signed distance per 2 m cell in macro channel B (128 + 8 · sd), verge 3.5 m, terrace band
+  22 m, rondell ring 3 m, bays 3.5 m; meadow parcels ≈ 34 × 24 m (standing seeding grass, 1.7 m swaths with straw
+  windrows, regrowth) with a ragged scythe edge; crisp swaths within 70 m with a footprint fade; terrain cache key
+  `terrain-splat-11`. Lower-third metrics (high-pass std / mid-frequency std / p5–p95) 16: 2.58 / 1.30 / 14.0 →
+  2.84 / 2.32 / 20.5 (04, 33 alike); mean colour slightly yellower (16 (105,125,65) → (125,137,75)). Retina A/B zones
+  on vs off (same session, 3 runs, min): 04 +0.22, 16 +0.23, 33 +0.75, 54 +0.18 ms; 1080p ≤ +0.28. Meadow-zone grass
+  cards tried and reverted (33 6.4 → 8.9 ms retina). Tests `viewer/tests/lawnZones.test.ts` (4).
+- **Lead check (wave 10):** 01 / 02 show the parcel patchwork and the mown verges along the belt walk from the air; at
+  16 / 33 / 04 the near lawn is now a yellower, patchier meadow with mown margins (`docs/shots/KB-I80/`, `after-54-…`
+  at eye level on the belt walk). The difference is clear from the air and moderate at eye level, where the swaths
+  are hard to tell from the meadow tile. Literal acceptance met; no tree outside the avenues moved at 01 / 16 / 32 (visual check).
+  Done.
+- **Wave-10 review fix (garden):** the review found the rank-1 eye-level acceptance unmet at 04 / 15 / 16 / 17 / 33
+  (flat olive-yellow lower third, no standing seed heads, no legible swath or windrow within 30 m, no path / clump
+  edge) and modern mower stripes from the air (02 / 62 / 01) with a hard-edged mown rectangle near the rondell.
+  Changes: (1) `lawnZones.ts` takes the draped walk centre lines (`walks`, new `lineDistance`) — prepare-terrain
+  paints HG-01 lawn over the belt-walk class, so before this no verge followed walks *inside* the lawn; (2)
+  `landcoverBake.ts` bakes only the swath / windrow mean for cut parcels (no stripes in the far field), warps the mown
+  edge one-sidedly (`ZONE_WARP` 45 m / 17 m) so it no longer reads as a rectangle, tints the close-mown sward cooler
+  (`lawn · (0.92, 1, 1.1)`) and sets the meadow states relative to the mown value (seeding +9 %, cut +10 % with straw,
+  regrowth +1 %); hay-parcel windrows broken up and at 0.75 contrast (row positions, hence hay cocks, unchanged); (3)
+  `terrain.ts` draws near swaths as a ratio to that mean, faded by footprint (3.4 m swath, ≥ 2 px) and camera
+  distance 60–110 m, standing sward darkened within 14–22 m; cache key `terrain-splat-12`; (4) `grassBlades.ts` gets a
+  third atlas tile (seeding culms with muted pinkish-buff / purplish-brown panicles; tiles 0 / 1 unchanged) and zone
+  logic in the vertex shader: seed-head and leafy meadow tufts in standing parcels and uncut margins, straw windrow and
+  stubble tufts in cut parcels, mown tufts elsewhere (`GRASS.seedShare 0.14`, `leafKeep 0.45`, `windrowRadius 14`;
+  grammar `GRASS_SWARD.seeding / windrow / stubble`, tag N research/11 §3.1; cache key `grass-blades-4`;
+  `skb.grass.uniforms.uGZone.value = 0` for A/B); (5) the sanded terrace walk HG-07 (KB-I88) with its mown verge;
+  (6) new pose 55 `55-gartenfront-beltwalk` (eye level on the belt walk at the garden front, 10:30). Poses 04 / 16 / 33
+  were not re-aimed (existing poses are fixed). Lower-third metrics (high-pass std / mid-frequency std / p5–p95,
+  wave9 → wave10 → fix): 04 2.44 / 1.28 / 13.3 → 2.70 / 2.70 / 20.8 → 3.01 / 2.54 / 20.3; 15 1.99 / 1.10 / 10.9 →
+  2.33 / 2.31 / 18.1 → 2.54 / 2.16 / 17.2; 16 2.58 / 1.30 / 14.0 → 2.84 / 2.32 / 20.5 → 4.83 / 1.90 / 21.4; 17
+  2.18 / 1.11 / 12.0 → 2.54 / 2.07 / 18.3 → 3.85 / 1.51 / 17.0; 33 2.69 / 1.54 / 16.0 → 2.83 / 2.83 / 22.8 → 3.06 /
+  2.67 / 21.4; 55 4.04 / 2.52 / 25.2; mean colour at 16 back from yellow (125,137,75) to (103,115,58). A/B zone tufts
+  on vs off (private server, 3 runs, retina min / median): 04 +0.2, 16 +0.7…+0.9, 33 +0.4…+0.5, 55 +0.4 ms; 1080p
+  +0.1…+0.2; all ≤ 8 ms retina at these poses. Full run `wave10-fix-garden` (58 shots + bench) and re-bench of
+  01 / 15 / 17 / 30 / 31 / 45 / 55 / 62: within noise except 16 / 17 (+0.7…+0.8 retina, the zone tufts). Visual:
+  02 / 01 / 62 without mower stripes, parcels differ subtly by state, mown verges along the belt walk; 16 / 17 standing
+  seeding meadow with muted panicles; 04 / 33 straw windrow tufts and an uncut margin band; 55 walk, green verge and
+  standing meadow; 13 / 30 / 31 / 32 / 41 / 47 no regression, trees unchanged at 01 / 32. Tests
+  `lawnZones.test.ts` (+2: walk verge without gravel class; HG-07 joins both belt ends inside the lawn),
+  `grassBlades.test.ts` (+1: head marker only in tile 2, sward heights). **Open:** the windrows still read best at
+  04 / 33; a lead eye check of 15 / 16 / 17 against the rank-1 wording.
+
+### KB-I81 · Avenue rows: size, crown and lean variation, young replants `[x] (wave 10)`
+- **Why:** audit rank 12. The avenue trees were clones in a row; a 1789 avenue held trees of mixed vigour with
+  replanted gaps [N].
+- **Payoff:** – / ★. **Effort:** S. **Perf:** 0.
+- **Files:** `model/src/site/trees.ts` (`rowVariation`), `model/src/site/features.ts` (`addTree` row flag), grammar
+  `AVENUE_ROW`, `model/tests/avenue-row.test.ts`.
+- **Acceptance:** visible variation at 01 / 32; no other tree's seed or position changes.
+- **Wave 10 (garden):** height ±20 %, crown width ±25 %, depth ±18 %, lean ≤ 3°, ≈ 1 in 17 a young replant at 55 %
+  height, hashed from the position; the `rnd` / `pick` streams are still consumed, so nothing else moves. No lath guards
+  (no source names the avenue). Tests (3).
+- **Lead check (wave 10):** 32 and the 01 avenue crop (`docs/shots/KB-I81/`): uneven crowns and heights instead of a
+  clone row; the other trees in 01 / 16 / 32 stand where they stood. Done.
+- **Wave 11 (garden, wave-10 review low: the court-mouth and Paradestraße rows still read as clones from 01 / 08):**
+  out-of-round crowns seen from above (x : z up to 1 ± 0.18) and a per-tree leaf tone (± 0.07 lightness, ± 0.025 hue),
+  from the same position hash (`AVENUE_ROW.aniso` / `tone` / `hue`) [I]. No stream or position changes.
+- **Lead check (wave 11):** 01 avenue crop and 31 (`docs/shots/KB-I81/*-wave11-01-…-crop-avenue.jpg`,
+  `*-wave11-31-…-crop-trees.jpg`): light and dark trees and narrower, out-of-round crowns along the Paradestraße row;
+  every tree stands where it stood at 01 / 31 / 32 (pairwise check). Done.
+
+### KB-I82 · Hotbed lights: timber sashes, propped, off or limewashed `[x] (wave 10)`
+- **Why:** audit rank 11 and the KB-I36 open note: the hotbed frames read as blue PV strips at 32 / 13.
+- **Payoff:** ★ / ★. **Effort:** S. **Perf:** +2 calls at 32.
+- **Files:** `model/src/site/hotbed.ts` (new, pure: `hotbedLightStates`, `lightSection`), `site/gardenDetail.ts`,
+  grammar `HOTBED_LIGHT`, `model/tests/hotbed.test.ts`, `garden-wave5.test.ts`.
+- **Acceptance:** timber-framed lights with glazing bars, a July mix of propped, removed and whitened lights.
+- **Wave 10 (garden):** 3 glazing bars over dull greenish glass; ≈ 45 % propped on a stick (10–20°), 15 % off, 15 %
+  limewashed against the sun, seeded per row [N period practice; I shares]. Panes use `wood.frame` with a glass colour
+  (a `stone.*` key would be exported, see Discovered); a non-mirror glass material is KB-I90. Calls 468 → 470 at 32.
+- **Lead check (wave 10):** `docs/shots/KB-I82/*-crop-hotbeds.jpg`: timber frames with grey-green lights, some
+  propped and a few white, instead of blue strips. Done.
+
+### KB-I83 · Ehrenhof sand: raked and trodden ground, ruts, camber, lane end `[~] (wave 10: patches only)`
+- **Why:** audit rank 6. The court sand read as one even tone with a hard cobble-lane end on the axis (Discovered,
+  wave 9).
+- **Payoff:** ★ / ★★. **Effort:** M. **Perf:** ~0.
+- **Files:** `viewer/src/terrain.ts` (court sand shader); `model/src/site/court.ts`, `cobbles.ts` (lane end).
+- **Acceptance:** broad raked vs trodden patches, cart ruts toward the portal, a slight camber, a soft lane end; a court
+  staffage toggle only once the Le Clerc figures are checked.
+- **Wave 10 (garden):** raked / trodden patches (noise at 23 m and 8.5 m), sweep marks × 1.25, cart tracks × 1.15,
+  stronger compaction on the trodden patches. Retina min 03 6.27, 14 6.28 ms (under load).
+- **Lead check (wave 10):** 03 / 14 (`docs/shots/KB-I83/`): soft broad patches, subtle at eye level. **Open:** ruts,
+  camber, the lane-end change in `court.ts` / `cobbles.ts`, the staffage toggle. Partial.
+
+### KB-I84 · Gewannflur: open strip fields instead of hinterland trees `[x] (wave 11; review fix: Flurzwang crops, balks, headlands, 12 / 46; 50 via KB-I96)`
+- **Why:** audit rank 2. The open three-field strips (LC-01…04) already read at 01, but the hinterland still holds
+  more trees than an 18th-century Gewannflur would [N research/11 S1].
+- **Payoff:** ★★ / ★★. **Effort:** M. **Perf:** ~0 or less.
+- **Files:** `model/src/site/trees.ts` / `openTreePlan`, the hinterland tree planner, `scripts/catalogue-v2/landcover.ts`.
+- **Acceptance:** first a per-cell seeded tree planner, so removing or adding trees in one cell leaves every other
+  cell's trees in place (test); then thinner hinterland and more strip fields; no tree near a standard pose moves.
+- **Wave 10 (garden):** skipped. With the current planner more fields or fewer hinterland trees would reshuffle the
+  seeded streams (`openTreePlan`) and move trees at the standard poses, which the wave rules forbid.
+- **Wave-10 review (garden):** scheduled as the next garden item, in two steps: a per-cell seeded tree planner
+  (seed from the cell id, test that editing one cell leaves the others identical), then the Gewannflur thinning. It is
+  the largest remaining aerial gap at 01 / 13 / 41.
+- **Wave 11 (garden, audit #2):**
+  - *Fields:* three Gewann fill parcels in the catalogue (`scripts/catalogue-v2/landcover.ts` LC-06 N plateau behind
+    the Marstall row, LC-07 N of the Carlsberger Hof over the far N lobe of the LC-05 hay, LC-08 the plateau E of the
+    Orangerie, kept ≥ 110 m off it; cover I, parcel layout I, rotation N, confidence low; `GEWANN_FILL_IDS`). The
+    hinterland walk skips them before its parcel counter, so no hedgerow seed moves (`hinterland.ts` `GEWANN_FILL`).
+    Field 270 k → 350 k cells; the hay near the palace (≤ 650 m, the hay-cock radius) is untouched.
+  - *Strips:* each Gewann block runs its strips along its own contour (mean gradient of its field cells, ≥ 3 %; flat
+    blocks keep the hashed grid direction) through a 64² RGBA8 table `tFieldDir` shared by the bake and the terrain
+    shader (`landcover.ts` `fieldBlockDirs`, `fieldAcross`; `FIELD_GLSL`). Line gate `uFieldGate` 4 → 6 m/px (strips at
+    any angle).
+  - *Three-field rotation (July):* every block belongs to a Zelge (winter corn .36 / summer corn .33 / fallow .31) and
+    each strip to a crop of it: rye / spelt / stubble with stooks, oats / barley, clover / weedy fallow / fresh plough
+    (`FIELD_ROTATION`, `fieldZelge`, `fieldCropOf`; colours `GROUND_COLOURS` spelt `#C69D58`, oats `#86985E`, clover
+    `#5D7A40`, plough `#7E6852`) [N research/11 S1 three-field system; I hues and shares]. Hay parcels: paler stubble
+    and rows (L × 1.09 / 1.18), fresher regrowth, ± 5 % between standing parcels.
+  - *Field trees:* the wave-2 lattice keeps only trees with a context (`FIELD_TREES`, `fieldTreeContext`: farmstead
+    ≤ 150 m, beside a way 6–30 m, a field edge / balk, a bank ≤ 40 m, the forest edge ≤ 45 m, or an old single tree on
+    meadow or hay ≥ 40 m from the ploughland); none inside the strips, so the thinning acts only on and beside the
+    arable land. New groups of 1–4 (oak, pear, walnut, field
+    maple, wild cherry) at farmstead margins, waysides and field edges, seeded per 64 m cell (test: editing one corner
+    moves no other group), ≥ 40 m from any building but a farmstead's and none within 380 m of the palace. The thinned trees stay in the plan as `ghost`s and the groups take their own stream
+    (`own`), so the forest tiles' random streams, and every forest tree's looks, are unchanged.
+    Real terrain: 46 field trees within 40 m of a field, 0 alone (wave-2 lattice: 43, 28 alone = 65 %); all field
+    trees: 49 % without a neighbour or context (74 %). A/B: `skb.forest.setClustered(false)`.
+  - *Standard poses:* garden and court poses (03, 04, 09, 10, 14–19, 30, 31, 33–35, 42, 53–55, 60, 61) differ from
+    the wave-11 baseline by ≤ 0.3 mean grey levels (noise 0.15–0.2). Changed on purpose: 12 (Karlslust; the LC-07
+    strips and the old oak beside them thinned) and 46 (two wayside groups by the Barrière road, one tree at the
+    frame's right edge); 01 / 02 / 08 / 13 / 41 / 43 1–1.5 levels (strips, crops, avenue tone).
+  - *Cost:* the bake is offline; in-page A/B of the line gate (6 / 4 / 0) at 01 / 13 / 08 under load 19: the min
+    differs by ≤ 0.2 ms either way, i.e. below the bench's resolution here (budget + 0.3 ms).
+  - Tests: `viewer/tests/field-trees.test.ts`, `gewann.test.ts` (new), `landcover-open.test.ts`,
+    `landcover-review3.test.ts` (updated).
+- **Lead check (wave 11):** `docs/shots/KB-I84/` (01, 12, 13, 50; also seen at 08, 41). Acceptance taken literally:
+  (1) *per-cell seeded planner, editing one cell leaves the others in place (test)*: met for the new groups
+  (`field-trees.test.ts`); the wave-2 lattice keeps its one stream and thins through ghosts. (2) *Thinner hinterland and
+  more strip fields*: met: LC-06…08 at 01 / 08 (the plateau right of the Orangerie and beyond the court now strip
+  fields with gold, green, brown and deep clover-green tones), at 13 the far hinterland reads as open strip fields with
+  fewer scattered trees, at 12 the strips beside the Karlslust meadow show clover, plough and corn. (3) *No tree near a
+  standard pose moves*: **not met at 50.** The forest tiles around the Pavillon zu Carlsberg have different crowns
+  (mean grey 13.6, draw calls 264 → 259). The garden owner's note blamed light or foliage edits; the lead traced it to
+  KB-I84 itself: `openTreePlan` (`landcover.ts`) decides whether a wave-2 lattice field tree exists by the class under
+  it (meadow 0.35, hay 0.25, field 0.12) *before* the ghost logic, so a meadow / hay cell turned into field (LC-06…08)
+  drops a lattice tree from the plan outright, and the 320 m tile's look stream re-rolls every later tree in it.
+  A plan comparison against the pre-wave-11 class raster (`w11g/terrain-before`) finds 8 tiles whose main-stream plan
+  changed: 5_0 (625 → 620 entries), 4_2 (KB-B28's tile, 908 → 907), 4_4, 3_0, 4_0, 3_1, 1_1, 1_2. That also explains
+  part of 12 and 46, which the owner accepted as intended. Fix → KB-I96. 12 (the old oak beside LC-07) and 46 (two
+  wayside groups, one crown hanging into the top right corner at eye level) change on purpose. Garden and court poses
+  ≤ 0.3 mean grey (03, 04, 09, 10, 14–18, 30, 34, 35, 42, 53–55, 60, 61). Bench 01 / 08 / 13 / 41 at retina 7.9→8.0,
+  8.0→7.8, 6.1→6.0, 8.2→7.8 ms (median of 3, load 13–20): no cost. Done, with the side effect at 50 open in KB-I96.
+
+- **Wave-11 review fix (garden):**
+  - *12 (the old oak and the mid-ground trees were thinned):* old lattice trees (height scale ≥ `FIELD_TREES.oldScale`
+    0.95, the upper ~55 % of the range) on meadow or hay within `keep.oldEdge` 60 m of a field stay as boundary trees
+    (Grenzbäume) [N; I threshold], and an old tree on grass that the Gewann fill turned into strips stays as a field tree
+    on a balk; young ones there stay ghosts. With KB-I96 the Karlslust view is back: land in the upper two-thirds of 12
+    differs from `wave10-final` by 0.87 mean grey (wave 11: 5.0; the rest are the LC-08 strips top left and the look
+    owner's clouds); the hero oak, the trees by the farmhouse and the balk tree on LC-08 stand where they stood.
+  - *46 (a crown grew out of the KB-B64 roof):* the group sat 18 m behind the guard house, allowed because the
+    Carlsberger Hof lay within 150 m. A group may now stand within `offBuilding` 40 m of a building only if that building
+    is the farmstead's own (`FIELD_TREES.farmOwn`: the farmstead centre lies ≤ 30 m beyond the nearest building) [I]. 46:
+    upper half 0.64 mean grey from `wave10-final` (wave 11: 9.7); the two guard houses frame the road and the Pavillon
+    again, no crown over a roof, no shadow in the lower right. A frustum check against the standard poses was not added
+    (the rule is the historical one: a guarded gate kept its approach clear) [I].
+  - *Strips read as printed flags (01 / 08 / 12):* under the Flurzwang one crop per Gewann block (`fieldCropOf`: rye or
+    spelt, oats or barley, clover or weedy fallow per block); inside a block only the reapers' or the plough's progress
+    differs, as one contiguous run of strips from one side (`FIELD_ROTATION.winterCut` / `fallowCut`, `fieldCutShare`)
+    [N harvest and Brachumbruch strip by strip; I shares]. Strip value ±6.5 % (`fieldStripValue`, was ±5.5 % alternating
+    with ≥ 8 % steps) plus a small ripeness shift toward green; low-frequency patches along each strip (±5 %, 30-60 m)
+    and a 3.2 m ridge-and-furrow ripple on grain and plough. The bake now carries the balk (0.85 m, 60 %) and furrow
+    (0.45 m, 25 %) lines, so they fade with the mips instead of vanishing at the line gate; a 4-6 m headland (Anwand)
+    across every block edge (grass with trodden soil) and a 3-6 m grass headland along the field land's edge, where the
+    strips stopped on a ruled line against the meadow; the terrain shader's lines end at the headland [N balks,
+    headlands; I widths]. Spelt `#C69D58` → `#C2A86A` (straw; no orange in the Kino grade). 01 / 08: the plateau blocks
+    read as one gold rye Gewann with faint strips and balks next to a green and a brown block (shots
+    `scratchpad/wave11-fix-garden`).
+  - *Catalogue honesty:* LC-08 does not overlap LC-12 (polygon intersection 0.0 ha; the forest paints after it anyway).
+    LC-07 lies over 7.9 ha of the LC-05 hay outline: both tags now say so (LC-05's extent was I, its D cover claim is the
+    valley floor, which stays hay). LC-06 overlaps 0.3 ha of the LC-13 forest belt, which paints after it.
+  - Tests: `viewer/tests/tree-streams.test.ts` (new), `landcover-review3.test.ts` (one crop per block, contiguous cut run,
+    1-15 % neighbour steps). Bench (one full run, load 15-24) unchanged within noise: 01 5.9 / 8.0, 08 5.8 / 7.8, 12
+    5.2 / 6.0, 13 5.0 / 6.1, 46 4.6 / 7.4, 50 3.8 / 6.1 ms (1080p / retina).
+
+### KB-I85 · Night sky: real 1789 moon, stars, moonlight `[x] (wave 10; star-table licence → KB-I93)`
+- **Why:** audit rank 5. The night sky was an empty gradient with three's streak clouds; the date of the scene
+  (15 July 1789) has a known moon.
+- **Payoff:** ★ / ★★★. **Effort:** M-L. **Perf:** night only.
+- **Files:** `viewer/src/ephemeris.ts`, `nightSky.ts`, `starCatalogue.ts` (generated by `scripts/stars/bsc5-to-ts.py`),
+  `atmosphere.ts`, `night.ts`, `nightlights.ts`, `ui.ts`, `main.ts`; poses 60 / 61.
+- **Acceptance:** an honest moon for the date (phase, position, rise / set), stars by magnitude and colour, moon
+  shadows only when the moon is up, day frames unchanged.
+- **Wave 10 (look):** see Discovered "(wave 10, look)": Meeus moon (47.a to 0.002° / 30 km), Krisciunas & Schaefer
+  brightness, 1,604 BSC5 stars (V < 5, precessed, B−V colour), moonlight through the sun's DirectionalLight and both
+  shadow maps. On 15 July 1789 the moon is 46 % waning and below the horizon until 23:09 LMT, so 26 / 60 show stars
+  only; "Vollmondnacht (6. Juli 1789)" switches to the nearest full-moon evening (61). Night GPU 1080p / retina
+  (median): 60 2.97 / 4.87, 61 4.06 / 5.10, 26 4.17 / 5.98 ms. Tests `ephemeris.test.ts` (9).
+- **Lead check (wave 10):** 26 (`docs/shots/KB-I85/`): stars instead of grey streak clouds; 60 stars and no moon; 61
+  long moon shadows across the lawn with the lit windows. Day poses unchanged by the night features (01, 03 skies
+  differ only by the cumulus, KB-I86, and the removed streak clouds). The BSC5 table states no licence terms → KB-I93 before any public export. Done.
+- **Wave-10 review fix (look):** 60 / 26 read too dark on the land, the stars were weak and there was no Milky Way.
+  - **Night fill:** `light.ts` `NIGHT_GROUND_FILL` (gain 0.9, cool tint, env 0.6) lifts the SH sky fill on the terrain and
+    vegetation and the environment intensity with `night`. At 60 the lawn and its tufts now show faintly under the lit
+    facade, and 26 stays a night frame [I].
+  - **Stars:** `STAR_SPOT.gain` is now 9 (was 6).
+  - **Milky Way:** an additive sky-sphere band in galactic coordinates (Hipparcos J2000→galactic rotation, then
+    precessed to 1789). The profile is brightest toward Sagittarius and has the Great Rift and the Cygnus bulge
+    (`nightSky.ts` `galactic`, `milkyWayProfile`, `MILKY_WAY`) [I; shape after the standard all-sky photometry, no
+    image used]. It is faint, and visible looking S / SE at 23:00. Pose 60 looks W, so the band is not in that frame.
+  - **61 "bars":** a raycast along the moon direction (alt 19.6°, az 169°) shows that they are the moon shadows of the
+    hypothetical Lombardy poplars (`site/trees-hypothetical/populus_italica`) and a conifer ≈ 20 m S. They are
+    physically right, so nothing changed. A softer crown taper is the garden's call.
+  - **Moonrise:** the moonrise is stated in the UI ("unter dem Horizont (Aufgang 23:09 Uhr)").
+  - GPU 1080p / retina min (3 runs): 60 3.2 / 4.2, 61 4.1 / 5.6, 26 4.1 / 5.9 ms. Tests `wave10-look-fix.test.ts`.
+
+### KB-I86 · Fair-weather cumulus and cloud shadows `[x] (wave-10 review fix: shape, default, refresh)`
+- **Why:** audit rank 7. A summer afternoon over the Westrich plateau has fair-weather cumulus; the sky was empty
+  apart from three's streak clouds [N; the weather of 15 Jul 1789 is U].
+- **Payoff:** – / ★★. **Effort:** M-L. **Perf:** ≤ +0.5 ms steady.
+- **Files:** `viewer/src/clouds.ts`, `atmosphere.ts` (`CUMULUS_GLSL`), `shadowsFar.ts`, `ui.ts` ("Wolken
+  (Schönwetter, Hypothese)", on by default), `main.ts`; pose 62.
+- **Acceptance:** cumulus that read as clouds from the air and at eye level, matching shadows on the ground, a sunny
+  residence, no standard pose in a cloud shadow, ≤ +0.5 ms steady.
+- **Wave 10 (look):** one coverage field (exact integer hash shared by TS and GLSL) for a 40-step dithered volume march
+  in the sky cube and a baked 512² RG shadow texture (one fetch per sunlit pixel); clearing round the residence; field
+  phase chosen so no standard pose camera has cloud shade within 200 m (test); thermals from 08:00, ≈ 0.6 at 19:12,
+  none by 21:00. A/B steady 1080p ≤ +0.1 ms; sky-cube refresh frames ≈ +1.2 ms at 1080p; no Rundflug drift. Tests
+  `clouds.test.ts` (7).
+- **Lead check (wave 10):** from the air (62, 08) the shadows dapple the plateau convincingly and the clouds sit in
+  the haze. At eye level (03, 05, 16, 32, 49; `docs/shots/KB-I86/*-crop-clouds.jpg`) the clouds read as pointed,
+  flat-bottomed "tents" with a fine vertical streak / dither texture, brighter than the haze around them — stylised,
+  and in several frames the most artificial element in the picture. Not accepted at eye level. **Open:** a 3D detail
+  noise or erosion for rounded tops, removing the streak (more steps or blue-noise jitter resolved in the cube), the
+  +1.2 ms refresh frames; until then consider defaulting "Wolken" off for eye-level views or keeping it on only in
+  fly mode (look owner's call; logged in Discovered). Partial.
+- **Wave-10 review fix (look):**
+  - **Shape:** each cloud is now a dome over the coverage field (`clouds.ts` `skbCloudColumn` / TS `cloudColumn`):
+    top = thickness · √(margin / 0.6), with a flat base. A 3-octave 3D value-noise billow (`skbCloudBillow`, 240 / 95 /
+    40 m, vertically stretched ×3) erodes the surface by up to 110 m, which rounds the tops without overhangs.
+  - **March:** 64 steps, crowded toward the base, with interleaved-gradient jitter. The light model uses sun optical
+    depth (own skin plus two samples toward the sun), a multiple-scattering octave, a powder term, a two-lobe HG phase
+    and an ambient falloff with ground bounce, which gives a grey base and a bright, sunlit top.
+  - **Result:** the vertical streaks and the "tents" are gone (62, 08, and forced on at 05 / 14 / 16 / 45). The edges
+    stay a little soft at cube resolution 1024.
+  - **Default:** a new select "Wolken (Schönwetter, Hypothese)" with the values **"aus der Luft"** (default), "immer"
+    and "aus". "Aus der Luft" shows the clouds from 80 m above ground and hides them below 60 m (hysteresis,
+    `cloudAloft`), and never in Gehen. Old boolean values map onto it (`cloudMode`).
+  - **Rundflug:** the Rundflug asks for clouds in its golden-hour aerial (`TourShotSpec.clouds`). The 07:15 anflug
+    gets none, because `cumulusAmount(7.25)` = 0 (the thermals start at 08:00). Eye-level standard poses now show a
+    clear sky, which is the decision logged under Discovered.
+  - **Refresh cost:** the sky-cube refresh renders one scissored quarter-face strip per frame
+    (`postMath.ts` `SKY_CUBE_TILES` = 4, `skyCubeTile`). The per-frame low-res sky fallback marches 24 steps without
+    billows (`uCloudFast`). Measured at 03, 1080p, load ≈ 15, 4 runs: steady +0.05…0.1 ms, strip refresh frames
+    +0.2 ms over steady (was +1.2), and camera-jump frames +0.2 ms (+2.5 before the fast path). Interiors at retina
+    with "immer" against "aus der Luft" (3 × 3 runs): 22 +0.1, 21 +0.1, 28 +1.8 ms median.
+  - Tests `wave10-look-fix.test.ts` (12).
+
+### KB-I87 · Mixed dressed-stone plinths and plinth damp `[x] (wave 10)`
+- **Why:** audit #3. The red sandstone plinths read as one flat brick-red band; Karlsberg used local red, yellow-grey
+  and grey-white Buntsandstein side by side [D plinth red, KB-B02; N mixed beds; I shares].
+- **Payoff:** ★ / ★★. **Effort:** S-M. **Perf:** ≈ 0 (measured).
+- **Files:** `model/src/materials/ashlar.ts` (new: `isMixedAshlar`, `ashlarPatch`), `materials/index.ts`,
+  `exterior/shade.ts` (`STONE_MIX`, `stoneMixTints`, `PLINTH_DAMP`, `plinthDamp`), `exterior/facade.ts`,
+  `model/tests/wave10.architecture.test.ts`.
+- **Acceptance:** block-by-block mix on the stone texture's joint grid, warm in shade (not olive or mauve), a damp
+  darkening at the foot; no cost; the TF-08 retaining wall follows.
+- **Wave 10 (architecture):** shares 0.64 / 0.24 / 0.12 (red / yellow-grey / grey-white), partial mix and luminance
+  keep 0.4 so pale blocks stay warm; recessed joints; damp baked into the vertex colour; non-main Freitreppen in the
+  portal sandstone. Runtime A/B 03 5.1 / 5.1 vs 5.0 / 5.0 ms, 49 4.9 / 4.9 both ways. The viewer patch is viewer-only;
+  the light layer carries the baked damp only.
+- **Lead check (wave 10):** 03 / 05 / 49 (`docs/shots/KB-I87/`): the plinths read as dressed stone of mixed beds;
+  at the TF-08 wall (49) the patchwork is lively, a little busy for a single-quarry wall. The coping of that wall is
+  still a plain box (KB-I92). Done.
+- **Wave-10 review fix (architecture):** the plinth read too brown and patchy, the TF-08 wall as a checkerboard.
+  `STONE_MIX`: colours `#A65E4A` / `#A0604E`, shares 0.45 / 0.35 / 0.20 (red still the largest share), `redToYellow`
+  0.3, `redDesat` 0.15, mix 0.45 / 0.4, luminance keep 0.05 / 0.06, value 0.02, `textureContrast` 0.45 (calms the CC0
+  texture's own blotches), joints 8 mm half width at albedo 0.42 with an arris highlight (`joint.arris`, 12 mm × 1.18);
+  `STONE_HUES.lumJitter` 0.05 → 0.03 [I]. `materials/ashlar.ts` scales the course grid (`ashlarScale`) for the
+  retaining walls: `RETAINING_ASHLAR` (`courseScale` 1.4, coping slab 0.30 m with 0.07 m overhang and a 0.06 m bed
+  course in grey-white `#CEC6B6`) drawn by `site/features.ts` (TF-08 pieces and the drive wall; a small edit in the
+  garden-owned file) [N coping; I sizes]. Shots 03 / 49 in `scratchpad/wave10-fix-architecture`: 03 a calm warm-red plinth (close to `wave9-final`,
+  the mix subtle), 49 coarser courses, visible joints and a pale coping instead of the patchwork. Bench (three runs,
+  min / median): 03 1080p 4.9 / 5.0, retina 6.1 / 6.1 ms (`wave10-after` 5.0 / 6.0); 49 4.7 / 4.7, 6.5 / 6.6 ms (4.7 / 6.8).
+  Tests: `facade.finish.test.ts` spread follows `lumJitter`; `wave10.architecture.test.ts` (shares, coping). Done.
+
+### KB-I88 · CdL garden door as a glazed porte-fenêtre; terrace walk `[x] (wave 10 + review fix)`
+- **Why:** audit #8 and Discovered (wave 9): a sentry box showed through the CdL's open garden door at 16 / 17.
+- **Payoff:** ★ / ★. **Effort:** S. **Perf:** 0.
+- **Files:** `model/src/spec.ts` (`PortalSpec.glazed`), `validate.ts`, `layout/facade.ts` (`FacadeOpening.glazed`),
+  `exterior/facade.ts`, `scripts/catalogue-v2/programme.ts`, `model/catalogue.json`.
+- **Acceptance:** a closed two-leaf glazed door at window width on the window line; a sanded terrace walk 8–12 Fuß wide
+  along the garden front joining the belt walk.
+- **Wave 10 (architecture):** the door is 1.3 × 3.65 m with its head on the window line (tag N); glass stays out of the
+  walk colliders. Catalogue rebuilt (117 buildings, 0 errors / issues / overlaps; `verify.sh catalogue` reproduces);
+  tests in `wave10.architecture.test.ts`.
+- **Lead check (wave 10):** 16 (`docs/shots/KB-I88/*-crop-door.jpg`): a French door instead of a hole with a sentry
+  box behind it. **Open:** the terrace walk (garden owner; terrain feature / land cover). Partial.
+- **Wave-10 review fix (garden):** terrace walk `HG-07` "Weg an der Gartenterrasse (vor dem Corps de logis)" in
+  `scripts/catalogue-v2/terrain.ts`: a sanded Buntsandstein-grit path 3.0 m (≈ 10 Fuß, grammar `GARDEN.path.frontWalk`)
+  at u = 54.7 (1.5 m beyond the terrace foot), v −40…40, joining both belt-walk ends; confidence low, from 1788, tag N
+  (width, surface) / I (line). It lies inside HG-01, so the class raster and the seeded trees are unchanged (prepare-
+  terrain not rerun); the mown verge follows it via the lawn-zone walks (KB-I80). Catalogue rebuilt: 117 buildings,
+  89 terrain features, 0 errors / warnings / issues / overlaps, only HG-07 added; `verify.sh catalogue` reproduces;
+  `verify.sh export` 4.37 MB. Seen at 55. Done.
+
+### KB-I89 · Procedural old-master canvases instead of colour grids `[x] (wave 10; real artworks [?])`
+- **Why:** audit #4. The paintings were blurred tonal colour grids (KB-I26/I27 placeholder decision).
+- **Payoff:** ★ / ★★. **Effort:** M. **Perf:** +0.6 ms 1080p / +0.8 ms retina at 28 (A/B).
+- **Files:** `model/src/interior/painting.ts` (new: `CANVAS_KINDS`, `canvasParams`, `PAINTING_GLSL`, `paintingPatch`),
+  `interior/mesh.ts` (`aCanvas`), `shell.ts`, `fixtures.ts`, `materials.ts`.
+- **Acceptance:** compositions that read as landscape, portrait, history piece and still life with varnish and
+  craquelure; ≤ +1 ms; no artwork copied, no HMS image.
+- **Wave 10 (architecture):** per-pixel procedural compositions (option A); option B (real BStGS works, CC BY-SA)
+  needs the user's licence decision. A/B at 28: 1080p 3.2 / 3.4 vs 2.6 / 2.8 ms, retina 7.5 / 7.5 vs 6.7 / 6.7 ms.
+- **Lead check (wave 10):** 22 / 28 (`docs/shots/KB-I89/`): landscapes with trees and sky, oval portraits, figure groups
+  instead of colour grids; the history groups still read as rows of small cloaked figures from 10 m. In the full runs 28 is
+  2.8 / 2.8 ms at 1080p and 7.2 / 7.2 ms at retina (`wave9-final` 2.3 / 5.9; cap 8), 22 7.0 / 7.6 ms retina (5.9). Done; option B stays `[?]` (user decision, licence).
+- **Wave-10 review fix (architecture):** the per-pixel shader paintings read as smeared, repeated "AI" pictures. Now a
+  painted **atlas**: `interior/paintingArt.ts` paints 64 deterministic compositions once with Canvas2D (soft blob and
+  gradient shapes, brushwork, varnish multiply `#F2E2BE`, vignette, craquelure; ≈ 30 ms once) into a 2048² sRGB
+  `CanvasTexture` (mipmaps, anisotropy 4; `null` in Node, so tests and the glb keep plain vertex colours);
+  `interior/painting.ts` stays pure: `paintingVariants()` (20 landscapes, 20 portraits, 12 history pieces, 12 still
+  lifes; portraits differ by sitter, head (wig / own hair / pouf / cap) and coat, muted 1780s palettes),
+  `PaintingHang` / `hangOf(owner)` (per wall and genre no repeat until the genre is used up; seeded mirror),
+  `canvasParams(kind, tile, mirror, w, h)`, `atlasUv` and `paintingPatch(m, atlas)` (cover-fit and mirror in the vertex
+  shader, a frame-edge shadow in the fragment). Tests: `model/tests/painting.test.ts` (9). Shots 22 / 28 in
+  `scratchpad/wave10-fix-architecture`: varied genres side by side, no two neighbours alike, readable portraits; faces stay simplified (no
+  features at 256 px). Bench (three runs, min / median): 22 1080p 2.4 / 2.4, retina 3.8 / 4.3 ms (`wave10-after`
+  2.7 / 7.0); 28 2.4 / 2.4, 6.2 / 6.2 ms (2.8 / 7.2). Done; option B stays `[?]`.
+
+### KB-I90 · A non-mirror glass material for hotbed and glasshouse lights `[ ]`
+- **Why:** wave 10 (garden): the hotbed lights borrow `wood.frame` with a glass colour, because `glass.crown` mirrors
+  the sky and a `stone.*` key would be exported. A dull, slightly translucent glazing material is missing.
+- **Payoff:** – / ★. **Effort:** S. **Perf:** 0.
+- **Files:** `model/src/context.ts` `MATERIAL_NAMES` (lead, contract), `docs/architecture.md`, `materials/index.ts`
+  (look), `site/gardenDetail.ts`, `exterior/glasshouse.ts`.
+- **Acceptance:** `glass.frame` (roughness ≈ 0.3, no SSR / mirror pull, not `stone.*`, not exported) used by the hotbed
+  lights and optionally the glasshouse panes; 32 / 13 unchanged in read or better.
+
+### KB-I91 · Foliage back-light rim under cloud and moon shadow `[ ]`
+- **Why:** wave 10 (look): the foliage back-light rim uses the unshadowed sun colour, so trees inside a cloud shadow
+  (and in moonlight) keep a faint sunlit rim.
+- **Payoff:** – / ★. **Effort:** S. **Perf:** 0.
+- **Files:** the foliage shader patch (`viewer/src/foliage*` / tree material), `clouds.ts` term.
+- **Acceptance:** the rim follows the shadowed direct light; trees under a cloud shadow at 62 show no rim.
+
+### KB-I92 · Interior reveal highlights and the TF-08 coping `[~] (wave 11 look: shoulder; gradation open)`
+- **Why:** wave 10 (architecture): window reveals blow out to white in the state rooms (20, 28, 29), and the TF-08
+  retaining wall, now in mixed ashlar, ends in a plain box with no coping.
+- **Payoff:** ★ / ★. **Effort:** S. **Perf:** 0.
+- **Files:** look (indoor shoulder / window pull, `viewer/src`), garden (`model/src/site/features.ts` TF-08).
+- **Acceptance:** reveals ≤ ≈ 0.9 display white indoors by day at 20 / 28 / 29; a projecting saddle or flat coping on
+  TF-08 with a drip, visible at 49.
+- **Wave-10 review fix (architecture part):** `STATE_ROOM.reveal` (`colour` `#D3CDC1`, `minDepth` 0.3, `minHeight` 1.2,
+  margin / bar / relief / foot): the embrasures of the panelled rooms take a darker boiserie and a moulded panel on each
+  jamb (splayed jambs too; gilt in state rooms) [N panelled embrasures; I values]; a porte-fenêtre's reveal gets the room
+  floor out to the glass, which removes the pink-blue strip at the threshold at 06 (the terrain / sky showed through
+  under the splayed reveal). TF-08 coping: see KB-I87 (`RETAINING_ASHLAR.coping`). Shots 06 / 20 / 28 / 29 in
+  `scratchpad/wave10-fix-architecture`: the strip is gone and the jamb panels read at 06; at 20 / 28 / 29 the sunlit reveals still clip
+  near white, which is the indoor exposure / shoulder (look owner). Open: that part.
+- **Wave 11 (look):** a second, tighter log stage of the indoor shoulder above `INDOOR_TONE.knee2` 0.66 (`s2` 0.05,
+  `viewer/src/interiorGrade.ts` `indoorShoulder`, GLSL `INDOOR_SHOULDER_GLSL` with `uIndoorTone2`); below an exposed
+  ≈ 0.84 the curve is unchanged, so lit walls, parquet and table linen keep their values (20: wall 202,198,189 and
+  linen 215→214 sRGB). Indoors by day the screen-space AO keeps more of its darkening on sky-lit surfaces (exposed
+  luminance 1.1–12, `aoBrightFade`; sun pools ≥ 12 keep the outdoor fade), so the reveal corners get some shading. Measured at 20 (1080p, `wave10-final` → wave 11): the sunlit reveals
+  218,229,235 → 209,220,226 (max channel 0.89 display) [measured]. Finding: the bright boxes at 20 / 29 are the
+  *exterior* reveals inside the glass (`KB-B05/exterior/render.lime`, `KB-B03/exterior/render.lime`), lit by the
+  outdoor sky environment and uniform, so a tone curve cannot give them gradation; that needs an interior laibung up to
+  the glass or baked AO on those reveals (architecture). Look part done; gradation open (architecture).
+- **Lead check (wave 11):** share of pixels with a max channel ≥ 240 sRGB (≈ 0.94 display), 1080p `wave10-final` →
+  `wave11-after`: 20 4.5 → 0.4 %, 06 13.5 → 1.2 %, 28 6.3 → 3.1 %, 29 10.1 → 6.2 %; p99.5 of the max channel 20
+  246 → 239, 28 249 → 246, 29 254 → 252 (`docs/shots/KB-I92/`). Walls and linen unchanged. The literal acceptance
+  (reveals ≤ ≈ 0.9 display at 20 / 28 / 29) is met at 20 and close at 28; at 29 the window reveal still clips because
+  it is the exterior render inside the glass → KB-I98. Partial.
+
+### KB-I93 · Licence audit of the Yale Bright Star Catalogue table `[x] (wave 11: HYG 4.4, CC BY-SA 4.0)`
+- **Why:** wave 10 (look): `viewer/src/starCatalogue.ts` is generated from BSC5 (SAO/TDC mirror of NSSDC/ADC V/50),
+  which states no licence terms. A public build (`scripts/release/`) needs a recorded licence or a replacement.
+- **Payoff:** – / –. **Effort:** S. **Perf:** 0.
+- **Acceptance:** the licence recorded in the release licence audit (or the table regenerated from a source with a
+  stated open licence, e.g. Hipparcos via CDS terms); attribution in the footer if required. User decision for public
+  hosting.
+- **Wave 11 (look):** regenerated from the HYG database v4.4 (David Nash / astronexus, Codeberg
+  `astronexus/hyg`, `data/hyg/CURRENT/hyg_v44.csv.gz`, sha256 `00b34989…2197d`; the README states CC BY-SA 4.0 for
+  v4.0 and later) by `scripts/stars/hyg-to-ts.py` (replaces `bsc5-to-ts.py`): 1,615 stars brighter than V 5 (BSC5:
+  1,604), the Sun skipped, each carried by its proper motion from J2000 to 1789.54 (equinox J2000 kept, the viewer
+  precesses), B−V 0.6 where missing. `viewer/src/starCatalogue.ts` states it is an adapted extract under CC BY-SA 4.0
+  and exports `STAR_ATTRIBUTION` ("Sterne: HYG 4.4, CC BY-SA 4.0"), which the photo / viewer footer now shows (the
+  research credit was shortened to "Rekonstruktion: Hypothese nach research/01–11" so the footer stays one line). The
+  download sits in the git-ignored `sources/hyg/`. Open (release owner): add the HYG entry and the ShareAlike note for
+  `starCatalogue.ts` to the licence audit in `../scripts/release/`. Done (look part).
+- **Lead check (wave 11):** the footer in every shot reads "… Texturen CC0 (Poly Haven, ambientCG) · Sterne: HYG 4.4,
+  CC BY-SA 4.0 · Rekonstruktion: Hypothese nach research/01–11 · Schauen, nicht graben" on one line
+  (`docs/shots/KB-I93/*-60-…-crop-footer.jpg`); night shots 26 / 52 / 60 / 61 change by ≤ 1 mean grey level. The
+  licence is recorded (CC BY-SA 4.0, attribution shown); the entry in `../scripts/release/` (outside the castle tree)
+  and the ShareAlike note for `starCatalogue.ts` are the release owner's. Done on the castle side.
+- **Release note (final cleanup after wave 11):** `viewer/src/starCatalogue.ts` is CC BY-SA 4.0 data (an adapted
+  extract of HYG v4.4, David Nash / astronexus) inside a code tree that is released under MIT; the MIT licence does
+  not cover it. A public release keeps the file's licence header, names it in the release's licence list as a
+  CC BY-SA 4.0 file with the HYG credit and the licence link, keeps `STAR_ATTRIBUTION` in the viewer footer and the
+  photo burn-in, and shares any changed table under CC BY-SA 4.0. In the usual reading ShareAlike binds the table and
+  its adaptations, not the MIT code that reads it (the bundle is a collection, not an adaptation); the release audit
+  should confirm that. The built viewer bundle contains the table; the `sle-recon-v1` light layer does not.
+
+### KB-I94 · Retina headroom after wave 10 (meadow, aerials, picture galleries) `[~] (≤ 8.0 ms retina everywhere under load; idle bench owed)`
+- **Why:** wave-10 lead check (three full runs, load 14–17): every pose rose 0.0–0.4 ms at 1080p against
+  `wave9-final` (cloud-shadow fetch, meadow zones, paintings), and at 3024×1964 the 8 ms eye-level target is missed at
+  39 (min / median 8.0 / 8.2 ms, the meadow blades of KB-I78) and only just met at 47 (7.9 / 8.0), 01 / 08 (7.7 / 7.9),
+  41 / 43 / 46 (7.9 median); 48 swings 7.1…9.6 ms (`wave9-final` 9.5); 22 / 28 rose 5.9 → 7.6 / 7.2 ms with the
+  procedural canvases [measured].
+- **Payoff:** – / ★. **Effort:** M. **Perf:** −0.5…−1 ms retina at the listed poses.
+- **Files:** `viewer/src/grassBlades.ts` (meadow path, KB-I78), `clouds.ts` / `shadowsFar.ts` (skip the shadow fetch
+  where the clouds are 0), `model/src/interior/painting.ts` (cheaper far LOD: flat colour beyond ≈ 12 m), the
+  quality presets (`viewer/src/quality*`).
+- **Acceptance:** every pose ≤ 8 ms median at 3024×1964 on an idle bench (3 runs); no visible change at the standard
+  poses except where a far LOD kicks in beyond the distance stated.
+- **Wave-10 review fix (look):** with the "Wolken" default "aus der Luft" (KB-I86), eye-level and interior poses no
+  longer pay for the cloud shadow fetch, which already early-outs at amount 0. The sky-cube refresh is spread over
+  24 strips (KB-I65).
+  - **Three full runs (load 15–17, working tree with the other owners' wave-10 fixes), retina min / median:** 22
+    3.5 / 3.6, 23 3.0 / 3.2, 28 5.9 / 6.1, 39 7.8 / 8.0, 01 7.9 / 8.1, 43 8.1 / 8.3, 47 8.0 / 8.7, 48 8.9 / 9.4 ms.
+  - **Attribution:** the 22 / 23 drop is mostly not the clouds; the A/B shows only +0.1 ms for clouds there.
+  - **Still open:** the meadow blades (39), the aerials (01 / 43 / 47) and 48. The canvas far LOD and an ashlar
+    compile-out restricted to `STONE_MIX` belong to architecture. Partial.
+- **Wave 11 (garden):** the meadow and hay tufts thin from 4.5 m instead of 6 m (`GRASS.meadowDense`, uniform
+  `uGDenseM`; the lawn keeps 6 m, so the garden poses do not change): at 39 the modelled card area at 3024×1964 drops
+  7.3 → 5.5 Mpx (−24 %; blades overlap ~1.2× over the lower screen at eye height; the whole blade field costs
+  ~1.3–1.8 ms retina there by A/B). Benches this wave ran under load 17–20 with several owners' Chrome instances on
+  the GPU (pose 01 at 14 ms instead of 8), so the absolute ≤ 7.5 ms at 39 is **not verified**; the in-page A/B
+  medians moved 17.7 → 15.2 ms (blades off 13.6). 48 (40 m up, no blades): no shadow redraws inside the bench window
+  (`shadowRedraws` 0 in all repeats); its spread followed the machine load (9.4–12.9 ms within one page). A final full
+  run at load 12–14 against the wave-11 baseline (same 59 poses), 1080p / retina: 39 3.6 / 7.8 → 3.5 / 7.9, 48
+  3.8 / 9.5 → 3.6 / 7.5, 47 5.5 / 8.0 → 5.4 / 7.7, 01 6.0 / 7.9 → 6.0 / 7.9, 13 5.0 / 6.2 → 5.1 / 6.1, median Δ 0.0 / 0.0
+  ms (single runs). So 39 is still at 7.8–7.9: the thinning did not show in a single run, the blades are not the
+  whole of it (the pond reflection and the bank trees share the frame). Partial; needs an idle 3-run bench.
+- **Wave 11 (look):** no cheap look-side recovery left. The cloud-shadow fetch already early-outs where the cloud
+  amount is 0, and "Wolken" defaults to "aus der Luft", so eye-level and interior poses do not pay for it; the
+  paintings are already a mip-mapped Canvas2D atlas (architecture's wave-10 fix: 22 retina 3.8 / 4.3 ms, was 7.0). The
+  wave-11 look items cost (interleaved A/B, one session, load 17–20, min / median): candle pool 07 night +0.06 / +0.06
+  ms 1080p and −0.03 / −0.04 ms retina, 07 Fest 0 / +0.06 and +0.08 / +0.12 ms, 20 night +0.17 / +0.17 ms 1080p and
+  +0.37 / +0.44 ms retina (8 rounds; four point lights over the long table, 3.0 ms retina in all); the second indoor
+  shoulder stage at 28 is within the noise (1080p 2.30 / 2.57 vs 2.42 / 2.52, retina 5.78 / 6.20 vs 5.81 / 5.97 ms).
+  The full `shots.mjs --bench` run (`scratchpad/w11look/after-r1`, load ≈ 19) reads +0.5…+1.5 ms on every pose
+  against `wave10-final` (load 14–17), including exterior poses this wave did not touch, with spikes at 01 / 07 / 08 /
+  47 / 48: machine load, not a regression; the idle-machine bench is still owed. Still open: meadow blades (39),
+  aerials, 48.
+- **Lead check (wave 11):** three full `shots.mjs --bench` runs in one session (`scratchpad/wave11-after`, `-r2`,
+  `-r3`, load 13–20, other owners' Chrome instances on the GPU), retina min / median: 39 7.6 / 7.6 (`wave10-final`
+  8.3), 48 5.4 / 6.1 (9.7), 47 7.6 / 7.8, 41 7.6 / 7.8, 43 7.6 / 7.7, 01 7.9 / 8.0, 62 7.8 / 7.9, 08 7.7 / 7.8 ms; 22 / 28
+  3.5 / 5.8. Every pose is ≤ 8.0 ms median (01 rounds to 8.0); the acceptance asks for an idle machine, which this
+  wasn't. `docs/shots/KB-I94/*-39-…-crop-meadow.jpg`: the thinner meadow tufts beyond 4.5 m are hard to see
+  (mean grey difference 4 in the lower third, mostly the tuft pattern). Partial until an idle 3-run bench.
+
 ---
 
+### KB-I95 · Wave 11 (architecture): garden-front relief, room hierarchy, carved heads, fine seat ovals `[x] (wave 11)`
+- **Why:** audit #8 (the CdL garden front reads as a flat slab), audit #9 rest (every state room the same white-and-gold
+  kit; seat-back medallions thick faceted gold rings at 1:1, pose 20), wave-10 review low (the garden door read as a
+  window run down to the floor).
+- **Done (garden front, KB-B01 only):** `CDL_CENTRE` in `layout/grammar.ts` [N research/02 §2.3 / §2.6, research/09
+  §3.4; I sizes]: Lisenen 0.7 × 0.05 m on the centre-risalit edges, profiled surrounds (0.06 band + 0.03 fillet) and
+  EG keystones on the centre axes, the shutters lifted onto the Lisene face where they overlap; the Beletage hoods that
+  were buried in the palace cornice (window tops 355.2 vs cornice foot 355.25) are no longer drawn; the garden door is
+  a croisée-porte (`glazedDoorJoinery`): frame, transom, glazed leaves above a lock rail, stiles, a narrow meeting stile
+  with battement bead, fielded lower panels with a sunk margin, glazing bars at LOD2, hood and keystone. Not added
+  (no source): rustication, a deeper cornice (no room above the Beletage heads), modillions, new roof-line accents (the
+  raised centre hip with lantern, chimneys and Hemmer rods are the documented ones), a deeper risalit projection.
+  New pose 66 (garden door, eye level).
+- **Done (state rooms):** `ROOM_ORDER` + pure `roomOrder`, `corniceProfile`, `rosetteRadius`, `carvedFields`
+  (`interior/finish.ts`) [N research/09 §4.2; I rank and sizes]: grand cornice (architrave step, frieze ovolo, second
+  gilt fillet) in the salles, plain one (fillet, shorter 5-step cove) in antichambres / cabinets; boiserie tones blanc /
+  perle / gris by room rank; rosette radius 0.055 × the shorter span (0.32–0.62 m); leaf fleurons in the Deckenspiegel
+  corners of the salles; carved heads (`mesh.ts carvedHead`: laurel swag tied with ribbon bows) over every pier glass /
+  trumeau (with ribbon ends and drops) and on every second upper field of the gilt panelled rooms. Seat medallions are a
+  swept 22 × 16 mm bead (`ovalMoulding`, `MEDALLION_SECTION`) instead of a torus.
+- **Budget:** lighter rosettes (≈ 760 instead of 1,120 triangles), dado frames on `beadProfileLite`, chimneypiece and
+  sconce small parts trimmed, stove joints open cylinders. Interior triangles per building (wave 10 → wave 11): B01
+  188,584 → 183,774, B02 299,418 → 295,904 (≤ 300 k), B03 248,162 → 241,312, B04 183,664 → 179,056, B06 287,862 →
+  276,246. Light layer 4.37 MB.
+- **Open:** plan elevations still draw no Lisenen / hoods / keystones (they never did); the window-reveal highlight
+  indoors is the look owner's (KB-I92); the cornice / tone differences are deliberately subtle (N).
+- **Lead check (wave 11):** 66 (`docs/shots/KB-I95/after-66-…`): the risalit Lisenen, grey surrounds with keystones on
+  the EG centre axes and the croisée-porte (glazed leaves above fielded panels) read at eye level; the Lisenen are
+  half hidden by the shutters, and the front stays calm, as the missing source demands. At 04 / 15 (95 m) the change is
+  small (crop mean grey 1.2 / 1.6). 20 / 29: laurel swags over the pier glasses and upper panels, slim seat ovals
+  (`*-20-…-crop-carved-heads.jpg`, `*-crop-chairs.jpg`). Light layer: `KB-B01` 13,071 → 13,755 triangles (the only
+  changed node; dropped `wood.frame` +108). Seen at 66: the balcony's shadow below it is speckled and detached from the
+  slab → KB-I99 (look; probably older than this wave: the balcony dates from wave 8, and 04 / 15 show the same band at 95 m). Plans don't draw the new relief → KB-I100. Done.
+- **Review fix (wave 11, architecture, 2026-11-02):** (1) shutters over the Lisenen (66, 15): the leaves of the risalit
+  edge axes were "lifted onto the Lisene face" and ran 0.2-0.3 m past the risalit edge into the air, and the base-plane
+  leaves beside the risalit ran 0.19 m into its return. New rule `CDL_CENTRE.shutter` (`clear` 0.05, `fold` 0.5) [I] with
+  the pure `shutterLeafFit` / `leafSpan` (`layout/facade.ts`): a leaf lies flat on its own wall plane and is sized to
+  its pier: full where it fits, a two-panel folding leaf (volet brisé) where that fits, else none. The pier between the
+  risalit edge and the edge-axis opening is 0.62-0.67 m (0.42-0.47 m outside the surround), less than the Lisene alone,
+  so the outer leaf of the 12.50 / 28.40 axes (EG and Beletage, garden and court) is left off and the Lisenen now read
+  from plinth to cornice; the 9.85 / 31.05 axes fold their risalit-side leaf short of the return. Test: no shutter
+  vertex of KB-B01 lies on a centre-risalit Lisene, past a risalit edge or inside a return (`wave11.architecture.test.ts`).
+  (2) swags (20, 06, 23): the "second half-swag" at each pier glass's top-right corner was the panel-field head of the
+  upper boiserie field behind the glass (the panel layout does not know the glass). `ShellInput.covers` +
+  `wallCoverSpans` (`interior/shell.ts`, filled in `interior/index.ts` from pier glasses, trumeaux, pictures and cases):
+  no field head behind a wall-hung item, the every-second alternation runs over the free fields (B05 window wall: only
+  the two end fields keep one). `carvedHead`: paired, pointed laurel leaves (two per station, splayed ±0.38 rad,
+  ±0.35 rad twist; lite: alternate single leaves), bows just outside the glass frame's top corners so the ribbon ends
+  (2×) and the laurel drops (four leaves, 0.44 m, ≈ 1.9×) hang beside the frame on the boiserie; pier glasses stop
+  `ROOM_ORDER.carved.crest` 0.2 m lower so bows and tablet clear the cornice [I]. Budget: full head 276-292 triangles,
+  lite 100 (≤ 300 / 120); interiors B01 184,574, B02 298,804 (≤ 300 k), B03 242,900, B04 177,440, B06 276,530.
+  Shots (`wave11-fix-architecture/full`, against `wave11-after`): 66 / 15 Lisenen clear (mean grey diff 1.8 / 0.4, the
+  rest of 66's change is the look owner's balcony shadow), 20 2.2, 23 1.7, 06 3.8 (with the look owner's changes).
+  Not changed: the shutter leaves of neighbouring windows still overlap on every ordinary 1.35 m pier palace-wide
+  (two 0.65 m leaves + two 0.2 m surrounds) → Discovered. (3) the menagerie watercourse → KB-I97.
+
+
+### KB-I96 · Forest look streams stable under land-cover edits `[x] (wave-11 review fix)`
+- **Why:** wave-11 lead check (KB-I84): pose 50 (Pavillon zu Carlsberg) changed its forest crowns (mean grey 13.6)
+  although no tree there was meant to change. `openTreePlan` (`viewer/src/landcover.ts`) drops a wave-2 lattice field
+  tree outright when the class under it no longer passes (meadow 0.35, hay 0.25, field 0.12), before the ghost logic;
+  `Forest.buildTile` (`viewer/src/forest.ts`) draws every tree's looks from one stream per 320 m tile in plan order, so
+  one dropped entry re-rolls every later tree of the tile. Eight tiles changed in wave 11 (lead plan comparison against
+  `w11g/terrain-before`: 5_0, 4_2, 4_4, 3_0, 4_0, 3_1, 1_1, 1_2) [measured].
+- **Payoff:** – / ★ (stable trees for every later land-cover change). **Effort:** S-M. **Perf:** 0.
+- **Files:** `viewer/src/landcover.ts` (`openTreePlan`), `viewer/src/forest.ts` (`buildTile`), tests.
+- **Acceptance:** either every lattice candidate that passes the class-independent tests stays in the plan (a ghost when
+  its class fails), or, better, each tree's looks come from a stream seeded by its own position (`hashString` of
+  `gx, gy`, as the wave-11 groups already do), so no plan edit can move another tree's looks. A test changes the class
+  of one cell and checks every other tree's variant, size, lean and colour. Decide whether to restore the `wave10-final`
+  look at 50 (only possible with the old raster as reference) or accept a one-time re-roll and re-baseline.
+
+- **Wave-11 review fix (garden):** decided for restoring `wave10-final` (a per-position stream for every tree would
+  have re-rolled every forest pose once more). `scripts/prepare-terrain.py` paints the 1789 ground a second time without
+  `PLANNER_BASE_SKIP` (the Gewann fill LC-06…08, mirror of `GEWANN_FILL_IDS`) and writes the differing cells as runs
+  [row, col0, length, class] to `meta.json` `ground.plannerBase` (79,430 cells in 1,337 runs; the rebuilt base equals the
+  pre-wave-11 raster `w11g/terrain-before` cell for cell; `SKB_TERRAIN_OUT` writes to another folder for A/B).
+  `landcover.ts` `plannerBaseGround` rebuilds it; `openTreePlan(…, { base })` decides on the base which Überhälter and
+  lattice trees exist (and so their place in the tile stream), the current ground only turns them into ghosts;
+  `forest.ts` plans the hay cocks and the hinterland on the base too and ghosts entries whose cell was repainted. A
+  ghost hay cock now draws its last value like a drawn one. Result: the 8 re-rolled tiles are back; 50 differs from
+  `wave10-final` by 0.48 mean grey (wave 11: 13.4), 260 calls (264; the ghost-only tiles are not built). Rule for later
+  land-cover edits of the open land: add the area to `PLANNER_BASE_SKIP` (and `GEWANN_FILL_IDS` if it is a fill), so
+  it hides trees but moves none; a change to the base polygons themselves still re-rolls (then re-baseline on purpose).
+  Test `viewer/tests/tree-streams.test.ts`: painting field over meadow and hay keeps every tile's main-stream entry list
+  (role, species, position, scale) identical and only flips ghosts; without the base the same paint changes it. The
+  per-tree look draw in `buildTile` follows that list, so variant, size, lean and colour of every other tree stay.
+  Not done: the suggested shot gate (non-target pose > 1.0 mean grey fails) belongs in the lead's tooling
+  (`.claude/skills/skb-improve/scripts/`); the comparison used here is `scratchpad/w11fg/cmp.py`.
+
+### KB-I97 · Menagerie: broad KL-B43 watercourse and a softer house finish `[x] (wave-11 review fix)`
+- **Why:** wave-11 garden request (Discovered). T1 p. 383 calls KL-B43 a "breiter Wasserlauf" [D], but `MENAGERIE.channel`
+  draws a 2.2 m channel whose water quad lies 0.12 m below the lower bank (`exterior/menagerie.ts` `channel()`), so on
+  any cross-fall the terrain covers it and from 40 m it reads as a kerbed gutter (36 / 38); the houses (white render,
+  slate, red plinth) read as kennels.
+- **Payoff:** ★ / ★★. **Effort:** M. **Perf:** ≈ 0.
+- **Files:** grammar `MENAGERIE`, `model/src/exterior/menagerie.ts`, `model/src/layout/menagerie.ts` (house-slot clearance),
+  terrain carve if needed (site).
+- **Acceptance:** a bed of ≈ 4–6 m [I], water at the low bank minus a freeboard, small weirs at the terrace steps, the
+  water visible from 36 / 38; a quieter house finish (limewash tone, the T1 roof if named, otherwise tagged I).
+- **Done (wave-11 review fix, architecture, 2026-11-02):** `MENAGERIE.channel` 4.5 m bed (was 2.2) [I] in a sandstone
+  trough: pure `channelReaches(line, ground)` (`layout/menagerie.ts`) splits the line into level reaches; a reach ends
+  where the ground has fallen more than `maxProud` 0.6 m below its water, and its weir stands at the foot of that fall
+  (the terrace step); water `over` 0.05 m above the reach's highest bed ground (5 samples across, 1 m stations), never
+  uphill, either line direction. On KL-B43: 8 reaches, weirs at 6 / 21 / 41 / 61 / 81 / 113 / 125 m (levels 299.94 …
+  292.61). `exterior/menagerie.ts channel()`: level water bank to bank, grey coping `freeboard` 0.2 m above it, red
+  sandstone outer faces down to the ground (the trough stands ≤ ≈ 1.1 m proud at a reach's lower end, over the step),
+  weirs (crest under the upper water, dressed face, a falling water sheet), end walls at head and outlet; LOD1 4 m
+  stations without the inner faces. The row terrace walls are cut open where the trough passes; slots within
+  half-width + kerb + 0.4 m stay open (66 houses, two slots per row). The water is drawn above the LiDAR ground, so no
+  terrain carve was needed (the acceptance's "low bank minus freeboard" would have needed one; the garden owner's
+  terrain is untouched). Houses: `MENAGERIE.houseRender` `#DED6C5` on `render.farm` (warm broken-white limewash, rough)
+  for ring and rows [I]; roofs unchanged (slate D T20 ring, I rows; T1 names no roof). Catalogue KL-B43 `material`
+  text updated (I tags). Tests in `wave11.architecture.test.ts` (stepped terrain: one reach per terrace, weirs at the
+  step feet, water never buried, direction-independent; terrace walls cut; LOD1/2 build). Light layer 4.37 MB.
+  Shots: 38 shows the broad water channel climbing the terraces with its weirs (`wave11-fix-architecture/full/38-…`,
+  mean grey diff 2.9); 36's camera does not see the channel lane (trees), only the warmer ring houses. Done.
+
+### KB-I98 · Shaded window reveals: interior laibung to the glass or baked AO `[ ]`
+- **Why:** KB-I92: at 20 / 29 the bright flat boxes in the windows are the exterior reveals inside the glass
+  (`KB-B05/exterior/render.lime`, `KB-B03/exterior/render.lime`), lit evenly by the outdoor sky; no tone curve can shade
+  them (29 still has 6 % of its pixels ≥ 240 sRGB).
+- **Payoff:** – / ★. **Effort:** S. **Perf:** 0.
+- **Files:** `model/src/interior/shell.ts` (reveal up to the glass) or exterior vertex AO on reveals.
+- **Acceptance:** at 20 / 28 / 29 the reveals show a gradient from the glass inward and stay ≤ ≈ 0.9 display white.
+
+### KB-I99 · Near-facade shadow quality: speckled, detached balcony shadow `[x] (wave-11 review fix)`
+- **Why:** wave-11 lead check at the new pose 66 (CdL garden front, 26 m, 08:00): the Festsaal balcony's shadow on the
+  render is a speckled band that starts below a lit strip under the slab (dither / bias), not a soft contact shadow.
+- **Payoff:** – / ★. **Effort:** S. **Perf:** ≤ +0.2 ms.
+- **Files:** `viewer/src/` shadow setup (bias / normal bias, PCF kernel, the near cascade), maybe the balcony's
+  shadow-caster geometry.
+- **Acceptance:** at 66 and 15 the shadow meets the slab and has a smooth penumbra; no acne elsewhere (03, 04, 14).
+- **Result (wave-11 review fix, look):** the cause was the depth bias, not the caster. three adds `shadow.bias` to the
+  orthographic light depth, and the near map spans near 100 … far 3000 m, so the fixed −0.0004 moved every receiver
+  1.16 m toward the sun: the render within ≈ 1.2 m of the slab along the sun ray stayed lit (the "lit strip"), the
+  shadow began 0.4 m below the brackets, and where the five PCF taps (rotated per pixel by interleaved gradient noise)
+  straddled the threshold it broke into per-pixel speckle. New `viewer/src/shadowsNearMath.ts`: the bias is set in
+  metres, two texels of the fitted map and at least 5 cm (walk 120 m map: 6 cm; flight 700 m: 0.68 m), converted to
+  depth units per frustum in `updateShadowFrustum` (`nearShadowBias`). Normal bias and PCF unchanged; the far map keeps
+  its own bias. At 66 and 15 the slab shadow now starts at the slab, the brackets sit in it, one band with a soft edge
+  (a faint PCF grain remains on its outer rim); the main cornice and the Lisenen at 15 now cast their short shadows.
+  Side effect, wanted: the sun no longer leaks onto the upper room walls through the wall / ceiling junction (06, 22,
+  29: the bright strips under the cornice are gone; the floor sun pools are unchanged). Checked for acne: 01, 03, 04,
+  08, 09, 12, 14, 42 (diff vs `wave11-after` ≤ 1.1 mean grey, all in shadow edges). Cost 0 (a uniform). Tests
+  `shadowsNear.test.ts`. Shots `wave11-fix-look` (scratch). Done.
+
+### KB-I100 · Plan elevations draw the KB-B01 garden-front relief `[ ]`
+- **Why:** KB-I95 added Lisenen, surrounds, keystones and a croisée-porte division to the CdL garden front
+  (`CDL_CENTRE`); the elevation sheet (`plans/src/sheets/elevation.ts`) never drew Lisenen, hoods or keystones, so plans
+  and 3D agree on the openings but not on the relief.
+- **Payoff:** ★ / –. **Effort:** S. **Perf:** 0.
+- **Acceptance:** the garden elevation of KB-B01 shows the Lisenen, keystones and the door division from `CDL_CENTRE`;
+  `pnpm run plans --only` the sheet, preview checked.
+
 ## Discovered (append here; give each a new id when promoted)
+
+- 2026-11-02 (wave-10 review fix, look, decision): "Wolken" defaults to "aus der Luft". The cumulus reads well from
+  the air, where the shadows dapple the plateau. At eye level even the domed clouds compete with the facades, and a
+  clear sky is equally plausible for 15 Jul 1789 [U]. "Immer" stays available, and pose 62 and the golden-hour
+  Rundflug shot ask for clouds explicitly.
 
 - 2026-11-02: `shots.mjs` 01-aerial-west is byte-identical to `docs/visual-audit/01-aerial-west.jpg`, so headless
   renders are deterministic and byte comparisons can prove "no visual change" for refactors.
@@ -4100,6 +4976,150 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
   `glassView`), `viewer/src/main.ts` (garden: grass blades; look: mirrors, window pull), `scripts/prepare-terrain.py`
   (garden: natural shores, KB-V1 low-pass). The viewer terrain was regenerated by the garden owner (backup of the
   previous dtm in the scratchpad `g9/dtm1789.before.f32`). No poses added; next free pose number 56; next free id KB-I80.
+- 2026-11-02 (wave 10, garden): audit rank 1 (mowing zones) done: `viewer/src/lawnZones.ts` (pure, signed distance per
+  2 m cell, macro B of the ground pack; 128 + 8 · sd), grammar `PLEASURE_GROUND`, `ZONE_GLSL` (landcoverBake.ts) used
+  by the bake and the terrain shader; terrain cache key `terrain-splat-11`; pose 54 (beltwalk, eye level). Meadow-tile
+  grass blades in the meadow zone were tried and reverted (retina 33 6.4 → 8.9, 04 5.0 → 6.1, 16 5.3 → 6.0 ms).
+  Retina A/B zones on vs off (same session, 3 runs, min): 04 +0.22, 16 +0.23, 33 +0.75, 54 +0.18 ms; the near swaths
+  and the dither cost ≈ 0 (measured by switching them off); the rest is the ordinary meadow shading on the pixels
+  that are now meadow. Lower third 16: mid-frequency std 1.30 → 2.32, mean colour (105,125,65) → (125,137,75), i.e.
+  slightly yellower. The standard poses could not be re-aimed, so no clump was pulled into the 25–45 m middle ground.
+  Rank 12 (avenue variation) done: `rowVariation` hashed from the position, rnd streams still consumed (no other tree
+  moves); lath guards not added (no source). Rank 11 (hotbeds) done: `HOTBED_LIGHT`, `site/hotbed.ts`, sash bars and
+  props. Rank 6 (Ehrenhof sand) partial: raked / trodden patches only; open: ruts, camber, the lane-end change in
+  court.ts / cobbles.ts, a staffage toggle (Le Clerc figures not checked). Rank 2 (Gewannflur) skipped: LC-01..04
+  already read at 01, and more fields or thinner hinterland trees would move seeded trees (`openTreePlan`); proposed
+  as a separate tree-planner pass with per-cell seeding.
+- 2026-11-02 (wave 10, garden, trap): `scripts/export-explorer.ts` exports every site mesh whose material starts with
+  `stone.`, so a garden part must not borrow a `stone.*` key for its colour (the hotbed lights first tried
+  `stone.marble`). Requested from the look owner: a non-mirror `glass.frame` material (roughness ≈ 0.3) for hotbed
+  and glasshouse lights; until then they use `wood.frame` with a glass colour.
+- 2026-11-02 (wave 10, look): audit rank 5 (night sky) done: pure `viewer/src/ephemeris.ts` (Meeus ch. 7, 12, 25,
+  47 truncated to the 30 + 30 largest terms, 48; Krisciunas & Schaefer 1991 moon brightness; night extinction 0.25
+  mag per air mass [I]); example 47.a to 0.002° in longitude, 0.0005° in latitude, 30 km in distance; 48.a k 0.6785
+  (book 0.6786). `viewer/src/nightSky.ts`: the moon disc (phase, bright limb turned by the parallactic angle, maria
+  table D-> places with round shapes I, earthshine, a 7-radius aureole, display cap 3) and 1,604 BSC5 stars (V < 5,
+  generated `viewer/src/starCatalogue.ts` by `scripts/stars/bsc5-to-ts.py`, precessed to the date, B−V colour by
+  Ballesteros 2012, spot size growing with energy, gain 6 [I: lifts the faint stars to what a dark-adapted eye sees
+  on a screen], faded with the sky luminance). Moonlight: `Atmosphere.update(…, moon)` turns the sun's
+  DirectionalLight into the moon (4100 K, illuminance × pre-exposure) while the sun is down, so the existing near and
+  far shadow maps cast moon shadows (61). Honest date: on 15 Jul 1789 the moon is waning (46 %) and below the
+  horizon until 23:09 LMT, so 26 / 60 have stars and no moon; the time panel shows "Mond: abnehmend, 46 %
+  beleuchtet, unter dem Horizont (Aufgang 23:09 Uhr)"; the checkbox "Vollmondnacht (6. Juli 1789)" moves the date to
+  the evening of the nearest full moon (7 Jul 1789 ≈ 09 UT). Day frames: the moon, the stars and the moonlight are
+  off while the night factor is 0, so no day frame changes. **Licence flag:** the BSC5 file (SAO/TDC mirror of
+  NSSDC/ADC V/50) states no licence terms; audit it before a public release (`scripts/release/`).
+  Rank 7 (cumulus) done: `viewer/src/clouds.ts`, one coverage field (two value-noise octaves, an exact 32-bit integer
+  hash identical in TS and GLSL; a float `fract` hash differed enough between float32 and double to move whole
+  clouds) for the sky (soft 40-step volume march in the KB-I65 sky cube, `atmosphere.ts` CUMULUS_GLSL) and the
+  shadows (`shadowsFar.ts`: a baked 512² RG texture over 24 km, noise + clearing × rim fade, one fetch per sunlit
+  pixel, skipped where the sun is already shadowed). The first procedural shadow lookup cost +0.75 ms retina at 01
+  (01 / 08 then 8.4 ms); the texture brought it to +0.05…0.35 ms. Field phase `CLOUD.seed` chosen by search so no
+  standard pose camera has cloud shade within 200 m at its hour (test); about 16 % of the open plateau in shade at
+  full cover. Refresh frames of the sky cube (hour changing every frame) cost ≈ +1.2 ms at 1080p with the cumulus
+  (8.4 → 9.6 ms median at 16); steady frames do not. Drift in the Rundflug skipped: it would refresh the sky cube on
+  every frame. Shapes are still a height field over a flat base: from eye level the towers read somewhat stylised
+  (vertical streak texture from the dither in the 1024² cube) — a later pass could add a 3D detail noise.
+  Wave-9 leftover (fountain jet) done: `water.ts` `jetPartMaterial` (per-part alpha patterns animated by `waterTime`)
+  and `jetDrift` / `jetFallTime` (down-wind drift ≈ 0.6 m at the water for 5 m, toward local (0.8, −0.6) like the
+  grass and foliage), `features.ts` `jetMesh` rebuilt (thinner tapered column, 32-segment sheared curtain, circle
+  foam at the landing point). Candles in the 07 / 25 default views: `night.ts` `addTableCandles` (a candlestick on
+  each guéridon, 2–3 candelabra on a laid "Tafel" in candle-lit rooms; pure `nightlights.ts` `tableCandelabra`),
+  flames with the other candles, no new lights. Interior CPU (rank: 27 / 28 / 29 within +0.3 ms of `wave8-final`):
+  this session fhd CPU min 3.10 / 2.04 / 3.30 ms vs 2.95 / 1.93 / 3.25 (≤ +0.15 ms), so the wave-9 review fix holds;
+  no further change. Retina in this run (load 15–17): 01 7.70…7.88 min, 08 7.75…7.87 min, 62 7.79 min (≤ 8 ms);
+  interiors at retina drifted run to run (25 4.4…6.5 ms on and off alike).
+- 2026-11-02 (wave 10, look, process): shared files edited additively: `viewer/src/main.ts` (night sky, moon state,
+  clouds, skyNote, table candles, skb hooks `cloudData` / `nightSky` / `moon`), `viewer/src/ui.ts` (beyond the
+  festival toggle: the "Wolken" and "Vollmondnacht" checkboxes and the moon note `#moonv`), `model/src/site/features.ts`
+  and `water.ts` (jet only), `model/tests/water.test.ts`. Poses 60–62 appended (the look's reserved range). Not done:
+  the garden owner's request for a non-mirror `glass.frame` material (it needs a new name in `context.ts`
+  `MATERIAL_NAMES`, which is not the look's file). The foliage back-light rim still uses the unshadowed sun colour, so
+  trees under a cloud shadow keep a faint rim (foliage owner).
+- 2026-11-02 (wave 10, lead, gates): `verify.sh test build catalogue export warn` pass: 907 tests (1 skipped) in 101
+  files; catalogue reproduced byte for byte (117 buildings, 106 placed, 88 terrain features, 119 rooms, 168 interior
+  openings, 12 stairs; 0 errors, 0 warnings, 0 programme issues, 0 overlaps); temp export **4.33 MB**, 118 nodes (103
+  buildings + 15 site), 423,007 triangles, round trip OK; `warn` `[]` for B01–B06, B10, B11; history-check 0 failures,
+  0 of 20 deltas open. Three consecutive `shots.mjs --bench` runs gave byte-identical JPEGs at all 56 poses. JS bundle
+  2,039.6 kB (1,930.7 after wave 9; the star table is most of the rise): lazy-loading `photo.ts`, `tour.ts`,
+  `festival.ts` and now `starCatalogue.ts` is overdue.
+- 2026-11-02 (wave 10, lead, export): against the wave-9 lead export (taken before the wave-9 review fixes) the light
+  layer gains `site:KB-V2` (the carriage drive's flank walls, wave-9 review fix, 320 triangles); `KB-B01` 13,039 →
+  13,071 triangles (narrower perron with riser blocks, glazed garden door) and its `bbox_local` W edge 1,249.03 →
+  1,249.20; `KB-B07` 5,859 → 6,125 (portico collar, entasis, no attic block); `index.json` heights +0.01 m on the
+  buildings with a lightning-rod mast (larger knob); `COLOR_0` carries the plinth damp, the grey Tempelzimmer steps and
+  the perron riser tint / step-corner AO. The mixed-ashlar and canvas shaders are viewer-only. Format unchanged; the
+  re-export into `../app` still waits for the user's go (`docs/explorer-integration.md` §2.5).
+- 2026-11-02 (wave 10, lead, look): the cumulus (KB-I86) read well from the air (08, 62: dappled cloud shadows, clouds
+  in the haze) but stylised at eye level (03, 05, 16, 32, 49): pointed, flat-based "tents" with a fine vertical streak
+  and dither texture, brighter than the surrounding haze. The architecture owner saw the same artefact as horizontal
+  slice banding at 1080p; both come from the 40-step dithered march resolved in the 1024² sky cube. Because "Wolken"
+  is on by default, every daytime eye-level frame now carries it; turning the default off (or on only in fly mode)
+  until a detail-noise pass lands is the cheap fallback (look owner).
+- 2026-11-02 (wave 10, lead, perf): at retina 39 (8.0 / 8.2 ms) and 48 (median 9.6) miss the 8 ms eye-level target;
+  47 (8.0 median), 01 / 08 / 41 / 43 / 46 (7.9) sit on it (KB-I94). The garden owner's re-bench requests (01, 33, 54)
+  give 7.7 / 7.9, 6.9 / 6.9, 6.2 / 6.2 ms (min / median, load 14–17); still not an idle machine. The pose-28 rise the
+  look owner saw (retina 5.9 → 6.9) is the procedural canvases (architecture A/B +0.8 ms retina at 28).
+- 2026-11-02 (wave 10, lead, wave-9 Discovered): the sentry box seen through the CdL's open garden door at 16 / 17 is
+  resolved by the glazed door (KB-I88); the hard cobble-lane end on the court axis (03 / 09 / 14) is still open (KB-I83).
+- 2026-11-02 (wave 10, lead, process): shared files edited additively by the owners: `model/src/layout/grammar.ts`
+  (garden `PLEASURE_GROUND`, `AVENUE_ROW`, `HOTBED_LIGHT`; architecture `ROTUNDA.porticoCollar` / `collar` /
+  `entasisFrom`, `HEMMER_ROD`, `STATE_ROOM.library` / `coveReach`), `model/src/materials/index.ts` (architecture:
+  ashlar patch on `stone.red`), `viewer/src/main.ts` (garden: lawn zones; look: night sky, moon, clouds, table
+  candles, `skb.cloudData` / `nightSky` / `moon`), `viewer/src/ui.ts` (look: "Wolken (Schönwetter, Hypothese)",
+  "Vollmondnacht (6. Juli 1789)", the moon note; reviewed: German labels, documented in tooltips),
+  `.claude/skills/skb-improve/scripts/shots.mjs` (poses 54, 60–62 appended; no existing pose changed).
+  `docs/architecture.md` got a "Wave 10 (architecture)" paragraph. The lead made no source change in this check.
+  Next free id KB-I96 (wave 11 architecture took KB-I95); next free pose numbers 55–59, then 63.
+
+- 2026-11-02 (wave 11, garden): the forest tiles (`viewer/src/forest.ts` `buildTile`) draw every tree's looks from
+  one stream per 320 m tile in plan order, so adding or removing a single open-land tree re-rolled the crown variant,
+  size, lean and colour of every later tree of its tile (seen at 12 / 46 / 50 in a first wave-11 run). The thinned
+  field trees now stay in the plan as `ghost`s (they draw, nothing is drawn) and the new groups take their own stream;
+  any future change to the open-tree plan must do the same. Lead: lattice trees dropped by a class change bypass the
+  ghosts (pose 50) → KB-I96.
+
+- 2026-11-02 (wave 11, garden, wave-10 review low): the jet at 17 (~60 m) dissolved against the grove. Column, crown
+  and curtain now gain up to 60 % opacity between 20 and 70 m (`GARDEN.basinLook.jetFar` / `jetFarGain`,
+  `features.ts` `keepFarOpacity`) [I]. The part materials are per (part, height), so this assumes one jet per height
+  (true today: HG-04 only).
+
+- 2026-11-02 (wave 11, garden → architecture): Menagerie 36 / 38. T1 p. 383 calls KL-B43 a broad watercourse, but it is
+  drawn as a 2.2 m channel (`MENAGERIE.channel` width 2.2, kerb 0.35) whose water quad lies 0.12 m below the lower bank
+  (`exterior/menagerie.ts` `channel()`), so on any cross-fall the terrain covers it and from 40 m it reads as a kerbed
+  gutter; the houses (white render, slate, red plinth) read as kennels. A terrain carve alone cannot help (the water is
+  always placed below the carved banks). Request for architecture: a wider bed (T1 "breit"; I ≈ 4–6 m) with the water
+  at bank level minus a freeboard on the low side and small weirs at the terrace steps, and a softer house finish
+  (limewash tone, Biberschwanz or the T1 roof if named). Not done in wave 11 (architecture-owned files) → KB-I97.
+
+- 2026-11-02 (wave 11, lead): gates `verify.sh test build catalogue export warn` pass: **965 tests** (1 skipped) in 108
+  files; catalogue reproduced byte for byte (117 buildings, 106 placed, 89 terrain features; 0 errors, issues,
+  overlaps); temp export **4.37 MB**, 118 nodes, 427,539 triangles, 732,877 vertices, round trip OK; `warn` `[]`;
+  history-check 0 failures, 0 of 20 deltas open. All 58 poses byte-identical over three full runs.
+- 2026-11-02 (wave 11, lead, pose 50): not the look owner's light or foliage edits, as the garden owner suspected, but
+  KB-I84's class raster: see KB-I84 "Lead check (wave 11)" and KB-I96. The look owner's report of "a near tree crown
+  covering the right half of 31" is not in the lead's run: the 31 trees stand where they stood and only change tone and
+  crown shape (KB-I81, `docs/shots/KB-I81/*-wave11-31-…`).
+- 2026-11-02 (wave 11, lead, export): against the committed wave-10 state (`c10/exp-head`, 426,855 triangles) only
+  `KB-B01` changes, 13,071 → 13,755 triangles (garden-front Lisenen, surrounds, keystones, croisée-porte frame);
+  `index.json` and `footprints.geojson` are identical apart from the timestamp; dropped `wood.frame` 253,996 → 254,104.
+  The wave-10 review fixes had already changed the layer against the wave-10 lead export (`KB-B07` 6,125 → 6,517,
+  `KB-B87` 4,065 → 4,785, `KB-B88` 2,680 → 3,048, `site:KB-V2` 320 → 480, `site:TF-03…TF-08` copings); both are now in
+  `docs/explorer-integration.md` §2.5. Format unchanged; the re-export into `../app` still waits for the user's go.
+- 2026-11-02 (wave 11, lead, low): at 46 one of the new wayside groups stands so close to the eye-level camera that a
+  crown hangs into the top right corner and its shadow into the bottom right; acceptable as a wayside, but a framing
+  cost at a standard pose. Several exterior poses draw 4–8 fewer calls than in `wave10-final` (30, 32, 33, 35, 38, 42,
+  50, 53); not traced, no visible loss found.
+- 2026-11-02 (wave 11, lead, process): shared files edited additively: `model/src/layout/grammar.ts` (garden
+  `AVENUE_ROW.aniso` / `tone` / `hue`, `GARDEN.basinLook.jetFar` / `jetFarGain`; architecture `CDL_CENTRE`,
+  `ROOM_ORDER`), `viewer/src/main.ts` (look: candle pool wiring), `.claude/skills/skb-improve/scripts/shots.mjs` (pose 66
+  appended; no existing pose changed). The lead made no source change in this check. Next free id KB-I101; next free
+  pose numbers 56–59, 63–65, 67–71, then 72.
+- 2026-11-02 (wave-11 review fix, architecture): open shutter leaves of neighbouring windows overlap on every ordinary
+  pier palace-wide (KB-B01: 2.65 m axes and 1.3-1.4 m windows leave 1.25-1.35 m piers, but two 0.65-0.7 m leaves plus
+  two 0.2 m surrounds need ≈ 1.75 m), so two coplanar leaf boxes share each pier. The fix is the same
+  `shutterLeafFit` rule with the neighbour's leaf as a guard (folding leaves on narrow piers), but it changes every
+  exterior pose, so it needs its own item (`exterior/facade.ts`, `layout/facade.ts`).
 
 ## Decisions log
 
@@ -4195,3 +5215,19 @@ polish (audit passes 2–3) · **later** needs headroom or a decision.
 | 2026-11-02 | KB-I22 (wave 9): the Hemmer head is a gilt knob with a vertical spike and four short level points; masts 0.4 × roof rise (1.2–3.0 m); 0.5 m points on roofs under 120 m² | keeps the NDB Fünfspitz form (D) while losing the aerial look; Hemmer's own height and spacing rules are not found (U) |
 | 2026-11-02 | KB-I72 (wave-9 review fix): the CdL perron returns to the portal frame + 0.9 m (withdraws the wave-9 three-axis width), tagged D-> steps / HMS stair / N width, no LC; sentries on the first piers | no source shows a broad CdL perron: LC's broad Freitreppe belongs to the KB-B02 head (research/07 §1.1), and HMS (research/06 §3.3) shows a short stair between the sentry boxes; the 10 D-> steps stay against HMS's ≈ 5 (conflict noted in the tag); the narrower flight puts the sentry pair on the piers instead of in front of windows |
 | 2026-11-02 | Wave-9 lead check: KB-I78 (lawn blades look and retina cost) and KB-I79 (rotated `axisRect` side audit) promoted; the explorer re-export still waits for the user's go | each is measured or found in `wave9-after` / the KB-B28 fix; the light-layer format is unchanged |
+| 2026-11-02 | Wave 10 (look): the viewer keeps 15 July 1789 and shows its real moon (waning, below the horizon until 23:09); a "Vollmondnacht" switch moves to 6 July 1789, the nearest full-moon evening, and says so | no invented full moon on the documented date; moonlit shots are possible and labelled with their date |
+| 2026-11-02 | Wave 10 (look): moonlight reuses the sun's DirectionalLight and its near / far shadow maps while the sun is down | moon shadows at no extra shadow pass; sun and moon are never both above the light threshold |
+| 2026-11-02 | Wave 10 (look): fair-weather cumulus on by default ("Wolken"), with a sunny clearing round the residence and a field phase that keeps every standard pose in sun | a photographer waits for the sun [I]; the weather of 15 Jul 1789 is U, July high-pressure cumulus is N |
+| 2026-11-02 | Wave 10 (look): cloud shadows read a baked 512² texture of the same noise, the sky marches the procedural field | the procedural lookup cost +0.75 ms at retina on every lit pixel; the sky is cached, so it can afford the exact field |
+| 2026-11-02 | Wave 10 (look): no cloud drift in the Rundflug | moving clouds would re-shade the sky cube every frame (≈ +5 ms at 1080p) |
+| 2026-11-02 | Wave 10 (garden): Petri's lawn is a close-mown pleasure ground only along the walks, before the terrace, round the rondell and at the benches; the rest is aftermath hay meadow | research/11 planting table (meadow in July: mown strips and seeding grass, N); one uniformly mown lawn of HG-01's size is a 19th-century image |
+| 2026-11-02 | Wave 10 (garden): no Gewannflur thinning (KB-I84) until the hinterland tree planner seeds per cell | changing the field cover with the current planner reshuffles seeded trees at the standard poses |
+| 2026-11-02 | Wave 10 (garden): garden parts never borrow a `stone.*` material key for colour | `scripts/export-explorer.ts` exports every site mesh with a `stone.*` material; a `glass.frame` key is the proper fix (KB-I90) |
+| 2026-11-02 | Wave 10 (architecture): paintings as procedural old-master compositions (option A); real BStGS works (CC BY-SA, option B) need the user's licence decision | no artwork is copied and no HMS image used; supersedes the KB-I26/I27 "tonal placeholder" row for the look, not for the rule that no image of the hang survives |
+| 2026-11-02 | Wave 10 (architecture): the plinth red `#A65E4A` is drawn as mixed dressed stone (red 0.64, yellow-grey 0.24, grey-white 0.12) in the viewer; the light layer keeps the baked colour plus the plinth damp | local Buntsandstein beds vary (N, shares I); viewer-only shader keeps the export unchanged in format and size |
+| 2026-11-02 | Wave-10 lead check: KB-I80…I89 recorded as items; follow-ups KB-I90 (glass.frame), KB-I91 (foliage rim), KB-I92 (reveals, TF-08 coping), KB-I93 (BSC5 licence) and KB-I94 (retina headroom) promoted; the cumulus stays partial (eye-level look); the explorer re-export still waits for the user's go | each is measured or seen in `wave10-after` (three runs); the light-layer format is unchanged |
+| 2026-11-02 | Wave 11 (look): the visitor's room at night is lit by its own flames: candle clusters (≤ 0.9 m apart) of 1 cd per flame, the 4 most relevant as shadowless inverse-square sphere lights, the rest plus the inter-reflection (Φρ / A(1−ρ), ρ 0.45) as the room ambient; the Fest night is brighter only because more flames burn; the indoor exposure key drops from 5 to 3 lx (`CANDLE_KEY_LUX`) and the scotopic grade to 0.35 indoors | the wave-10 room ambient lit every wall evenly and the table lamp was a screen-space grey wash; a fixed pool of four lights keeps the lit programs stable from room to room and costs nothing by day [I] |
+| 2026-11-02 | Wave 11 (look): the star table comes from HYG 4.4 (CC BY-SA 4.0) instead of BSC5; the footer names it and the research credit is shortened to stay on one line | BSC5 states no licence terms; HYG states CC BY-SA 4.0, so a public build only needs the attribution and the ShareAlike note in the release audit |
+| 2026-11-02 | Wave 11 (look): sunlit reveals are tamed by a second shoulder stage above display 0.66 (indoors by day), not by darkening the reveal materials | walls, parquet and linen below ≈ 0.84 exposed stay unchanged; the remaining flat boxes at 20 / 29 are exterior reveals and need geometry or AO (architecture) |
+| 2026-11-02 | Wave 11 (garden): field trees only in a context (farmstead, way, field edge, bank, forest edge, old single tree on meadow or hay ≥ 40 m from the ploughland), none inside the strips; thinned trees kept as ghosts in the plan | audit #2: a Gewannflur has no trees in the common strips [N research/11 S1]; ghosts keep every forest tile's random stream, so no other tree changes |
+| 2026-11-02 | Wave-11 lead check: the pose-50 forest change is a KB-I84 side effect, not accepted as intended; recorded as KB-I96 instead of re-baselining now. 12 / 46 accepted as KB-I84's goal. Follow-ups KB-I97 (Menagerie watercourse), KB-I98 (reveal gradation), KB-I99 (balcony shadow), KB-I100 (plan parity) | the wave rules forbid moving trees or seeded looks at standard poses unless that is the item's goal; a per-tree look seed fixes the whole class of problem once |

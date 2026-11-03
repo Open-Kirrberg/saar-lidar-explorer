@@ -129,15 +129,15 @@ footprint; for WALL buildings it is the buffered centre line.
 
 ### 2.5 Light-layer changes (re-export pending)
 The copy in `../app/public/data/shared/karlsberg1789/` is still the 2026-11-01 export (4.65 MB, 99 nodes), which
-§2.2 describes. The castle side has changed since; a temp export (`verify.sh export`, 2026-11-02, after wave 9 and
+§2.2 describes. The castle side has changed since; a temp export (`verify.sh export`, 2026-11-02, after wave 11 and
 all its owners' changes) gives:
 
 | | 2026-11-01 (deployed) | 2026-11-02 (pending) |
 |---|---|---|
-| `buildings.glb` | 4.65 MB, 99 nodes (91 buildings + 8 site) | **4.32 MB**, 117 nodes (103 buildings + 14 site) |
-| triangles / vertices | 340 087 / 624 855 | 422 389 / 723 845 |
+| `buildings.glb` | 4.65 MB, 99 nodes (91 buildings + 8 site) | **4.37 MB**, 118 nodes (103 buildings + 15 site) |
+| triangles / vertices | 340 087 / 624 855 | 427 539 / 732 877 |
 | `POSITION` | float32 | int16 on a 1/64 m grid, per-node translation + scale (max error 7.8 mm, KB-I62) |
-| dropped `wood.frame` / `metal.iron` | 294 208 / 16 080 triangles | 253 924 / 32 892 triangles |
+| dropped `wood.frame` / `metal.iron` | 294 208 / 16 080 triangles | 254 104 / 32 892 triangles |
 | `footprints.geojson` / `index.json` | 91 polygons / 91 entries | 103 / 103 |
 | `bboxEN` | S edge N 5464622 | [[381255.3, 5464643.2], [383159.4, 5467054.1]] |
 
@@ -227,6 +227,43 @@ What changed (format `sle-recon-v1` unchanged; the explorer needs no code change
   - The 1789 terrain under the castle changed again (`prepare-terrain.py`: natural pond shores and the TF-21 island,
     the KB-V1 forecourt low-pass); the explorer uses its own 2025 DTM, so only the base skirts can differ (deepest
     still KL-B41a, 5.68 m).
+- Wave-9 review fixes and wave 10 (2026-11-02; the lead's temp export after all wave-10 changes, against the wave-9
+  lead export above, which predates the wave-9 review fixes):
+  - **New node:** `site:KB-V2` (the graded carriage drive to the Ehrenhof grille: its sloping flank walls
+    (Wangenmauern) in red Buntsandstein with a grey coping, `stone.red` / `stone.grey`; 320 triangles). The drive's
+    gravel surface is terrain paint and stays out. `footprints.geojson` / `index.json` keep 103 / 103 entries.
+  - **Changed nodes:** `KB-B01` 13,039 → 13,071 triangles (the perron narrowed to the portal frame + 0.9 m with riser
+    blocks, sandstone treads and pale nosings; the CdL garden door is now a closed glazed porte-fenêtre drawn with the
+    window joinery, so it is exported like the other porte-fenêtres); its `bbox_local` W edge moves 1,249.03 → 1,249.20. `KB-B07` (Tempelzimmer)
+    5,859 → 6,125: the portico roof runs into the drum under a lead collar, no attic block, columns with entasis,
+    grey-white portico steps. `index.json` heights rise by 0.01 m on every building with a lightning-rod mast (larger
+    gilt knob; the iron mast stays dropped).
+  - `COLOR_0` changes: a damp darkening at the plinth foot, the grey Tempelzimmer steps, the perron risers' tint and
+    step-corner AO. The mixed dressed-stone look of the red plinths and the procedural paintings are viewer-only
+    shaders; the layer keeps the plinth's single baked red.
+  - Not in the layer (viewer-only): the mowing zones, avenue variation and hotbed lights, the Ehrenhof sand patches,
+    the moon, stars, moonlight and cumulus with cloud shadows, the fountain jet, the table candles, the interiors
+    (seats, cove, library doors, canvases).
+- Wave-10 review fixes and wave 11 (2026-11-02; the lead's temp export after all wave-11 changes, against the wave-10
+  lead export above):
+  - **No new nodes**; `footprints.geojson` and `index.json` are unchanged apart from the timestamp (103 / 103; one
+    `bbox_local` corner of `KB-B88` moves by 0.01 m).
+  - **Changed nodes, wave-10 review fixes:** `KB-B07` (Tempelzimmer) 6,125 → 6,517 triangles (two-tone lead gores with
+    seams, a lead ridge roll and saddle where the portico roof meets the dome, a grey-white stone base); the round
+    garden pavilions `KB-B87` 4,065 → 4,785 and `KB-B88` 2,680 → 3,048 (both still hypothetical, `_CONF` 0);
+    `site:KB-V2` 320 → 480 (drive flank walls with a coping slab); the terrace retaining walls `site:TF-03` 1,896 →
+    2,772, `TF-04` 768 → 1,152, `TF-05` 672 → 1,008, `TF-06` 432 → 648, `TF-08` 792 → 1,188 (a pale coping slab with
+    bed course and overhang, `RETAINING_ASHLAR`).
+  - **Changed node, wave 11:** `KB-B01` 13,071 → 13,755 triangles: Lisenen on the garden-front centre risalit,
+    profiled window surrounds and EG keystones on its centre axes, the buried Beletage hoods removed, and the garden
+    door as a croisée-porte (its joinery is `wood.frame` and dropped: +108 dropped triangles). `COLOR_0` carries the
+    new members in the render / stone colours.
+  - Not in the layer (viewer-only): the Gewannflur strips, crop rotation and field trees (terrain paint and trees),
+    the avenue tone, the fountain jet, the candle light, the HYG star table, the interior cornices, boiserie tones,
+    carved heads and seat ovals.
+  - The 1789 terrain under the castle changed (`prepare-terrain.py`: the Gewann fill parcels LC-06…08 change the
+    ground classes N and E of the palace; heights unchanged); the explorer uses its own 2025 DTM, so nothing changes
+    for it.
 - The ten Ehrenhof sentry boxes and the cobbled lanes are not in the layer (the site export keeps `stone.*` only).
   The gutters in `site:TF-01` are flat strips 3 cm above the lower of the 1789 and 2025 grounds, so they may z-fight
   with or sink under the explorer's 2025 DTM; whether to drop them is open on the castle side.

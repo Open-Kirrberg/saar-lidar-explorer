@@ -29,6 +29,9 @@ import { buildShell, materialOr } from './shell.ts';
 import { silkHue } from './finish.ts';
 import { buildStair } from './stairs3d.ts';
 
+/** Wall-hung items that cover the boiserie's upper panel fields (wave-11 review fix). */
+const COVER_KINDS: ReadonlySet<string> = new Set(['pier_glass', 'trumeau', 'picture', 'bookcase', 'shelf', 'wardrobe', 'vitrine', 'weapon_rack']);
+
 export const buildInterior: BuildInteriorFn = (b, ctx) => {
   const g = new THREE.Group();
   g.name = `${b.id}/interior`;
@@ -71,6 +74,10 @@ export const buildInterior: BuildInteriorFn = (b, ctx) => {
       col,
       leavesDone,
       rosettes: r.items.filter((it) => it.kind === 'chandelier').map((it) => it.pos),
+      // wave-11 review fix: wall-hung items the boiserie keeps its carved heads clear of (a glass's crest included)
+      covers: r.items
+        .filter((it) => it.size && COVER_KINDS.has(it.kind))
+        .map((it) => ({ pos: it.pos, facing: it.facing, width: it.size![0] + 0.1, z0: it.z ?? 0, z1: (it.z ?? 0) + it.size![2] + (it.kind === 'pier_glass' || it.kind === 'trumeau' ? 0.2 : 0.05) })),
     });
 
     // furnishing

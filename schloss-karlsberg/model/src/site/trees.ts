@@ -8,8 +8,8 @@
  * (Lombardy poplar), a tiered cone (conifers), a clipped cone (yew) and a low 2-lobe mass (flowering shrubs).
  */
 import * as THREE from 'three';
-import { mulberry32 } from '../layout/geom.ts';
-import { GARDEN, GARDEN_DETAIL } from '../layout/grammar.ts';
+import { hash12, mulberry32 } from '../layout/geom.ts';
+import { AVENUE_ROW, GARDEN, GARDEN_DETAIL } from '../layout/grammar.ts';
 
 /** Per-face flower speckles of a crown variant: `faceShare[v]` of the faces of variant v take colour `colours[v]`. */
 export interface Bloom {
@@ -229,6 +229,38 @@ export interface TreeInstance {
   z: number;
   /** Height scale factor (height / species height). */
   scale?: number;
+  /**
+   * Wave 10: a young avenue tree: its size, crown, lean and variant come from a hash of its position (rowVariation,
+   * grammar AVENUE_ROW) instead of the group's random stream, which it still consumes, so the other trees of the
+   * group keep their looks.
+   */
+  row?: boolean;
+}
+
+/**
+ * Wave 10 (audit #12): independent per-tree values of a young avenue tree from a hash of its position (grammar
+ * AVENUE_ROW): height and crown-width factors, crown-depth factor, lean (deg) and its azimuth (rad), crown variant
+ * (0..variants-1), whether it is a replanted younger tree, and (wave 11) crown anisotropy and leaf tone / hue offsets.
+ * Pure and deterministic.
+ */
+export function rowVariation(x: number, z: number, variants = 3): { height: number; width: number; depth: number; lean: number; leanAz: number; variant: number; replant: boolean; aniso: number; tone: number; hue: number } {
+  const kx = Math.round(x * 4);
+  const kz = Math.round(z * 4);
+  const u = (i: number) => hash12(kx * 0.37 + i * 17.13, kz * 0.41 - i * 11.71);
+  const replant = u(1) < 1 / AVENUE_ROW.replantEvery;
+  return {
+    height: (1 + AVENUE_ROW.height * (2 * u(2) - 1)) * (replant ? AVENUE_ROW.replantScale : 1),
+    width: 1 + AVENUE_ROW.width * (2 * u(3) - 1),
+    depth: 1 + AVENUE_ROW.depth * (2 * u(4) - 1),
+    lean: AVENUE_ROW.lean * u(5),
+    leanAz: u(6) * Math.PI * 2,
+    variant: Math.min(variants - 1, Math.floor(u(7) * variants)),
+    replant,
+    // wave 11: out-of-round crown (x : z = aniso : 1 / aniso) and leaf tone (lightness, hue offsets)
+    aniso: 1 + AVENUE_ROW.aniso * (2 * u(8) - 1),
+    tone: AVENUE_ROW.tone * (2 * u(9) - 1),
+    hue: AVENUE_ROW.hue * (2 * u(10) - 1),
+  };
 }
 
 export interface TreeMeshOptions {
@@ -834,7 +866,10 @@ export function treeMeshes(sp: TreeSpecies, trees: TreeInstance[], seed = 1789, 
   const VARIANTS = 3;
   const crownGeos = Array.from({ length: VARIANTS }, (_, v) => crownGeometry(sp, seed + v * 7919, v));
   const pick = mulberry32(seed ^ 0x2545f491);
-  const which = trees.map(() => Math.floor(pick() * VARIANTS));
+  const which = trees.map((t) => {
+    const w = Math.floor(pick() * VARIANTS);
+    return t.row ? rowVariation(t.x, t.z, VARIANTS).variant : w;
+  });
   const trunks = hasTrunk ? new THREE.InstancedMesh(trunkGeo, barkMaterial(), trees.length) : null;
   const crownsV = crownGeos.map((g, v) => {
     const n = which.filter((w) => w === v).length;
@@ -877,12 +912,19 @@ export function treeMeshes(sp: TreeSpecies, trees: TreeInstance[], seed = 1789, 
   const flowerCols = (sp.flowers?.colours ?? []).map((x) => new THREE.Color(x));
   const tint = sp.tint ? new THREE.Color(sp.tint.colour) : null;
   trees.forEach((t, i) => {
-    const s = (t.scale ?? 1) * (1 - jitter + rnd() * 2 * jitter);
+    // wave 10: a young avenue tree takes its own hashed values (rowVariation); the stream is consumed all the same
+    const rv = t.row ? rowVariation(t.x, t.z, VARIANTS) : null;
+    const sj = 1 - jitter + rnd() * 2 * jitter;
+    const s = (t.scale ?? 1) * (rv ? rv.height : sj);
     const h = sp.height * s;
     q.setFromAxisAngle(up, rnd() * Math.PI * 2);
     if (sp.lean) {
       const a = rnd() * Math.PI * 2;
       qt.setFromAxisAngle(new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), ((rnd() * 2 - 1) * sp.lean * Math.PI) / 180);
+      q.premultiply(qt);
+    }
+    if (rv) {
+      qt.setFromAxisAngle(new THREE.Vector3(Math.cos(rv.leanAz), 0, Math.sin(rv.leanAz)), (rv.lean * Math.PI) / 180);
       q.premultiply(qt);
     }
     const base = new THREE.Vector3(t.x, t.y, t.z);
@@ -894,13 +936,17 @@ export function treeMeshes(sp: TreeSpecies, trees: TreeInstance[], seed = 1789, 
       trunks.setMatrixAt(i, m);
       trunks.setColorAt(i, bark);
     }
-    const j = clipped ? (rnd(), 1) : 0.9 + rnd() * 0.2; // crown width variation (clipped heads: none)
+    const jr = clipped ? (rnd(), 1) : 0.9 + rnd() * 0.2; // crown width variation (clipped heads: none)
+    const j = rv ? rv.width : jr;
+    // (a young avenue tree's crown reaches lower or higher on its stem: depth, top kept at h)
+    const cd = rv ? rv.depth : 1;
     if (std) {
       off.set(0, std.stem + std.crownH / 2, 0).applyQuaternion(q);
       m.compose(base.clone().add(off), q, new THREE.Vector3(std.sx, std.sy, std.sx));
     } else {
-      off.set(0, h - (crownH * s) / 2, 0).applyQuaternion(q);
-      m.compose(base.clone().add(off), q, new THREE.Vector3(s * j, s, s * j));
+      off.set(0, h - (crownH * s * cd) / 2, 0).applyQuaternion(q);
+      const an = rv ? rv.aniso : 1;
+      m.compose(base.clone().add(off), q, new THREE.Vector3(s * j * an, s * cd, (s * j) / an));
     }
     const im = crownsV[which[i]];
     const k = fill[which[i]]++;
@@ -920,6 +966,8 @@ export function treeMeshes(sp: TreeSpecies, trees: TreeInstance[], seed = 1789, 
     const fc = rnd();
     if (sp.flowers && flowerCols.length && fl < sp.flowers.share) c.lerp(flowerCols[Math.floor(fc * flowerCols.length)], sp.flowers.amount);
     if (tint && sp.tint) c.lerp(tint, fc * sp.tint.amount);
+    // wave 11: a young avenue tree's own leaf tone (rowVariation), scaled like the lightness jitter above
+    if (rv) c.offsetHSL(rv.hue, 0, rv.tone * Math.min(1, leafL / 0.08));
     im.setColorAt(k, c);
     if (fruit && sp.fruit) {
       // on the outer surface of the head, mostly on its sides and lower half (fruit hangs) [I]

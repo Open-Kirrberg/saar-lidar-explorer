@@ -173,7 +173,9 @@ const CDL: Prog = {
   sideTag: 'HMS 15 axes (4+7+4) on both fronts; spacing D-> 40.9 m / 15; end windows only on the free garden-pile part I',
   portals: (ax) => [
     { side: 'court', axis: ax('court', 7), kind: 'portal', storey: 1, steps: 10, tag: '10 steps D-> (1.4 m Sockel / 0.145); stair HMS short straight ~5 steps between sentries (secondary, step count conflicts); width N Blondel; sizes I; low' },
-    { side: 'garden', axis: ax('garden', 7), kind: 'door', storey: 1, steps: 2, grade_h: 345.9, tag: 'I through-going vestibule (05 §e.1); garden door with a 2-step perron down to the parterre TF-09 (345.9) I (fix round 1)' },
+    // wave 10 (audit #8): the garden door on Petri's axis as a glazed two-leaf porte-fenêtre as wide as the windows, its
+    // head on the window head line (0.9 + 2.75 m) [N 1780s garden salon door, KB-I16 croisée grammar; I size]
+    { side: 'garden', axis: ax('garden', 7), kind: 'door', storey: 1, steps: 2, grade_h: 345.9, glazed: true, width: 1.3, height: 3.65, tag: 'I through-going vestibule (05 §e.1); garden door with a 2-step perron down to the parterre TF-09 (345.9) I (fix round 1); glazed two-leaf French door, window width, head on the window line N (wave 10)' },
     {
       side: 'garden',
       axis: ax('garden', 6, 3),

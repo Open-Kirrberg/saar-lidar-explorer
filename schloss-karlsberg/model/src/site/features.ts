@@ -9,13 +9,14 @@
 import * as THREE from 'three';
 import type { BuildContext } from '../context.ts';
 import { E0, N0, gridFrame } from '../frame.ts';
-import { type P2, hashString, pointInPolygon, polylineLength, pointAlong } from '../layout/geom.ts';
+import { type P2, hashString, pointInPolygon, polylineLength, pointAlong, smoothstep } from '../layout/geom.ts';
 import { avenueBlockers, basinOrnaments, clumpPlants, distanceToLine, edgePieces, singleTrees, treeBlocked, walkRibbon } from '../layout/garden.ts';
 import { ARTICULATION, COURT_FURNITURE, FENCE, GARDEN } from '../layout/grammar.ts';
 import { stToEN } from '../layout/footprint.ts';
 import { avenueTrees } from '../layout/site.ts';
 import type { EN, GeoJsonGeometry, SiteSpec, TerrainFeature } from '../spec.ts';
 import { GeoBuilder, matKey } from '../exterior/builder.ts';
+import { RETAINING_ASHLAR } from '../exterior/shade.ts';
 import { SPECIES, speciesFor, treeMeshes, type TreeInstance } from './trees.ts';
 import { type GapStair, type WallPiece, siteBuildings, siteEntrances, siteFeatures, siteWalls } from './access.ts';
 import { buildCourtFurniture } from './court.ts';
@@ -24,7 +25,7 @@ import { hedgeProfile } from './hedgeProfile.ts';
 import { barriereLayout, postRailLayout } from './fence.ts';
 import { edgeStonePlan, isTroddenPath, outcropPlan, outcropShape, pathWidthFactor, smoothNoise1 } from './rockPath.ts';
 import { waterPatch } from '../materials/index.ts';
-import { jetSpray, wetBank } from './water.ts';
+import { JET_LOOK, JET_WIND, jetDrift, jetFallTime, jetPartMaterial, jetSpray, wetBank } from './water.ts';
 import { SHORE, type ShoreMesh, naturalShore, shoreWater } from './shore.ts';
 import { type DriveWall, clipOutsideDrives, driveCoords, driveFrame, driveWalls, isDrapedWay, isDrive } from './drive.ts';
 
@@ -39,7 +40,10 @@ function lineOf(g: GeoJsonGeometry): EN[] | null {
   return null;
 }
 
-/** One retaining-wall piece (access.ts siteWalls): stone body plus a 0.18 m cap. */
+/**
+ * One retaining-wall piece (access.ts siteWalls): stone body plus a projecting coping (wave-10 review, architecture:
+ * shade.ts RETAINING_ASHLAR - a bed course and a slab overhanging the face, so its underside casts a drip shadow).
+ */
 function renderPiece(gb: GeoBuilder, p: WallPiece, key: ReturnType<typeof matKey>, cap: ReturnType<typeof matKey>): void {
   const tx = p.x1 - p.x0;
   const tz = p.z1 - p.z0;
@@ -49,8 +53,10 @@ function renderPiece(gb: GeoBuilder, p: WallPiece, key: ReturnType<typeof matKey
   const p0: [number, number] = [p.x0, -p.z0];
   const tan: [number, number] = [tx / tl, -tz / tl];
   const nrm: [number, number] = [tan[1], -tan[0]];
-  gb.orientedBox(key, p0, tan, nrm, -0.02, tl + 0.02, -p.thick / 2, p.thick / 2, p.foot, p.top - 0.18);
-  gb.orientedBox(cap, p0, tan, nrm, -0.02, tl + 0.02, -p.thick / 2 - 0.06, p.thick / 2 + 0.06, p.top - 0.18, p.top);
+  const C = RETAINING_ASHLAR.coping;
+  gb.orientedBox(key, p0, tan, nrm, -0.02, tl + 0.02, -p.thick / 2, p.thick / 2, p.foot, p.top - C.height);
+  gb.orientedBox(cap, p0, tan, nrm, -0.02, tl + 0.02, -p.thick / 2 - 0.02, p.thick / 2 + 0.02, p.top - C.height, p.top - C.height + C.bed);
+  gb.orientedBox(cap, p0, tan, nrm, -0.02, tl + 0.02, -p.thick / 2 - C.overhang, p.thick / 2 + C.overhang, p.top - C.height + C.bed, p.top);
 }
 
 /**
@@ -76,8 +82,10 @@ function renderDriveWall(gb: GeoBuilder, w: DriveWall, key: ReturnType<typeof ma
     gb.quadFacing(k, P(a0, d0, lo(a0)), P(a0, d1, lo(a0)), P(a0, d1, hi(a0)), P(a0, d0, hi(a0)), [-tan[0], -tan[1], 0]);
     gb.quadFacing(k, P(a1, d0, lo(a1)), P(a1, d1, lo(a1)), P(a1, d1, hi(a1)), P(a1, d0, hi(a1)), [tan[0], tan[1], 0]);
   };
-  box(key, -w.thick / 2, w.thick / 2, w.foot, w.foot, w.top0 - 0.18, w.top1 - 0.18);
-  box(cap, -w.thick / 2 - 0.06, w.thick / 2 + 0.06, w.top0 - 0.18, w.top1 - 0.18, w.top0, w.top1);
+  const C = RETAINING_ASHLAR.coping;
+  box(key, -w.thick / 2, w.thick / 2, w.foot, w.foot, w.top0 - C.height, w.top1 - C.height);
+  box(cap, -w.thick / 2 - 0.02, w.thick / 2 + 0.02, w.top0 - C.height, w.top1 - C.height, w.top0 - C.height + C.bed, w.top1 - C.height + C.bed);
+  box(cap, -w.thick / 2 - C.overhang, w.thick / 2 + C.overhang, w.top0 - C.height + C.bed, w.top1 - C.height + C.bed, w.top0, w.top1);
 }
 
 /** Steps in a terrace-wall gap: a landing where the wall stood, then `steps − 1` treads down to the ground. */
@@ -116,17 +124,20 @@ export function buildFeatures(spec: SiteSpec, ctx: BuildContext): { group: THREE
   const terr = ctx.terrain;
   const wallK = matKey('stone.red', '#A65E4A');
   const capK = matKey('stone.grey', '#BDBAB2');
+  // retaining walls: mixed stone in larger courses under a grey-white coping (shade.ts RETAINING_ASHLAR)
+  const retainK = matKey('stone.red', RETAINING_ASHLAR.colour);
+  const copeK = matKey('stone.grey', RETAINING_ASHLAR.coping.colour);
   const water = ctx.materials.get('water');
   // trees grouped by species + stakes + confidence group (hypothetical features' trees go to a 'low' group the viewer
   // can hide with its low-confidence select, KB-I12)
   const trees = new Map<string, { key: string; stakes: number; low: boolean; list: TreeInstance[] }>();
-  const addTree = (key: string, x: number, z: number, scale = 1, stakes = 0, low = false, yAt?: number) => {
+  const addTree = (key: string, x: number, z: number, scale = 1, stakes = 0, low = false, yAt?: number, row = false) => {
     const y = yAt ?? terr(x, z);
     if (!Number.isFinite(y)) return;
     const k = `${key}|${stakes}|${low ? 1 : 0}`;
     let e = trees.get(k);
     if (!e) trees.set(k, (e = { key, stakes, low, list: [] }));
-    e.list.push({ x, y, z, scale });
+    e.list.push(row ? { x, y, z, scale, row } : { x, y, z, scale });
   };
 
   // only what stands in the scene year (KB-I03): an absent 1785 rotunda blocks nothing; hypothetical features
@@ -163,7 +174,7 @@ export function buildFeatures(spec: SiteSpec, ctx: BuildContext): { group: THREE
       case 'terrace':
       case 'scarp': {
         // retaining walls (+ gap stairs at Durchfahrten) come from access.ts so walk starts see the same walls
-        for (const p of walls.pieces) if (p.featureId === f.id) renderPiece(gb, p, wallK, capK);
+        for (const p of walls.pieces) if (p.featureId === f.id) renderPiece(gb, p, retainK, copeK);
         for (const st of walls.stairs) if (st.featureId === f.id) renderGapStair(gb, st, capK);
         // gravel terrace with a stone kerb (TF-09): crisp surface and edge, broad perron at its doors (wave-2 review)
         if (f.kind === 'terrace' && f.coping && f.level !== undefined) {
@@ -184,7 +195,8 @@ export function buildFeatures(spec: SiteSpec, ctx: BuildContext): { group: THREE
         const blockers = blockersFor(f);
         for (const p of avenueTrees(line, f.trees, { seed: hashString(f.id) ^ ctx.options.seed })) {
           if (treeBlocked(p.E, p.N, blockers)) continue;
-          addTree(sp.key, p.E - E0, -(p.N - N0), h / sp.height, stakes, f.placement === 'hypothetical');
+          // wave 10 (audit #12): each young avenue tree varies on its own (trees.ts rowVariation, grammar AVENUE_ROW)
+          addTree(sp.key, p.E - E0, -(p.N - N0), h / sp.height, stakes, f.placement === 'hypothetical', undefined, true);
         }
         return;
       }
@@ -208,7 +220,7 @@ export function buildFeatures(spec: SiteSpec, ctx: BuildContext): { group: THREE
         // wave-9 review fix: a walled graded drive (KB-V2, drive.ts) gets its flanking walls; the drive and the
         // forecourt strip KB-V1 are gravel ribbons like the walks (isDrapedWay: they are not painted into the ground
         // classes, so no seeded tree moves)
-        if (isDrive(f)) for (const w of driveWalls(f, terr)) renderDriveWall(gb, w, wallK, capK);
+        if (isDrive(f)) for (const w of driveWalls(f, terr)) renderDriveWall(gb, w, retainK, copeK);
         // KB-I12: garden walks (≤ 4 m) as a gravel ribbon draped on the terrain; other wide paths stay a splat class only
         const line = lineOf(f.geometry);
         if (!line || !f.width || !isDrapedWay(f)) return;
@@ -1073,19 +1085,6 @@ function shoreWaterMat(base: THREE.Material): THREE.Material {
   return m;
 }
 
-const jetMats = new Map<string, THREE.MeshStandardMaterial>();
-function jetMaterial(opacity: number): THREE.MeshStandardMaterial {
-  const k = opacity.toFixed(2);
-  let m = jetMats.get(k);
-  if (!m) {
-    // white aerated water scatters light: a little self-light keeps it white in shade [I render]
-    m = new THREE.MeshStandardMaterial({ color: '#F6FAFA', emissive: '#DDE6E8', emissiveIntensity: 0.18, roughness: 0.5, transparent: true, opacity, depthWrite: false });
-    m.name = 'water.jet';
-    jetMats.set(k, m);
-  }
-  return m;
-}
-
 /**
  * Keep a thin vertical mesh at least `minPx` pixels wide on screen (the jet column read as nothing from the standard
  * aerials, wave-2 review): before each draw its horizontal scale grows with the camera distance. Shadow passes and
@@ -1109,49 +1108,76 @@ export function keepMinScreenWidth(mesh: THREE.Mesh, radius: number, minPx: numb
 }
 
 /**
- * Fountain jet of height h on a basin at (x, y = water level, z), static (animation is viewer work): a white rising
- * column (at least GARDEN.basinLook.jetMinPx wide on screen), a spray crown where it breaks, a falling sheath and a
- * faint spray haze reaching ~0.25 h out, and a foam ring on the water.
+ * Wave 11 (garden): raise a jet part's opacity with the camera distance (GARDEN.basinLook.jetFar / jetFarGain), so the
+ * thin column and curtain do not dissolve against a dark grove from the garden's far end. Chains any earlier
+ * onBeforeRender (keepMinScreenWidth). The part materials are per (part, height), so one jet per height owns them.
+ */
+function keepFarOpacity(mesh: THREE.Mesh, base: number): void {
+  const prev = mesh.onBeforeRender;
+  const wp = new THREE.Vector3();
+  const [d0, d1] = GARDEN.basinLook.jetFar;
+  mesh.onBeforeRender = (renderer, scene, camera, geometry, material, group) => {
+    prev.call(mesh, renderer, scene, camera, geometry, material, group);
+    mesh.getWorldPosition(wp);
+    const k = smoothstep(d0, d1, wp.distanceTo(camera.position));
+    (material as THREE.Material).opacity = Math.min(1, base * (1 + GARDEN.basinLook.jetFarGain * k));
+  };
+}
+
+/**
+ * Fountain jet of height h on a basin at (x, y = water level, z) (wave 10: water, not a frosted cone on a white rod):
+ * a slim rising column, clear in the middle with aerated rims (at least GARDEN.basinLook.jetMinPx wide on screen), a
+ * spray crown where it breaks, a falling curtain of strands that drifts down-wind, a faint drift haze, and a churned
+ * foam ring where the curtain lands. Patterns and their motion are the materials' (water.ts `jetPartMaterial`,
+ * animated by `waterTime`); the shapes are static.
  */
 function jetMesh(x: number, y: number, z: number, h: number, id: string): THREE.Group {
   const g = new THREE.Group();
   g.name = `feature/${id}/jet`;
-  const rCol = 0.16;
-  const col = new THREE.CylinderGeometry(0.08, rCol, h, 10, 1, true);
+  const rCol = 0.11;
+  // rising column: a compact jet at the nozzle that aerates and widens upward
+  const col = new THREE.CylinderGeometry(rCol, 0.05, h, 12, 1, true);
   col.translate(0, h / 2, 0);
   // spray crown where the jet breaks and falls back
-  const crown = new THREE.IcosahedronGeometry(0.32, 1);
-  crown.scale(1, 1.8, 1);
-  crown.translate(0, h - 0.35, 0);
-  // falling sheath: narrow at the top, bowed outward, reaching ~0.15 h at the water
-  const sh = new THREE.CylinderGeometry(0.3, 0.15 * h, h * 0.95, 16, 4, true);
+  const crown = new THREE.IcosahedronGeometry(0.34, 2);
+  crown.scale(1, 1.6, 1);
+  crown.translate(0, h - 0.3, 0);
+  // falling curtain: narrow at the top, bowed outward, reaching ~0.15 h at the water, sheared down-wind by the drift of
+  // water that has fallen from the crown to that height
+  const shH = h * 0.95;
+  const sh = new THREE.CylinderGeometry(0.3, 0.15 * h, shH, 32, 8, true);
+  const drift = (yy: number) => jetDrift(jetFallTime(h, yy));
   const ps = sh.attributes.position;
   for (let i = 0; i < ps.count; i++) {
-    const t = (ps.getY(i) + (h * 0.95) / 2) / (h * 0.95); // 0 bottom .. 1 top
+    const t = (ps.getY(i) + shH / 2) / shH; // 0 bottom .. 1 top
     const k = 1 + 0.25 * Math.sin(Math.PI * t);
-    ps.setX(i, ps.getX(i) * k);
-    ps.setZ(i, ps.getZ(i) * k);
+    const d = drift(t * shH);
+    ps.setX(i, ps.getX(i) * k + JET_WIND.dir[0] * d);
+    ps.setZ(i, ps.getZ(i) * k + JET_WIND.dir[1] * d);
   }
-  sh.translate(0, (h * 0.95) / 2, 0);
+  sh.translate(0, shH / 2, 0);
   sh.computeVertexNormals();
-  // spray haze: a wider, very faint dome of drift
-  const haze = new THREE.SphereGeometry(0.25 * h, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  // drift haze: a wider, very faint dome off the water, leaning down-wind
+  const haze = new THREE.SphereGeometry(0.25 * h, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2);
   haze.scale(1, 1.1, 1);
-  const foam = new THREE.RingGeometry(0.1, 0.24 * h, 28, 1);
+  const foam = new THREE.CircleGeometry(0.24 * h, 40);
   foam.rotateX(-Math.PI / 2);
-  foam.translate(0, 0.02, 0);
-  for (const [geo, nm, op] of [
-    [col, 'column', 0.92],
-    [crown, 'crown', 0.3],
-    [sh, 'sheath', 0.24],
-    [haze, 'haze', 0.08],
-    [foam, 'foam', 0.62],
+  const land = drift(0);
+  for (const [geo, nm, at] of [
+    [col, 'column', 0],
+    [crown, 'crown', 0],
+    [sh, 'sheath', 0],
+    [haze, 'haze', land],
+    [foam, 'foam', land],
   ] as const) {
-    const m = new THREE.Mesh(geo, jetMaterial(op));
+    const m = new THREE.Mesh(geo, jetPartMaterial(nm, h));
     m.name = `feature/${id}/jet-${nm}`;
     m.renderOrder = 2;
     m.userData = { part: 'water' };
+    // haze and foam sit where the curtain lands
+    m.position.set(JET_WIND.dir[0] * at, nm === 'foam' ? 0.02 : 0, JET_WIND.dir[1] * at);
     if (nm === 'column') keepMinScreenWidth(m, rCol, GARDEN.basinLook.jetMinPx);
+    if (nm === 'column' || nm === 'crown' || nm === 'sheath') keepFarOpacity(m, JET_LOOK.opacity[nm]);
     g.add(m);
   }
   // KB-I37: animated droplets falling from the crown (water.ts)

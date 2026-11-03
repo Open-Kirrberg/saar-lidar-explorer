@@ -38,7 +38,7 @@ period value with its tag. **Key** is where it lives. Change the value there and
 | Window surround (wings) | Flat band 0.18–0.22 m (use **0.20**), projection **0.03** m, painted render; flat or slightly segmental head; **no Verdachung** | HMS; N | `ARTICULATION.surround` (now 0.2 / 0.06, G7) |
 | Verdachung / pediment | Only on CdL centre axes (if at all), the Orangerie centre risalit, and the gallery rotunda portico. Pediment pitch 20–25° | HMS; D (rotunda); N | `ARTICULATION.pedimentPitch` 22 |
 | Gurtgesims | None on WING2/RANGE1; optional on the CdL | HMS | — |
-| Lisenen | On the CdL risalits and the B02 head only (Hautt's Herzogvorstadt idiom: "Lisenengliederung, Balkone, Mansarddächer") | D Herzogvorstadt; HMS | `ARTICULATION`, risalits |
+| Lisenen | On the CdL risalits and the B02 head only (Hautt's Herzogvorstadt idiom: "Lisenengliederung, Balkone, Mansarddächer") | D Herzogvorstadt; HMS | `ARTICULATION`, risalits; the CdL garden-front centre risalit `CDL_CENTRE` (wave 11: Lisenen, profiled surrounds, keystones, croisée-porte; exterior/facade.ts) |
 | Risalit projection | 0.3–0.8 m (0.5) | N | `ARTICULATION.risalitProjection` |
 | Member material | Painted render `#B9B8B2`, roughness 0.9, render normal map (not ashlar) | D-> Koblenz; I | new `render.member` (M4, C4) |
 | Orders | Tuscan or Doric porticoes (B02 head, 4 columns, D LC); **Ionic** pilasters on the gallery Tempelzimmer and portico (D T5). No giant order on the wings | D / N | `PORTICO` (column Ø 0.7, entablature 0.9) |
@@ -53,7 +53,7 @@ period value with its tag. **Key** is where it lives. Change the value there and
 | Glazing bars | — | 0.03 m on court buildings, 0.035 m on farm buildings; wood, ovolo or lamb's tongue | N | `GLAZING` (G2) |
 | Glass | `glass.crown` `#1d2a30`, opacity 0.38 | Cylinder (Walzen-) glass, slightly green-grey (`#22302C`), faint waviness; per-pane normal/rotation jitter 0.5–1.5° so the panes catch low sun differently. Regional glassworks in the Warndt | N; D (glassworks) | `MATERIAL_BASE['glass.crown']` (M6) |
 | Joinery colour | `wood.frame` `#E9E6DE` | White or pale grey oil paint (keep). Orangerie: white-painted metre-high windows and doors (D T5) | D-> Bamberg; D T5 | `wood.frame` |
-| Shutters | `wood.shutter` `#7D8A78`; catalogue `#5E665B` | Two-leaf louvred **Jalousieläden**, blue-grey **`#5F6F7A`** (light `#8796A0`) on court buildings; plank shutters, green `#3F5A3A` / oxblood `#6E2E26`, on farm buildings; iron shutter dogs at LOD2. No louvred shutters on the Orangerie hall tier (I) | D-> Baunetz; HMS | `wood.shutter` (M1), catalogue `shutter_colour` (C3) |
+| Shutters | `wood.shutter` `#7D8A78`; catalogue `#5E665B` | Two-leaf louvred **Jalousieläden**, blue-grey **`#5F6F7A`** (light `#8796A0`) on court buildings; plank shutters, green `#3F5A3A` / oxblood `#6E2E26`, on farm buildings; iron shutter dogs at LOD2. No louvred shutters on the Orangerie hall tier (I) | D-> Baunetz; HMS | `wood.shutter` (M1), catalogue `shutter_colour` (C3); leaves beside a Lisene sized to the pier: `CDL_CENTRE.shutter`, layout/facade.ts `shutterLeafFit` |
 | Portes-fenêtres | 3.8 m | 3.6–4.0 m on the garden side, centre axes | N | `PORTE_FENETRE_HEIGHT` |
 | Main doors | — | Raised-and-fielded double leaves, fanlight with radiating bars; pale grey `#CFCBC2` | HMS; N | `wood.door` (now `#6B4A33` brown, the interior fallback `#E9E6DE`) |
 | Durchfahrt | 3.4 × 4.0 m, round | Round-arched, plank leaves; Prellsteine at the jambs | HMS; N | `PORTAL.durchfahrt` |
@@ -99,11 +99,11 @@ Gardens, avenues, landcover and planting are covered by research/11 and are not 
 | Wall system B: silk | Lyon silk or damask stretched in panels framed by gilt **Tapetenleisten** (≈ 0.05 m fillet) above a painted dado (lambris d'appui) 0.8–1.0 m (use 0.9) | D (Tapetenleisten, Lyon); N dado | `wall.silk.*` + fixtures (I1) |
 | Silk colours | Crimson, blue, green, **yellow** (Gelber Salon), red-violet, grey, hazel, laurel (10 §c.2); goût étrusque accents in cabinets (terracotta and black, I from Dugourc) | D names; N hexes | `wall.silk.*` (add `wall.silk.yellow` `#C9A94E`/`#D9B95B`, M8) |
 | Floor | Parquet de Versailles: oak, ≈ 0.97 m (3 pieds) square panels laid diagonally, in state rooms; Fischgrat or straight boards in secondary rooms; planks in service rooms; halls with 0.4–0.6 m red and grey sandstone flags laid diagonally | D pattern; N size | `floor.parquet` (G12, I4) |
-| Ceiling | Flat with a cove (voussure) 0.6–1.2 m, stucco cornice, frieze, rosette | N | `ceiling.stucco` |
+| Ceiling | Flat with a cove (voussure) 0.6–1.2 m, stucco cornice, frieze, rosette | N | `ceiling.stucco`; rank by room type (cornice section, boiserie tone, carved heads, rosette size): `ROOM_ORDER`, interior/finish.ts `roomOrder` / `corniceProfile` (wave 11) |
 | Chimneypiece | Marble cheminée à la française, opening 1.1–1.3 × 0.9 m, mantel ≈ 1.1 m, trumeau mirror above | D Mannheim/Benrath; N | interior/fixtures.ts |
 | Stoves | White faience Kachelofen ≈ 1.0 × 0.7 × 2.5–3 m in antechambers, stoked from the corridor; the dining hall has 2 enamelled-copper altar stoves in niches (O4) | N; D O4 | fixtures.ts |
 | Doors | Double doors, painted and gilt; a **Supraporte** (painting field ≈ door width × 0.8–1.0 m) over every enfilade door in state rooms | N | fixtures.ts (I3) |
-| Light | Chandelier + 2–4 wall lights per state room; candle-only look (≈ 1800–1930 K). Period practice: candelabra on ordinary evenings, chandeliers lit for feasts | D Knigge; N; D-> SPSG (docs/visual-audit.md) | interior/furniture.ts (I7) |
+| Light | Chandelier + 2–4 wall lights per state room; candle-only look (≈ 1800–1930 K). Period practice: candelabra on ordinary evenings, chandeliers lit for feasts | D Knigge; N; D-> SPSG (docs/visual-audit.md) | interior/furniture.ts (I7); the room lit by its own candles at night: viewer/src/candleLight.ts (wave 11) |
 | Mirrors | Pier-glasses between windows, trumeaux, mirror doors (Waffensammlung, Tempelzimmer) | D; N | `interior.*` mirror material |
 | Furniture | Jacob carved giltwood seating; the Duke's Paradebett (O2, walnut, carved, gilt); 2 bergères + a seating set in Antichambre Nr. 8 | D | interior/furniture.ts (I6) |
 | Service rooms | Limewash, plank floors, plain grey-painted doors, tiled stoves; kitchens flagged and vaulted with a big hearth hood | N | `FIN.service`, `FIN.kitchen` |

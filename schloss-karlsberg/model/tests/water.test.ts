@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { JET_SPRAY, WET_BANK, densifyRing, jetSpray, offsetRing, ringArea, sprayPoint, wetBank, wetShade } from '../src/site/water.ts';
+import { JET_LOOK, JET_SPRAY, JET_WIND, WET_BANK, densifyRing, jetDrift, jetFallTime, jetPartMaterial, jetSpray, offsetRing, ringArea, sprayPoint, wetBank, wetShade } from '../src/site/water.ts';
 
 const square: [number, number][] = [
   [0, 0],
@@ -84,11 +84,48 @@ describe('water detail (KB-I37)', () => {
         const [x, y, z] = sprayPoint(seed, h, t);
         expect(y).toBeGreaterThanOrEqual(0);
         expect(y).toBeLessThanOrEqual(h + (JET_SPRAY.kick * JET_SPRAY.kick) / (2 * 9.81) + 1e-9);
-        expect(Math.hypot(x, z)).toBeLessThanOrEqual(0.1 + JET_SPRAY.spread[1] * h + 1e-9);
+        // radial spread plus the down-wind drift of the longest fall
+        expect(Math.hypot(x, z)).toBeLessThanOrEqual(0.1 + JET_SPRAY.spread[1] * h + jetDrift(2 * jetFallTime(h + 1, 0)) + 1e-9);
       }
     const a = jetSpray(h, 'HG-04');
     const b = jetSpray(h, 'HG-04');
     expect(Array.from(a.geometry.getAttribute('aSeed').array)).toEqual(Array.from(b.geometry.getAttribute('aSeed').array));
     expect(a.geometry.getAttribute('aSeed').count).toBe(Math.round(JET_SPRAY.perMetre * h));
+  });
+
+  it('wave 10: falling water drifts down-wind, gently (a 5 m jet leans < 0.7 m at the water)', () => {
+    expect(jetFallTime(5, 5)).toBe(0);
+    expect(jetFallTime(5, 0)).toBeCloseTo(Math.sqrt(10 / 9.81), 9);
+    expect(jetDrift(0)).toBe(0);
+    let prev = 0;
+    for (let t = 0.05; t < 3; t += 0.05) {
+      const d = jetDrift(t);
+      expect(d).toBeGreaterThan(prev);
+      prev = d;
+    }
+    const lean = jetDrift(jetFallTime(5, 0));
+    expect(lean).toBeGreaterThan(0.2);
+    expect(lean).toBeLessThan(0.7);
+    // toward the north-east, as the grass and the foliage bend (prevailing south-west wind)
+    expect(JET_WIND.dir[0]).toBeGreaterThan(0);
+    expect(JET_WIND.dir[1]).toBeLessThan(0);
+    expect(Math.hypot(...JET_WIND.dir)).toBeCloseTo(1, 9);
+    // the droplets of the spray drift the same way: phase 0, so the droplet has fallen for t s; take the radial part off
+    const t = 0.6;
+    const [x, , z] = sprayPoint([0, 0.25, 0], 5, t);
+    expect(x).toBeCloseTo(JET_WIND.dir[0] * jetDrift(t), 6);
+    expect(z - (0.1 + JET_SPRAY.spread[0] * 5 * (t / ((JET_SPRAY.kick * 0.3 + Math.sqrt((JET_SPRAY.kick * 0.3) ** 2 + 2 * 9.81 * 5)) / 9.81)))).toBeCloseTo(JET_WIND.dir[1] * jetDrift(t), 6);
+  });
+
+  it('wave 10: jet parts are translucent water materials, one program per part, animated by waterTime', () => {
+    for (const part of ['column', 'crown', 'sheath', 'haze', 'foam'] as const) {
+      const m = jetPartMaterial(part, 5);
+      expect(m.name).toBe('water.jet');
+      expect(m.transparent).toBe(true);
+      expect(m.depthWrite).toBe(false);
+      expect(m.opacity).toBe(JET_LOOK.opacity[part]);
+      expect(m.customProgramCacheKey()).toBe(`water.jet.${part}`);
+      expect(jetPartMaterial(part, 5)).toBe(m);
+    }
   });
 });

@@ -15,7 +15,7 @@ export const PRINT_SERIES_LIST = 'series.json';
 export const PRINT_PREFS_KEY = 'sle.print.v1';
 
 /** Series keys tried when `print/series.json` is absent (current series first, then older ones). */
-export const KNOWN_PRINT_SERIES: readonly string[] = ['saarpfalz-9200', 'detail-2300', 'saarpfalz-8500', 'detail-2125', 'saarpfalz-8400', 'detail-2100', 'saarpfalz-8000', 'detail-2000'];
+export const KNOWN_PRINT_SERIES: readonly string[] = ['saarpfalz-9200', 'detail-2300', 'kirrberg-11050', 'saarpfalz-8500', 'detail-2125', 'saarpfalz-8400', 'detail-2100', 'saarpfalz-8000', 'detail-2000'];
 
 /** Tile id `E{km}_N{km}` (decimals only when needed, ≤ 3) — contract regex. */
 export const TILE_ID_RE = /^E(\d+(?:\.\d{1,3})?)_N(\d+(?:\.\d{1,3})?)$/;
@@ -121,7 +121,7 @@ export interface PrintSeries {
   datum_m: number | null;
   /** "series" (one datum) or "set" (per tile `datum_m`); absent in older files = "series". */
   datumMode: string;
-  /** Catalog hint: "main" | "detail". */
+  /** Catalog hint: "main" | "detail" | "single" (standalone showpiece: no AOI grid / extension ring). */
   role?: string;
   base_mm: number;
   cell_m?: number;
@@ -497,12 +497,14 @@ export interface DisplayCell extends GridCell {
 
 /**
  * Cells to draw on the minimap: the AOI's cells plus one ring of extension cells, every generated
- * tile and every set member (wherever they are). N descending, E ascending.
+ * tile and every set member (wherever they are). N descending, E ascending. A series with role
+ * "single" (one standalone piece on its own origin, joins nothing) shows only its tiles and set
+ * members — no AOI grid of "missing" neighbours.
  */
 export function displayCells(index: Pick<PrintIndex, 'series' | 'tiles' | 'sets'>, aoiBbox: Readonly<Bbox>, ring = 1): DisplayCell[] {
   const g: GridSpec = { tile_m: index.series.tile_m, origin: index.series.origin };
   const byId = new Map<string, GridCell>();
-  for (const c of gridCells(aoiBbox, g, ring)) byId.set(c.id, c);
+  if (index.series.role !== 'single') for (const c of gridCells(aoiBbox, g, ring)) byId.set(c.id, c);
   const add = (E0: number, N0: number) => {
     const c = cellOfCorner(E0, N0, g);
     if (c && !byId.has(c.id)) byId.set(c.id, c);

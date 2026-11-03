@@ -21,7 +21,7 @@ import * as THREE from 'three';
 import { hashString, mulberry32 } from '@model/layout/geom.ts';
 import { unitCrown, unitDome } from '@model/site/trees.ts';
 import { EDGE_BAND, edgeWeight, forestCrownForm, isForestStandSpecies } from './crownForm.ts';
-import { DEFAULT_FOREST_MIX, FOREST_SPECIES, GROUND_CLASS, forestPlan, hayCockPlan, openTreePlan, tileKey, type ForestSpecies, type ForestTree } from './landcover.ts';
+import { DEFAULT_FOREST_MIX, FOREST_SPECIES, GROUND_CLASS, forestPlan, hayCockPlan, openTreePlan, plannerBaseGround, tileKey, type ForestSpecies, type ForestTree } from './landcover.ts';
 import { HINTERLAND_SPECIES, hinterlandPlan, type HinterlandKind, type HinterlandPlan, type LandcoverParcel } from './hinterland.ts';
 import type { TerrainData } from './terrain.ts';
 import { CARD_ORDER, FOREST_CARD_CAP, FOREST_CARD_FAR, FOREST_FRINGE, fringeMaterial, leafCardGeometry } from './leafCards.ts';
@@ -227,6 +227,17 @@ export class Forest {
     this.rebuild();
   }
 
+  /** The last tree plan in grid metres, ghosts included (diagnostics: `skb.forest.plan`). */
+  plan: Planned[] = [];
+
+  /** Wave 11 (KB-I84): thinned, clustered field trees; false = the wave-2 scatter (A/B: `skb.forest.setClustered(false)`). */
+  clusteredFieldTrees = true;
+  setClustered(on: boolean): void {
+    if (on === this.clusteredFieldTrees) return;
+    this.clusteredFieldTrees = on;
+    this.rebuild();
+  }
+
   /** Silhouette fringe cards on the mid crowns (KB-I66 residual, wave 7; A/B: `skb.forest.setFringe(false)`). */
   showFringe = true;
   setFringe(on: boolean): void {
@@ -265,12 +276,30 @@ export class Forest {
     // forest-edge trees: direction toward the open land (their crowns lean out, crownForm.ts)
     for (const p of plan) if ((p.role === 'canopy' || p.role === 'standard') && p.edge < EDGE_BAND) p.out = outward(gg, p.gx, p.gy, p.edge);
     if (t.epoch === '1789') {
+      // KB-I96 (wave-11 review fix): the open-land planners take their seeded order from the base ground (without the
+      // land cover painted over it since, e.g. the wave-11 Gewann fill); a tree whose cell changed is kept as a `ghost`
+      // (drawn from the tile stream, not shown), so no land-cover edit re-rolls another tree's looks
+      const base = plannerBaseGround(t.ground, gm.cols, gm.plannerBase?.runs);
+      const gb = { ...gg, ground: base };
+      const cellOf = (p: Planned) => {
+        const c = Math.floor(p.gx / gm.cell);
+        const r = Math.floor(p.gy / gm.cell);
+        return c < 0 || r < 0 || c >= gm.cols || r >= gm.rows ? -1 : r * gm.cols + c;
+      };
+      const ghostIfRepainted = (list: Planned[]): Planned[] =>
+        base === t.ground
+          ? list
+          : list.map((p) => {
+              const i = cellOf(p);
+              return i >= 0 && base[i] !== t.ground[i] ? { ...p, ghost: true as const } : p;
+            });
       // no gridU: the Gewann-edge hedges are replaced by the hinterland hedgerows (open strip fields, KB-I44)
-      plan.push(...openTreePlan(gg, { seed: 1789, ox, oz }));
+      // wave 11 (KB-I84): field trees thinned to farmsteads, ways, field edges and banks, plus seeded groups there
+      plan.push(...openTreePlan(gg, { seed: 1789, ox, oz, base, farms: (this.opts.farms ?? []).map((f) => ({ gx: f.x - ox, gy: f.z - oz })), clustered: this.clusteredFieldTrees, ghosts: true, core: this.opts.centre ? [this.opts.centre[0] - ox, this.opts.centre[1] - oz] : undefined }));
       // hay cocks on cut parcels near the palace (wave-2 review wow cue)
-      if (this.opts.gridU && this.opts.centre) plan.push(...hayCockPlan(gg, { ox, oz, gridU: this.opts.gridU, centre: this.opts.centre }));
+      if (this.opts.gridU && this.opts.centre) plan.push(...ghostIfRepainted(hayCockPlan(gb, { ox, oz, gridU: this.opts.gridU, centre: this.opts.centre })));
       if (this.opts.parcels?.length && this.showHinterland) {
-        const h = hinterlandPlan(gg, {
+        const h = hinterlandPlan(gb, {
           west: grid.west,
           north: grid.north,
           parcels: this.opts.parcels,
@@ -279,10 +308,11 @@ export class Forest {
           height: (gx, gy) => t.sample(ox + gx, oz + gy),
           seed: 1789,
         });
-        plan.push(...h.trees);
+        plan.push(...ghostIfRepainted(h.trees));
         this.hinterland = h.summary;
       }
     }
+    this.plan = plan;
     const buckets = new Map<string, Planned[]>();
     for (const p of plan) {
       const k = tileKey(p.gx, p.gy, FOREST_TILE);
@@ -299,11 +329,13 @@ export class Forest {
         const y = t.sample(x, z);
         if (Number.isFinite(y)) placed.push({ x, y, z, tree: p });
       }
-      if (!placed.length) continue;
+      // wave 11: a tile left with thinned-away (ghost) field trees only is not built
+      const nDrawn = placed.filter((p) => !p.tree.ghost).length;
+      if (!nDrawn) continue;
       const tile = this.buildTile(key, placed);
       this.tiles.push(tile);
       this.group.add(tile.near, tile.far);
-      count += placed.length;
+      count += nDrawn;
     }
     this.count = count;
     this.group.userData.count = count;
@@ -316,25 +348,33 @@ export class Forest {
     const isHay = (p: { tree: Planned }) => p.tree.species === 'haycock';
     const isShrub = (p: { tree: Planned }) => SHRUBS.has(p.tree.species);
     const hasTrunk = (p: { tree: Planned }) => !isShrub(p) && !isHay(p);
-    const nTrunk = placed.filter(hasTrunk).length;
+    // wave 11 (KB-I84): the plan's trees in their order take the tile stream, thinned-away field trees (`ghost`) included
+    // (they draw their values but are not drawn, so every other tree of the tile keeps its looks); the seeded field-tree
+    // groups (`own`) come last, each with its own stream from its position
+    const mainP = placed.filter((p) => !p.tree.own);
+    const ownP = placed.filter((p) => p.tree.own);
+    const order = [...mainP, ...ownP];
+    const streams = [...mainP.map(() => rnd), ...ownP.map((p) => mulberry32(hashString(`${p.tree.gx.toFixed(2)},${p.tree.gy.toFixed(2)}`) ^ 0x51ed27))];
+    const drawn = (p: { tree: Planned }) => !p.tree.ghost;
+    const nTrunk = order.filter((p) => drawn(p) && hasTrunk(p)).length;
     const trunks = new THREE.InstancedMesh(geo.trunk, material('vegetation.bark'), Math.max(1, nTrunk));
     trunks.count = nTrunk;
     // variant per instance: trees 0..2 → crowns, shrubs 0..1 → shrubs
-    const which = placed.map((p) => (isShrub(p) ? Math.floor(rnd() * geo.shrubs.length) : Math.floor(rnd() * geo.crowns.length)));
+    const which = order.map((p, i) => (isShrub(p) ? Math.floor(streams[i]() * geo.shrubs.length) : Math.floor(streams[i]() * geo.crowns.length)));
     const mk = (g: THREE.BufferGeometry, n: number, m = material('vegetation.leaf')) => {
       const im = new THREE.InstancedMesh(g, m, Math.max(1, n));
       im.count = n;
       return im;
     };
     // the tile crowns (lumpy mid domes; 'lite' 20-face domes) take the leaf-cluster relief (FOL_MID, wave 7)
-    const crowns = geo.crowns.map((g, v) => mk(g, placed.filter((p, i) => hasTrunk(p) && which[i] === v).length, material('vegetation.leaf.mid')));
-    const shrubs = geo.shrubs.map((g, v) => mk(g, placed.filter((p, i) => isShrub(p) && which[i] === v).length));
-    const nHay = placed.filter(isHay).length;
+    const crowns = geo.crowns.map((g, v) => mk(g, order.filter((p, i) => drawn(p) && hasTrunk(p) && which[i] === v).length, material('vegetation.leaf.mid')));
+    const shrubs = geo.shrubs.map((g, v) => mk(g, order.filter((p, i) => drawn(p) && isShrub(p) && which[i] === v).length));
+    const nHay = order.filter((p) => drawn(p) && isHay(p)).length;
     const hay = mk(geo.hay, nHay, material('vegetation.hay'));
     // solitary trees in the open keep their trunk at the far level too (a crown alone reads as a floating ball)
     const solitary = (p: { tree: Planned }) => hasTrunk(p) && (p.tree.role === 'field' || p.tree.role === 'hedge' || (p.tree.role === 'standard' && p.tree.edge === 0));
-    const nSol = placed.filter(solitary).length;
-    const nFar = placed.length - nHay - nSol;
+    const nSol = order.filter((p) => drawn(p) && solitary(p)).length;
+    const nFar = order.filter(drawn).length - nHay - nSol;
     const far = mk(geo.far, nFar, material('vegetation.leaf.mid'));
     // KB-I66: their far crowns cast shadows too (a shadow on the meadow anchors a crown seen at 400-900 m)
     const farSolo = mk(geo.far, nSol, material('vegetation.leaf.mid'));
@@ -358,7 +398,8 @@ export class Forest {
     let ti = 0;
     const box = new THREE.Box3();
     const items: CrownItem[] = [];
-    placed.forEach((p, i) => {
+    order.forEach((p, i) => {
+      const rnd = streams[i];
       const tr = p.tree;
       // mantle shrubs borrow a hedge shrub's look (species colour and size), hashed per shrub
       const lookKey = tr.role === 'mantle' ? MANTLE_LOOK[Math.floor(rnd() * MANTLE_LOOK.length)] : tr.species;
@@ -394,6 +435,11 @@ export class Forest {
       const ell = 0.88 + rnd() * 0.24;
       // per-instance hue / saturation / lightness; the clumps add their own variation in the shader (KB-I44) [I]
       c.set(sp.leaf).offsetHSL((rnd() - 0.5) * 0.05, (rnd() - 0.5) * 0.14, (rnd() - 0.45) * 0.08);
+      // a thinned-away tree: its last draw (the bark tone) and nothing on screen
+      if (tr.ghost) {
+        if (hasTrunk(p) || isHay(p)) rnd();
+        return;
+      }
       if (isHay(p)) {
         m.compose(pos.set(p.x, p.y - 0.1, p.z), q, scl.set(sp.crown * s, h + 0.1, sp.crown * s));
         hay.setMatrixAt(hi, m);

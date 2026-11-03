@@ -45,6 +45,8 @@ export interface TourShotSpec {
   look: TourPoint[];
   /** Share of the shot spent accelerating / decelerating (0…0.5). */
   ramp?: number;
+  /** Wave-10 review fix: show the cumulus in this shot when "Wolken" is 'aus der Luft' (the aerial shots); default no. */
+  clouds?: boolean;
 }
 
 export interface TourSpec {
@@ -198,6 +200,7 @@ export function rundflugSpec(anchors: TourAnchors = {}): TourSpec {
         hour: 7.25,
         duration: 12,
         ramp: 0.3,
+        // no `clouds`: at 7:15 the fair-weather cumulus has not formed yet (cumulusAmount(7.25) = 0)
         // wave 8 (look-and-period §6 "open ridge, not a forest clearing"): the shot opens high over the E end of the
         // open garden lawn, where the forest edge already lies behind and below the camera, with the palace on its ridge
         // in view from the first frame; it glides W and down the garden axis (grid az 80.5°: z −0.165 m per m E) toward the
@@ -270,6 +273,7 @@ export function rundflugSpec(anchors: TourAnchors = {}): TourSpec {
         hour: 18.75,
         duration: 14,
         ramp: 0.3,
+        clouds: true,
         // a high arc W of the residence, from the SW round toward the W, with the low sun (≈ 10°, WNW) behind the right
         // shoulder: warm, front-lit court fronts with long shadows reaching east across the Ehrenhof and the meadows
         // (wave-5 review: from the N the sun came side-on and the shot read as grey haze; pose 08 is the reference)

@@ -12,7 +12,7 @@
  */
 import type { Room, ST } from '../spec.ts';
 import { type EdgeHit, type IOpening, WALK_KINDS, holesForEdge, roomEdges } from './openings.ts';
-import { STATE_ROOM } from '../layout/grammar.ts';
+import { ROOM_ORDER, STATE_ROOM } from '../layout/grammar.ts';
 import { corniceHeight, countIn, supraportePanels } from './finish.ts';
 import { type Hole, freeAlong } from './wall.ts';
 
@@ -488,7 +488,8 @@ export function furnishRoom(inp: ProgrammeInput): Item[] {
     for (const [a, b] of piers) {
       const w = Math.min(1.1, b - a - 0.25);
       const u = (a + b) / 2;
-      const glassTop = Math.min(clearH - 0.5, 3.9);
+      // wave-11 review fix: the carved crest (bows + tablet) stays under the cornice [ROOM_ORDER.carved.crest, I]
+      const glassTop = Math.min(clearH - 0.5 - ROOM_ORDER.carved.crest, 3.9);
       push({ kind: 'console', pos: wallPoint(ww, u, 0.27), facing: ww.nIn, ...base('Konsoltisch (vergoldet, Marmorplatte)') });
       if (glassTop - 1.0 > 1.0) push({ kind: 'pier_glass', pos: wallPoint(ww, u, 0.03), facing: ww.nIn, size: [w, 0.05, glassTop - 1.0], z: 1.0, ...base('Pfeilerspiegel', 'N', 'N 02 §2.12 pier-glasses between windows; D mirrors (Knigge)') });
     }

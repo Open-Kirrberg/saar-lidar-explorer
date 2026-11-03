@@ -409,7 +409,7 @@ export const AVENUE = {
  */
 export const GARDEN = {
   /** Belt and serpentine walks (Sckell 1825: walk 8/10/12 Fuß = 2.3-3.9 m; Herzogsgarten belt walk 10 Fuß) [N] */
-  path: { drive: [4.4, 7.8], walk: [2.3, 3.9], footpath: [0.9, 1.6], beltWalk: 3.0, spur: 2.0 },
+  path: { drive: [4.4, 7.8], walk: [2.3, 3.9], footpath: [0.9, 1.6], beltWalk: 3.0, spur: 2.0, frontWalk: 3.0 },
   /** Serpentine bend radius on slopes 15-25 m [I]; ribbon sampling step (m) for draped walk meshes [I] */
   serpentineRadius: [15, 25],
   ribbonStep: 2.0,
@@ -456,7 +456,11 @@ export const GARDEN = {
    * dark deep water (#1E3036) that reflects the sky at grazing angles [I render], a jet column at least `jetMinPx`
    * pixels wide [I render].
    */
-  basinLook: { coping: '#D6CCBC', surround: 1.2, water: '#1E3036', jetMinPx: 2.5 },
+  /**
+   * wave 11 (garden, wave-10 review low: the jet at ~60 m vanished against the grove, pose 17): beyond jetFar[0] m the
+   * column, crown and curtain gain up to jetFarGain of their opacity by jetFar[1] m (sub-pixel strands average out) [I]
+   */
+  basinLook: { coping: '#D6CCBC', surround: 1.2, water: '#1E3036', jetMinPx: 2.5, jetFar: [20, 70] as readonly [number, number], jetFarGain: 0.6 },
   /**
    * Flowering shrubs in July: Rosa, Spiraea, Hypericum still in flower, Syringa / Philadelphus over -> ~4 % of the
    * crown faces [N]; a face is far larger than a flower, so its colour is only `strength` of the way from leaf to
@@ -502,7 +506,8 @@ export const ROTUNDA = {
    * standard 18th-century handbook]; entablature 1/4 of the column height [N Vignola Ionic 4.5 of 18 modules].
    */
   orders: {
-    ionic: { diameters: 9, entablature: 0.25, base: 0.5, capital: 0.36, taper: 0.85 },
+    // wave-10 review: the Ionic diminution exactly 1/6 of the lower diameter [N Vignola]
+    ionic: { diameters: 9, entablature: 0.25, base: 0.5, capital: 0.36, taper: 5 / 6 },
     doric: { diameters: 8, entablature: 0.25, base: 0.5, capital: 0.5, taper: 0.83 },
     tuscan: { diameters: 7, entablature: 0.25, base: 0.5, capital: 0.5, taper: 0.8 },
   },
@@ -528,6 +533,24 @@ export const ROTUNDA = {
   atticBlockClear: 0.2,
   /** Lead roll seams (ribs) on the low dome [N sheet-lead practice; count I]. */
   domeRibs: 16,
+  /**
+   * Wave 10 (audit #10): the portico's lead roof runs back into the drum and ends under a lead flashing collar dressed
+   * up the attic (`collar` m high), instead of against a raised attic block, which read as a box pushed into the dome
+   * [N: a pedimented portico roof abutting a drum, flashed in lead; I]. False restores the wave-4 attic block.
+   */
+  porticoCollar: true,
+  collar: 0.16,
+  /** Column entasis: the shaft stays full for the lower `entasisFrom` of its height, then swells into the taper [N Vignola]. */
+  entasisFrom: 0.33,
+  /**
+   * Wave-10 review: the sheet-lead dome read as one smooth grey. Its gores between the roll seams alternate two lead
+   * tones (sheets laid at different times weather apart) and the rolls catch the light in a paler, oxidised tone [N
+   * sheet-lead patina; I tones]. The podium, the drum plinth, the step cheeks and the colonnade floor are the grey-white
+   * sandstone of the three garden steps [research/09 §3.7 M5 #CFC8BA; D T5 three steps; I one stone for the whole base].
+   */
+  leadGores: ['#586066', '#737B80'] as readonly string[],
+  leadSeam: '#899095',
+  baseStone: '#CFC8BA',
 } as const;
 
 // ---------------------------------------------------------------------------------------------
@@ -673,8 +696,17 @@ export const STATE_ROOM = {
   parquetPanel: 0.974,
   supraporte: { inset: 0.06, min: 0.45 },
   rosette: { radius: 0.42 },
+  /** wave 10 (audit #9): minimum reach of a state-room cove into the ceiling, share of the clear height [N 0.08-0.1; I] */
+  // wave-10 review: 0.14 (≈ 0.57 m at 4.1 m clear), so the Voute reads in the Festsaal, Tanzsaal and Speisesaal too
+  coveReach: 0.14,
   sconce: { height: 1.75, offset: 0.35 },
-  library: { oak: '#7A5434', oakDark: '#4E3420', oakLight: '#A07A4E', frieze: 0.12, cornice: 0.1, taffeta: '#9E1B32', mesh: 0.09 },
+  /**
+   * wave-10 review (KB-I92): window embrasures of the panelled rooms: boiserie a shade darker than the room's (`colour`)
+   * and a moulded panel on each jamb deeper than `minDepth` and taller than `minHeight` (margin, bar width, relief m,
+   * `foot` above the floor of a porte-fenêtre) [N panelled embrasures; I values]
+   */
+  reveal: { colour: '#D3CDC1', minDepth: 0.3, minHeight: 1.2, margin: 0.06, bar: 0.03, relief: 0.012, foot: 0.3 },
+  library: { oak: '#7A5434', oakDark: '#4E3420', oakLight: '#A07A4E', frieze: 0.12, cornice: 0.1, taffeta: '#9E1B32', mesh: 0.09, taffetaFold: '#6E1222', doorFrame: 0.06, openShare: 0.25 }, // wave 10: fold shade, door frame, open doors [N / I]
   cabinet: { white: '#EDEAE2' },
   gallery: { chandeliers: 20, chairs: 104 },
   tag: 'D Tapetenleisten, Lyon silks, damask borders, library and collection fittings (research/09 §4.1, research/10 §c.2-c.3); sizes and hues N',
@@ -830,8 +862,16 @@ export const MENAGERIE = {
   grille: { bar: 0.2, barWidth: 0.026, height: 2.2, rail: 0.05 },
   /** Net over the runs: tarred yarn or wire on the ≈ 3.6 m posts (D T1 "aus Garn oder Drahtgeflecht"), drawn as a coarse grid of cords [I mesh]. */
   run: { depth: 9.0, netHeight: 3.6, postSpacing: 4.5, netCell: 1.5, cord: 0.014 },
-  // "breiter Wasserlauf" (T1 p. 383) [D]; width I
-  channel: { width: 2.2, kerb: 0.35 },
+  /**
+   * "breiter Wasserlauf" (T1 p. 383) [D]; width I. KB-I97 (wave-11 review): a 4.5 m bed (was 2.2 m, a kerbed gutter)
+   * in a sandstone trough of level reaches, one per terrace: a reach ends where the ground falls more than `maxProud` m
+   * below its water, and a weir (`weir` m thick crest, water spilling over it) stands at the foot of that fall, the
+   * terrace step (reaches ≥ `minReach` m). The water stands `over` m above the highest bed ground of its reach (the
+   * LiDAR terrain is not carved, so it is never buried) and `freeboard` m under the coping [I all sizes].
+   */
+  channel: { width: 4.5, kerb: 0.35, freeboard: 0.2, over: 0.05, weir: 0.4, maxProud: 0.6, minReach: 4, step: 2 },
+  /** KB-I97: the houses' finish, a warm broken-white limewash on rough render instead of the palace white [I]. */
+  houseRender: '#DED6C5',
   /** Dry sandstone retaining wall along each row's back line: the ≈ 1 m LiDAR terrace steps (KL-02) [D height; I wall]. */
   terraceWall: { thickness: 0.55, minRise: 0.35, maxRise: 1.6, coping: 0.12, step: 3.0 },
   /** Trampled grass and earth inside the runs [I]. */
@@ -840,7 +880,7 @@ export const MENAGERIE = {
   island: { coping: 0.14, copingOver: 0.08, foundationWall: 0.6, foundationH: 0.35, stairRadius: 1.1, stairRise: 1.35, stairSteps: 8 },
   /** Hypothetical open superstructure on the island foundations (KL-B41a): slender painted timber posts [I, low]. */
   openPavilion: { post: 0.18, postsPerSide: 3, beam: 0.22 },
-  tag: 'D T20 (19 square slate-roofed houses), T1 pp. 383 f., 413 (rows, grilles, broad watercourse, 11-Fuß net, in beech wood); LiDAR KL-01 (moat, 10 m island), KL-02 (≈ 1 m terraces); sizes N/I',
+  tag: 'D T20 (19 square slate-roofed houses), T1 pp. 383 f., 413 (rows, grilles, broad watercourse, 11-Fuß net, in beech wood); LiDAR KL-01 (moat, 10 m island), KL-02 (≈ 1 m terraces); sizes N/I; KB-I97 watercourse 4.5 m with weirs at the terrace steps and limewash tone I',
 } as const;
 
 /**
@@ -1133,14 +1173,18 @@ export const HEMMER_ROD = {
   chimneyClear: 0.9,
   baseRadius: 0.03,
   topRadius: 0.014,
-  /** gilt knob (ball) at the mast head, radius */
-  knob: 0.055,
+  /** gilt knob (ball) at the mast head, radius (wave 10: 0.055 → 0.07, the knob carries the silhouette) */
+  knob: 0.07,
   /** vertical gilt spike above the knob: height and base radius */
   spike: 0.38,
   spikeRadius: 0.03,
-  /** four level gilt points out of the knob: reach from the mast axis and base radius (no arms) */
-  point: 0.17,
-  pointRadius: 0.022,
+  /**
+   * four level gilt points out of the knob: reach from the mast axis and base radius (no arms). Wave 10 (review
+   * leftover, poses 14 / 46 / 47): 0.17 → 0.11 m, so at eye level they stay inside the knob's silhouette and the head
+   * reads as a gilt knob and point, not as a small cross; still level (D NDB "horizontal cross") [I reach]
+   */
+  point: 0.11,
+  pointRadius: 0.024,
   ironColour: '#2E2B28',
   tag: 'D rods on all buildings (T21; research/10 §c.1); D NDB 8 (1969) 510 f. Fünfspitz = vertical rod + horizontal cross; placement on the ridge ends / central mast I (no source spacing yet); sizes N (research/09 G6), mast scaled to the roof I, short points on small buildings I',
 } as const;
@@ -1237,7 +1281,15 @@ export const GRASS_SWARD = {
   // KB-I78: lawn cards half as wide (finer grain, half the fill cost at retina)
   lawn: { height: [0.045, 0.085] as readonly [number, number], card: 1.7 },
   meadow: { height: [0.09, 0.22] as readonly [number, number], card: 1.7 },
-  tag: 'N scythed and rolled pleasure-ground lawn (Hirschfeld, Sckell; research/11 §4); N July aftermath regrowth after the first hay cut (research/11 §3.1); I heights',
+  /**
+   * wave-10 review fix (the meadow-lawn had no standing height at eye level): in the uncut parcels and margins of the
+   * aftermath meadow (PLEASURE_GROUND), seeding grass stands 35-65 cm with its panicles above the leaf (`card` = width
+   * : height of a stem card); the straw windrows of freshly scythed parcels lie 7-15 cm high, the stubble 3-6 cm
+   */
+  seeding: { height: [0.35, 0.65] as readonly [number, number], card: 0.55 },
+  windrow: { height: [0.07, 0.15] as readonly [number, number] },
+  stubble: { height: [0.03, 0.06] as readonly [number, number] },
+  tag: 'N scythed and rolled pleasure-ground lawn (Hirschfeld, Sckell; research/11 §4); N July aftermath regrowth after the first hay cut (research/11 §3.1); N July hay meadow before the second cut, seeding grasses 0.3-0.8 m (research/11 §3.1 "taller seeding grass"); I heights',
 } as const;
 
 /**
@@ -1281,4 +1333,126 @@ export const DRIVE = {
   pieceLen: 3,
   maxGrade: 0.1,
   tag: 'N carriage ramps <= 1:10 with walled sides (research/09 §5); N ashlar retaining walls with a coping (research/02); I sizes',
+} as const;
+
+/**
+ * Wave 10 (garden, audit #1): mowing zones of Petri's lawn (HG-01; viewer/src/lawnZones.ts). A close-scythed
+ * pleasure-ground band lay only near the house and along the walks, with turf bands beside the gravel (Sckell: "5-6 Fuß
+ * breite Rasenbänder", research/11 §4.4) [N]; the open lawn beyond was mown for hay, so in July it showed a patchwork of
+ * scythed light-green / straw swaths and taller seeding grass (research/11 §3.1) [N]. Widths in m [I]: `frontBand`
+ * beyond the garden terrace (TF-09; ≈ 30 m from the facade), `walkVerge` beyond walks and buildings, `spot` round
+ * benches and the herm, `rondell` beyond the basin's levelled grass ring; `swath` the scythe swath width (one mower's
+ * stroke, ≈ 5-6 Fuß) and `patch` the size of the parcels mown on one day [N; I].
+ */
+export const PLEASURE_GROUND = {
+  frontBand: 22,
+  walkVerge: 3.5,
+  spot: 3.5,
+  rondell: 3,
+  swath: 1.7,
+  patch: [34, 24] as readonly [number, number],
+  /** only a meadow-lawn this large (m²) was mown for hay beyond its pleasure ground; small lawns stay close-mown [I] */
+  minArea: 10000,
+  tag: 'N close-mown pleasure ground near the house and turf bands along the walks (Sckell 1825, research/11 §4.4); N July aftermath / hay patchwork on open lawns (research/11 §3.1); I widths',
+} as const;
+
+/**
+ * Wave 10 (garden, audit #12): young avenue trees vary tree by tree. Avenues planted 1778-88 were 1-11 years old in
+ * 1789 (research/11 §3.2), raised as single nursery trees, staked, and gaps were replanted, so a row was uneven in
+ * size [N Hirschfeld / Sckell planting practice; I amounts]. Each avenue tree draws its own values from a hash of its
+ * position (site/trees.ts `rowVariation`), so neighbours never share a size or a crown: height ± `height`, crown width
+ * ± `width`, crown depth (how low the crown reaches) ± `depth`, a lean of up to `lean` degrees, and one tree in
+ * `replantEvery` a younger replacement at `replantScale` of the height.
+ * Wave 11 (wave-10 review low: the court-mouth and Paradestraße rows still read as clones from the air, poses 01/08):
+ * the crown is also out of round seen from above (x : z up to 1 ± `aniso`, a tree grown against its neighbour or
+ * pruned on the road side) and its leaf tone differs by up to ± `tone` lightness and ± `hue` (vigour, soil, age) [I].
+ */
+export const AVENUE_ROW = {
+  height: 0.2,
+  width: 0.25,
+  depth: 0.18,
+  lean: 3,
+  replantEvery: 17,
+  replantScale: 0.55,
+  aniso: 0.18,
+  tone: 0.07,
+  hue: 0.025,
+  tag: 'N young avenues staked, gaps replanted (Hirschfeld, Sckell; research/11 §3.2); I amounts',
+} as const;
+
+/**
+ * Wave 10 (garden, audit #11): Mistbeet lights in July. Forcing frames of the period were glazed with small lapped
+ * panes of greenish crown glass in wooden sash bars (BSB 25r "couches" type plan, research/11 §1.3, S11) [D-> type;
+ * N]; in July the lights were propped up for air, taken off, or limewashed against the sun (period practice, research/11
+ * §1.3 / KB-I36 "hotbeds open") [N]. Shares of the lights per state, the prop angle range (deg), the sash bars per
+ * light (along the slope), and the pane tints (sRGB: crown glass over the dark bed; limewashed) [I].
+ */
+export const HOTBED_LIGHT = {
+  propped: 0.45,
+  removed: 0.15,
+  whitewashed: 0.15,
+  prop: [10, 20] as readonly [number, number],
+  bars: 3,
+  bar: 0.035,
+  glass: '#4E5C47',
+  whitewash: '#BCC0B2',
+  tag: 'D-> BSB 25r couches (research/11 §1.3, S11); N lapped crown-glass panes in sash bars; N July lights propped, removed or limewashed; I shares and tints',
+} as const;
+
+/**
+ * Wave 11 (architecture, audit #8): the CdL centre risalit (the 7-axis Louisenhof core) read as a flat slab. The
+ * documented means are period norms only; no source shows the garden front in detail (HMS: "plain", research/06 §3.3;
+ * no Mannlich elevation of it in research/10), so the 0.5 m projection stays and nothing is added beyond:
+ *  - `lisene`: the risalit-edge Lisenen of the CdL (research/09 §3.4 "Lisenen articulating the risalits on the CdL";
+ *    D Herzogvorstadt "Lisenengliederung") at the norm's width and projection (02 §2.6: 0.6-0.9 m, 30-60 mm) instead of
+ *    the 0.02 m corner-strip value [N; HMS corner strips 0.02 stay on the building corners, G8];
+ *  - `surround`: the window surrounds of the risalit axes a profiled fascia 0.05-0.08 m proud with an inner fillet
+ *    (02 §2.3 "Buntsandstein, profiled Faszie; Beletage same, richer profile") [N], in the members' grey render (I);
+ *  - `keystone`: a flat keystone over the ground-floor windows of the risalit (02 §2.3 CdL EG "straight, keystone") [N];
+ *    the Beletage Verdachungen of MEMBERS.hoodedAxes are only drawn where they clear the cornice (the Beletage window
+ *    heads meet the architrave, so before wave 11 they lay inside the cornice, unseen);
+ *  - `door`: a glazed garden door is joinery, not a window run to the floor: stiles and a meeting stile with a cover
+ *    bead (battement), a bottom rail and a fielded lower panel (soubassement) to `panel` above the threshold, glass
+ *    above (Louis-seize croisée-porte) [N research/09 §3.1, §3.3; I sizes], and a straight Verdachung over it on the
+ *    centre axis (02 §2.3 "straight cornice on centre axes") [N; I on the EG garden door].
+ *  - `shutter` (wave-11 review fix): an open shutter leaf lies flat on its own wall plane, so on the axes beside the
+ *    risalit edges it must clear the Lisene and the risalit return by `clear` m. The pier there (opening edge to
+ *    risalit edge 0.62-0.67 m, less the 0.2 m surround) cannot take a leaf beside the Lisene, so the architect sizes
+ *    the leaf to the pier: a full leaf where it fits, else a two-panel folding leaf (volet brisé, folded width =
+ *    `fold` × leaf) where that fits, else no outer leaf (layout/facade.ts shutterLeafFit) [I; N folding leaves on
+ *    narrow piers].
+ */
+export const CDL_CENTRE = {
+  lisene: { width: 0.7, projection: 0.05 },
+  shutter: { clear: 0.05, fold: 0.5 },
+  surround: { projection: 0.06, fillet: 0.05, filletProjection: 0.03 },
+  keystone: { width: 0.28, rise: 0.12, drop: 0.05, projection: 0.09 },
+  door: { stile: 0.09, meetingStile: 0.055, bead: 0.035, beadProjection: 0.025, bottomRail: 0.14, panel: 0.85, raise: 0.02, hood: true },
+  tag: 'N 02 §2.3 / §2.6 (Lisenen 0.6-0.9 m, 30-60 mm; profiled CdL surrounds 0.05-0.08 m proud; EG keystones; straight Verdachung on the centre axis); research/09 §3.4 Lisenen on the CdL risalits (D Herzogvorstadt idiom); N croisée-porte with soubassement (research/09 §3.1, §3.3); I sizes; projection 0.5 m kept (no garden-front source); I shutter leaves sized to the pier beside the Lisenen (wave-11 review)',
+} as const;
+
+/**
+ * Wave 11 (audit #9, architecture): the hierarchy of the panelled rooms, so the state floor stops reading as one
+ * white-and-gold kit. research/09 §4.2 gives the boiserie of the period as white, pearl or "gris" with a ceiling cove
+ * (voussure), cornice, frieze and centre rosette, gilding only on the innermost moulding [D Koblenz; N]. Which room
+ * takes which tone and cornice order follows rank (salle > salon / audience > antichambre / cabinet) [I]; hexes N.
+ * Carved heads: a laurel swag hung from a bow knot over every pier glass and on every second upper panel field of the
+ * gilt rooms (`carvedFields` in interior/finish.ts) [N Louis-seize boiseries, research/02 §2.12 / 09 §4.2; sizes I].
+ * Read by interior/finish.ts (roomOrder, corniceProfile, rosetteRadius), interior/shell.ts and interior/fixtures.ts.
+ */
+export const ROOM_ORDER = {
+  boiserie: { blanc: '#F1EFE8', perle: '#E8E6E0', gris: '#DCDAD3' },
+  /** stucco rosette radius = `share` × the room's shorter plan span, clamped [I] */
+  rosette: { share: 0.055, min: 0.32, max: 0.62 },
+  /** cove reach of the plain order (antichambres, cabinets) as a share of the state one [I] */
+  plainCove: 0.7,
+  /**
+   * carved head: swag width ≤ `maxWidth` m, its sag `sag` × width, leaf-bead size `bead` m [I]. Wave-11 review fix: over
+   * a pier glass / trumeau the bows sit just outside the frame's top corners (swag width = glass + 0.1, ≤ `glassMax`)
+   * so the ribbon ends and laurel drops hang beside the frame against the boiserie, the glass
+   * stops `crest` m lower so the bows and tablet clear the cornice, and no panel-field head is carved where a glass,
+   * picture or case covers it (interior/shell.ts) [I].
+   */
+  carved: { maxWidth: 0.9, sag: 0.28, bead: 0.032, glassMax: 1.6, crest: 0.2 },
+  tag: 'N research/09 §4.2 (boiserie white / pearl / gris, voussure, cornice, frieze, rosette; carved garlands and trophies); I assignment by room rank and all sizes',
 } as const;

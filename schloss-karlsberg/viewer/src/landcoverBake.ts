@@ -14,7 +14,9 @@
  * floor), A = 0.5 · cultivated weight (hay, field, kitchen garden) + 1.0 · vineyard weight (decode in terrain.ts).
  */
 import * as THREE from 'three';
-import { MAX_PARCEL_SEGMENTS, bakeGrid } from './landcover.ts';
+import { FIELD_DIR, FIELD_ROTATION, MAX_PARCEL_SEGMENTS, bakeGrid } from './landcover.ts';
+import { PLEASURE_GROUND } from '@model/layout/grammar.ts';
+import { ZONE_SCALE } from './lawnZones.ts';
 
 export interface LandBakeUniforms {
   tWeights: THREE.IUniform<THREE.Texture>;
@@ -34,6 +36,13 @@ export interface LandBakeUniforms {
   uFieldGreen: THREE.IUniform<THREE.Vector3>;
   uFallow: THREE.IUniform<THREE.Vector3>;
   uStubble: THREE.IUniform<THREE.Vector3>;
+  /** wave 11 (KB-I84): spelt, oats, clover and the ploughed fallow of the three-field rotation */
+  uSpelt: THREE.IUniform<THREE.Vector3>;
+  uOats: THREE.IUniform<THREE.Vector3>;
+  uClover: THREE.IUniform<THREE.Vector3>;
+  uPlough: THREE.IUniform<THREE.Vector3>;
+  /** wave 11: contour direction per field block (landcover.ts fieldBlockDirs, FIELD_DIR²) */
+  tFieldDir: THREE.IUniform<THREE.Texture>;
   uVine: THREE.IUniform<THREE.Vector3>;
   uSoil: THREE.IUniform<THREE.Vector3>;
   uGardenSoil: THREE.IUniform<THREE.Vector3>;
@@ -114,33 +123,99 @@ float vineCover(float sinT, float acrossC){
  * Gewann strip frame shared by the bake (crops per strip) and the terrain shader (balk and furrow lines per pixel, so
  * they hold at ≥ 1 px from 450 m up; wave-3 review fix). Mirrored on the CPU by landcover.ts `fieldStrip`
  * [N Gewannflur; I sizes]: blocks of 190 × 150 m in the palace grid warped by 30 m of 160 m noise (`warp` =
- * (vn(xz / 160), vn(xz / 160 + 7.3)) from the shared lattice), strips 12-24 m wide along the block's u or v axis,
- * an alternating ±5.5 % value step (±1.5 % jitter) so neighbouring strips differ by ≥ 8 % even with the same crop,
- * a grass balk on half of the strip edges and a plain furrow on the rest.
+ * (vn(xz / 160), vn(xz / 160 + 7.3)) from the shared lattice), strips 12-24 m wide, an alternating ±5.5 % value step
+ * (±1.5 % jitter) so neighbouring strips differ by ≥ 8 % even with the same crop, a grass balk on half of the strip
+ * edges and a plain furrow on the rest.
+ * Wave 11 (KB-I84, audit #2): the strips of a block run along its contour (`tFieldDir`, landcover.ts fieldBlockDirs;
+ * the wave-3 hash axis where the block is flat), and the crops follow the three-field rotation: one Zelge per block
+ * (winter grain, summer grain, fallow) and the strip crops inside it (landcover.ts FIELD_ROTATION, fieldCropOf).
  */
 export const FIELD_GLSL = /* glsl */ `
 const vec2 FIELD_B = vec2(190.0, 150.0);
+uniform sampler2D tFieldDir;
 float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
-struct FieldFrame { vec2 p; vec2 blk; vec2 fb; vec2 acrossDir; float across; float along; float sw; float sid; float fa; };
+struct FieldFrame { vec2 p; vec2 blk; vec2 fb; vec2 a; vec2 acrossDir; float across; float along; float sw; float sid; float fa; };
 FieldFrame fieldFrame(vec2 xz, vec2 gU, vec2 warp){
   FieldFrame F;
   vec2 gV = vec2(-gU.y, gU.x);
   F.p = vec2(dot(xz, gU), dot(xz, gV)) + 30.0 * warp;
   F.blk = floor(F.p / FIELD_B);
   F.fb = F.p - F.blk * FIELD_B;
-  bool alongU = hash12(F.blk + 3.1) < 0.55;
-  F.across = alongU ? F.p.y : F.p.x;
-  F.along = alongU ? F.p.x : F.p.y;
-  F.acrossDir = alongU ? gV : gU;
+  vec2 bi = F.blk + ${(FIELD_DIR / 2).toFixed(1)};
+  vec4 bd = all(greaterThanEqual(bi, vec2(0.0))) && all(lessThan(bi, vec2(${FIELD_DIR.toFixed(1)}))) ? textureLod(tFieldDir, (bi + 0.5) / ${FIELD_DIR.toFixed(1)}, 0.0) : vec4(0.0);
+  vec2 a = hash12(F.blk + 3.1) < 0.55 ? vec2(0.0, 1.0) : vec2(1.0, 0.0);
+  if (bd.g > 0.5) { float ang = bd.r * (255.0 / 256.0) * 3.14159265; a = vec2(cos(ang), sin(ang)); }
+  F.a = a;
+  F.across = dot(F.p, a);
+  F.along = dot(F.p, vec2(-a.y, a.x));
+  F.acrossDir = a.x * gU + a.y * gV;
   F.sw = 12.0 + 12.0 * hash12(F.blk + 9.7);
   F.sid = floor(F.across / F.sw);
   F.fa = F.across - F.sid * F.sw;
   return F;
 }
-// 0 ripe winter grain (40 %), 1 summer grain (24 %), 2 fallow / clover (20 %), 3 stubble (16 %)
-float fieldCrop(FieldFrame F){ float h = hash12(vec2(F.sid, F.blk.x * 31.0 + F.blk.y * 7.0)); return h < 0.4 ? 0.0 : h < 0.64 ? 1.0 : h < 0.84 ? 2.0 : 3.0; }
-float fieldStripValue(FieldFrame F){ return (mod(F.sid, 2.0) < 0.5 ? 1.055 : 0.945) * (1.0 + 0.03 * (hash12(vec2(F.sid, 7.0 + F.blk.x)) - 0.5)); }
+// Zelge of the block: 0 winter grain, 1 summer grain, 2 fallow (landcover.ts fieldZelge)
+float fieldZelge(FieldFrame F){ float h = hash12(F.blk + vec2(51.7, 23.3)); return h < ${FIELD_ROTATION.zelge[0].toFixed(3)} ? 0.0 : h < ${(FIELD_ROTATION.zelge[0] + FIELD_ROTATION.zelge[1]).toFixed(3)} ? 1.0 : 2.0; }
+// reaped / ploughed share of the block width (landcover.ts fieldCutShare)
+float fieldCutShare(vec2 blk, vec3 cut){ float h = hash12(blk + vec2(61.3, 17.9)); return h < cut.x ? 0.0 : cut.y + (h - cut.x) / (1.0 - cut.x) * (cut.z - cut.y); }
+// 0 rye, 1 spelt, 2 reaped stubble; 3 oats, 4 barley; 5 clover, 6 weedy fallow, 7 ploughed (landcover.ts fieldCropOf):
+// one crop per block (Flurzwang), the reapers' / plough's run from the block's low-across side
+float fieldCrop(FieldFrame F){
+  float z = fieldZelge(F);
+  float h = hash12(vec2(F.blk.x * 31.0 + 0.7, F.blk.y * 7.0 + 0.3));
+  vec2 b0 = F.blk * FIELD_B;
+  float a0 = dot(b0, F.a) + min(0.0, FIELD_B.x * F.a.x) + min(0.0, FIELD_B.y * F.a.y);
+  float a1 = dot(b0, F.a) + max(0.0, FIELD_B.x * F.a.x) + max(0.0, FIELD_B.y * F.a.y);
+  float t = ((F.sid + 0.5) * F.sw - a0) / max(a1 - a0, 1e-6);
+  if (z < 0.5) return t < fieldCutShare(F.blk, vec3(${FIELD_ROTATION.winterCut.map((v) => v.toFixed(3)).join(', ')})) ? 2.0 : h < ${FIELD_ROTATION.winter[0].toFixed(3)} ? 0.0 : 1.0;
+  if (z < 1.5) return h < ${FIELD_ROTATION.summer[0].toFixed(3)} ? 3.0 : 4.0;
+  return t < fieldCutShare(F.blk, vec3(${FIELD_ROTATION.fallowCut.map((v) => v.toFixed(3)).join(', ')})) ? 7.0 : h < ${FIELD_ROTATION.fallow[0].toFixed(3)} ? 5.0 : 6.0;
+}
+float fieldStripValue(FieldFrame F){ return (mod(F.sid, 2.0) < 0.5 ? 1.035 : 0.965) * (1.0 + 0.06 * (hash12(vec2(F.sid, 7.0 + F.blk.x)) - 0.5)); }
 float fieldHasBalk(FieldFrame F){ return step(0.5, hash12(vec2(floor(F.across / F.sw + 0.5), F.blk.x * 5.0 + F.blk.y + 0.5))); }
+`;
+
+/**
+ * Wave 10 (garden, audit #1): the meadow-lawn's mowing zones (viewer/src/lawnZones.ts, macro B = 128 + 8 · signed
+ * distance, negative = close-mown). Both the bake and the terrain shader turn it into the aftermath-meadow weight with
+ * the same ragged scythe edge: ±0.9 m at 1.6 m and ±1.2 m at 7 m (n1, n7 = value noise at xz / 1.6 + 23, xz / 7 + 5).
+ * Wave-10 review fix (02: the mown zone round the rondell ended in a straight, hard-edged rectangle from the air): a
+ * one-sided 45 m / 17 m warp that lets the mown ground reach up to ZONE_WARP[1] m farther out and pulls it in by at most
+ * ZONE_WARP[0] m (so the walk verges never close), so the scythe line wanders at aerial scale too.
+ */
+export const ZONE_WARP = [1.2, 4.2] as const;
+/** Mean straw-windrow weight of a scythed parcel (aftermathSwath wr over one swath pair; the bake carries it, wave-10 review fix). */
+export const WINDROW_MEAN = 0.22;
+export const ZONE_GLSL = /* glsl */ `
+float lawnMeadowAt(float b, vec2 xz, float n1, float n7){
+  float sd = (b * 255.0 - 128.0) / ${ZONE_SCALE.toFixed(1)};
+  float wA = clamp(zn(xz / 45.0 + 61.0) * 0.7 + zn(xz / 17.0 + 67.0) * 0.3, 0.0, 1.0);
+  sd += ${ZONE_WARP[0].toFixed(2)} - wA * ${(ZONE_WARP[0] + ZONE_WARP[1]).toFixed(2)};
+  return smoothstep(-0.5, 0.5, sd + (n1 - 0.5) * 1.8 + (n7 - 0.5) * 2.4);
+}
+// aftermath parcels (≈ 34 × 24 m, warped, on the palace grid; PLEASURE_GROUND.patch): st = the parcel's mowing state
+// hash (< 0.45 standing seeding grass, < 0.8 freshly scythed, else regrowth); in scythed parcels wr = the straw windrow
+// (one per two 1.7 m swaths), alt = the swath's value step (±1), edge = distance (m) to the parcel edge (the uncut
+// margin), sy = the coordinate across the swaths (m; its pixel footprint fades the swaths, wave-10 review fix).
+// Needs zn() = mip-0 value noise and hash12 (FIELD_GLSL) in the including shader.
+struct Swath { float st; float wr; float alt; float edge; float sy; };
+Swath aftermathSwath(vec2 xz, vec2 gU) {
+  vec2 gV = vec2(-gU.y, gU.x);
+  vec2 aq = vec2(dot(xz, gU), dot(xz, gV)) + 9.0 * vec2(zn(xz / 40.0 + 71.0), zn(xz / 40.0 + 77.0)) + 1.5 * vec2(zn(xz / 9.0 + 81.0), zn(xz / 9.0 + 83.0));
+  vec2 PS = vec2(${PLEASURE_GROUND.patch[0].toFixed(1)}, ${PLEASURE_GROUND.patch[1].toFixed(1)});
+  vec2 pid = floor(aq / PS);
+  vec2 pf = aq - pid * PS;
+  Swath S;
+  S.st = hash12(pid + 91.3);
+  float sw = ${PLEASURE_GROUND.swath.toFixed(2)};
+  float sy = pf.y + (zn(vec2(pf.x / 8.0, pid.x * 2.3 + pid.y * 1.9)) - 0.5) * 0.8;
+  S.sy = sy;
+  S.alt = mod(floor(sy / sw), 2.0) < 0.5 ? 1.0 : -1.0;
+  float d = abs(fract(sy / (2.0 * sw)) - 0.5) * 2.0 * sw;
+  S.wr = (1.0 - smoothstep(0.3, 0.7, d)) * (0.5 + 0.5 * zn(xz / 5.0 + 51.0));
+  S.edge = min(min(pf.x, PS.x - pf.x), min(pf.y, PS.y - pf.y)) + (zn(xz / 3.0 + 3.0) - 0.5) * 1.6;
+  return S;
+}
 `;
 
 const VERT = /* glsl */ `
@@ -173,7 +248,7 @@ uniform sampler2D tWeights; uniform sampler2D tCult; uniform sampler2D tNoise; u
 uniform float uDistScale; uniform vec2 uGroundOrigin; uniform vec2 uGroundSize; uniform float uShowClasses;
 uniform vec2 uGridU; uniform vec2 uVineAcross; uniform vec2 uTexel;
 uniform vec3 uHayGreen; uniform vec3 uHayStraw; uniform vec3 uFieldGold; uniform vec3 uFieldGreen; uniform vec3 uFallow;
-uniform vec3 uStubble; uniform vec3 uVine; uniform vec3 uSoil; uniform vec3 uGardenSoil; uniform vec3 uParterreCol;
+uniform vec3 uStubble; uniform vec3 uSpelt; uniform vec3 uOats; uniform vec3 uClover; uniform vec3 uPlough; uniform vec3 uVine; uniform vec3 uSoil; uniform vec3 uGardenSoil; uniform vec3 uParterreCol;
 uniform vec3 uMeadow; uniform vec3 uMeadowDry; uniform vec3 uMeadowLush; uniform vec3 uLawn; uniform vec3 uLawnDry;
 uniform vec3 uWorn; uniform vec3 uTrack; uniform vec3 uBalk;
 uniform sampler2D tMacro; uniform vec4 uVineSeg[${MAX_PARCEL_SEGMENTS}]; uniform int uVineSegN;
@@ -183,6 +258,8 @@ float vn(vec2 p){ vec2 i = floor(p); vec2 f = fract(p); return textureLod(tNoise
 vec3 lumTo(vec3 c, float L){ return c * (L / max(dot(c, LUM), 1e-4)); }
 ${VINE_GLSL}
 ${FIELD_GLSL}
+float zn(vec2 p){ return vn(p); }
+${ZONE_GLSL}
 // signed distance (m) to the vineyard outline (negative inside, even-odd), mirrored by landcover.ts parcelSignedDistance
 float vineSd(vec2 p, out vec2 cp){
   float d2 = 1e12;
@@ -260,6 +337,41 @@ vec4 land(vec2 xz) {
   float ld = smoothstep(0.5, 0.85, n23 * 0.55 + nBig * 0.45);
   vec3 lawnC = mix(uLawn, uLawnDry, ld * 0.7) * (0.95 + 0.1 * vn(xz / 6.0)) * (0.97 + 0.06 * n1);
   lawnC = mix(lawnC, mix(uWorn, lawnC, 0.5), (1.0 - smoothstep(0.3, 1.6, dd.r)) * 0.35);
+  // wave-10 review fix (04 / 16 / 33: one olive-yellow tone): the close-mown turf is a cooler, fresher green (rolled and
+  // scythed every week or two, no seed heads, no sun-faded thatch) at the same value [N Sckell / Hirschfeld; I tint]
+  float Lm = dot(lawnC, LUM);
+  lawnC = lumTo(lawnC * vec3(0.92, 1.0, 1.1), Lm);
+  // wave 10 (garden, audit #1): beyond the close-mown pleasure ground the meadow-lawn is an aftermath hay meadow
+  // (grammar PLEASURE_GROUND; research/11 §3.1 "mown light-green / straw strips and taller seeding grass" [N]): parcels
+  // mown on different days (≈ 34 × 24 m, warped, on the palace grid), each either standing seeding grass (buff and
+  // reddish seed heads, darker tussocks), freshly scythed (pale stubble with straw windrows) or green regrowth; an
+  // uncut 1 m margin between parcels [N mowing practice; I shares and tones]. Wave-10 review fix: the meadow is a warmer
+  // tone about 6-9 % above the mown turf (it was up to 25 % and read parched olive-yellow), and the bake carries only the
+  // mean of the 1.7 m swaths and windrows: from the air the parcels differ by state alone (the 3.4 m stripes read as
+  // ride-on mower striping at 02 / 62); the terrain shader draws the swaths near the camera while they resolve
+  if (w.r > 0.001) {
+    float gm = lawnMeadowAt(texture2D(tMacro, (xz - uGroundOrigin) / uGroundSize).b, xz, vn(xz / 1.6 + 23.0), vn(xz / 7.0 + 5.0));
+    if (gm > 0.001) {
+      Swath S = aftermathSwath(xz, gU);
+      float st = S.st;
+      // only ≥ 4 m variation here: the bake's 1 m texels are magnified near the camera, where the terrain shader's
+      // meadow grain, swaths and the seeding grass cards (grassBlades.ts) carry the fine structure
+      float nS = vn(xz / 7.0 + 13.0);
+      float Lh = Lm * 1.09;
+      vec3 seeding = lumTo(mix(mix(uHayGreen, uMeadow, 0.4), uHayStraw, 0.08), Lh) * (0.93 + 0.12 * nS) * (0.95 + 0.08 * n9);
+      seeding = mix(seeding, lumTo(mix(uHayGreen, uHayStraw, 0.4) * vec3(1.06, 0.95, 0.96), Lh * 1.03), 0.3 * smoothstep(0.5, 0.85, vn(xz / 11.0 + 4.0) * 0.6 + n23 * 0.4));
+      vec3 ag;
+      if (st < 0.45) ag = seeding;
+      else if (st < 0.8) {
+        vec3 cutG = lumTo(mix(mix(uLawn, uHayGreen, 0.5), uHayStraw, 0.22), Lm * 1.1);
+        ag = mix(cutG, lumTo(uHayStraw, Lm * 1.2), 0.45 * ${WINDROW_MEAN.toFixed(2)}) * (0.97 + 0.06 * n9);
+        ag = mix(seeding, ag, smoothstep(0.6, 1.6, S.edge));
+      } else {
+        ag = lumTo(mix(uHayGreen, uLawn, 0.6), Lm * 1.01) * (0.95 + 0.1 * vn(xz / 6.0 + 7.0));
+      }
+      lawnC = mix(lawnC, ag, gm);
+    }
+  }
 
   vec3 forestC = mix(vec3(0.10, 0.13, 0.07), vec3(0.17, 0.19, 0.10), n9 * 0.6 + n23 * 0.4);
   // water class: the ground under the water surfaces is hidden by them; where a graded natural shore (wave 9,
@@ -285,7 +397,7 @@ vec4 land(vec2 xz) {
     // 05 read as a mown golf lawn), seeding / flowering drifts (sorrel and grass heads reddish-buff, buttercup and
     // umbellifer specks) [N July hay meadow; I hues]
     // wave 9 (audit #1: the outer hay meadows read yellow at 17:30, pose 47): 12 % straw (was 20 %), fewer buttercup drifts
-    vec3 standing = lumTo(mix(uHayGreen, uHayStraw, 0.12), L) * (0.96 + 0.06 * hash12(bid + 2.0)) * (0.91 + 0.16 * vn(xz / 5.0)) * (0.91 + 0.18 * n1);
+    vec3 standing = lumTo(mix(uHayGreen, uHayStraw, 0.12), L) * (0.94 + 0.1 * hash12(bid + 2.0)) * (0.91 + 0.16 * vn(xz / 5.0)) * (0.91 + 0.18 * n1);
     standing = mix(standing, lumTo(mix(uHayGreen, uHayStraw, 0.55) * vec3(1.1, 0.93, 0.97), L * 1.04), 0.6 * smoothstep(0.45, 0.85, n9 * 0.6 + n23 * 0.4));
     standing = mix(standing, lumTo(vec3(1.0, 0.92, 0.6), L * 1.14), 0.12 * smoothstep(0.6, 0.88, vn(xz / 3.3 + 61.0)));
     // darker, lusher tussocks and lodged patches (2-4 m)
@@ -300,15 +412,22 @@ vec4 land(vec2 xz) {
       float sp = 4.0 + 2.0 * hash12(bid + 7.7);
       float wy = f.y + (vn(vec2(f.x / 9.0, bid.x * 3.1 + bid.y * 1.7)) - 0.5) * 1.0;
       float d = abs(fract(wy / sp) - 0.5) * sp;
-      float wr = (1.0 - smoothstep(0.35, 0.85, d)) * (0.7 + 0.3 * vn(xz / 4.0));
-      vec3 stubble = lumTo(mix(uHayGreen, uHayStraw, 0.42), L * 1.04);
-      vec3 rows = lumTo(uHayStraw, L * 1.12);
-      vec3 cut = mix(stubble, rows, wr) * (0.97 + 0.06 * vn(xz / 5.0)) * (0.96 + 0.08 * n1);
+      // wave-10 review fix (62: evenly spaced bands read as modern mower striping from the air): hand-raked windrows
+      // are uneven: each row breaks up along its length (gaps, thinner stretches) and varies in width [N; I]
+      float wRow = floor(wy / sp + 0.5);
+      float wBreak = smoothstep(0.22, 0.55, vn(vec2(f.x / 6.0, wRow * 3.7 + bid.x * 1.3 + bid.y * 2.1)));
+      float wr = (1.0 - smoothstep(0.25 + 0.2 * vn(xz / 9.0 + 3.0), 0.85, d)) * (0.55 + 0.45 * vn(xz / 4.0)) * (0.35 + 0.65 * wBreak);
+      // wave 11 (KB-I84, audit #2: hay parcels read as one olive sheet from the air): paler stubble and rows
+      // (was L · 1.04 / 1.12) so the mown parcels stand apart [research/11 §3.1 mown light strips; I values]
+      vec3 stubble = lumTo(mix(uHayGreen, uHayStraw, 0.45), L * 1.09);
+      vec3 rows = lumTo(uHayStraw, L * 1.18);
+      vec3 cut = mix(stubble, rows, 0.75 * wr) * (0.97 + 0.06 * vn(xz / 5.0)) * (0.96 + 0.08 * n1);
       // uncut margin along the parcel edge, and the standing rest of a parcel still being mown (a ragged swath edge)
       float mown = smoothstep(1.4, 2.6, edge) * (1.0 - smoothstep(-0.4, 0.4, f.y - cutY + (vn(xz / 2.0) - 0.5) * 0.8));
       hay = mix(standing * 0.97, cut, mown);
     } else {
-      hay = lumTo(mix(uHayGreen, uHayStraw, 0.16), L * 1.02) * (0.95 + 0.1 * vn(xz / 3.0));
+      // regrowth (aftermath): short fresh green, lighter and cooler than the seeding stands (wave 11, was straw 0.16)
+      hay = lumTo(mix(mix(uHayGreen, uLawn, 0.35), uHayStraw, 0.06), L * 1.05) * (0.95 + 0.1 * vn(xz / 3.0));
     }
     // a soft seam between neighbouring parcels (different mowing dates) instead of a ruled line
     hay = mix(hay, standing, (1.0 - smoothstep(0.0, 1.2, edge)) * 0.5);
@@ -332,34 +451,56 @@ vec4 land(vec2 xz) {
     vec3 crop;
     float ripe = 0.0;
     float stub = 0.0;
-    if (hsd < 0.5) { crop = mix(uFieldGold, uFieldGold * vec3(0.92, 0.95, 1.06), hs2); ripe = 1.0; } // spelt .. greyer rye
-    else if (hsd < 1.5) crop = mix(uFieldGreen, uFieldGold, 0.3 * hs2); // oats / barley, turning
-    else if (hsd < 2.5) crop = mix(uFallow, uMeadowDry, 0.35 * hs2); // fallow / clover, grazed
-    else { crop = uStubble; stub = 1.0; }
-    // a hard value step between strips (no soft blending between strips; wave-3 review fix)
+    float clover = 0.0;
+    float plough = 0.0;
+    // wave 11 (KB-I84): the three-field rotation in July (FIELD_GLSL fieldCrop; landcover.ts FIELD_ROTATION) [N; I hues]
+    if (hsd < 0.5) { crop = mix(uFieldGold, uFieldGold * vec3(0.93, 0.95, 1.05), hs2); ripe = 1.0; } // ripe rye, greyer to golder
+    else if (hsd < 1.5) { crop = mix(uSpelt, uFieldGold, 0.25 * hs2); ripe = 1.0; } // ripe spelt: straw gold
+    else if (hsd < 2.5) { crop = uStubble; stub = 1.0; } // reaped: stubble with sheaf stooks
+    else if (hsd < 3.5) crop = mix(uOats, uFieldGreen, 0.3 * hs2); // oats, still blue-green
+    else if (hsd < 4.5) crop = mix(uFieldGreen, uFieldGold, 0.3 + 0.3 * hs2); // barley, yellowing
+    else if (hsd < 5.5) { crop = mix(uClover, uClover * vec3(1.05, 0.96, 1.0), hs2); clover = 1.0; } // clover in the fallow
+    else if (hsd < 6.5) crop = mix(uFallow, uMeadowDry, 0.35 * hs2); // weedy, grazed fallow
+    else { crop = mix(uPlough, uPlough * vec3(1.06, 1.04, 1.0), hs2); plough = 1.0; } // freshly ploughed fallow
+    // wave-11 review fix: one crop per block, so neighbouring strips differ only in ripeness (a late-sown strip a little
+    // greener, hs3) and value (fieldStripValue, ±6.5 %): a hard step between strips (wave-3 review fix), no category jump
+    float hs3 = hash12(vec2(sid, blk.x * 5.0 + blk.y * 11.0 + 2.0));
+    crop = mix(crop, uFieldGreen, (ripe > 0.5 || (hsd > 2.5 && hsd < 4.5) ? 0.1 : 0.0) * hs3);
     crop *= fieldStripValue(F);
-    // lengthwise streaks of the plough lands (3-5 m) and broad patches [N]
+    // lengthwise streaks of the plough lands (3-5 m) and broad patches [N]; wave-11 review fix: low-frequency patches
+    // along each strip (thin and lush stretches, ±5 %, 30-60 m) and the ridged plough lands (3.2 m ridge-and-furrow
+    // across the grain and the ploughed fallow, ±3 %) [N; I]
     float streak = vn(vec2(across / 3.7, alongC / 45.0) + blk * 13.0);
     vec3 cropC = crop * (0.95 + 0.07 * streak) * (0.96 + 0.08 * vn(xz / 13.0));
+    cropC *= 0.95 + 0.1 * vn(vec2(alongC / 38.0, sid * 1.7) + blk * 5.0);
+    cropC *= 1.0 + 0.03 * sin(across * 1.9635) * (1.0 - stub) * (1.0 - clover);
     // lodged and weedy patches in the ripe grain: darker, a little greener
     cropC = mix(cropC, cropC * vec3(0.86, 0.9, 0.84), ripe * smoothstep(0.7, 0.9, vn(xz / 7.0 + 3.0)) * 0.8);
-    // stooks (Garbenhocken) on half of the stubble strips, ~6 × 5 m apart [N hand harvest; I spacing]
-    if (stub > 0.5 && hs2 < 0.5) {
+    // clover: pink-red flower heads in drifts; the ploughed fallow: furrow ridges along the strip and clods [N; I]
+    cropC = mix(cropC, cropC * vec3(1.12, 0.9, 0.95), clover * 0.45 * smoothstep(0.5, 0.85, vn(xz / 6.0 + 41.0)));
+    cropC *= 1.0 + plough * (0.07 * (vn(vec2(across / 1.3, alongC / 60.0) + blk * 7.0) - 0.5) + 0.05 * (vn(xz / 3.0 + 17.0) - 0.5));
+    // stooks (Garbenhocken) on most reaped strips, ~6 × 5 m apart [N hand harvest; I spacing]
+    if (stub > 0.5 && hs2 < 0.8) {
       vec2 sc = vec2(across / 6.0, alongC / 5.0);
       vec2 cid = floor(sc);
       vec2 jit = vec2(hash12(cid + 1.3), hash12(cid + 2.9)) - 0.5;
       float dS = length((fract(sc) - 0.5 - jit * 0.4) * vec2(6.0, 5.0));
       cropC = mix(cropC, uFieldGold * 0.7, (1.0 - smoothstep(0.45, 0.85, dS)) * 0.85);
     }
-    // the balks and furrows between strips are drawn per pixel by the terrain shader (≥ 1 px wide); the bake only
-    // carries a faint trace of them for the mip levels beyond the shader's line fade
+    // the balks and furrows between strips are drawn per pixel by the terrain shader (≥ 1 px wide); the bake carries
+    // them for the mip levels beyond the shader's line fade. Wave-11 review fix (no balks from the air): a 0.85 m grass
+    // balk (Rain) at 60 %, a 0.45 m furrow at 25 %, so they fade out with the mips instead of vanishing at the line gate [N]
     float bd = min(F.fa, sw - F.fa);
-    vec3 fieldC = mix(cropC, mix(cropC * 0.86, uBalk, fieldHasBalk(F) * 0.5), (1.0 - smoothstep(0.15, 0.6, bd)) * 0.3);
-    // headland at the block edge, a grass margin along the edge of the field land
+    float hasBalk = fieldHasBalk(F);
+    vec3 fieldC = mix(cropC, mix(cropC * 0.82, uBalk * (0.92 + 0.16 * n1), hasBalk), (1.0 - smoothstep(mix(0.2, 0.42, hasBalk), mix(0.45, 0.75, hasBalk), bd)) * mix(0.25, 0.6, hasBalk));
+    // headland (Anwand) across the block edge, 4-6 m in all (the plough team turned there; ploughed last, so part
+    // trodden soil, part grass), and a 3-6 m grass headland along the edge of the field land, so the strips no longer
+    // stop on a ruled line against the meadow [N; I widths]
     float eb = min(min(fb.x, B.x - fb.x), min(fb.y, B.y - fb.y)) + (vn(xz / 4.0) - 0.5) * 1.5;
-    float head = 1.0 - smoothstep(1.2, 2.4, eb);
-    float marg = 1.0 - smoothstep(1.2, 2.8 + 1.5 * n9, dd.b);
-    fieldC = mix(fieldC, uBalk * (0.9 + 0.2 * n9), max(head, marg) * 0.9);
+    float head = 1.0 - smoothstep(1.8, 2.6 + 0.8 * vn(xz / 21.0 + 4.4), eb);
+    float marg = 1.0 - smoothstep(2.6, 4.4 + 1.6 * n9, dd.b);
+    vec3 headC = mix(uBalk, mix(uFallow, uWorn, 0.5), 0.35 * smoothstep(0.35, 0.75, vn(xz / 6.0 + 27.0))) * (0.9 + 0.2 * n9);
+    fieldC = mix(fieldC, headC, max(head, marg) * 0.9);
     // dusty field tracks with two ruts and a grass middle on ~45 % of the block edges (same edge keys as the hedges)
     float ex = p.x - floor(p.x / B.x + 0.5) * B.x;
     float ey = p.y - floor(p.y / B.y + 0.5) * B.y;

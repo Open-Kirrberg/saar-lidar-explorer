@@ -208,6 +208,8 @@ export function validateSite(raw: unknown, mode: ValidationMode = 'v2'): Validat
               // wave-8 review fix (KB-I72): continuous balcony across the portes-fenêtres of one entry
               else if (q.balcony_run !== undefined && (!isObj(q.balcony_run) || q.kind !== 'porte_fenetre' || (q.balcony_run.depth !== undefined && !(isNum(q.balcony_run.depth) && (q.balcony_run.depth as number) > 0))))
                 err(`${P}.facade.portals[${j}].balcony_run`, "only on a 'porte_fenetre' entry; depth > 0 if given");
+              // wave 10 (audit #8): glazed French door
+              else if (q.glazed !== undefined && (typeof q.glazed !== 'boolean' || q.kind !== 'door')) err(`${P}.facade.portals[${j}].glazed`, "boolean, only on a 'door' entry");
             });
         }
         if (f.glasshouse !== undefined && !isObj(f.glasshouse)) err(P + '.facade.glasshouse', 'must be an object');

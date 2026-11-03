@@ -18,9 +18,9 @@ import type { BuildContext } from '../context.ts';
 import { E0, N0 } from '../frame.ts';
 import type { BuildingLayout } from '../layout/building.ts';
 import { enToST } from '../layout/footprint.ts';
-import { hashString } from '../layout/geom.ts';
+import { hashString, polylineLength } from '../layout/geom.ts';
 import { MENAGERIE } from '../layout/grammar.ts';
-import { type MenagerieHouse, type MenagerieTerrace, menagerieLayout } from '../layout/menagerie.ts';
+import { type MenagerieHouse, type MenagerieTerrace, channelReaches, menagerieLayout, polylineAt } from '../layout/menagerie.ts';
 import type { EN } from '../spec.ts';
 import { type GeoBuilder, type MatKey, type P3, matKey } from './builder.ts';
 import type { ExteriorPalette } from './index.ts';
@@ -36,6 +36,8 @@ const DARK = matKey('stone.rubble', '#2E2924');
 const RUN = matKey('ground.grass', MENAGERIE.runGround);
 const GRAVEL = matKey('ground.gravel');
 const COPING = matKey('stone.grey', '#BDBAB2');
+// KB-I97: the houses' warm broken-white limewash on rough render, not the palace white [I]
+const HOUSE = matKey('render.farm', MENAGERIE.houseRender);
 
 export function buildMenagerie(g: GeoBuilder, gr: GeoBuilder, L: BuildingLayout, pal: ExteriorPalette, ctx: BuildContext): void {
   const b = L.building;
@@ -355,19 +357,19 @@ function house(g: GeoBuilder, gr: GeoBuilder, h: MenagerieHouse, st: (p: EN) => 
   const P = (a: number, d: number, z: number): P3 => [c[0] + tA[0] * a + tD[0] * d, c[1] + tA[1] * a + tD[1] * d, z];
   const blk = (k: MatKey, a0: number, a1: number, d0: number, d1: number, z0: number, z1: number, top = true) => block(g, k, P, a0, a1, d0, d1, z0, z1, top);
   if (lod < 2) {
-    blk(pal.wall, -W, W, -D, D, foot, eaves);
+    blk(HOUSE, -W, W, -D, D, foot, eaves);
     if (lod >= 1) blk(pal.plinth, -W - 0.04, W + 0.04, -D - 0.04, D + 0.04, foot, floor, false);
   } else {
     const T = 0.3;
     const pier = Math.min(0.45, h.width * 0.13);
     blk(pal.plinth, -W - 0.04, W + 0.04, -D - 0.04, D + 0.04, foot, floor);
-    blk(pal.wall, -W, W, -D, -D + T, floor, eaves); // back
-    blk(pal.wall, -W, -W + T, -D + T, D, floor, eaves); // sides
-    blk(pal.wall, W - T, W, -D + T, D, floor, eaves);
-    blk(pal.wall, -W + T, -W + T + pier, D - T, D, floor, eaves); // front piers
-    blk(pal.wall, W - T - pier, W - T, D - T, D, floor, eaves);
+    blk(HOUSE, -W, W, -D, -D + T, floor, eaves); // back
+    blk(HOUSE, -W, -W + T, -D + T, D, floor, eaves); // sides
+    blk(HOUSE, W - T, W, -D + T, D, floor, eaves);
+    blk(HOUSE, -W + T, -W + T + pier, D - T, D, floor, eaves); // front piers
+    blk(HOUSE, W - T - pier, W - T, D - T, D, floor, eaves);
     const lintel = eaves - Math.min(0.55, h.eaves * 0.22);
-    blk(pal.wall, -W + T + pier, W - T - pier, D - T, D, lintel, eaves);
+    blk(HOUSE, -W + T + pier, W - T - pier, D - T, D, lintel, eaves);
     // dark inside (straw, soot) so the open front reads as a den
     g.quadFacing(DARK, P(-W + T, -D + T + 0.01, floor), P(W - T, -D + T + 0.01, floor), P(W - T, -D + T + 0.01, lintel), P(-W + T, -D + T + 0.01, lintel), dirOf(P, 0, 1));
     g.quadFacing(DARK, P(-W + T, -D + T, floor + 0.01), P(W - T, -D + T, floor + 0.01), P(W - T, D, floor + 0.01), P(-W + T, D, floor + 0.01), [0, 0, 1]);
@@ -412,7 +414,7 @@ function house(g: GeoBuilder, gr: GeoBuilder, h: MenagerieHouse, st: (p: EN) => 
     gr.polygonFacing(roofK, [P(-rw, rd, ez), P(rw, rd, ez), r1, r0], dirOf(P, 0, 1, 1));
     gr.polygonFacing(roofK, [P(rw, -rd, ez), P(-rw, -rd, ez), r0, r1], dirOf(P, 0, -1, 1));
     // gable triangles
-    for (const s of [-1, 1]) g.polygonFacing(pal.wall, [P(s * W, D, eaves), P(s * W, -D, eaves), P(s * W, 0, rz)], dirOf(P, s, 0));
+    for (const s of [-1, 1]) g.polygonFacing(HOUSE, [P(s * W, D, eaves), P(s * W, -D, eaves), P(s * W, 0, rz)], dirOf(P, s, 0));
     if (lod >= 2) {
       gr.polygonFacing(roofK, [P(-rw, rd, ez), P(rw, rd, ez), P(rw, -rd, ez), P(-rw, -rd, ez)], [0, 0, -1]);
     }
@@ -490,47 +492,93 @@ function fence(g: GeoBuilder, a: ST, b: ST, za: number, zb: number, height: numb
   }
 }
 
-/** The watercourse through the runs: a water strip between two sandstone kerbs, following the ground. */
+/**
+ * KB-I97: the broad watercourse through the runs (T1 p. 383 "breiter Wasserlauf" [D]; form and sizes I, MENAGERIE.channel):
+ * a 4.5 m bed in a sandstone trough of level reaches (layout channelReaches), each held by a weir at the foot of the
+ * terrace step below it: crest just under the upper water, a dressed face down to the lower water and a falling sheet of water in
+ * front of it. Side walls carry a grey coping `freeboard` above the water and stand proud of the ground where the
+ * terrace falls away; the head and the outlet are closed by end walls. LOD1 (light layer): water, coping and outer
+ * faces at 4 m stations; LOD2 adds the inner freeboard faces at 2 m stations.
+ */
 function channel(g: GeoBuilder, line: EN[], st: (p: EN) => ST, ground: (p: EN) => number, lod: number): void {
   const C = MENAGERIE.channel;
   const water = matKey('water');
-  const kerb = matKey('stone.red', '#9C6A55');
-  // resample every ≈ 4 m so the strip follows the terrace steps
-  const pts: EN[] = [];
-  for (let i = 1; i < line.length; i++) {
-    const a = line[i - 1];
-    const e = line[i];
-    const n = Math.max(1, Math.ceil(Math.hypot(e[0] - a[0], e[1] - a[1]) / 4));
-    for (let k = i === 1 ? 0 : 1; k <= n; k++) pts.push([a[0] + ((e[0] - a[0]) * k) / n, a[1] + ((e[1] - a[1]) * k) / n]);
-  }
+  const wall = matKey('stone.red', '#9C6A55');
   const hw = C.width / 2;
-  for (let i = 1; i < pts.length; i++) {
-    const a = pts[i - 1];
-    const e = pts[i];
-    const l = Math.hypot(e[0] - a[0], e[1] - a[1]) || 1;
-    const nE: EN = [-(e[1] - a[1]) / l, (e[0] - a[0]) / l];
-    const side = (p: EN, s: number): EN => [p[0] + nE[0] * s, p[1] + nE[1] * s];
-    const za = Math.min(ground(side(a, -hw)), ground(side(a, hw))) - 0.12;
-    const ze = Math.min(ground(side(e, -hw)), ground(side(e, hw))) - 0.12;
-    const P = (p: EN, z: number): P3 => {
-      const q = st(p);
-      return [q[0], q[1], z];
-    };
-    g.quadFacing(water, P(side(a, -hw), za), P(side(e, -hw), ze), P(side(e, hw), ze), P(side(a, hw), za), [0, 0, 1]);
-    // kerbs at LOD1 too (wave-6 review: the watercourse must read from the air); inner faces only at LOD2
-    if (lod >= 1)
-      for (const s of [-1, 1]) {
-        const i0 = side(a, s * hw);
-        const i1 = side(e, s * hw);
-        const o0 = side(a, s * (hw + C.kerb));
-        const o1 = side(e, s * (hw + C.kerb));
-        const ka = Math.max(ground(o0), za + 0.2) + 0.06;
-        const ke = Math.max(ground(o1), ze + 0.2) + 0.06;
-        g.quadFacing(kerb, P(i0, ka), P(i1, ke), P(o1, ke), P(o0, ka), [0, 0, 1]);
-        if (lod < 2) continue;
-        const inner = st(side(a, -s));
-        const cq = st(a);
-        g.quadFacing(kerb, P(i0, za - 0.1), P(i1, ze - 0.1), P(i1, ke), P(i0, ka), [inner[0] - cq[0], inner[1] - cq[1], 0]);
+  const ko = hw + C.kerb;
+  const reaches = channelReaches(line, ground);
+  const P = (p: EN, z: number): P3 => {
+    const q = st(p);
+    return [q[0], q[1], z];
+  };
+  const at = (s: number, off: number): EN => {
+    const { p, dir } = polylineAt(line, s);
+    return [p[0] - dir[1] * off, p[1] + dir[0] * off];
+  };
+  const dirAt = (s: number, k: number): P3 => {
+    // object-space horizontal direction: k = 0 along the flow (+s), k = ±1 across (towards ±off)
+    const a = st(at(s, 0));
+    const b = k === 0 ? st(at(s + 0.5, 0)) : st(at(s, k));
+    return [b[0] - a[0], b[1] - a[1], 0];
+  };
+  const step = lod >= 2 ? C.step : C.step * 2;
+  reaches.forEach((r, ri) => {
+    const n = Math.max(1, Math.round((r.s1 - r.s0) / step));
+    const ss = Array.from({ length: n + 1 }, (_, i) => r.s0 + ((r.s1 - r.s0) * i) / n);
+    const lv = r.level;
+    const topAt = (s: number, side: number) => Math.max(lv + C.freeboard, ground(at(s, side * ko)) + 0.06);
+    for (let i = 0; i < n; i++) {
+      const a = ss[i];
+      const e = ss[i + 1];
+      // level water from bank to bank
+      g.quadFacing(water, P(at(a, -hw), lv), P(at(e, -hw), lv), P(at(e, hw), lv), P(at(a, hw), lv), [0, 0, 1]);
+      for (const side of [-1, 1]) {
+        const ta = topAt(a, side);
+        const te = topAt(e, side);
+        // coping on the side wall
+        g.quadFacing(COPING, P(at(a, side * hw), ta), P(at(e, side * hw), te), P(at(e, side * ko), te), P(at(a, side * ko), ta), [0, 0, 1]);
+        // outer face down to the ground (proud where the terrace falls away)
+        g.quadFacing(wall, P(at(a, side * ko), ground(at(a, side * ko)) - 0.15), P(at(e, side * ko), ground(at(e, side * ko)) - 0.15), P(at(e, side * ko), te), P(at(a, side * ko), ta), dirAt(a, side));
+        // inner freeboard face down into the water
+        if (lod >= 2) g.quadFacing(wall, P(at(a, side * hw), lv - 0.1), P(at(e, side * hw), lv - 0.1), P(at(e, side * hw), te), P(at(a, side * hw), ta), dirAt(a, -side));
       }
+    }
+    const next = reaches[ri + 1];
+    const prev = reaches[ri - 1];
+    // which way the water runs (+1: towards growing s)
+    const flow = next ? (next.level <= lv ? 1 : -1) : prev ? (prev.level >= lv ? 1 : -1) : 1;
+    const downEnd = flow > 0 ? r.s1 : r.s0;
+    const lower = flow > 0 ? next : prev;
+    if (lower && lv - lower.level > 0.02) {
+      // weir at the step: crest under the upper water, face down to the lower water, a falling sheet in front
+      const s0 = downEnd - flow * C.weir;
+      const fwd = dirAt(downEnd, 0);
+      const out: P3 = [fwd[0] * flow, fwd[1] * flow, 0];
+      g.quadFacing(COPING, P(at(s0, -hw), lv - 0.03), P(at(downEnd, -hw), lv - 0.03), P(at(downEnd, hw), lv - 0.03), P(at(s0, hw), lv - 0.03), [0, 0, 1]);
+      g.quadFacing(wall, P(at(downEnd, -hw), lower.level - 0.1), P(at(downEnd, hw), lower.level - 0.1), P(at(downEnd, hw), lv - 0.03), P(at(downEnd, -hw), lv - 0.03), out);
+      const sf = downEnd + flow * 0.04;
+      g.quadFacing(water, P(at(sf, -hw), lower.level), P(at(sf, hw), lower.level), P(at(sf, hw), lv - 0.01), P(at(sf, -hw), lv - 0.01), out);
+      // the side walls step down with the water: end faces of the upper copings
+      for (const side of [-1, 1]) {
+        const lowTop = Math.max(lower.level + C.freeboard, ground(at(downEnd, side * ko)) + 0.06);
+        const hiTop = topAt(downEnd, side);
+        if (hiTop - lowTop > 0.02) g.quadFacing(wall, P(at(downEnd, side * hw), lowTop), P(at(downEnd, side * ko), lowTop), P(at(downEnd, side * ko), hiTop), P(at(downEnd, side * hw), hiTop), out);
+      }
+    }
+  });
+  // head and outlet: end walls across the bed
+  if (!reaches.length) return;
+  const total = polylineLength(line);
+  for (const [s, r, sign] of [
+    [0, reaches[0], -1],
+    [total, reaches[reaches.length - 1], 1],
+  ] as [number, (typeof reaches)[number], number][]) {
+    const top = Math.max(r.level + C.freeboard, ground(at(s, 0)) + 0.06);
+    const fwd = dirAt(s, 0);
+    const out: P3 = [fwd[0] * sign, fwd[1] * sign, 0];
+    const back = s + sign * C.kerb;
+    g.quadFacing(COPING, P(at(s, -ko), top), P(at(s, ko), top), P(at(back, ko), top), P(at(back, -ko), top), [0, 0, 1]);
+    g.quadFacing(wall, P(at(back, -ko), ground(at(back, 0)) - 0.15), P(at(back, ko), ground(at(back, 0)) - 0.15), P(at(back, ko), top), P(at(back, -ko), top), out);
+    if (lod >= 2) g.quadFacing(wall, P(at(s, -hw), r.level - 0.1), P(at(s, hw), r.level - 0.1), P(at(s, hw), top), P(at(s, -hw), top), [-out[0], -out[1], 0]);
   }
 }

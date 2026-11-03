@@ -52,6 +52,10 @@ Then tell the user in 2–4 lines what you'll change, which audit items it close
 
 ## Mental model of the current renderer (verify line numbers, they drift)
 
+This section is the audit-time baseline (before the backlog). Waves 0–11 changed most of it (own post chain,
+calibrated light, forest tiles, the candle pool, …); the current API is in `docs/architecture.md` (the wave paragraphs
+at the end of §4.4 and §9) and the done items of `docs/improvement-backlog.md`.
+
 - `viewer/src/main.ts`: one `WebGLRenderer` (`antialias`, `preserveDrawingBuffer: true`, DPR `min(dpr, 2)`),
   `ACESFilmicToneMapping`, no post chain.
   - `updateSun()` drives everything from `state.hour` on 15 Jul 1789 (`viewer/src/sun.ts`, NOAA, local mean time):
@@ -73,9 +77,10 @@ Then tell the user in 2–4 lines what you'll change, which audit items it close
   is 28,381 trees on ground class 6 (today's canopy, tag U for 1789), never frustum-culled (bounding sphere about
   2.15 km). It is the single largest cost.
 - `viewer/src/terrain.ts`: chunked terrain with a ground-class splat patch (lawn, meadow, gravel, forest, water).
-- Test hooks: `window.skb` = `{ scene, camera, renderer, controls, state, pois, entries, step, goto, setMode, set,
-  bench, gpuBench, triangles, handover, backUrl, placed }`. Automated tabs are often hidden (rAF paused), so drive
-  frames with `skb.step(n)`.
+- Test hooks: `window.skb` (full list in `README.md` under the viewer keys), e.g. `step`, `goto`, `pose`, `set`,
+  `setMode`, `look`, `bench`, `gpuBench`, `triangles`, `atmosphere`, `post`, `cloudData`, `nightSky`, `moon`, `night`,
+  `candles`.
+  Automated tabs are often hidden (rAF paused), so drive frames with `skb.step(n)`.
 
 ## Principles (and why)
 
