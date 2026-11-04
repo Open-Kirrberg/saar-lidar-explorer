@@ -8,7 +8,7 @@ Repo: `/Users/svenreiser/Documents/Develop/open-kirrberg/saar-lidar-explorer` ·
 
 1. `CLAUDE.md` (conventions, gates, heritage rules), then the `sle-roadmap` skill (`.claude/skills/sle-roadmap/SKILL.md`): it is your process (plan → delegate → verify → record). This brief **overrides** it where they differ.
 2. `PRD.md`, `docs/adr/README.md` and ADRs 0014–0027, `.claude/skills/sle-roadmap/references/roadmap.md` (items V2.0–V2.10 with acceptance).
-3. Per item: the specialist skill (`sle-renderer`, `sle-pipeline`, `sle-relict-detection`, castle skills in `schloss-karlsberg/.claude/skills/`) and the module README.
+3. Per item: the specialist skill (`sle-renderer`, `sle-pipeline`, `sle-relict-detection`, castle skills in `zones/schloss-karlsberg/.claude/skills/`) and the module README.
 
 ## 🎯 Done definition
 
@@ -36,7 +36,7 @@ Still respected: heritage rules (hypotheses only, no digging/detector guidance, 
 ## 📦 State at start
 
 - `app/public/data/overall/` (1.4 GB, incl. ortho, historic, LoD2, OSM, cadastre, candidates, point clouds) + `pois.geojson`; `data/raw` + `data/work/{overall,karlsberg}` (3 GB, GeoTIFFs incl. DTM/DSM for the CHM).
-- Castle: `schloss-karlsberg/viewer/public/terrain/`, textures, explorer light layer in `app/public/data/shared/`.
+- Castle (moved by V2.6a): `zones/schloss-karlsberg/viewer/public/terrain/`, textures, explorer light layer in `app/public/data/shared/`.
 - Disk: ≈ 65 GB free. Keep splat/photogrammetry intermediates under `data/` and delete what you don't need.
 
 ## 🕸️ Orchestration

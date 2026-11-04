@@ -44,17 +44,17 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 
 ## V2.6 — Zone contract + portal 🚪
 - [ ] **Approach:** write the zone contract next to `docs/data-contract.md` ([0016](../../../../docs/adr/0016-zone-kinds-zone-contract.md)): footprint, portal, spawn, assets/LOD, preset, attribution, evidence. Decide same bundle vs. separate app (new ADR). Portal + loading screen in the overworld.
-- **Acceptance:** contract + ADR; a test zone (fixture) enterable and leavable, camera pose restored. Decide the zone folder layout and move `schloss-karlsberg/` there (≈ 140 path refs: Pages workflow, release scripts, `../` paths).
+- **Acceptance:** contract + ADR; a test zone (fixture) enterable and leavable, camera pose restored. Decide the zone folder layout and move `schloss-karlsberg/` there (done: `zones/schloss-karlsberg/`, ADR 0029) (≈ 140 path refs: Pages workflow, release scripts, `../` paths).
 - **Skill:** `sle-pipeline`, `sle-renderer`
 
 ## V2.7 — Castle as zone #1 🏰
 - [ ] **Approach:** castle viewer behind the portal (1789 only), Kino look default, Rundflug as entry, „Gehe zu“ ≈ 8 highlights, *Gewissheit* control; shared sky + trees.
 - **Acceptance:** U1 end-to-end on the phone.
-- **Skill:** castle skills in `schloss-karlsberg/.claude/skills/`
+- **Skill:** castle skills in `zones/schloss-karlsberg/.claude/skills/`
 
 ## V2.8 — Captured zone pipeline + bakery 🥖 ⏳
 - [ ] ⏳ Blocked on location + footage from Hoon (Q-36).
-- **Approach:** move `schloss-karlsberg/video2world/` out of the castle into a shared tool; automate it: video → frames → mesh (or splats, ADR [0027](../../../../docs/adr/0027-captured-zone-method.md)) → scale + georeference → zone package. Measure hours per zone.
+- **Approach:** move `zones/schloss-karlsberg/video2world/` (→ `tools/capture/`) out of the castle into a shared tool; automate it: video → frames → mesh (or splats, ADR [0027](../../../../docs/adr/0027-captured-zone-method.md)) → scale + georeference → zone package. Measure hours per zone.
 - **Acceptance:** U3 works; one command from footage to zone; time per zone recorded.
 
 ## V2.9 — Tutorial + attribution ✨
