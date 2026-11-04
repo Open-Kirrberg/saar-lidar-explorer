@@ -59,6 +59,7 @@ Still respected: heritage rules (hypotheses only, no digging/detector guidance, 
 - **Ownership by directory.** V2.2 owns `app/src/shell/` + `main.ts` wiring; others build modules behind interfaces and get wired by V2.2 or by you. Contract changes (`docs/data-contract.md`, zone contract) are written by you or by the owning sibling **before** dependents start.
 - Every brief: goal + acceptance (copy from the roadmap), files to read, owned directories, settled decisions that apply, gates to run, report format (≤ 300 words, verified vs. not verified).
 - Don't poll siblings; follow each task's `next`. Cancel what you replace.
+- **No visible Chrome on the user's desktop** (user request): every brief says so. Browser checks and screenshots → T3 preview tools (`preview_open`, `preview_evaluate`, `preview_snapshot`); perf runs need CDP CPU throttling, which the T3 preview lacks → headless Chrome only (`pnpm run perf`, headless by default). Never `--headed`, never `open <url>`.
 
 **Waves** (start everything that is independent at once):
 
