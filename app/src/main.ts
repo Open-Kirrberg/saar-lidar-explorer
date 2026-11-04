@@ -23,6 +23,7 @@ import type { LoadProgressLike } from './ui/streaming';
 import { createSettingsRuntime, createShell } from './shell/Shell';
 import type { ShellApi } from './shell/types';
 import { registerZones } from './zones/runtime/feature';
+import { installTutorial } from './tutorial/Tutorial';
 import type { ZonesApi } from './zones/runtime/feature';
 import './ui/style.css';
 
@@ -62,6 +63,8 @@ export interface AppContext {
    * frame hooks, render or store sync), on the same rAF / `step()`. null = overworld again.
    */
   setFrameOwner(owner: ((dt: number) => void) | null): void;
+  /** True once the first terrain is on screen (`sle:ready` fired). */
+  ready?: boolean;
   /** V2.6b: zone portals + enter/exit (src/zones/runtime/feature.ts); set while the feature is mounted. */
   zones?: ZonesApi;
 }
@@ -241,6 +244,7 @@ async function main(): Promise<void> {
     areaNote: `Gebiet: ${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''}`,
   });
   registerZones(ctx); // V2.6b: zone portals (Standard), loading screen, enter / leave
+  installTutorial(ctx); // V2.9 first-flight tutorial: 🟢 Standard, once per profile (ADR 0038)
   installTrees(ctx); // V2.4 CHM trees: 🟢 Standard feature `trees`, updated via ctx.onFrame (app/README „Bäume“)
 
   // ---- frame loop -----------------------------------------------------------------------------
@@ -300,6 +304,7 @@ async function main(): Promise<void> {
     // display write (overlay/forest/layer) would otherwise serialise the default pose (#0,0,0,…).
     syncStore();
     bindHash(store, { isValidLayer, suspend: (s) => getLocate()?.revealsPosition(s) ?? false }); // F20 privacy
+    ctx.ready = true;
     window.dispatchEvent(new CustomEvent('sle:ready', { detail: ctx }));
   };
   const result = await terrain.load(startXZ.x, startXZ.z, (pr) => {

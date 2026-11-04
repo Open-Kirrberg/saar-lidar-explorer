@@ -20,7 +20,13 @@ import type { Tier } from './tiers';
 
 // ---- Steuerung --------------------------------------------------------------------------------------
 
-export function openKeysDialog(isMounted: (id: string) => boolean, extra: readonly Shortcut[], touch: boolean): void {
+export function openKeysDialog(
+  isMounted: (id: string) => boolean,
+  extra: readonly Shortcut[],
+  touch: boolean,
+  /** V2.9: restart the first-flight tutorial (button above the lists). */
+  tutorial: (() => void) | null = null,
+): void {
   const rows = visibleShortcuts(isMounted, extra);
   const cols = el('div', { class: 'sle-keys-cols' });
   const group = (title: string, items: Array<{ caps: string[]; label: string }>) => {
@@ -46,7 +52,15 @@ export function openKeysDialog(isMounted: (id: string) => boolean, extra: readon
     el('p', { class: 'sle-dim', text: 'Was gerade verfügbar ist. Mehr Werkzeuge gibt es in den Stufen Entdecker und Labor (Einstellungen).' }),
     cols,
   );
-  openDialog({ id: 'sle-keys', title: 'Steuerung', body, wide: true });
+  if (tutorial) {
+    const b = el('button', { type: 'button', class: 'sle-btn', 'data-tut': 'restart', text: 'Einführung starten' });
+    b.addEventListener('click', () => {
+      dlg.close();
+      tutorial();
+    });
+    body.prepend(el('p', { class: 'sle-row' }, b, el('span', { class: 'sle-dim sle-small', text: 'Fünf Schritte bis zum Schloss.' })));
+  }
+  const dlg = openDialog({ id: 'sle-keys', title: 'Steuerung', body, wide: true });
 }
 
 // ---- Einstellungen ------------------------------------------------------------------------------------

@@ -342,7 +342,9 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
   });
 
   // ---- dialogs ------------------------------------------------------------------------------------------
-  const openKeys = () => openKeysDialog((id) => registry.isMounted(id), [...extraShortcuts, ...registry.defs().filter((d) => registry.isMounted(d.id)).flatMap((d) => d.shortcuts ?? [])], env.coarse);
+  let tutorialStart: (() => void) | null = null; // V2.9: „Einführung starten“ in *Steuerung*
+  const openKeys = () =>
+    openKeysDialog((id) => registry.isMounted(id), [...extraShortcuts, ...registry.defs().filter((d) => registry.isMounted(d.id)).flatMap((d) => d.shortcuts ?? [])], env.coarse, tutorialStart);
   const reset = () => {
     resetting = true;
     settings.freeze();
@@ -452,6 +454,12 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
       } catch {
         /* ignore */
       }
+    },
+    setTutorialStart(fn) {
+      tutorialStart = fn;
+      return () => {
+        if (tutorialStart === fn) tutorialStart = null;
+      };
     },
     mountTutorial(fn) {
       const layer = el('div', { class: 'sle-tutorial' });

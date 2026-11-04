@@ -264,6 +264,7 @@ desktop                                        phone (≤ 600 px)
 | `minimap` | 🟢 standard | | game minimap in `slots.minimap` (V2.3, ADR 0036); Labor: layer control on the full-screen map |
 | `places` | 🟢 standard | | *Orte* drawer (nearest places, search) |
 | `zone-portals` | 🟢 standard | | V2.6b portal markers, „… betreten“ prompt, loading screen, zones ([below](#zones-v26b-)) |
+| `tutorial` | 🟢 standard | | V2.9 first-flight tutorial card (once per profile; restart in *Steuerung* / *Einstellungen*), see *Tutorial* below |
 | `osm-paths` / `buildings` | 🟢 standard | 🔴 labor | 3D layers; their cards in Labor (only with `vectors` / `models.buildings`) |
 | `trees` | 🟢 standard | | V2.4 CHM trees (only with `trees`); switch „Bäume“ in *Einstellungen* (see *Bäume*) |
 | `quality`, `exaggeration` | 🟡 entdecker | | sections in *Einstellungen* |
@@ -287,11 +288,13 @@ shell.anchor('move-mode'|'speed'|'minimap'|'places'|'lens'|'share'|'keys'|'setti
 shell.prompt({ text, action, onAction, keyHint? }): { close() }                  // V2.6 zone portal prompt
 shell.loading(title): { progress(p: number | null, text?), close() }            // V2.6 loading screen
 shell.firstRun(): boolean; shell.markTutorialDone(); shell.mountTutorial((layer, shell) => teardown?): () => void  // V2.9
+shell.setTutorialStart(fn): () => void   // V2.9: „Einführung starten“ in *Steuerung* while set
 shell.openDialog({ id, title, body, wide?, onClose? }); shell.openKeys(); shell.openSettings(); shell.openSources(); shell.toast(text, warn?)
 shell.moveMode(): 'fly' | 'walk'; shell.setMoveMode(m)
 ctx.onFrame((dt) => …): () => void   // runs after controller.update, before render
 ```
 
+- **Tutorial (V2.9, ADR 0038):** `src/tutorial/` — `steps.ts` (pure step machine + German texts, `tests/tutorial.test.ts`), `Tutorial.ts` (card in `slots.tutorial`, ticks on `onFrame`, `sle:step` and a 400 ms timer because zones own the frame loop), `tutorial.css`. Steps: umschauen (≥ 20° / 8° / 40 m) → fliegen (≥ 120 m) → finden (*Orte* or full map open, or ≤ 1.2 km) → hinfliegen (inside the castle portal radius; without the `schloss-karlsberg` zone: 250 m around the palace ruins) → betreten (castle zone loading/entered). `?notutorial` skips it for one visit; `window.sleTutorial` = `{ start, stop, step, active }` for debugging. **H8 walkthrough:** `pnpm run first-run -- --url http://127.0.0.1:<port>/?aoi=overall` (headless, fresh profile, 390 px touch + 1440 px desktop, reads only the card, real input, no `flyTo`; shots + JSON in `docs/shots/v29/`).
 - Minimap (V2.3): `registerFeature({ id: 'minimap', replaces: 'minimap', tier: 'standard', … })` and render into `h.shell.slots.minimap`; set `h.services.minimap` if markers should sync.
 - Lens (V2.5): a Standard feature that appends its toggle to `shell.slots.lens` (it then shows in the bar); variants as an Entdecker feature with a `settings` section.
 - Keys: pass `shortcuts` rows (with `feature: id`) so the *Steuerung* dialog lists them while mounted; bind keys yourself with `isTyping()` and `modalOpen()` guards.

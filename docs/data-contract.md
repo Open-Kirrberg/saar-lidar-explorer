@@ -110,9 +110,11 @@ The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (
     // … level 2 (4 m, 2×2), 3 (8 m, 1×1), 4 (16 m, 1×1, size 188×188)
   ],
   "sources": [ { "tile": "382_5466", "provider": "LVGL-SL", "year": 2025, "product": "DGM1" } ],
-  "attribution": "© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet; © GeoBasis-DE/LVermGeoRP, dl-de/by-2-0; © OpenStreetMap-Mitwirkende, ODbL"
+  "attribution": "© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet; © GeoBasis-DE/LVermGeoRP (2026), dl-de/by-2-0, www.lvermgeo.rlp.de, Daten bearbeitet; © OpenStreetMap-Mitwirkende, ODbL"
 }
 ```
+
+**Attribution entries and dataset URIs (ADR 0026, V2.9).** `attribution` stays one `"; "`-joined string of verbatim Quellenvermerke; the year is the **year of retrieval** (2026 for every LVGL-SL and LVermGeoRP entry; manifests written with the old RLP tile year `(2022)` are healed in place by `merge_attribution` on any step's next write, or alone with `./run.sh <aoi> attribution`). A trailing `(<Layer>)` tag (`ALKIS`, `LoD2`, `DOP20`, `Historische Karten`) names the dataset. The „© Quellen“ dialog (`app/src/shell/attribution.ts`) maps provider + tag to the dataset URI (dl-de/by-2-0 §2 Nr. 3), so the manifest gains **no new field** and old manifests need no change. A new source whose provider the app does not know may put its dataset URI into its entry as a plain `https://…` URL (no `;`); the dialog links the first such URL. Unknown entries without a URL still show verbatim, without a dataset link.
 
 Layer keys and value ranges may be tuned by the pipeline; the app must read `min`/`max`/`label_de` from the manifest and not hard-code them. Optional layers may be missing; the app hides missing ones.
 

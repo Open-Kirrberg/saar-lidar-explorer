@@ -59,6 +59,8 @@ export const LINK_ONLY_HOSTS: readonly string[] = [
   'de.wikipedia.org',
   'geobasis-rlp.de',
   'www.shop.lvgl.saarland.de',
+  'www.geoportal.rlp.de', // V2.9 dataset URIs (RLP ALKIS WFS, DOP20 WMS)
+  'geo4.service24.rlp.de',
 ];
 
 /** Hosts of the deployment itself (site + data repositories on GitHub Pages) and local dev. */

@@ -11,7 +11,8 @@
     "serve:local": "pnpm run build && vite preview --host 127.0.0.1 --port 5250 --strictPort",
     "test": "vitest run",
     "fixture": "tsx scripts/make-fixture.ts",
-    "perf": "node scripts/perf-proxy.mjs"
+    "perf": "node scripts/perf-proxy.mjs",
+    "first-run": "node scripts/first-run.mjs"
   },
   "dependencies": {
     "leaflet": "1.9.4",

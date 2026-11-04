@@ -21,8 +21,9 @@ for s in "${STEPS[@]}"; do
     pointcloud) step "pointcloud $AOI" uv run python pointcloud.py "$AOI" ;;   # F16 focus-area point clouds (LAZ ≈ 45 MB/km²)
     trees) step "trees $AOI" uv run python trees.py "$AOI" ;;                 # V2.4 tree crowns from the CHM (after buildings, ortho)
     pois)  step "pois"       uv run python pois.py ;;
+    attribution) step "attribution $AOI" uv run python -c 'import sys, common; print(common.refresh_attribution(sys.argv[1]))' "$AOI" ;;  # manifest-only: heal superseded entries
     test)  step "tests"      uv run pytest -q ;;
-    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|pois|detect|pointcloud|trees|test)"; exit 1 ;;
+    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|pois|detect|pointcloud|trees|attribution|test)"; exit 1 ;;
   esac
 done
 du -sh "../app/public/data/$AOI" "../app/public/data/$AOI/xyz" 2>/dev/null || true
