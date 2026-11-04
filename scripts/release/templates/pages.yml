@@ -49,6 +49,8 @@ jobs:
         env:
           VITE_VIEWER_URL: /{{CODE_REPO}}/castle/
         run: |
+          # The explorer type-checks castle sources (V2.7 zone runtime); they resolve `three` from the castle package.
+          pnpm --dir ../zones/schloss-karlsberg install --frozen-lockfile
           pnpm install --frozen-lockfile
           pnpm run test
           pnpm run build
