@@ -106,6 +106,7 @@ export function initMobile(ctx: AppContext, deps: MobileDeps): MobileApi {
     return b;
   };
   const locBtn = mkBtn('locate', ICONS.locate, 'Standort', 'Mein Standort: zur eigenen Position fliegen (bleibt privat)');
+  locBtn.hidden = true; // 🧊 "Mein Standort" is frozen (ADR 0020): code kept, off the UI, initLocate() not called
   const reliefBtn = mkBtn('relief', ICONS.relief, 'Relief', 'Reliefdarstellung wechseln');
   const layersBtn = mkBtn('layers', ICONS.layers, 'Ebenen', 'Ebenen ein-/ausblenden');
   const mapBtn = mkBtn('map', ICONS.map, 'Karte', 'Übersichtskarte');
@@ -210,22 +211,6 @@ export function initMobile(ctx: AppContext, deps: MobileDeps): MobileApi {
   };
   if (toolbar) new MutationObserver(syncProxies).observe(toolbar, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden'] });
   syncProxies();
-  // F21: jump to the "3D-Druck" card inside the panel below (it exists only when print series load).
-  const printBtn = document.createElement('button');
-  printBtn.type = 'button';
-  printBtn.className = 'sle-btn';
-  printBtn.textContent = '3D-Druck';
-  printBtn.title = 'Druckkacheln planen und herunterladen';
-  printBtn.addEventListener('click', () => {
-    const card = document.querySelector<HTMLElement>('#sle-print');
-    if (!card) return;
-    if (!card.classList.contains('open')) card.querySelector<HTMLButtonElement>('.sle-card-head')?.click();
-    card.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  });
-  toolsSlot.appendChild(printBtn);
-  const syncPrintBtn = () => (printBtn.hidden = !document.querySelector('#sle-print:not([hidden])'));
-  window.addEventListener('sle:features', syncPrintBtn);
-  syncPrintBtn();
 
   // ---- layers sheet --------------------------------------------------------------------------------
   const m = manifest;
@@ -245,14 +230,6 @@ export function initMobile(ctx: AppContext, deps: MobileDeps): MobileApi {
       available: () => !!m.vectors?.osm && !!window.sleVectors,
       isOn: () => !!window.sleVectors?.osm?.visible,
       set: (on) => window.sleVectors?.setOsm(on),
-    },
-    {
-      id: 'parcels',
-      label: 'Flurstücke',
-      hint: 'Grenzen und Nummern (ALKIS)',
-      available: () => !!m.vectors?.flurstuecke && !!window.sleVectors,
-      isOn: () => !!window.sleVectors?.parcels?.lines.visible,
-      set: (on) => window.sleVectors?.setParcels(on),
     },
     {
       id: 'buildings',

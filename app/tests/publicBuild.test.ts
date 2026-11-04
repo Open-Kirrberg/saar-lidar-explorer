@@ -7,11 +7,10 @@ import {
   impressumUrl,
   isAbsoluteHttpUrl,
   parseAoiList,
-  printRootUrl,
   resolveDataPath,
   viewerUrlOverride,
 } from '../src/data/urls';
-import { chooseDeployedAoi, switchableAois } from '../src/map/aois';
+import { chooseDeployedAoi } from '../src/map/aois';
 import { DEFAULT_VIEWER_URL, backTargetUrl, buildViewerUrl, isTrustedHandoverUrl } from '../src/reconstruction/recon';
 
 const DATA = 'https://open-kirrberg.github.io/saar-lidar-data/';
@@ -60,18 +59,6 @@ describe('resolveDataPath (xyz URLs may point to a second data repo)', () => {
   });
 });
 
-describe('printRootUrl', () => {
-  it('defaults to <dataRoot>print/ and honours VITE_PRINT_URL', () => {
-    vi.stubGlobal('location', { href: 'http://localhost:5240/' });
-    vi.stubEnv('VITE_DATA_URL', '');
-    vi.stubEnv('BASE_URL', './');
-    vi.stubEnv('VITE_PRINT_URL', '');
-    expect(printRootUrl()).toBe('http://localhost:5240/data/print/');
-    vi.stubEnv('VITE_PRINT_URL', 'https://open-kirrberg.github.io/saar-lidar-data-2/print');
-    expect(printRootUrl()).toBe('https://open-kirrberg.github.io/saar-lidar-data-2/print/');
-  });
-});
-
 describe('deployed AOIs', () => {
   it('parses the comma list, drops invalid ids, empty → null', () => {
     expect(parseAoiList('overall')).toEqual(['overall']);
@@ -90,10 +77,6 @@ describe('deployed AOIs', () => {
     expect(chooseDeployedAoi('', ['kirrberg', 'homburg'])).toBe('kirrberg');
   });
 
-  it('switcher only offers deployed AOIs', () => {
-    expect(switchableAois(['overall']).map((a) => a.id)).toEqual(['overall']);
-    expect(switchableAois(null).length).toBeGreaterThan(1);
-  });
 });
 
 describe('castle viewer handover on the public site', () => {

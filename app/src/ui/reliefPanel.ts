@@ -182,9 +182,7 @@ export function createReliefPanel(ctx: ReliefPanelContext): ReliefPanelApi {
     forestMode: terrain.forest.mode as ForestMode,
     forestOpacity: terrain.forest.opacity,
     canopyMin: u.uCanopyMin.value,
-    collide: terrain.forest.collide,
     exaggeration: s0.exaggeration,
-    haze: 1,
   };
 
   // Contrast / colour
@@ -238,7 +236,6 @@ export function createReliefPanel(ctx: ReliefPanelContext): ReliefPanelApi {
     .name('Deckkraft (transparent)')
     .onChange((v: number) => terrain.setForest({ opacity: v }));
   fFor.add(p, 'canopyMin', 0.5, 10, 0.5).name('Mindesthöhe (m)').onChange((v: number) => (u.uCanopyMin.value = v));
-  fFor.add(p, 'collide').name('Kollision mit Baumkronen').onChange((v: boolean) => terrain.setForest({ collide: v }));
   if (!hasDsm) {
     for (const c of fFor.controllers) c.disable();
     fFor.title('Wald / Kronendach (kein DOM im Datensatz)');
@@ -247,7 +244,6 @@ export function createReliefPanel(ctx: ReliefPanelContext): ReliefPanelApi {
   // Terrain
   const fTer = gui.addFolder('Gelände');
   fTer.add(p, 'exaggeration', 1, 5, 0.1).name('Überhöhung (×)').onChange((v: number) => store.set({ exaggeration: v }, 'gui'));
-  fTer.add(p, 'haze', 0, 3, 0.05).name('Dunst').onChange((v: number) => (u.uFogDensity.value = v / 7000));
 
   fOvl.close();
   fSun.close();
@@ -346,7 +342,6 @@ export function createReliefPanel(ctx: ReliefPanelContext): ReliefPanelApi {
     cRadius.show(key === 'live-lrm' || o.key === 'live-lrm');
     p.forestMode = terrain.forest.mode;
     p.forestOpacity = terrain.forest.opacity;
-    p.collide = terrain.forest.collide;
     cForOp.enable(hasDsm && terrain.forest.mode === 'transparent');
     const st = store.get();
     p.sunAzimuth = st.sunAzimuth;
@@ -608,13 +603,13 @@ export function createReliefPanel(ctx: ReliefPanelContext): ReliefPanelApi {
     if (o.key) parts[0] += ` + ${modeByKey.get(o.key)?.label ?? terrain.labelFor(o.key)}`;
     const f = terrain.forest;
     let warn = false;
-    if (f.mode !== 'off' || f.collide) {
+    if (f.mode !== 'off') {
       const c = camera.position;
       const top = terrain.canopyHeightAt(c.x, c.z);
-      const inCanopy = !f.collide && !Number.isNaN(top) && c.y < terrain.toDisplayY(top);
+      const inCanopy = !Number.isNaN(top) && c.y < terrain.toDisplayY(top);
       warn = inCanopy;
       parts.push(
-        `Wald ${FOREST_LABELS[f.mode].toLowerCase()} · ${f.collide ? 'Kollision mit Baumkronen' : 'durchfliegbar (keine Kollision)'}` +
+        `Wald ${FOREST_LABELS[f.mode].toLowerCase()} · durchfliegbar` +
           (inCanopy ? ' · im Kronendach' : ''),
       );
     }

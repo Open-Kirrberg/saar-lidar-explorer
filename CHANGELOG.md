@@ -4,6 +4,7 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-04 | V2.1 | 🗑️ AOI switcher, HUD key list, prod debug panel, canopy collision, 3D Flurstücke, *Dunst* removed; *Mein Standort* + point cloud frozen; F21 → `sle-print`, F22 → private repo; bundle guard against crater/print code |
 | 2026-11-04 | docs | 📚 PRD split into ADRs 0001–0027, a short PRD and this changelog; v2 vision recorded (ADR 0014–0024); v1 PRD and roadmap frozen in `docs/history/` |
 | 2026-11-03 | castle | 🏰 Waves 10–11: paintings, HYG night sky, July field mosaic, garden-front relief, candle light |
 | 2026-11-03 | F21 | 🖨️ Kirrberg showpiece tile `kirrberg-11050` (1:11050, engraved title) |

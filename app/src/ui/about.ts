@@ -66,10 +66,8 @@ export function openAbout(): void {
       <ul class="sle-about-list">
         <li>Keine Cookies, keine Analyse- oder Tracking-Dienste, keine Werbung, keine Benutzerkonten.</li>
         <li>Einstellungen, Fundmarker, Bewertungen von Verdachtsflächen und Messungen werden nur in Ihrem Browser gespeichert
-        (localStorage) und von der App an keinen Server übertragen. „Mein Standort“ ermittelt Ihr Browser bzw. Gerät erst nach
-        Ihrer Zustimmung (je nach Browser mit dessen Ortungsdienst); die Position bleibt nur im Arbeitsspeicher dieser Seite und wird weder gespeichert noch gesendet.</li>
-        <li>Geteilte Links und QR-Codes enthalten nur die Ansicht (Position, Blickrichtung, Darstellung), nie Fundmarker;
-        solange die Ansicht Ihren Standort verraten würde, ist Teilen gesperrt.</li>
+        (localStorage) und von der App an keinen Server übertragen. Die App fragt Ihren Standort nicht ab.</li>
+        <li>Geteilte Links und QR-Codes enthalten nur die Ansicht (Position, Blickrichtung, Darstellung), nie Fundmarker.</li>
         <li><strong>Flurstücksabfrage:</strong> Beim Setzen eines Fundmarkers oder Messpunkts wird das Flurstück zuerst aus den
         mitgelieferten Daten ermittelt. Nur wenn diese die Stelle nicht abdecken (oder Sie es im Bericht ausdrücklich wählen),
         wird die <em>Koordinate</em> an den ALKIS-Dienst des Geoportals Saarland gesendet – Titel und Notizen nie.</li>

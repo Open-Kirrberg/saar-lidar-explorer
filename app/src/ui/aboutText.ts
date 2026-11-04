@@ -80,8 +80,8 @@ export function hostingText(pageHost: string, dataHost: string): HostingText {
     text = `Diese Website wird über GitHub Pages (GitHub Inc., USA) ausgeliefert. ${gh}`;
     text +=
       data === page
-        ? ' Auch die Gelände-, Relief- und Druckdaten werden von dort geladen.'
-        : ` Die Gelände-, Relief- und Druckdaten werden von ${data}${ghData ? ' (ebenfalls GitHub Pages)' : ''} geladen.`;
+        ? ' Auch die Gelände-, Relief- und Kartendaten werden von dort geladen.'
+        : ` Die Gelände-, Relief- und Kartendaten werden von ${data}${ghData ? ' (ebenfalls GitHub Pages)' : ''} geladen.`;
   } else {
     text = `Diese Installation wird von ${page || 'diesem Rechner'} ausgeliefert`;
     text += data === page ? ', von dort kommen auch die Gelände- und Kartendaten.' : `; die Gelände- und Kartendaten kommen von ${data}.`;

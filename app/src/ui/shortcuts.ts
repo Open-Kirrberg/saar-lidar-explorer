@@ -7,7 +7,7 @@
 
 export type ShortcutGroup = 'Flug' | 'Ansicht' | 'Ebenen' | 'Werkzeuge' | 'Hilfe';
 /** Optional data a row depends on (row hidden when the AOI lacks it). */
-export type ShortcutFeature = 'osm' | 'parcels' | 'buildings' | 'pointclouds' | 'candidates' | 'reconstruction';
+export type ShortcutFeature = 'osm' | 'buildings' | 'pointclouds' | 'candidates' | 'reconstruction';
 
 export interface Shortcut {
   group: ShortcutGroup;
@@ -53,7 +53,6 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { group: 'Ansicht', keys: ['K'], label: 'Kontrast automatisch', short: 'Kontrast auto', codes: ['KeyK'], hud: true },
   // ---- Ebenen (feature modules) ----
   { group: 'Ebenen', keys: ['O'], label: 'Wege (OSM)', codes: ['KeyO'], requires: 'osm', hud: true },
-  { group: 'Ebenen', keys: ['F'], label: 'Flurstücke', codes: ['KeyF'], requires: 'parcels', hud: true },
   { group: 'Ebenen', keys: ['G'], label: 'Gebäude (LoD2)', codes: ['KeyG'], requires: 'buildings', hud: true },
   { group: 'Ebenen', keys: ['C'], label: 'Punktwolke (Fokusgebiete)', short: 'Punktwolke', codes: ['KeyC'], requires: 'pointclouds', hud: true },
   { group: 'Ebenen', keys: ['X'], label: 'Verdachtsflächen', codes: ['KeyX'], requires: 'candidates', hud: true },
@@ -78,7 +77,6 @@ export const SHORTCUTS: readonly Shortcut[] = [
     hud: true,
   },
   // ---- Hilfe ----
-  { group: 'Hilfe', keys: ['H'], label: 'diese Hilfe im HUD ein/aus', short: 'Hilfe ein/aus', codes: ['KeyH'], hud: true },
   { group: 'Hilfe', keys: ['?'], label: 'Einführung & alle Tastenkürzel', short: 'alle Kürzel', codes: [], hud: true },
   { group: 'Hilfe', keys: ['Esc'], label: 'Tour beenden / Dialog schließen', codes: ['Escape'] },
 ];

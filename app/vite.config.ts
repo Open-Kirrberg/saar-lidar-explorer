@@ -5,13 +5,14 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import basicSsl from '@vitejs/plugin-basic-ssl';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { findForbidden } from './scripts/bundleGuard.ts';
 import { dataSubPath } from './scripts/dataPath.ts';
 
 const PUBLIC_DIR = resolve(import.meta.dirname, 'public');
 const PUBLIC_DATA_DIR = join(PUBLIC_DIR, 'data');
 /** AOI-independent shared datasets (F19 reconstruction models, contract "Shared datasets"). */
 const SHARED_DATA_DIR = join(PUBLIC_DATA_DIR, 'shared');
-/** 3D-print exports (pipeline/print3d.py: STL/3MF/PNG, GBs) — local files, never part of dist. */
+/** Leftover F21 3D-print exports (moved to the sle-print repo; STL/3MF/PNG, GBs) — never part of dist. */
 const PRINT_DATA_DIR = join(PUBLIC_DATA_DIR, 'print');
 /** Data dirs under public/data that stay out of dist besides the AOI datasets. */
 const NON_DIST_DATA_DIRS = new Set([SHARED_DATA_DIR, PRINT_DATA_DIR]);
@@ -32,15 +33,12 @@ const PUBLIC_BUILD = process.env.SLE_PUBLIC === '1';
 const PUBLIC_BASE = withSlash(process.env.SLE_BASE ?? '/saar-lidar-explorer/');
 const PUBLIC_ENV_DEFAULTS: Record<string, string> = {
   VITE_DATA_URL: 'https://open-kirrberg.github.io/saar-lidar-data/',
-  VITE_PRINT_URL: 'https://open-kirrberg.github.io/saar-lidar-data-2/print/',
   VITE_AOIS: 'overall',
   VITE_VIEWER_URL: `${PUBLIC_BASE}castle/`,
 };
 if (PUBLIC_BUILD) {
   // Vite reads VITE_* from process.env after loading this file; explicit env vars win.
   for (const [k, v] of Object.entries(PUBLIC_ENV_DEFAULTS)) process.env[k] ||= v;
-  // F22: forced (not a default) — the public app drops the private UXO candidate classes.
-  process.env.VITE_SLE_PUBLIC = '1';
   console.log(`[sle] public build: base ${PUBLIC_BASE}, data ${process.env.VITE_DATA_URL}, AOIs ${process.env.VITE_AOIS}`);
 }
 
@@ -98,6 +96,21 @@ function dataMiddleware(fallbackDir: () => string, base: () => string) {
     res.setHeader('Content-Length', String(st.size));
     if (req.method === 'HEAD') return res.end();
     createReadStream(file).on('error', next).pipe(res);
+  };
+}
+
+/** Fails the build when an emitted chunk contains F21/F22 code (scripts/bundleGuard.ts). */
+function bundleGuard(): Plugin {
+  return {
+    name: 'sle-bundle-guard',
+    apply: 'build',
+    generateBundle(_opts, bundle) {
+      for (const [name, out] of Object.entries(bundle)) {
+        const code = out.type === 'chunk' ? out.code : typeof out.source === 'string' ? out.source : '';
+        const hits = findForbidden(code);
+        if (hits.length) this.error(`[sle] ${name} contains moved-out code: ${hits.join('; ')}`);
+      }
+    },
   };
 }
 
@@ -191,9 +204,9 @@ function lanHttpsNotice(): Plugin {
 export default defineConfig({
   // Relative base so the build works from any sub-path; the public build uses its absolute path.
   base: PUBLIC_BUILD ? PUBLIC_BASE : './',
-  worker: { format: 'es' },
+  worker: { format: 'es', plugins: () => [bundleGuard()] },
   build: { target: 'es2022', chunkSizeWarningLimit: 1500, copyPublicDir: false },
-  plugins: [publicWithoutAoiData(), devDataDir(), ...(LAN_HTTPS ? [basicSsl({ name: 'sle-lan' }), lanHttpsNotice()] : [])],
+  plugins: [bundleGuard(), publicWithoutAoiData(), devDataDir(), ...(LAN_HTTPS ? [basicSsl({ name: 'sle-lan' }), lanHttpsNotice()] : [])],
   // Own dep-optimizer cache, so a LAN server next to a normal `pnpm dev` doesn't re-optimize the other's deps.
   ...(LAN_HTTPS ? { cacheDir: 'node_modules/.vite-lan' } : {}),
   test: {

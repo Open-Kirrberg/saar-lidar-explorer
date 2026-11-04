@@ -15,7 +15,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Skill:** `sle-renderer` · ADR [0014](../../../../docs/adr/0014-audience-scope-devices.md)
 
 ## V2.1 — Removals & move-outs 🗑️
-- [ ] **Why:** smaller surface before the rebuild.
+- [x] **Why:** smaller surface before the rebuild.
 - **Approach:** apply [0020](../../../../docs/adr/0020-remove-move-out-freeze.md). Debug panel behind `import.meta.env.DEV`. F21 → own repo/tool; F22 → private repo (keep the public-build guards until the code is gone). Frozen features: off the UI, code kept, tests kept.
 - **Acceptance:** public bundle has no F21/F22 code; `verify.sh` green; release-strip tests still pass.
 - **Skill:** `sle-renderer`, `sle-pipeline`
@@ -68,4 +68,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 
 ## Known issues / notes log
 - Carried from v1 (details: [`docs/history/roadmap-v1.md`](../../../../docs/history/roadmap-v1.md#known-issues--notes-log)): F15 precision unknown (Q-15); never run on a real phone (Q-22); canopy ends ≈ 1.9 km out (moot after V2.4); failed DSM / point tiles not retried until reload; F21 nothing printed (Q-26, moves out with F21); sld outlines beyond the AOI bbox (Q-30).
+- V2.1: `scripts/release/export_data.py` still stages `data/print/` into `saar-lidar-data-2`; F21 now lives in `../sle-print` → drop that staging at V2.10 (humans decide whether the published 3MF series stays).
+- V2.1: *Vollmondnacht*, shadow/cloud/resolution toggles never existed in the explorer (castle-only); only *Dunst* was removed.
+- Castle vitest: heavy builds time out at 5 s under parallel load → `testTimeout: 30_000`.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).

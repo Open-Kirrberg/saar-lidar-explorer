@@ -49,30 +49,9 @@ export function chooseDeployedAoi(search: string, deployed: readonly string[]): 
   return deployed.includes(PREFERRED_AOI) ? PREFERRED_AOI : deployed[0]!;
 }
 
-/** Known AOIs to offer in the "Gebiet" switcher: all, or only the deployed ones. */
-export function switchableAois(deployed: readonly string[] | null): readonly KnownAoi[] {
-  return deployed ? KNOWN_AOIS.filter((a) => deployed.includes(a.id)) : KNOWN_AOIS;
-}
-
 /** Is UTM (E, N) inside the bbox (inclusive)? */
 export function inBbox(b: readonly [number, number, number, number], E: number, N: number): boolean {
   return E >= b[0] && E <= b[2] && N >= b[1] && N <= b[3];
-}
-
-/**
- * URL (search + hash) for switching to `aoi`: sets `?aoi=`, keeps other params; keeps the
- * camera hash only if its position lies inside the target AOI (else the AOI centre is used).
- */
-export function switchAoiHref(
-  loc: { pathname: string; search: string; hash: string },
-  aoi: string,
-  pos: { E: number; N: number } | null,
-): string {
-  const params = new URLSearchParams(loc.search);
-  params.set('aoi', aoi);
-  const target = KNOWN_AOIS.find((a) => a.id === aoi);
-  const keepHash = !!(pos && target && inBbox(target.bbox, pos.E, pos.N));
-  return `${loc.pathname}?${params.toString()}${keepHash ? loc.hash : ''}`;
 }
 
 /** Densified rectangle ring (UTM) for drawing a UTM box in Web Mercator. */

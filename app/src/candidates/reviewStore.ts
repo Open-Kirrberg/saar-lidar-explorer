@@ -3,7 +3,7 @@
  * `sle.candidates.v1.<aoi>` (docs/data-contract.md "Review decisions"). Never written into data
  * files, never uploaded. Pure apart from the injected key-value storage; unit-tested.
  */
-import { UXO_CLASSES, UXO_NOTE_DE, candidatesStorageKey, isCandidateClass } from '../data/manifest';
+import { candidatesStorageKey, isCandidateClass } from '../data/manifest';
 import type { CandidateClass, CandidateDecision, CandidateReviewStatus, CandidateReviewStore } from '../data/manifest';
 import type { Candidate } from './candidateData';
 
@@ -116,7 +116,7 @@ export interface DecisionExport {
   detector: { method: string; version: number };
   note: string;
   counts: Record<CandidateReviewStatus, number>;
-  /** F22 (additive): decisions per class, e.g. `{ crater: 12, pit: 3 }`. */
+  /** Decisions per class, e.g. `{ pit: 3, mound: 1 }`. */
   classes: Partial<Record<CandidateClass, number>>;
   version: 1;
   decisions: Record<string, CandidateDecision>;
@@ -135,9 +135,7 @@ export function exportDecisions(store: CandidateReviewStore, aoi: string, detect
     aoi,
     exported: now.toISOString(),
     detector,
-    note:
-      'Private Prüfentscheidungen zu automatisch erkannten Verdachtsflächen (Hypothesen). Nicht veröffentlichen – Schauen, nicht graben.' +
-      (UXO_CLASSES.some((c) => classes[c]) ? ` Bombentrichter/Trichterfelder: ${UXO_NOTE_DE}.` : ''),
+    note: 'Private Prüfentscheidungen zu automatisch erkannten Verdachtsflächen (Hypothesen). Nicht veröffentlichen – Schauen, nicht graben.',
     counts,
     classes,
     version: 1,

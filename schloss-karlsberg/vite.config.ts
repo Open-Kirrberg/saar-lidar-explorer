@@ -32,5 +32,7 @@ export default defineConfig({
     root: ROOT,
     include: ['model/tests/**/*.test.ts', 'plans/tests/**/*.test.ts', 'viewer/tests/**/*.test.ts'],
     environment: 'node',
+    // Heavy geometry builds hit the 5 s default when the machine is loaded (parallel agents).
+    testTimeout: 30_000,
   },
 });

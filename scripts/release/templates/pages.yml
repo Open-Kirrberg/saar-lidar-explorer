@@ -23,7 +23,6 @@ env:
   SLE_PUBLIC: "1"
   SLE_BASE: "/{{CODE_REPO}}/"
   VITE_DATA_URL: ${{ vars.SLE_DATA_URL || '{{DATA_URL}}' }}
-  VITE_PRINT_URL: ${{ vars.SLE_PRINT_URL || '{{DATA2_URL}}print/' }}
   VITE_AOIS: ${{ vars.SLE_AOIS || '{{AOI}}' }}
   VITE_IMPRESSUM_URL: ${{ vars.SLE_IMPRESSUM_URL || '' }}
 

@@ -33,9 +33,9 @@ export function showIntro(o: IntroOptions): void {
   if (isIntroOpen()) return;
   const prevFocus = document.activeElement as HTMLElement | null;
   const has = o.hasFeature;
-  const layerKeys = (['osm', 'parcels', 'buildings', 'pointclouds', 'candidates', 'reconstruction'] as const)
+  const layerKeys = (['osm', 'buildings', 'candidates', 'reconstruction'] as const)
     .filter(has)
-    .map((f) => ({ osm: '<kbd>O</kbd> Wege', parcels: '<kbd>F</kbd> Flurstücke', buildings: '<kbd>G</kbd> Gebäude', pointclouds: '<kbd>C</kbd> Punktwolke', candidates: '<kbd>X</kbd> Verdachtsflächen', reconstruction: '<kbd>R</kbd> Rekonstruktion 1789' })[f]);
+    .map((f) => ({ osm: '<kbd>O</kbd> Wege', buildings: '<kbd>G</kbd> Gebäude', candidates: '<kbd>X</kbd> Verdachtsflächen', reconstruction: '<kbd>R</kbd> Rekonstruktion 1789' })[f]);
 
   const wrap = document.createElement('div');
   wrap.id = ID;

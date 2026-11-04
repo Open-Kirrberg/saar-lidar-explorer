@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FOCUS_AREAS, KNOWN_AOIS, aoiParam, bboxRing, chooseAoi, inBbox, switchAoiHref } from '../src/map/aois';
+import { FOCUS_AREAS, KNOWN_AOIS, aoiParam, bboxRing, chooseAoi, inBbox } from '../src/map/aois';
 import { needsRefine, pendingText, progressPending, terrainPending } from '../src/ui/streaming';
 
 describe('known AOIs', () => {
@@ -31,13 +31,6 @@ describe('known AOIs', () => {
     expect(chooseAoi('?aoi=../x', true)).toBe('overall'); // invalid → ignored
     expect(aoiParam('?foo=1&aoi=homburg')).toBe('homburg');
     expect(aoiParam('?aoi=')).toBeNull();
-  });
-
-  it('switch URL keeps the camera hash only inside the target AOI', () => {
-    const loc = { pathname: '/', search: '?aoi=karlsberg&x=1', hash: '#382500,5466500,300,0,-25' };
-    expect(switchAoiHref(loc, 'overall', { E: 382500, N: 5466500 })).toBe('/?aoi=overall&x=1#382500,5466500,300,0,-25');
-    expect(switchAoiHref(loc, 'homburg', { E: 382500, N: 5466500 })).toBe('/?aoi=homburg&x=1');
-    expect(switchAoiHref(loc, 'homburg', null)).toBe('/?aoi=homburg&x=1');
   });
 
   it('bboxRing densifies all four edges counter-clockwise from SW', () => {

@@ -1,7 +1,4 @@
 import type { AppState, Store } from '../state';
-import { isTyping } from './keys';
-import { availableShortcuts, shortcutsHtml } from './shortcuts';
-import type { ShortcutFeature } from './shortcuts';
 import { pendingText } from './streaming';
 import { touchHelpHtml } from './mobileMode';
 
@@ -16,9 +13,7 @@ export interface HudExtras {
   showFps: () => boolean;
   /** Terrain pieces still loading (F9 streaming); shows "Lade Details … n" while > 0. */
   pending?: () => number;
-  /** Which optional layers exist in this AOI (rows for missing ones are hidden). */
-  hasFeature?: (f: ShortcutFeature) => boolean;
-  /** Initial visibility of the "Steuerung" block and a callback when H toggles it (settings). */
+  /** Initial visibility of the touch-gesture block and a callback when its chip toggles it (settings). */
   helpVisible?: boolean;
   onHelpToggle?: (visible: boolean) => void;
 }
@@ -37,8 +32,7 @@ export function createHud(el: HTMLElement, store: Store<AppState>, extras: HudEx
     <div class="hud-stream" role="status" hidden></div>
     <button type="button" class="hud-help-btn" aria-controls="sle-hud-help">Gesten</button>
     <div class="help" id="sle-hud-help">
-      <span class="help-keys"><b>Steuerung</b> <span class="help-dim">(H: ein/aus · ? alle Kürzel)</span></span>
-      <div class="help-rows"></div>
+      <span class="help-keys"><kbd>?</kbd> alle Tastenkürzel</span>
       <div class="help-touch">${touchHelpHtml()}</div>
     </div>`;
   const cell = (k: string) => el.querySelector<HTMLElement>(`[data-k="${k}"]`)!;
@@ -46,15 +40,6 @@ export function createHud(el: HTMLElement, store: Store<AppState>, extras: HudEx
   const fpsRow = el.querySelector<HTMLElement>('[data-row="fps"]')!;
   const help = el.querySelector<HTMLElement>('.help')!;
   const stream = el.querySelector<HTMLElement>('.hud-stream')!;
-  const renderHelp = () => {
-    help.querySelector<HTMLElement>('.help-rows')!.innerHTML = shortcutsHtml(
-      availableShortcuts(extras.hasFeature ?? (() => true), true),
-      { short: true },
-    );
-  };
-  renderHelp();
-  // Optional layers found after start-up (F19 shared reconstruction dataset) add their rows.
-  window.addEventListener('sle:features', renderHelp);
   // F20: on touch devices (html.sle-touch) the block shows gestures, toggled by the "Gesten" chip.
   const helpBtn = el.querySelector<HTMLButtonElement>('.hud-help-btn')!;
   const setHelp = (visible: boolean, persist: boolean) => {
@@ -72,12 +57,6 @@ export function createHud(el: HTMLElement, store: Store<AppState>, extras: HudEx
   }
   setHelp(!coarse && extras.helpVisible !== false, false);
   helpBtn.addEventListener('click', () => setHelp(help.classList.contains('collapsed'), true));
-
-  const onKey = (e: KeyboardEvent) => {
-    if (e.code !== 'KeyH' || e.repeat || isTyping(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
-    setHelp(help.classList.contains('collapsed'), true);
-  };
-  window.addEventListener('keydown', onKey);
 
   const render = () => {
     const s = store.get();
@@ -97,7 +76,5 @@ export function createHud(el: HTMLElement, store: Store<AppState>, extras: HudEx
   const id = setInterval(render, 125);
   return () => {
     clearInterval(id);
-    window.removeEventListener('keydown', onKey);
-    window.removeEventListener('sle:features', renderHelp);
   };
 }

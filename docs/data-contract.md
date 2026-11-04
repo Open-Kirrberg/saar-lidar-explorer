@@ -227,11 +227,11 @@ Semi-automatic relict candidates from `pipeline/detect.py` (rule-based, local re
 
 **Privacy (heritage law, SDschG Saarland §§ 3, 8, 16; DSchG RLP).** Candidate files live under the git-ignored `app/public/data/<aoi>/candidates/` and are never committed to this repo; neither the pipeline nor the app sends them anywhere. The *relict* classes of the `overall` AOI are published only through the release export (see "Public release"; [ADR 0009](adr/0009-candidates-public-user-data-private.md)); the UXO classes below never are ([ADR 0010](adr/0010-craters-never-public.md)). Candidates carry no digging/detector guidance. Review decisions are **never** written into data files (see "Review decisions"). Every UI that shows candidates shows the hypothesis note and the "Schauen, nicht graben" disclaimer.
 
-**UXO classes (`crater`, `crater_field`, F22, additive).** Written by the sister project `saar-lidar-detect` (`sld run`, contract `../saar-lidar-detect/docs/data-contract.md`), not by `pipeline/detect.py`. They are **UXO indicators** (Kampfmittel-Vorerkundung, for professionals) and **always private**: a public build (`SLE_PUBLIC=1`) drops them while parsing, and the release export (`scripts/release/export_data.py`) strips them from `candidates.geojson`, the manifest and the mask before anything is staged. Every UI that shows them adds the note **„Hinweis, keine Aussage über Kampfmittel/Blindgänger“** (missing candidates never mean an area is free of ordnance).
+**UXO classes (`crater`, `crater_field`, codes 6/7).** The sister project `saar-lidar-detect` may write these UXO-indicator classes into the same files. They are **always private** ([ADR 0010](adr/0010-craters-never-public.md)): the explorer treats them as unknown classes in every build (features, counts, labels, decisions and mask codes 6/7 are ignored; `featureCount` is capped at the sum of known per-class counts), and the release export strips them (see "Public release"). Their format and viewer live in the private `sle-craters-private` repo (moved out in V2.1).
 
 ```ts
 CandidateClass = 'pit' | 'mound' | 'linear' | 'rect' | 'platform'
-               | 'crater' | 'crater_field'          // F22, additive (saar-lidar-detect), private
+               // 'crater' | 'crater_field' (6/7): saar-lidar-detect only, ignored by the explorer
 candidates = {
   path: 'candidates/candidates.geojson',   // relative to the AOI dir
   crs: 'EPSG:25832',
@@ -251,13 +251,11 @@ candidates = {
   // ---- additive keys written by saar-lidar-detect (all optional, informative unless noted) ----
   generator?: string,                      // e.g. 'saar-lidar-detect 0.1.0'
   method_version?: string,                 // primary '<method>/<ruleset>+sld.<version>'
-  method_versions?: string[],              // every method_version in the file, e.g. crater-rules/1+…
-  detectors?: string[],                    // detectors that ran: 'relicts', 'craters'
+  method_versions?: string[],              // every method_version in the file, e.g. lrm-rules/2+…
+  detectors?: string[],                    // detectors that ran, e.g. 'relicts'
   data_dates?: string[],                   // distinct feature data_date values
   disclaimer_de?: string,                  // German hypothesis/heritage/UXO note (shown in the panel)
   tiling?: Record<string, unknown>         // tile grid of the run (informative)
-  // params.crater_threshold?: number      // recommended display threshold for `crater` (0.55);
-                                           // the app's crater min-score filter starts there
 }
 ```
 
@@ -270,10 +268,6 @@ candidates = {
 | `linear` (3) | `Graben/Wall/Weg` | ditches, banks, walls, hollow ways, terrace edges | `length_m`, `width_m`?, `depth_m` (ditch/hollow way) or `height_m` (bank/wall), `orientation_deg` |
 | `rect` (4) | `Rechteckstruktur` | foundations, bunkers | `area_m2`, `rectangularity`, `length_m`, `width_m`, `orientation_deg`, `depth_m` or `height_m` |
 | `platform` (5) | `Plattform` | charcoal-kiln platforms, terraces | `area_m2`, `diameter_m`, `circularity`, `slope_in_deg`, `height_m`? |
-| `crater` (6) | `Bombentrichter (Hypothese)` | WW II bomb craters (UXO indicator) | `diameter_m` (inner opening), `rim_diameter_m`, `depth_m`, `rim_m`, `rim_frac`, `circularity`, `n_50m`, … (see saar-lidar-detect `docs/craters.md`) |
-| `crater_field` (7) | `Trichterfeld (Hypothese)` | clusters of ≥ 5 craters ≥ 0.55 (UXO indicator) | `n_craters`, `area_ha`, `density_per_ha`, `diam_median_m`, `diam_min_m`, `diam_max_m`, `nn_median_m`, `crater_score_mean` |
-
-`crater`: Point = deepest cell of the pit, **no `outline`** (the app draws a circle of `metrics.diameter_m`). `crater_field`: Point = centroid (or point on surface), `outline` = closed counter-clockwise single-ring `Polygon` (concave hull of the members + buffer, densified ≤ 2 m, baked z) — drawn in 3D and on the minimap; `properties.member_ids: string[]` = ids of its member craters in the same file (missing/invalid → `[]`). Both have `near_path`/`along_path` false and `near_known` null. Craters are written from score 0.3 (review recall); the recommended display threshold is `params.crater_threshold` (0.55). Older apps skip both classes (unknown class) and keep working.
 
 Known paths are not a separate class: a `linear` candidate with `along_path: true` (≥ 50 % of its centreline within 5 m of an OSM `road`/`track`/`path` way) is shown, filtered and saved as "Weg (bekannt)". `near_path` alone (which also counts `water`/`barrier` and lines that merely cross a way) is informative only. Older files without `along_path` read it as `false`.
 
@@ -304,22 +298,22 @@ CandidateProps = {
   near_known: string | null,  // `id` of the nearest pois.geojson site within 50 m, else null
   outline?: Polygon | LineString,
   // additive (saar-lidar-detect, optional): informative for every class
-  member_ids?: string[],      // crater_field only: member crater ids
-  method_version?: string,    // e.g. 'crater-rules/1+sld.0.1.0'
+  member_ids?: string[],      // saar-lidar-detect UXO classes only; ignored
+  method_version?: string,    // e.g. 'lrm-rules/2+sld.0.1.0'
   data_date?: string          // ISO year of the terrain data under the candidate ('2025', RLP '2022')
 }
 ```
 
 **Rule set 2 (v1.0, additive).** `method: "lrm-rules"`, `version: 2` = the version-1 fine rules unchanged plus a coarse pass for large structures on 2 m block means (large `rect`/`mound`/`platform` regions, moats around them and straight terrace scarps, both as `linear`). Fine-pass candidates keep their ids and scores; coarse ids continue the same collision counter. Every coarse candidate carries `metrics.scale_m` (analysis scale in metres: the local-relief radius for regions and moats, the 2 m cell for scarps); further informative metrics may appear (`flank_slope_deg`, `slope_break_deg`, `top_flat`, `moat_coverage`, `straightness`, `side_slope_deg`) — consumers show or ignore unknown metric keys as above. `evaluation.*.chance_hit_rate` is now the share of the AOI area within the radius of any candidate (`chance_hit_rate_poisson` keeps the old density estimate); `evaluation` stays informative.
 
-**Mask (optional).** `candidates/mask/{i}_{j}.png`, level 0 only, 500 × 500 single-channel 8-bit PNG per chunk, same pixel ↔ cell mapping as relief layers (no apron, row 0 = north). Encoding `class8`: the raw byte **is the class code** (0 = none, 1 = pit, 2 = mound, 3 = linear, 4 = rect, 5 = platform, 6 = crater, 7 = crater_field (F22); unknown codes read as 0; no min/max scaling; decode with `colorSpaceConversion: 'none'`). A cell is set when its centre lies inside the outline polygon (`linear`: within 1 m of the centreline; no outline: within `diameter_m / 2`, fallback 2.5 m) of a candidate with `score ≥ minScore`; on overlap the higher-scored candidate wins (crater fields are an underlay: every other class wins over code 7 regardless of score; craters are discs of `diameter_m / 2`). The mask cannot be filtered by score — the app's min-score filter works on the GeoJSON; the mask is a coarse highlight only. The app's min-score filter starts at `params.min_score` when it is a finite number (fallback 0.3), never at `mask.minScore`. It is **not** a `layers` entry (not a relief mode). Only chunks listed in `chunks` are fetched; a 404 hides that chunk's mask.
+**Mask (optional).** `candidates/mask/{i}_{j}.png`, level 0 only, 500 × 500 single-channel 8-bit PNG per chunk, same pixel ↔ cell mapping as relief layers (no apron, row 0 = north). Encoding `class8`: the raw byte **is the class code** (0 = none, 1 = pit, 2 = mound, 3 = linear, 4 = rect, 5 = platform; unknown codes — incl. the private 6/7 — read as 0; no min/max scaling; decode with `colorSpaceConversion: 'none'`). A cell is set when its centre lies inside the outline polygon (`linear`: within 1 m of the centreline; no outline: within `diameter_m / 2`, fallback 2.5 m) of a candidate with `score ≥ minScore`; on overlap the higher-scored candidate wins. The mask cannot be filtered by score — the app's min-score filter works on the GeoJSON; the mask is a coarse highlight only. The app's min-score filter starts at `params.min_score` when it is a finite number (fallback 0.3), never at `mask.minScore`. It is **not** a `layers` entry (not a relief mode). Only chunks listed in `chunks` are fetched; a 404 hides that chunk's mask.
 
 **Review decisions** (app only, never in data files): `localStorage` key `sle.candidates.v1.<aoi>`, JSON
-`{ version: 1, decisions: { [id]: { status: 'confirmed' | 'rejected' | 'unsure', at: string /* ISO */, class: CandidateClass, E: number, N: number, score: number, markerId?: string } } }`. `class` may be any `CandidateClass` incl. `crater`/`crater_field` (F22; an app without the UXO classes drops such decisions when it loads the store — run one app version per origin). `class`/`E`/`N` let the app re-attach a decision whose `id` vanished after a re-run to the nearest same-class candidate within 3 m. Confirming creates a normal private marker (`sle.markers.v1`) whose id is stored in `markerId`. Export of decisions is a user-triggered local download only. The export document (`type: "sle-candidate-decisions"`, `version: 1`, `aoi`, `exported`, `detector`, `note`, `counts`, `decisions`) is what `sld review import` reads; F22 adds optional `classes: Partial<Record<CandidateClass, number>>` (decisions per class) — readers ignore it.
+`{ version: 1, decisions: { [id]: { status: 'confirmed' | 'rejected' | 'unsure', at: string /* ISO */, class: CandidateClass, E: number, N: number, score: number, markerId?: string } } }`. `class`/`E`/`N` let the app re-attach a decision whose `id` vanished after a re-run to the nearest same-class candidate within 3 m. Confirming creates a normal private marker (`sle.markers.v1`) whose id is stored in `markerId`. Export of decisions is a user-triggered local download only. The export document (`type: "sle-candidate-decisions"`, `version: 1`, `aoi`, `exported`, `detector`, `note`, `counts`, `decisions`) is what `sld review import` reads; Optional `classes: Partial<Record<CandidateClass, number>>` (decisions per class) — readers ignore it.
 
 **Manifest + attribution.** `detect.py` owns the whole `candidates` key (replaces it on each run, read–modify–write via `update_manifest`, keeps all other keys) and adds no attribution entry (derived from the already attributed DGM/OSM). `build.py` keeps it.
 
-**App tolerance.** Missing `candidates`, no string `path`, or `crs` ≠ `EPSG:25832` → absent (logged, not fatal). `featureCount` defaults to 0, `counts` to `{}` (non-numeric or unknown-class entries dropped), `classes` merged over the default labels, `method` to `''`, `version` to 0, `params` to `{}`. A malformed `mask` (no string `path`, `encoding` ≠ `class8`) is dropped; invalid `[i, j]` pairs are skipped as for `models.buildings`; `minScore` defaults to 0. Features with an unknown `class`, a non-Point geometry or a non-finite `score` are skipped; missing `reasons` → `[]`, missing booleans → `false`, missing `near_known` → `null`. A 404 on `path` hides the candidate layer only. F22: `member_ids` keeps string entries only (else `[]`, ignored for other classes); `along_path` is read for `linear` only; the additive manifest keys are optional (`method_versions`/`detectors`/`data_dates` keep string entries, `disclaimer_de` a non-empty string); `params.crater_threshold` is used when it is a finite number in 0..1 (fallback 0.55). In a public build (`SLE_PUBLIC=1`) `crater`/`crater_field` features, counts and labels are dropped as if unknown. Manifests and files without UXO classes load exactly as before.
+**App tolerance.** Missing `candidates`, no string `path`, or `crs` ≠ `EPSG:25832` → absent (logged, not fatal). `featureCount` defaults to 0, `counts` to `{}` (non-numeric or unknown-class entries dropped), `classes` merged over the default labels, `method` to `''`, `version` to 0, `params` to `{}`. A malformed `mask` (no string `path`, `encoding` ≠ `class8`) is dropped; invalid `[i, j]` pairs are skipped as for `models.buildings`; `minScore` defaults to 0. Features with an unknown `class`, a non-Point geometry or a non-finite `score` are skipped; missing `reasons` → `[]`, missing booleans → `false`, missing `near_known` → `null`. A 404 on `path` hides the candidate layer only. `along_path` is read for `linear` only; the additive manifest keys are optional (`method_versions`/`detectors`/`data_dates` keep string entries, `disclaimer_de` a non-empty string). `crater`/`crater_field` (and any other unknown class) are dropped from features, counts and labels in every build; `featureCount` is capped at the sum of the known counts.
 
 ## Point clouds (`pointclouds`, optional, F16)
 
@@ -479,122 +473,9 @@ Both directions use **true heights** (m DHHN2016, no exaggeration), **heading in
 
 **Viewer → explorer** ("Zurück zur Karte"): target = the validated `back` URL (http/https and a local host as above; otherwise ignored) or `http://localhost:5240/`. The viewer replaces the **first five comma-separated hash fields** with its current pose `E,N,h,heading,pitch` (rounded as above) and keeps all remaining fields (layer, overlay, exaggeration, …); a target without a hash gets just the five fields. The explorer's existing hash parser applies it (true height → display y with the current exaggeration). Navigation in the same tab.
 
-## 3D print tiles (`data/print/<series>/`, sle-print3d-v1, F21)
+## 3D print tiles (moved out, V2.1)
 
-Written by `pipeline/print3d.py` (series in `pipeline/print3d.toml`) to **`app/public/data/print/<series>/`** (git-ignored, regenerable). AOI-independent like `data/shared/`, **not a manifest key** (old manifests unaffected). Discover series via **`<dataRoot>print/series.json`** (below), then fetch `<dataRoot>print/<series>/index.json`. Tiles lie on a **global grid**: lower-left corner `E0 ≡ origin[0]`, `N0 ≡ origin[1] (mod tile_m)`, EPSG:25832, id `E{E0/1000}_N{N0/1000}` in km with decimals only when needed (`E380_N5460`, `E382.5_N5465.5`; regex `^E\d+(\.\d{1,3})?_N\d+(\.\d{1,3})?$`). All tiles of one series share scale, exaggeration, datum rule and base; tiles join seamlessly when they belong to the same series **and have the same `datum_m`**, whenever they were generated.
-
-Series generated now (2026-11-02, second run): **`saarpfalz-9200`** (role `main`, 1:9200, 2 km → 217.391 mm, exag 2, datum 180 m) and **`detail-2300`** (role `detail`, 1:2300, 500 m → 217.391 mm, exag 1.5, datum per set); since 2026-11-03 also **`kirrberg-11050`** (role `single`, 1:11050, one 2.4 km tile `E380.3_N5461.25` → 217.195 mm on its own `origin` [380300, 5461250], exag 1.5, datum per set, no connectors, `text.title` "Kirrberg"). The earlier `saarpfalz-8500` / `detail-2125` (235.294 mm, refused by the Bambu Studio GUI, never printed) and `saarpfalz-8000` / `detail-2000` outputs were deleted; consumers must not hard-code series keys.
-
-**Geometry (binding for every series).** Vertex (i, j), i, j = 0 … `vertices`−1, sits at `E0 + i·tile_m/(vertices−1)`, `N0 + j·tile_m/(vertices−1)` (on the tile boundary at both ends). Its height h = area-weighted mean of the 1 m DGM (PixelIsArea: cell (k, l) covers [k, k+1) × [l, l+1), centre +0.5 m) over the axis-aligned square of side `cell_m` centred on the vertex — 2 m: mean of the 2 × 2 cells around the integer vertex position; 0.5 m: bilinear interpolation of cell centres. Source: raw LVGL-SL 2025 DGM1, where it has no data RLP 2022 DGM1 + `rlpOffset_m` (a series constant). Shared edges of neighbouring tiles are bit-identical. `z_mm = base_mm + (max(h, datum_m) − datum_m) / scale · 1000 · exag` with the **tile's** `datum_m`. Mesh frame: mm, X = east, Y = north, Z up, origin = tile lower-left corner at z = 0; footprint exactly `tile_mm × tile_mm` (`tile_mm = tile_m / scale · 1000`); closed, 2-manifold, outward normals; the **top surface is a simplified triangulation** of the vertex grid (greedy Delaunay insertion, added 2026-11-02): it uses a subset of the grid vertices, **always all `4·(vertices−1)` edge vertices** (so walls and shared edges stay bit-identical), and every grid vertex lies within `series.maxError_mm` (vertical) of it — `tile.maxError_mm` is the achieved maximum (it may exceed the bound only if `series.maxTriangles` was hit; `maxError_mm` 0 = full grid, two triangles per cell, as before 2026-11-02); bottom at z = 0 with the bowtie recesses and the mirrored engraving described in `series.connectors` / `series.text`. A connector position `p` (fraction of `tile_mm`) is measured from the **west** corner on the S and N edges (recess centre x = p·tile_mm) and from the **south** corner on the W and E edges (y = p·tile_mm), so neighbours' recesses face each other for any position list.
-
-**Buildings (LoD2, added 2026-11-02, `series.buildings` / `tile.buildings`).** By default (`buildings = true` in `print3d.toml`; `--no-buildings` writes a bare-earth tile) LoD2 buildings are part of the heightfield: a vertex whose position lies inside the **top view of a LoD2 building** (closed triangles of its non-vertical surfaces — roofs, closure/ceiling parts; walls and GroundSurfaces not used) gets the **highest LoD2 surface** above it; this LoD2 surface (absolute heights, no building = −∞) is then **opened grey-scale with a flat digital disk** of `minFeature_cells = ceil(minFeature_mm / cell_mm)` cells (default 0.8 mm → 4 cells: 8 m at 1:9200, 2 m at 1:2300; min over the disk, then max): at every height level, building parts narrower than that in the print are removed or cut down to the wider part below them (a 0.4 mm nozzle cannot print them; thin towers on wider roofs and the last ≈ minFeature of pitched-roof ridges are lowered); kept vertices get `h = max(DGM sample, opened LoD2 surface)`, then the same `z_mm` formula (same datum, scale, **same exaggeration** as the terrain). Source: the raw LoD2 CityGML (LVGL-SL 1 km tiles from the county ZIPs, GeoBasis-RLP 2 km tiles; RLP buildings inside an SL footprint dropped as duplicates), read for the tile ± 500 m (a building may overhang its file square by at most that; checked). Every value is a function of global coordinates — the opening is computed on the vertex grid extended by `minFeature_cells + 2` vertices from the **global** vertex index — so a building crossing a tile edge is cut identically on both sides and shared edges stay bit-identical; a tile with buildings and a bare tile of the same series and datum still join (footprint, keys, datum unchanged) but their shared edge differs where a building crosses it. The DGM-only `h_m` stays the bare-earth statistic; `z_mm` includes the buildings.
-
-**Roles (`series.role`, catalog hint).** `main` = the series that covers the explorer area; `detail` = larger-scale showpiece sets; `single` (added 2026-11-03) = a standalone piece (usually one tile on a series-own `origin`, connectors disabled) — consumers show only its generated tiles and set members, **not** the grid of empty neighbour cells around the AOI. Unknown roles: treat like `detail`.
-
-**Datum.** `series.datumMode = "series"`: every tile uses `series.datum_m`. `"set"` (`series.datum_m` = null): each named set gets `floor(min h over all tiles of the set) − series.datumMargin_m`, recorded in `setDatum_m` and on each tile (`datum_m`); once recorded it is frozen (re-runs, extended or overlapping/nested sets adopt it). Tiles written before 2026-11-02 have no `datum_m`: use `series.datum_m`.
-
-**Printer (Bambu Lab P1S 0.4, `series.printer` / `printerProfile.mode`).** Plate 256 × 256 mm, printable height 250 mm. **`stock`** (default): the tile opens and slices with the unmodified "Bambu Lab P1S 0.4 nozzle" profile **in the Bambu Studio GUI** — exclusion area plate X 0–18 × Y 0–28 mm (front left), start-G-code load line along the front with a stroke to G-code Y 11 at X 240 (plate Y = G-code Y + 2, `extruder_offset` 0x2, ≤ plate Y 13.5 incl. width). Bambu Studio's rules (source v02.08.02.61, reproduced with its CLI): (1) a plain 3MF (no Bambu project settings) is a geometry import — the GUI **discards the build position and centres the object** on the plate (`Plater.cpp` `load_files` → `Model::center_instances_around_point(bed centre)`; the CLI keeps the position); (2) an object whose 2D convex hull (no offset; brim/skirt not included) intersects a `bed_exclude_area` rectangle is refused, "… is too close to exclusion area, there may be collisions when printing." (`Print.cpp` `layered_print_cleareance_valid`). A centred square passes only below 220 mm (128 − w/2 > 18); with a 1 mm margin the stock limit is **w < 218 mm** → 2 km at 1:9200 / 500 m at 1:2300 = 217.391 mm. The 3MF build item puts the tile **centred: lower-left plate X 19.3043, Y 19.3043** (`series.placement_mm` = `printerProfile.placement_mm`), so CLI and GUI slice the same position. (The 1:8500 tiles at X 19.4 / Y 17.1 passed the CLI but the GUI re-centred them to X 10.35 → refused.) **`sle-250`** (optional, not generated): 250 mm tiles with the user printer preset `printer/sle-p1s-0.4-250mm.json` (inherits the stock profile; `bed_exclude_area` = full-width front strip plate Y 0–5 mm instead of the corner — frees the corner at the user's risk; load line without the Y 11 stroke), tile at plate X 3, Y 6 — the GUI centres it on import (Y 3, inside the strip), so the user must set the position by hand (`note_de`).
-
-### `series.json` (catalog, added 2026-11-02)
-
-```jsonc
-{ "format": "sle-print3d-series-v1",
-  "series": [                                  // main series first, then by scale
-    { "key": "saarpfalz-9200", "name_de": "Saarpfalz 1:9200", "role": "main",   // "main" | "detail" | "single"
-      "scale": 9200, "tile_m": 2000, "tile_mm": 217.391, "exag": 2.0,
-      "datum_m": 180.0, "datumMode": "series",  // detail: datum_m null, datumMode "set"
-      "printer": "stock", "index": "saarpfalz-9200/index.json",   // relative to series.json
-      "tiles": 13, "configured": true,          // false: series no longer in print3d.toml (stale output)
-      "updated": "2026-11-02T00:05:24Z" } ],
-  "updated": "…" }
-```
-
-Rebuilt from every `<series>/index.json` after each `print3d.py` run. Optional: without it, an app may still fetch a known `<series>/index.json`.
-
-### `index.json`
-
-```jsonc
-{
-  "format": "sle-print3d-v1",                 // required, exact
-  "series": {
-    "key": "saarpfalz-9200", "name_de": "Saarpfalz 1:9200", "scale": 9200,
-    "tile_m": 2000, "tile_mm": 217.391, "vertices": 1001, "cell_m": 2.0, "cell_mm": 0.217,
-    "maxError_mm": 0.03, "maxTriangles": 900000,   // added 2026-11-02: top-surface simplification (0 = full grid; budget 500 k before the buildings)
-    "buildings": { "default": true, "minFeature_mm": 0.8, "minFeature_cells": 4,   // optional (added 2026-11-02)
-                   "source": "…", "sampling": "…", "zRule": "…" },   // default = print3d.toml `buildings`
-    "exag": 2.0, "datum_m": 180.0,             // null when datumMode is "set" (then use tile.datum_m)
-    "datumMode": "series", "datumMargin_m": null,   // added 2026-11-02; "set": margin below the set minimum
-    "base_mm": 4.0, "origin": [0, 0], "rlpOffset_m": -0.07,
-    "role": "main", "printer": "stock", "placement_mm": [19.3043, 19.3043],  // added 2026-11-02 (centred)
-    "zFormula": "…", "sampling": "…", "frame": "…",
-    "text": { "engraved": true, "depth_mm": 0.6, "mirrored": true, "note_de": "…",
-              "title": null },                 // optional (added 2026-11-03): name engraved large above the tile id
-                                               // (print3d.toml `title`, A–Z 0–9, ≤ 16 chars), null/absent = none
-    "connectors": { "enabled": true, "type": "bowtie", "positions": [0.25, 0.75], "depth_mm": 2.0,
-                    "length_mm": 10.0, "waist_mm": 8.0, "end_mm": 14.0, "clearance_mm": 0.15,
-                    "keyThickness_mm": 1.85, "key": "keys/bowtie_key.stl" }      // key: null when disabled
-  },
-  "crs": "EPSG:25832", "heightDatum": "DHHN2016", "units": "mm",
-  "printer": "Bambu Lab P1S 0.4 (Druckfläche 256 × 256 mm, Höhe max. 250 mm) mit Standarddruckerprofil „…“",  // display text
-  "printerProfile": {                          // optional (added 2026-11-02); consumers must not require it
-    "mode": "stock",                           // "stock" | "sle-250" (absent in older files = "sle-250")
-    "name": "Bambu Lab P1S 0.4 nozzle", "inherits": null,   // sle-250: preset name, inherits the stock name
-    "file": null,                              // sle-250: "printer/sle-p1s-0.4-250mm.json" (null if not written)
-    "bambuProfilesVersion": "02.08.00.05", "plate_mm": [256, 256], "printableHeight_mm": 250,
-    "placement_mm": [19.3043, 19.3043],        // tile lower-left corner on the plate (3MF build transform)
-    "bedExcludeArea": ["0x0", "18x0", "18x28", "0x28"],   // sle-250: ["0x0", "256x0", "256x5", "0x5"]
-    "loadLine": "…", "note_de": "…" },
-  "filament": { "material": "PLA", "density_g_cm3": 1.24, "shell_mm": 0.9, "infill": 0.155, "formula": "…" },
-  "slicer": {                                  // optional (added 2026-11-02): recommended slicer process changes
-    "base": "0.20mm Standard @BBL X1C",        // the stock process they modify
-    "settings": { "sparse_infill_pattern": "lightning", "sparse_infill_density": "10%", "wall_loops": 3,
-                  "top_shell_layers": 6, "top_shell_thickness": 1.2 },   // Bambu Studio option keys / values
-    "savingPct": [24, 55], "timeSavingPct": [-3, 22],  // measured filament / time saving vs. "base" (min, max)
-    "estimate": { "shell_mm": 1.25, "infill": 0.02 },  // filament model for tiles[].filament_g.recommended
-    "inFile": false,                           // the 3MF does NOT carry these settings (plain 3MF, see below)
-    "note_de": "Filament sparen: in Bambu Studio unter Prozess → Stärke …" },   // display text for the planner
-  "layout": "layout.png",                      // tiles of the series, one grid per edge-connected block (north up)
-  "sets": { "explorer": ["E378_N5460", "…"] }, // named sets from print3d.toml (ids, may include ungenerated tiles)
-  "setDatum_m": { "karlsberg": 274.0 },        // only for datumMode "set" (frozen per set)
-  "keysNeeded": 36,                            // bowtie keys for all shared edges among the listed tiles (same datum)
-  "attribution": "entry 1; entry 2",           // "; "-joined like the manifest; derived from the tiles (DGM SL/RLP,
-                                               // LoD2 SL/RLP strings of the manifest's `models.buildings`)
-  "disclaimer_de": "…Schauen, nicht graben.",
-  "updated": "2026-11-02T00:10:00Z",
-  "tiles": [                                   // sorted N descending, E ascending (table layout order)
-    { "id": "E380_N5460",
-      "grid": { "col": 190, "row": 2730 },     // (E0 − origin) / tile_m, (N0 − origin) / tile_m
-      "bboxUTM": [380000, 5460000, 382000, 5462000],
-      "wgs84": [lonMin, latMin, lonMax, latMax],
-      "wgs84Corners": [[lon, lat] ×4],         // SW, SE, NE, NW (the UTM square is slightly rotated in WGS84)
-      "files": { "3mf": "E380_N5460.3mf", "png": "E380_N5460.png" },   // "stl" only when written (--stl)
-      "datum_m": 180.0,                        // added 2026-11-02; required when series.datum_m is null
-      "z_mm": { "min": 17.043, "max": 51.292, "mean": 35.847 },
-      "h_m": { "min": 235.43, "max": 380.99, "mean": 315.35 },
-      "clampedVertices": 0,                    // vertices with h < datum_m (raised to the datum)
-      "buildings": {                           // optional (added 2026-11-02); absent or enabled false = bare earth
-        "enabled": true, "count": 2937,        // LoD2 buildings with their footprint centroid in the tile
-        "kept": 1997, "dropped": 940,          // … with ≥ 1 vertex left after the opening / removed entirely
-        "vertices": 106950, "raisedVertices": 106950, "droppedVertices": 9000,   // kept / raised / removed by opening
-        "loweredVertices": 30000,              // kept but cut down by the opening (narrow upper parts, roof ridges)
-        "maxAboveGround_m": 68.0, "minFeature_mm": 0.8, "minFeature_cells": 4,
-        "sources": { "sl": ["377_5461", "…"], "rlp": [] },   // LoD2 files read (km corner)
-        "usedSources": ["sl"] },               // sources of the buildings kept in this tile (→ attribution)
-      "baseAboveRecess_mm": 15.257,             // null without connectors
-      "volume_cm3": 1982.4, "surface_cm2": 1510.5,
-      "filament_g": { "solid": 2458, "typical": 560, "recommended": 300 },
-                                               // typical = stock process (15 % infill + shell, filament.formula);
-                                               // recommended (optional, with "slicer") = with slicer.settings;
-                                               // all three recomputed from volume/surface on every index write
-      "triangles": 364344, "vertices": 182186, "watertight": true,
-      "maxError_mm": 0.03,                     // added 2026-11-02: max |Δz| of the simplified top at any grid vertex
-      "sources": { "sl": ["379_5459", "…"], "rlp": ["382_5459"], "rlpCells": 1, "rlpBiasMeasured_m": null },
-      "created": "2026-11-02T00:05:00Z", "timings_s": { "sample": 0.2, "simplify": 20.1, "mesh": 0.7, "write": 1.1 } }
-  ]
-}
-```
-
-Files are relative to `index.json` (plain names, no `..`). `<id>.png` is a 512 px north-up shaded relief (fixed tint 220–420 m). `<id>.3mf` is a 3MF core package (`unit="millimeter"`, one object, build item translated so the tile's lower-left corner is at `printerProfile.placement_mm` — for `stock` the plate centre, where the Bambu Studio GUI puts it anyway; the first 2026-11-02 files used X 19.4 / Y 17.1, files before that were centred). Its `Copyright` metadata lists the tile's sources (DGM, and the LoD2 strings when buildings are in), `Description` says whether it has buildings. `<id>.stl` (binary) is optional and not written by default. The 3MF stays a **plain** 3MF (no `Metadata/` part: no `project_settings.config`, no `model_settings.config`): the Bambu Studio GUI discards per-object settings of a 3MF without valid project settings and would stop centring a project file, so recommended slicer settings travel only as `slicer` (display). Consumers must ignore unknown keys; a tile entry missing a required key is invalid (`print3d.validate_index`). Content is a terrain model, not a finding; keep the disclaimer when showing it.
+F21 (`print3d.py`, sle-print3d-v1 tiles, the in-app planner) moved to the separate local repo `sle-print` (with its contract `docs/data-contract-print.md`). The explorer no longer reads or ships `data/print/`.
 
 ## Levels (v2, F9)
 
@@ -642,14 +523,12 @@ Typical chunk (DTM + 2 resident layers) ≈ **1.5 MB**, with canopy ≈ 2.5 MB, 
 - User find markers are stored in the browser (localStorage key `sle.markers.v1`), exported as WGS84 GeoJSON with properties `id, title, note, category, created, E, N, h`.
 - Candidate review decisions (F15) are stored in the browser (localStorage key `sle.candidates.v1.<aoi>`), see "Candidates"; never in data files.
 - `app/public/data/shared/<id>/`: AOI-independent shared datasets (F19 reconstruction models), see "Shared datasets". Not part of any manifest.
-- `app/public/data/print/<series>/`: F21 3D print tiles, see "3D print tiles". Not part of any manifest.
 
 ## Public release (static hosting, 2026-11-02)
 
 The public GitHub Pages release (`scripts/release/`, see `scripts/release/RELEASING.md`) serves the app and its data from separate static hosts. Contract additions, all backward compatible:
 
-- **Data roots are build-time config** (`app/src/data/urls.ts`): `VITE_DATA_URL` = root holding `<aoi>/manifest.json`, `pois.geojson` and `shared/`; `VITE_PRINT_URL` = root of the print series (`<root><series>/index.json`, default `<dataRoot>print/`). Roots are resolved to absolute URLs on the main thread, so the decode/vector workers only ever see absolute URLs.
+- **Data roots are build-time config** (`app/src/data/urls.ts`): `VITE_DATA_URL` = root holding `<aoi>/manifest.json`, `pois.geojson` and `shared/`. Roots are resolved to absolute URLs on the main thread, so the decode/vector workers only ever see absolute URLs.
 - **`xyz.<key>.url` may be an absolute `https://…` URL template** (the app uses it as is; relative templates are still appended to the AOI base URL unchanged — the `{z}/{x}/{y}` braces must not be percent-encoded). The release export uses this to put the Leaflet tiles into a second data repository and trims `maxZoom` (the minimap keeps `maxZoom: 20` with `maxNativeZoom` = the manifest's `maxZoom`, i.e. overzoom); it recomputes `tileCount`/`bytes`.
-- The exported `print/<series>/index.json` drops `tiles[].files.stl` (3MF only; `stl` is optional per "3D print tiles").
 - `VITE_AOIS` (comma list) tells the app which AOIs a deployment ships: no manifest probes for others, `?aoi=` outside the list falls back to the preferred AOI.
-- **UXO candidate classes are never exported (F22).** `export_data.py` removes `crater`/`crater_field` features from `candidates/candidates.geojson`, their `counts`/`classes` entries, `params.crater_threshold`, crater entries of `method_versions`/`detectors`, recomputes `featureCount`, and rewrites every mask PNG with codes 6/7 set to 0 (re-encoded 8-bit grey PNG); it aborts when a mask is not 8-bit greyscale. Mask chunks left empty are dropped together with their `mask.chunks` entry; only the manifest's GeoJSON and mask chunks under `candidates/` are staged, saar-lidar-detect side files in the AOI dir (`run.json`, `report*.html`, `eval*`, `fachbericht*`, `manifest.json.bak-*`, `*.sld-new/`) never are, and the export aborts when a staged AOI text file still names a UXO class. The public build (`SLE_PUBLIC=1` → `VITE_SLE_PUBLIC=1`, forced) also drops them in the parser.
+- **UXO candidate classes are never exported (F22).** `export_data.py` removes `crater`/`crater_field` features from `candidates/candidates.geojson`, their `counts`/`classes` entries, `params.crater_threshold`, crater entries of `method_versions`/`detectors`, recomputes `featureCount`, and rewrites every mask PNG with codes 6/7 set to 0 (re-encoded 8-bit grey PNG); it aborts when a mask is not 8-bit greyscale. Mask chunks left empty are dropped together with their `mask.chunks` entry; only the manifest's GeoJSON and mask chunks under `candidates/` are staged, saar-lidar-detect side files in the AOI dir (`run.json`, `report*.html`, `eval*`, `fachbericht*`, `manifest.json.bak-*`, `*.sld-new/`) never are, and the export aborts when a staged AOI text file still names a UXO class. The explorer ignores them in every build, and the build fails if a crater/print string reaches the bundle (`app/scripts/bundleGuard.ts`).
