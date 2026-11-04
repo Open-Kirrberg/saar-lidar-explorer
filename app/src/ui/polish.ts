@@ -58,12 +58,10 @@ export function featureChecker(ctx: Pick<AppContext, 'manifest'>): (f: ShortcutF
     switch (f) {
       case 'osm':
         return !!m.vectors?.osm;
-      case 'parcels':
-        return !!m.vectors?.flurstuecke;
       case 'buildings':
         return !!m.models?.buildings?.chunks.length;
       case 'pointclouds':
-        return !!m.pointclouds?.areas.length;
+        return false; // 🧊 frozen (ADR 0020): no point cloud UI, so no key row
       case 'candidates':
         return !!m.candidates;
       case 'reconstruction':

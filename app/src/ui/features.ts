@@ -9,9 +9,7 @@ import { Minimap } from '../map/Minimap';
 import { MarkerManager } from '../markers/MarkerManager';
 import { PARCEL_ATTRIBUTION } from '../markers/parcel';
 import { initMeasure } from '../measure';
-import { initPointClouds } from '../pointcloud/PointCloud';
 import { createPoiPanel } from '../pois/PoiPanel';
-import { initPrint } from '../print/Print3D';
 import { initReconstruction } from '../reconstruction/Reconstruction';
 import { openReportDialog } from '../report/ReportDialog';
 import { initVectorLayers } from '../vectors/VectorLayers';
@@ -43,10 +41,10 @@ export function initFeatures(ctx: AppContext): Features {
   });
   markers.onChange((list) => minimap.setMarkers(list));
   markers.setReportHandler((m) => openReportDialog(ctx, m)); // F18: "Meldung erstellen" (download only)
-  initVectorLayers(ctx, panel, viewport); // F10/F12: Wege (OSM) + Flurstücke in 3D (only if manifest.vectors)
+  initVectorLayers(ctx, panel); // F10: Wege (OSM) in 3D + F12 parcel lookup (only if manifest.vectors)
   initBuildings(ctx, panel); // F11: LoD2 Gebäude in 3D, key G (only if manifest.models.buildings)
   initCandidates(ctx, panel, { minimap, markers, labels }); // F15: Verdachtsflächen, keys X, N/P (only if manifest.candidates)
-  initPointClouds(ctx, panel, { minimap }); // F16: Punktwolke, key C (only if manifest.pointclouds)
+  // 🧊 F16 point cloud + Röntgen are frozen (ADR 0020): src/pointcloud/ and its tests stay, initPointClouds() is not called.
   void createPoiPanel(ctx, panel, labels).then((api) => {
     minimap.setPois(api.pois);
     poiFly = (id) => {
@@ -66,8 +64,6 @@ export function initFeatures(ctx: AppContext): Features {
   initMeasure(ctx, panel, labels, { toolbar: bar, exclusiveWith: markers }); // F17: Messen, key L
   // F19: Rekonstruktion 1789 (shared dataset data/shared/karlsberg1789/, not in the manifest), keys R, T
   void initReconstruction(ctx, panel, { minimap, toolbar: bar });
-  // F21: 3D-Druck planner (data/print/<series>/index.json, not in the manifest); no keys
-  void initPrint(ctx, panel, { minimap });
 
   return { minimap, markers, labels };
 

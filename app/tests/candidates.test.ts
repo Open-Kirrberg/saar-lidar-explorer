@@ -233,7 +233,7 @@ describe('filtering and navigation', () => {
   });
 
   it('counts per class including known paths', () => {
-    expect(countByClass(list)).toEqual({ pit: 2, mound: 1, linear: 1, rect: 1, platform: 0, crater: 0, crater_field: 0, known: 1 });
+    expect(countByClass(list)).toEqual({ pit: 2, mound: 1, linear: 1, rect: 1, platform: 0, known: 1 });
   });
 
   it('steps forward/backward with wrap-around', () => {

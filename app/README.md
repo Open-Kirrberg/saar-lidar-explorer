@@ -48,19 +48,17 @@ URL parameters:
 | `Space` / `E` | Climb |
 | `Shift` / `Q` | Descend |
 | Mouse wheel, `+` / `−` | Speed multiplier (×1.2 steps, 0.05–50) |
-| `H` | Show/hide the control help in the HUD |
 | `1`–`9`, `0` | Relief mode (see *Relief lab* below) |
 | `Shift` + `1`–`N` | Relief combination preset (4 relief presets, plus *Luftbild × Relief* / *Karte 1840 ↔ Relief* when the AOI has those images) |
 | `B` | Overlay on/off (last overlay layer, default Lokales Relief) |
 | `V` | Forest: aus → transparent → voll |
 | `K` | Automatic contrast (percentile stretch) |
 | `O` | Wege (OSM) in 3D on/off (only if the manifest has `vectors.osm`) |
-| `F` | Flurstücke + Flurnummern in 3D on/off (only if the manifest has `vectors.flurstuecke`) |
 | `G` | Gebäude (LoD2) in 3D on/off (only if the manifest has `models.buildings`; default on) |
 | `L` | Messen on/off (Strecke / Fläche / Höhenprofil / Punkt). While on: click adds a point, double-click / `Enter` finishes, `Backspace` removes the last point, `Esc` discards the drawing (second `Esc` ends) |
 | `X` | Verdachtsflächen (F15 relict candidates) on/off in 3D and on the map (only if the manifest has `candidates`) |
 | `N` / `P` | Next / previous candidate (score order, current filters; only while Verdachtsflächen are on) |
-| `C` | Punktwolke (F16 classified ALS points of the focus areas) on/off (only if the manifest has `pointclouds`; default off) |
+| `C` | Punktwolke (F16) on/off — 🧊 frozen since V2.1, not wired |
 | `R` | Rekonstruktion 1789 (F19 hypothetical Schloss Karlsberg model) on/off (only if the shared dataset `data/shared/karlsberg1789/` exists and overlaps the AOI; default off) |
 | `T` / `Shift`+`T` | *Schloss betreten*: hand the camera over to the castle viewer (fly / *zu Fuß*); only with the layer on and within 300 m of the palace |
 | `M` | Markieren (find marker) mode on/off; `Esc` cancels |
@@ -68,7 +66,7 @@ URL parameters:
 | `Esc` | Ends the tour / closes the intro (besides releasing pointer lock and cancelling Markieren/Messen) |
 | Gamepad (standard mapping) | Left stick moves, right stick looks, `LT`/`RT` descend/climb, `LB`/`RB` change speed |
 
-The table above, the HUD *Steuerung* list and the intro overlay all come from `src/ui/shortcuts.ts`; `tests/shortcuts.test.ts` scans `src/` for bound `e.code`/`k.has` keys and fails when one is missing there. `Space`/`Enter` on a keyboard-focused button activate the button and are not flight keys.
+The table above and the intro overlay come from (the HUD shows only "`?` alle Tastenkürzel" since V2.1) `src/ui/shortcuts.ts`; `tests/shortcuts.test.ts` scans `src/` for bound `e.code`/`k.has` keys and fails when one is missing there. `Space`/`Enter` on a keyboard-focused button activate the button and are not flight keys.
 
 Speed is `baseSpeed · clamp(AGL/50, 0.2, 20) · multiplier`, with exponential acceleration and damping. A minimum clearance of 2 m (configurable) keeps the camera above the terrain.
 
@@ -161,16 +159,14 @@ src/
   reconstruction/ F19 Rekonstruktion 1789: recon.ts (pure: sle-recon-v1 index/footprint parsing + tolerance, AOI overlap/offset,
            handover URLs both ways, prefs), ReconLayer.ts (glb load, meshopt, bake, picking through the exaggeration,
            ghost pre-pass), ReconMaterial.ts, Reconstruction.ts (card, keys R/T, toolbar, minimap, footer)
-  print/   F21 3D-Druck planner: printData.ts (pure: tile ids, grid cells, index/series parsing, totals, keys per datum,
-           CLI command), Print3D.ts (card, minimap grid, command popup), PrintOutline.ts (draped tile outline), print.css
   vectors/ F10/F12 draped vectors: drape.ts (pure: UTM → local float64, densify, per-chunk segment
            buckets with TRUE heights), spatial.ts (pure: point/segment grid indices, local parcel lookup),
-           labels.ts + styles.ts (pure), DrapedLines.ts (screen-space ribbons), ParcelLabels.ts
-           (pooled DOM labels, ≤ 300 m), VectorLayers.ts (panel "Wege & Flurstücke", keys O/F, loading),
+           labels.ts + styles.ts (pure), DrapedLines.ts (screen-space ribbons),
+           VectorLayers.ts (card "Wege", key O, loading; parcels only for the local lookup),
            vectorData.ts (pure GeoJSON → buckets, baked heights) parsed in vectors.worker.ts via vectorLoader.ts
-  ui/  aoiSwitcher.ts ("Gebiet" card, start AOI), flyTo.ts (fly-to re-aimed as finer data streams in),
+  ui/  startAoi.ts (start AOI; no switcher UI since V2.1), flyTo.ts (fly-to re-aimed as finer data streams in),
        streaming.ts (pure: pending count for "Lade Details …", fly-to refinement rule),
-       displayState.ts (store ⇄ Terrain bridge for overlay/opacity/forest), reliefPanel.ts + relief.css ("Darstellung"), gui.ts (lil-gui "Flug & Technik"), hud.ts, style.css, features.ts/.css, Labels3D.ts, disclaimer.ts, panelSection.ts,
+       displayState.ts (store ⇄ Terrain bridge for overlay/opacity/forest), reliefPanel.ts + relief.css ("Darstellung"), gui.ts (lil-gui "Flug & Technik"; LOD/Debug folder in dev only), hud.ts, style.css, features.ts/.css, Labels3D.ts, disclaimer.ts, panelSection.ts,
        F20: mobileMode.ts (pure: Einfach/Vollständig detection, auto Mobil quality, Relief cycle, sheet state, swipe), mobile.ts + mobile.css
        (top bar, bottom bar, sheets, Standort pill), sheet.ts (bottom sheet), contextLoss.ts (WebGL context loss → reload)
 scripts/  make-fixture.ts, fixture-terrain.ts, fixture-imagery.ts (synthetic ortho / 1840 map, DSM roofs, `bldg` mask), fixture-buildings.ts (gabled houses → glb per chunk, F11)
@@ -227,7 +223,7 @@ tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, st
   - `raycaster.intersectObject(terrain)` also works: `Terrain.raycast` marches the displaced height field. Chunk meshes have raycasting disabled because their CPU geometry is not displaced.
   - `terrain.heightAt(x, z)` returns the true height (finest resident level) and `terrain.surfaceY(x, z)` the displayed height of the surface actually drawn there (level of the drawn chunk), used for picking, labels and collision.
   - When a click should place a marker instead of locking the mouse, set `controller.opts.lockOnClick = false`.
-- **Ground vs. canopy:** `terrain.surfaceY` is always the bare earth (DTM). The drone uses `terrain.collisionGround` (`collisionY`): DTM, or max(DTM, DSM) when *Kollision mit Baumkronen* is on. Then the HUD's *Höhe über Grund* is measured above the canopy.
+- **Ground vs. canopy:** `terrain.surfaceY` is always the bare earth (DTM). The drone uses `terrain.collisionGround` (`collisionY`): the DTM (canopy collision removed in V2.1; you fly through the crowns).
 - `window.sle` is the `AppContext`. `window` fires `sle:ready` once the coarsest level is resident (the loading box then hides; further streaming shows as "Lade Details … n" with a spinner in the HUD). `window.sle.terrainStats()` returns the streaming stats (resident/drawn chunks per level, `pending`, GPU estimate, evictions).
 - `window.sle.step(frames = 1, dt = 1/60)` advances frames synchronously (controller, LOD, render, store sync). Automated Chrome tabs are often reported as hidden, which pauses rAF; use `step()` to render for screenshots and measurements.
 
@@ -254,8 +250,8 @@ Every mode remembers its own colormap, range and gamma for the session.
 
 - **Kontrast & Farbe:** Farbskala, Untergrenze/Obergrenze (physical units, slider bounds from the manifest), Gamma (`t^(1/γ)`; for diverging maps applied symmetrically), Schummerung in Farbe. *Kontrast automatisch* (`K`) stretches to the 2–98 % percentiles (*abschneiden* 0–10 %) over the *Sichtbereich* or the *Gesamtgebiet*. *laufend nachführen* repeats it about twice a second while the camera moves.
 - **Überlagerung (`B`):** layer (any mode), opacity, blend mode, its own colormap/range/gamma.
-- **Wald / Kronendach (`V`):** *Aus* / *Transparent* (opacity slider) / *Voll*, *Mindesthöhe* (default 2 m), *Kollision mit Baumkronen* (default off: you fly through the canopy; the HUD shows "durchfliegbar" and "im Kronendach" while below the crown tops).
-- **Gelände:** *Überhöhung* 1–5×, *Dunst*.
+- **Wald / Kronendach (`V`):** *Aus* / *Transparent* (opacity slider) / *Voll*, *Mindesthöhe* (default 2 m) (you fly through the canopy; the HUD shows "durchfliegbar" and "im Kronendach" while below the crown tops).
+- **Gelände:** *Überhöhung* 1–5×.
 
 **Presets** (`Shift` + `1`–`N`):
 
@@ -313,13 +309,13 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
 
 ## Wege & Flurstücke (F10, F12)
 
-`src/vectors/`, wired by one call in `features.ts`; the card is hidden when the manifest has no `vectors`.
+`src/vectors/`, wired by one call in `features.ts`; card *Wege* (OSM in 3D), hidden without `vectors.osm`. Since V2.1 Flurstücke are **not drawn in 3D** (no lines, no Flurnummern, no `F` key); their data still loads for the local parcel lookup, and the 2D WMS overlay stays on the minimap. Parcel-line and label notes below are historical.
 
 - **Loading:** GeoJSON is fetched and parsed in `vectors.worker.ts` (main-thread fallback if the worker fails), producing per-chunk segment buckets (`vectorData.ts`). With `heights: "baked"` the file's z is used per vertex; vertices without z are sampled from `HeightQuery` and re-sampled when height data changes. Overall parcels (42 MB) take ≈ 1.1 s in the worker.
 - **Lines** are screen-space ribbons: one instance per ≤ 2 m segment (start/end with the *true* DTM height — baked or from `HeightQuery` — and a style index), expanded in the vertex shader to a constant pixel width with a dark casing in the same pass. The shader shares the terrain's `uExag`/`uHRef`/fog uniform objects: `y = hRef + (h − hRef)·exag + 0.3·exag`. Against z-fighting with coarse LODs: a view-space pull toward the camera (0.15 % of the distance × exag) plus `polygonOffset`. `alphaToCoverage` (MSAA) gives soft edges and the distance fade without blending artefacts. Segments are bucketed per 500 m chunk (frustum + distance culling). Bucket meshes exist only within a build radius of the camera (fade end + 500 m: parcels ≈ 2.1 km, OSM 6.5 km) and are disposed beyond it with hysteresis.
 - **Styles:** Straße yellow, Wirtschaftsweg orange, Pfad magenta, Bahn light grey, Gewässer blue, Mauer/Graben green (barrier=wall/retaining_wall/city_wall/ditch; fences and hedges are not imported); parcel boundaries thin pale yellow (fade out 0.9–1.6 km).
 - **Flurnummern:** pooled DOM labels; each update takes the ≤ 200 nearest label points within 300 m **3D distance** from the camera (grid index, label height = baked z or displayed terrain; so from ≳ 300 m AGL no labels are shown) that are in the view frustum, projected by hand, and **declutters** them greedily nearest-first (a label whose screen box overlaps a nearer one is skipped); dimmed when the terrain occludes them (round-robin ray tests). Updated from `scene.onBeforeRender` (≈ 11 Hz) and on `sle:step`.
-- Toggles persist in localStorage `sle.vectors.v1` (both off by default). Debug handle: `window.sleVectors`.
+- The toggle persists in localStorage `sle.vectors.v1` (`osm`, off by default). Debug handle: `window.sleVectors`.
 - **Parcel lookup** (`VectorLayers.lookupLocal`, used by the marker form, *Messen → Punkt*, *bestätigen* and the report): with `flurstuecke.polygons` a point-in-polygon on the parcel polygons (`parcelPolygons.ts`: packed in the vector worker on first use, 100 m grid index, holes/MultiPolygons, any winding, first feature wins on overlap); if the file is missing or fails, the nearest label point ≤ 60 m whose connecting line crosses no parcel boundary; else the live WFS (marker form) or the opt-in online lookup (report). Checked: 3/3 points equal the live SL WFS, incl. a 60 ha forest parcel 836 m from its label point (118 ms incl. the lazy load).
 
 ## Gebäude (F11)
@@ -362,9 +358,9 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
 - **Filter:** class chips + "Weg (bekannt)", min-score slider starting at `params.min_score` (0.3), not the mask threshold. `N`/`P` step through the visible candidates in score order and fly there (`flyToSiteExag` / `framing.ts`, 45–160 m out: aims at the **displayed** height at any exaggeration and raises the camera when a ridge would block the view; also used by markers, measurements and the report); both ignore text fields and modifier keys.
 - **Review:** *bestätigen* / *verwerfen* / *unsicher* per AOI in localStorage `sle.candidates.v1.<aoi>`; decisions re-attach to the nearest same-class candidate within 3 m after a re-run; *verworfen* hides the candidate. *bestätigen* creates a normal private marker (category from the class, reasons + metrics + disclaimer in the note); confirming again (also after *zurücksetzen*) reuses that marker; the parcel is looked up locally and stored on it (`MarkerManager.setParcel`). Un-confirming offers inline *Marker löschen / Behalten* (`MarkerManager.delete`); nothing is deleted automatically. Decisions export = local download `verdachtsflaechen-entscheidungen-<aoi>-YYYY-MM-DD.json`.
 
-### Bombentrichter / Trichterfelder (F22, private)
+### Bombentrichter / Trichterfelder (moved out)
 
-UXO indicator classes from the sister project `saar-lidar-detect` (`sld run`; contract "Candidates" → UXO classes): `crater` *Bombentrichter (Hypothese)* (red ring of `diameter_m`, no outline) and `crater_field` *Trichterfeld (Hypothese)* (coral outline polygon in 3D **and** on the minimap, `member_ids`). Chips, the red UXO note and the *Min. Score Trichter* slider (starts at `params.crater_threshold`, 0.55; craters are written from 0.3) appear only when the data has them; the general *Min. Score* still applies to every other class incl. fields. Detail, tooltips, the 3D pin and the confirmed-marker note carry „Hinweis, keine Aussage über Kampfmittel/Blindgänger“. Reviews/export work as for relicts (`sle-candidate-decisions`, additive `classes` counts; `sld review import` reads it). **Never public:** `SLE_PUBLIC=1` forces `VITE_SLE_PUBLIC=1` and the parsers drop both classes (`src/data/publicBuild.ts`); `scripts/release/export_data.py` strips them from the data export. To preview locally, copy an `sld run` output's `candidates/` into `public/data/<aoi>/` and replace the manifest's `candidates` key with the run's (or run `sld run --out app/public/data/<aoi>`).
+`crater`/`crater_field` (saar-lidar-detect, UXO indicators) are ignored in every build; the viewer moved to the private repo `sle-craters-private` in V2.1 ([ADR 0010](../docs/adr/0010-craters-never-public.md)).
 
 ## Meldung (F18)
 
@@ -376,6 +372,8 @@ UXO indicator classes from the sister project `saar-lidar-detect` (`sld run`; co
 - **Zuständige Stelle:** LDA Saarland, Bodendenkmalpflege (`www.saarland.de/lda/DE/themen-aufgaben/Bodendenkmalpflege`, § 16 SDschG) and GDKE Rheinland-Pfalz for RLP sites — no postal address or phone (research/03 has none).
 
 ## Punktwolke (F16)
+
+🧊 **Frozen in V2.1:** code and tests stay, but `features.ts` no longer wires it (no card, no `C`, not in the bundle).
 
 Classified ALS 2025 points (`manifest.pointclouds`, contract format `sle-pts-v1`) for the focus areas. Off by default; nothing is fetched until the card's *anzeigen* or `C` switches it on.
 
@@ -399,6 +397,8 @@ Classified ALS 2025 points (`manifest.pointclouds`, contract format `sle-pts-v1`
 
 ## Mein Standort & Handy im WLAN (F20)
 
+🧊 **Frozen in V2.1:** `initLocate` is not called and the mobile button is hidden; code and tests stay.
+
 `src/locate/` — card *Mein Standort* (button, *Folgen*, *Kompass*); other UIs (mobile toolbar) use `getLocate()` / the `LocateApi` returned by `initLocate()`: `locateMe()`, `toggleFollow(on?)`, `toggleCompass(on?)`, `flyToNearest()`, `clear()`, `getState()`, `onState(cb)`.
 
 - **Flow:** `navigator.geolocation.getCurrentPosition` (`enableHighAccuracy`, timeout 15 s, `maximumAge` 5 s) → `wgs84ToUtm` → AOI rectangle test (`locateMath.ts`, origin = lower-left). Inside: `ctx.flyTo` 150 m (true) above ground, pitch −45°, plus a pulsing DOM dot (Labels3D, follows the displayed terrain) and an accuracy ring draped as `DrapedLines` (true heights, `y = hRef + (h − hRef)·exag` in the shader; radius = accuracy clamped 5 m … 3 km). Minimap: blue dot + `L.circle` with the accuracy radius. Outside: „Sie sind 12,3 km außerhalb des Gebiets.“, the minimap shows AOI + position (`Minimap.showBounds`: in memory only — follow/zoom are not saved and `endTemporaryView()` restores them on *Zum nächsten Punkt* / *Ausblenden*; while the map is hidden in the closed *Karte* sheet the fit waits until the sheet opens), *Zum nächsten Punkt im Gebiet* flies to the nearest point (150 m inset) looking towards the user.
@@ -409,27 +409,18 @@ Classified ALS 2025 points (`manifest.pointclouds`, contract format `sle-pts-v1`
 - **Phone access:** `pnpm run dev:lan` = `SLE_HTTPS=1 vite --host 0.0.0.0 --port 5243 --strictPort` with `@vitejs/plugin-basic-ssl` (self-signed certificate, cached in `node_modules/.vite/basic-ssl`; own optimizer cache `node_modules/.vite-lan` so it can run next to `pnpm dev`). It prints the `https://<LAN-IP>:5243/` URLs. Without `SLE_HTTPS=1` (plain `pnpm dev`, build, preview) nothing changes. Geolocation needs a secure context: `http://localhost` is fine on the desktop, `http://<LAN-IP>` is not.
 - **Not verified:** a real phone (GPS fix and accuracy, iOS/Android permission prompts, self-signed certificate flow), *Folgen*, the *Kompass* arrow direction, the *Zum nächsten Punkt* flight and the outside-case minimap fit; *Ansicht teilen* being blocked near the user was checked by code path only.
 
-## 3D-Druck planner (F21)
+## 3D-Druck planner (moved out)
 
-`src/print/` — card *3D-Druck* (added hidden in `ui/features.ts`, removed when no series is found; no keys). Data: `data/print/` (not in the manifest; format "3D print series" in `docs/data-contract.md`, written by `pipeline/print3d.py`).
-
-- **Files:** `printData.ts` (pure: tile ids `E382.5_N5465.5` ↔ UTM corners, grid cells, `parsePrintIndex` with warnings, `parseSeriesList`, `tileDatum` (tile datum, else series datum), `printTotals`, `sharedEdges`/`blockCount` (tiles join only within the same datum), `setKeys`, `cellCommand`, `displayCells`, `outlineRuns`, prefs), `Print3D.ts` (card, loading, minimap layer), `PrintOutline.ts` (outline of the selected tile draped on the terrain via `DrapedLines`, exaggeration in the shader), `print.css`.
-- **Discovery:** `print/series.json` (`sle-print3d-series-v1`) lists the series; without it the known keys (`KNOWN_PRINT_SERIES`, incl. old ones) are tried. Every `<key>/index.json` that validates becomes a choice; invalid ones are skipped with a console warning.
-- **Card:** series picker, totals (tiles, typical/solid filament, assembled size, separate pieces, datums), generated tiles table, file links (3MF, PNG, bowtie key STL, Bambu Studio printer profile, `layout.png`), set progress with set datums. Key count: generated tiles (`printTotals.keys`, = `index.keysNeeded`) and, while a set is incomplete, all set members (`setKeys`). Clicking a cell on the minimap (or a table row) selects it, flies there and shows the `uv run python print3d.py --series … --tiles …` command (with `--datum` for a cell outside every set of a per-set-datum series).
-- **Prefs:** `localStorage` `sle.print.v1` (`series`, `grid`, `outline`), wrapped in try/catch.
-- **Debug:** `window.slePrint` (`PrintApi`), available once the series have loaded (event `sle:features`).
-- **Minimap grid:** the series grid covers the AOI plus one ring of cells; generated tiles are labelled and link to their files. A click on a missing cell opens the command popup and does not bubble to the minimap's click-to-fly. Hidden while the card is closed.
-- **Mobile (F20 layout):** *Mehr* sheet → button *3D-Druck* opens the card; the grid shows in the *Karte* sheet.
+F21 moved to the separate local repo `sle-print` in V2.1.
 
 ## Known gaps
 
 - Messen (F17): no editing of finished measurements (delete + redraw); no measurement import; the rubber band is a straight (not draped) preview; the area is horizontal only (no 3D surface area). Exports are not written by the Export button in automated checks (GeoJSON content was checked via `measurementsToGeoJSON`).
-- Verdachtsflächen (F15): the optional `candidates.mask` class raster is not rendered (outlines/circles only; F22 codes 6/7 are known but unused); N/P does not switch the relief preset per class; *Bekannte Orte* (`pois/PoiPanel.ts`) still fly with the old, not exaggeration-aware `flyToSite` (one-line switch to `flyToSiteExag`). Precision of the rule-set-2 coarse candidates is unknown (2 inspected by eye). The mask raster is not drawn. Clicking a candidate circle or a point-cloud outline on the minimap no longer also triggers the map's click-to-fly (`bubblingMouseEvents: false`, v1.0.1; verified by code path, not clicked in a browser).
+- Verdachtsflächen (F15): the optional `candidates.mask` class raster is not rendered (outlines/circles only); N/P does not switch the relief preset per class; *Bekannte Orte* (`pois/PoiPanel.ts`) still fly with the old, not exaggeration-aware `flyToSite` (one-line switch to `flyToSiteExag`). Precision of the rule-set-2 coarse candidates is unknown (2 inspected by eye). The mask raster is not drawn. Clicking a candidate circle or a point-cloud outline on the minimap no longer also triggers the map's click-to-fly (`bubblingMouseEvents: false`, v1.0.1; verified by code path, not clicked in a browser).
 - Meldung (F18): without `flurstuecke.polygons` (old manifests) the label-point fallback still misses large forest parcels. Notes over ≈ 1000 characters push the print to a third page (the dialog warns). No postal address/phone for the authorities (none in the research). Printing from a real browser dialog and an occluded marker were not checked.
 - Punktwolke (F16): no eye-dome lighting; point bytes (10 B GPU + 10 B CPU per resident point) are not counted in the terrain's GPU estimate/LRU; *Gelände ausblenden* also pauses auto contrast while on; colour modes Höhe/ü. Grund/Intensität, the point-size slider and frame pacing while tiles stream in flight were not checked. Areas exist only where the pipeline wrote them (`overall`: all three, `karlsberg`: Schloss Karlsberg; `homburg` after a rebuild, `kirrberg` none).
 - Rekonstruktion 1789 (F19): only the one dataset `shared/karlsberg1789/` is looked up (no discovery of other `shared/<id>/`); no distance fade/LOD (≈ 340 k triangles always drawn while on); where today's LoD2 buildings stand inside the model both are drawn (no masking); the model is not hidden by the canopy; skirts reach 0.5 m below the 2025 DTM, so at high exaggeration they sink visibly deeper into ruin pits (by design). Browser rendering, frame time and the round trip with the viewer were not verified in this build step.
 - Mobile (F20): nothing tested on a real phone (see *Touch (F20)* / *Mein Standort*). A long-press marker leaves Markieren on, and it opens the form by a synthetic canvas tap because `MarkerManager.openForm` is private (a public `openDraftAt(E, N, h)` would fix both). The Markieren hint still mentions keys and clicks. On desktop the panel full-width rule no longer matches lil-gui's current class names (panels render 245 px; fixed only inside the Einfach layout). *Vollständig* on a phone is cramped. The HUD *Gesten* button is 60×28 px (< 44 px target). After *Mein Standort* the camera sits ≈ 200 m above the ground under it (150 m is relative to the target). The compass ignores magnetic declination (≈ 2–3°). The desktop canvas now has `touch-action: none`.
-- 3D-Druck (F21): "assembled size" is the bounding rectangle of all generated tiles of a series — for far-apart detail sets (Karlsberg + Merburg: 47 × 165 cm) it is not meaningful, the card adds the number of separate pieces. Permanent tile labels on the minimap overlap at the overview zoom. Filament figures come from the pipeline's estimate (5–11 % above Bambu Studio's). The clipboard was checked only in headless Chrome with granted permissions.
 - Buildings: bases are matched to the 1 m DTM only; where a coarser terrain level is drawn (far field) the ground may sit slightly off the bases (not measured). Buildings are not pickable. A few LoD2 buildings keep a gap > 0.5 m where the pipeline's 5 m skirt cap applies (2 Karlsberg / 20 overall).
 
 - Live local relief: where a same-level neighbour is not resident, the band within *Relief-Radius* of that edge uses the coarser level's heights (approximate) until the neighbour arrives.
@@ -445,4 +436,4 @@ Classified ALS 2025 points (`manifest.pointclouds`, contract format `sle-pts-v1`
 - Failed DSM chunks are not retried until reload.
 - Draped lines/labels use the bare-earth DTM; with *Wald: Voll* they should be hidden under the canopy (not checked). Very sharp bends in thick lines show small notches (no round joins). On the overall AOI parcels appear ≈ 1 s after the first `F` (worker parse of 42 MB) and parcel lines exist only within ≈ 2.1 km. Lines are lifted 0.3 m·exag, but 0.04 % of OSM chord samples lie > 0.3 m below the true surface (max 1.38 m on a road near E 381125 / N 5467365), so such short spots can be hidden.
 - The canopy colours everything above *Mindesthöhe* green; buildings are excluded only where the manifest has `layers.bldg` (R0.7; LoD2 footprints dilated 1 m — trees overhanging roofs disappear too, other structures (walls, bridges) stay green). In *Voll* mode crown edges form dark near-vertical walls; *Transparent* drops them.
-- Final polish: the parcel-label radius is not part of the presets (private to the vectors module); presets are not measured in real rAF pacing. A point budget set with the point-cloud slider is kept across preset picks (`sle.pointcloud.v1` `budgetUser`; v1.0 prefs count as user-set when the budget is no preset value) — after *Einstellungen zurücksetzen* presets control it again. `pnpm run serve:local` on 5250 itself, the tour with reduced motion, and gamepad were not checked.
+- Final polish: presets are not measured in real rAF pacing. A point budget set with the point-cloud slider is kept across preset picks (`sle.pointcloud.v1` `budgetUser`; v1.0 prefs count as user-set when the budget is no preset value) — after *Einstellungen zurücksetzen* presets control it again. `pnpm run serve:local` on 5250 itself, the tour with reduced motion, and gamepad were not checked.

@@ -19,7 +19,7 @@
 #hud .help-touch { display: none; }
 
 /* ---- touch devices (any layout): gestures instead of keys --------------------------------------- */
-html.sle-touch #hud .help-keys, html.sle-touch #hud .help-rows { display: none; }
+html.sle-touch #hud .help-keys { display: none; }
 html.sle-touch #hud .help-touch { display: grid; grid-template-columns: auto; gap: 1px; margin-top: 2px; }
 html.sle-touch #hud .hud-help-btn { display: inline-block; }
 html.sle-touch #panel kbd, html.sle-touch #sle-toolbar kbd, html.sle-touch .sle-btn-grid kbd,

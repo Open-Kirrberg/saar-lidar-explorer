@@ -92,11 +92,19 @@ describe('validateManifest + candidates', () => {
   });
 });
 
+describe('classes outside the allow-list (private sister-project classes)', () => {
+  it('are dropped from counts, labels and featureCount in every build', () => {
+    const c = parseCandidates({ ...full, featureCount: 12, counts: { pit: 4, mound: 2, linear: 1, other_private: 5 }, classes: { other_private: 'X' } }, grid)!;
+    expect(c.counts).toEqual({ pit: 4, mound: 2, linear: 1 });
+    expect(c.featureCount).toBe(7);
+    expect((c.classes as Record<string, string>).other_private).toBeUndefined();
+  });
+});
+
 describe('candidate constants', () => {
   it('class codes, guard and storage key', () => {
-    expect(Object.values(CANDIDATE_MASK_CODES)).toEqual(['pit', 'mound', 'linear', 'rect', 'platform', 'crater', 'crater_field']);
-    expect(CANDIDATE_MASK_CODES[6]).toBe('crater');
-    expect(CANDIDATE_MASK_CODES[7]).toBe('crater_field');
+    expect(Object.values(CANDIDATE_MASK_CODES)).toEqual(['pit', 'mound', 'linear', 'rect', 'platform']);
+    expect(CANDIDATE_MASK_CODES[6]).toBeUndefined(); // codes of classes the explorer does not read are not drawn
     expect(isCandidateClass('rect')).toBe(true);
     expect(isCandidateClass('wall')).toBe(false);
     expect(candidatesStorageKey('karlsberg')).toBe('sle.candidates.v1.karlsberg');

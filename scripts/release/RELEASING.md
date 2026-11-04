@@ -26,7 +26,6 @@ Everything is configured in `release.env` (org, host, repo names, AOI, `XYZ_MAX_
 |---|---|---|
 | `SLE_PUBLIC=1` | – | absolute base `SLE_BASE` (default `/saar-lidar-explorer/`), fills the `VITE_*` defaults below, copies **no** `public/data` into `dist/` |
 | `VITE_DATA_URL` | `https://open-kirrberg.github.io/saar-lidar-data/` | manifest, chunks (decode worker), vectors (vector worker), pois, `shared/`, point clouds |
-| `VITE_PRINT_URL` | `https://open-kirrberg.github.io/saar-lidar-data-2/print/` | 3D-print series |
 | `VITE_AOIS` | `overall` | AOIs this deployment has: no probes for others, AOI switcher hidden, `?aoi=` outside → `overall` |
 | `VITE_VIEWER_URL` | `/saar-lidar-explorer/castle/` | castle viewer handover target (same origin is trusted); `off` hides „Schloss betreten“ |
 | `VITE_IMPRESSUM_URL` | – (unset) | optional http(s) link „Impressum“ in *Über & Datenschutz*; set the repo variable `SLE_IMPRESSUM_URL` |
@@ -41,7 +40,7 @@ ever get absolute URLs) work.
 
 ```bash
 cd pipeline && ./run.sh overall          # if the data are not current
-# F21: regenerate the print series first (pipeline/print3d.py), then:
+# print series (F21) now come from the separate sle-print repo, if any
 scripts/release/export-data.sh           # → ../_release/saar-lidar-data, ../_release/saar-lidar-data-2
 ```
 
@@ -56,7 +55,7 @@ Size report: `../_release/data-size-report.txt`. What it does:
 - **F22: UXO candidate classes are stripped** (`crater`, `crater_field` from saar-lidar-detect are private): features
   removed from `candidates.geojson`, manifest `counts`/`classes`/`params.crater_threshold`/crater versions and detectors
   dropped, `featureCount` recomputed, mask PNGs rewritten with codes 6/7 → 0 (stdlib PNG codec; a non-8-bit-grey mask
-  aborts the export). The log prints how many were removed. The public app build drops them too (`VITE_SLE_PUBLIC=1`).
+  aborts the export). The log prints how many were removed. The explorer ignores them in every build (bundle guard).
   Mask chunks left empty are dropped (with their `mask.chunks` entry); a crater-only primary `method` is renamed.
   Of `candidates/` only the manifest's GeoJSON and mask chunks are staged; saar-lidar-detect side files in the AOI dir
   (`run.json`, `report*.html`, `eval*`, `fachbericht*`, `manifest.json.bak-*`, `*.sld-new/`) are never staged, and the
@@ -91,7 +90,7 @@ The workflow builds the explorer (`pnpm install --frozen-lockfile`, tests, `SLE_
 viewer into `app/dist/castle/`: textures via `scripts/fetch-textures.sh` (Poly Haven CC0, md5-checked, cached by
 `actions/cache`), terrain from `<VITE_DATA_URL>castle-viewer/terrain/` (sha256-checked). If that step fails, the
 explorer is rebuilt with `VITE_VIEWER_URL=off` (no handover) so the site still deploys. Repository variables
-`SLE_DATA_URL`, `SLE_PRINT_URL`, `SLE_AOIS`, `SLE_IMPRESSUM_URL` override the defaults without a code change.
+`SLE_DATA_URL`, `SLE_AOIS`, `SLE_IMPRESSUM_URL` override the defaults without a code change.
 
 ## 4. Publish (the lead / the user — not the scripts)
 
@@ -117,6 +116,6 @@ large refreshes, prefer a fresh orphan commit (`git checkout --orphan new && git
 - `../_release/data-size-report.txt`: no FAIL; `../_release/secret-scan.md`: HIGH none, INFO reviewed.
 - `../_release/AUDIT.md`: licence + heritage audit.
 - Local smoke test of the public build against the staged data: build with
-  `SLE_PUBLIC=1 VITE_DATA_URL=http://127.0.0.1:5271/saar-lidar-data/ VITE_PRINT_URL=http://127.0.0.1:5271/saar-lidar-data-2/print/`,
+  `SLE_PUBLIC=1 VITE_DATA_URL=http://127.0.0.1:5271/saar-lidar-data/`,
   serve the site under `/saar-lidar-explorer/` on one port and `../_release` with `Access-Control-Allow-Origin: *` on
   another (the minimap tiles still point to github.io until the data are live).

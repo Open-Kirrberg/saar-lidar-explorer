@@ -35,10 +35,7 @@
 .sle-keys-group { break-after: avoid; margin: 6px 0 2px; font-weight: 600; color: var(--ui-accent); }
 .sle-keys-row { break-inside: avoid; margin: 1px 0; }
 
-/* ---- HUD help (rendered from the shortcut table) ---------------------------------------------- */
-#hud .help .help-dim { opacity: 0.85; }
-#hud .help-rows { display: grid; grid-template-columns: auto auto; gap: 0 12px; margin-top: 2px; }
-#hud .help-rows .sle-keys-row { white-space: nowrap; }
+/* ---- HUD help: one "? alle Tastenkürzel" line (desktop), gestures on touch ------------------- */
 
 /* ---- tour ---------------------------------------------------------------------------------------- */
 #sle-tour {

@@ -9,19 +9,19 @@ import { DecodePool } from './data/DecodePool';
 import { loadManifest } from './data/manifest';
 import type { Manifest } from './data/manifest';
 import { utmToWorld, worldToUtm } from './geo';
-import { getLocate, initLocate } from './locate';
+import { getLocate } from './locate';
 import { bindHash, createStore, hashDisplayPatch, normDeg, parseHash } from './state';
 import type { AppState, Store } from './state';
 import { createSky } from './terrain/Sky';
 import { Terrain } from './terrain/Terrain';
 import type { StreamStats } from './terrain/Terrain';
-import { createAoiSwitcher, resolveStartAoi } from './ui/aoiSwitcher';
+import { resolveStartAoi } from './ui/startAoi';
 import { bindDisplayState } from './ui/displayState';
 import { createRefinedFlyTo } from './ui/flyTo';
 import { createGui } from './ui/gui';
 import { initFeatures } from './ui/features';
 import { createHud } from './ui/hud';
-import { createSettingsRuntime, featureChecker, initPolish } from './ui/polish';
+import { createSettingsRuntime, initPolish } from './ui/polish';
 import { createReliefPanel } from './ui/reliefPanel';
 import { browserStorage, loadSettings, saveSettings, settingsStatePatch } from './ui/settings';
 import { progressPending, terrainPending } from './ui/streaming';
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   scene.add(terrain);
 
   const store = createStore({ layer: terrain.defaultDisplay() });
-  // collisionGround = DTM, or max(DTM, DSM) with "Kollision mit Baumkronen".
+  // collisionGround = DTM: flying passes through the canopy (ADR 0020).
   const controller = new DroneController(camera, renderer.domElement, terrain.collisionGround, origin, {
     fallbackGround: manifest.heightRange.min,
   });
@@ -170,7 +170,6 @@ async function main(): Promise<void> {
   syncFooterH();
 
   const debug = { showFps: false };
-  const checkFeature = featureChecker({ manifest });
   let fps = 0;
   // F9: loading never blocks once the first terrain is drawable; the rest shows in the HUD.
   let loadProgress: LoadProgressLike | null = null;
@@ -180,7 +179,6 @@ async function main(): Promise<void> {
     fps: () => fps,
     showFps: () => debug.showFps,
     pending: () => Math.max(progressPending(loadProgress, loadDone), terrainPending(terrain) ?? 0),
-    hasFeature: checkFeature,
     helpVisible: settings.get().hudHelp,
     onHelpToggle: (v) => settings.patch({ hudHelp: v }),
   });
@@ -234,8 +232,7 @@ async function main(): Promise<void> {
   window.sle = ctx;
   const features = initFeatures(ctx); // minimap, POIs, Fundmarker, disclaimer (src/map, src/pois, src/markers)
   bindLongPressContext(touch, { markers: features.markers, measure: () => window.sleMeasure }); // F20 long-press
-  initLocate(ctx, $('#panel'), { minimap: features.minimap, labels: features.labels }); // F20 "Mein Standort" (getLocate())
-  void createAoiSwitcher(ctx, $('#panel')); // "Gebiet" card (F9)
+  // 🧊 F20 "Mein Standort" is frozen (ADR 0020): initLocate() is not called, getLocate() stays null.
   // Final polish: settings card, quality presets, share, introduction, tour, a11y helpers.
   initPolish(ctx, { settings, kv, labels: features.labels, applyPreset: (id) => relief.applyPresetById(id), resize, minimap: features.minimap, relief }); // F20: + simple (mobile) layout
 

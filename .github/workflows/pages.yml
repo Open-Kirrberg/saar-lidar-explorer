@@ -23,7 +23,6 @@ env:
   SLE_PUBLIC: "1"
   SLE_BASE: "/saar-lidar-explorer/"
   VITE_DATA_URL: ${{ vars.SLE_DATA_URL || 'https://open-kirrberg.github.io/saar-lidar-data/' }}
-  VITE_PRINT_URL: ${{ vars.SLE_PRINT_URL || 'https://open-kirrberg.github.io/saar-lidar-data-2/print/' }}
   VITE_AOIS: ${{ vars.SLE_AOIS || 'overall' }}
   VITE_IMPRESSUM_URL: ${{ vars.SLE_IMPRESSUM_URL || '' }}
 

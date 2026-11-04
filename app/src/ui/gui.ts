@@ -68,26 +68,28 @@ export function createGui(ctx: GuiContext): GUI {
     ctx.onFlightChange?.({ minClearance: v });
   });
 
-  // ---- LOD / Debug -------------------------------------------------------------------------
-  const fDbg = gui.addFolder('LOD / Debug');
-  const sp = terrain.lod.spacings;
-  if (sp.length > 1) fDbg.add(p, 'lod0', 20, 3000, 10).name(`${sp[0]} m bis (m)`).listen();
-  if (sp.length > 2) fDbg.add(p, 'lod1', 50, 5000, 10).name(`${sp[1]} m bis (m)`).listen();
-  if (sp.length > 3) fDbg.add(p, 'lod2', 100, 8000, 10).name(`${sp[2]} m bis (m)`).listen();
-  fDbg.add(p, 'wireframe').name('Drahtgitter').onChange((v: boolean) => {
-    for (const c of terrain.chunks.values()) {
-      c.mesh.material.wireframe = v;
-      if (c.canopy) c.canopy.mesh.material.wireframe = v;
-    }
-  });
-  fDbg.add(p, 'lodTint').name('LOD-Farben').onChange((v: boolean) => (u.uLodTint.value = v ? 0.6 : 0));
-  fDbg.add(p, 'showFps').name('Bildrate anzeigen').onChange((v: boolean) => (ctx.debug.showFps = v));
-  fDbg.add(p, 'info').name('Info').disable().listen();
-  setInterval(() => {
-    const info = ctx.renderer.info.render;
-    p.info = `${terrain.stats.visible}+${terrain.stats.canopyVisible} Kacheln · ${(info.triangles / 1e6).toFixed(2)} M Dreiecke · ${info.calls} Draw Calls`;
-  }, 500);
-  fDbg.close();
+  // ---- LOD / Debug: dev builds only (ADR 0020) ------------------------------------------------
+  if (import.meta.env.DEV) {
+    const fDbg = gui.addFolder('LOD / Debug');
+    const sp = terrain.lod.spacings;
+    if (sp.length > 1) fDbg.add(p, 'lod0', 20, 3000, 10).name(`${sp[0]} m bis (m)`).listen();
+    if (sp.length > 2) fDbg.add(p, 'lod1', 50, 5000, 10).name(`${sp[1]} m bis (m)`).listen();
+    if (sp.length > 3) fDbg.add(p, 'lod2', 100, 8000, 10).name(`${sp[2]} m bis (m)`).listen();
+    fDbg.add(p, 'wireframe').name('Drahtgitter').onChange((v: boolean) => {
+      for (const c of terrain.chunks.values()) {
+        c.mesh.material.wireframe = v;
+        if (c.canopy) c.canopy.mesh.material.wireframe = v;
+      }
+    });
+    fDbg.add(p, 'lodTint').name('LOD-Farben').onChange((v: boolean) => (u.uLodTint.value = v ? 0.6 : 0));
+    fDbg.add(p, 'showFps').name('Bildrate anzeigen').onChange((v: boolean) => (ctx.debug.showFps = v));
+    fDbg.add(p, 'info').name('Info').disable().listen();
+    setInterval(() => {
+      const info = ctx.renderer.info.render;
+      p.info = `${terrain.stats.visible}+${terrain.stats.canopyVisible} Kacheln · ${(info.triangles / 1e6).toFixed(2)} M Dreiecke · ${info.calls} Draw Calls`;
+    }, 500);
+    fDbg.close();
+  }
   fFly.close();
 
   return gui;

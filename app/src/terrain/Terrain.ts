@@ -67,8 +67,6 @@ export interface ForestSettings {
   mode: ForestMode;
   /** Opacity in 'transparent' mode. */
   opacity: number;
-  /** Drone collides with the canopy (DSM) instead of flying through it. */
-  collide: boolean;
 }
 
 export interface LodSettings {
@@ -179,7 +177,7 @@ export class Terrain extends Group {
   };
   /** Holds the canopy meshes (child of the terrain, rendered after it). */
   readonly canopyGroup = new Group();
-  readonly forest: ForestSettings = { mode: 'off', opacity: 0.6, collide: false };
+  readonly forest: ForestSettings = { mode: 'off', opacity: 0.6 };
   private readonly geometries = new Map<number, BufferGeometry>();
   private readonly allowedSpacings: number[];
   private readonly skirtSpacings: number[];
@@ -605,7 +603,7 @@ export class Terrain extends Group {
   }
 
   private canopyWanted(): boolean {
-    return this.hasCanopyData() && (this.forest.mode !== 'off' || this.forest.collide);
+    return this.hasCanopyData() && this.forest.mode !== 'off';
   }
 
   /** Layers chunk `c` should have for the current display (available at its level, not failed). */
@@ -898,18 +896,12 @@ export class Terrain extends Group {
     return this.canopyHeights.loadedCount ? this.canopyHeights.heightAt(x, z) : NaN;
   }
 
-  /**
-   * Displayed height the drone must stay above: the DTM, or max(DTM, DSM) when
-   * "Kollision mit Baumkronen" is on (and the DSM is loaded). Pass to DroneController.
-   */
+  /** Displayed height the drone must stay above: the DTM (flying passes through the canopy, ADR 0020). */
   collisionY(x: number, z: number): number {
-    const g = this.surfaceY(x, z);
-    if (!this.forest.collide) return g;
-    const c = this.canopyHeightAt(x, z);
-    return Number.isNaN(c) ? g : Math.max(g, this.toDisplayY(c));
+    return this.surfaceY(x, z);
   }
 
-  /** Ground provider for DroneController honouring the canopy-collision option. */
+  /** Ground provider for DroneController. */
   readonly collisionGround = { surfaceY: (x: number, z: number) => this.collisionY(x, z) };
 
   toDisplayY(h: number): number {

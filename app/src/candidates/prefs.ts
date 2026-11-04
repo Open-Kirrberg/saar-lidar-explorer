@@ -42,9 +42,8 @@ export function loadCandidatePrefs(
   kv: PrefsKV | null | undefined,
   aoi: string,
   defaultMin: number,
-  defaultCraterMin?: number,
 ): { prefs: CandidatePrefs; migrated: boolean } {
-  const base = defaultFilter(defaultMin, defaultCraterMin);
+  const base = defaultFilter(defaultMin);
   const fresh = (): CandidatePrefs => ({ on: false, filter: base });
   if (!kv) return { prefs: fresh(), migrated: false };
   let own: string | null = null;

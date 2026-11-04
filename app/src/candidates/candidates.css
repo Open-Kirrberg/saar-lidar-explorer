@@ -19,8 +19,3 @@
 #sle-candidates kbd { font: inherit; background: rgba(255, 255, 255, 0.15); border-radius: 3px; padding: 0 4px; }
 .sle-cand-offer { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; padding: 4px 6px; font-size: 11px; border-left: 3px solid #ff8f80; background: rgba(255, 143, 128, 0.1); }
 .sle-cand-offer .sle-btn.danger { border-color: #ff8f80; color: #ffb4a8; }
-/* F22 UXO indicator classes (crater, crater_field) */
-.sle-cand-uxo-only[hidden] { display: none !important; }
-.sle-cand-warn.uxo { background: rgba(255, 46, 46, 0.12); border-left-color: #ff2e2e; }
-.sle-cand-detail .sle-cand-warn.uxo { margin: 4px 0; }
-.sle-cand-chip i.ring { background: transparent !important; border: 2px solid #ff9a8a; box-shadow: 0 0 0 1px #111; }

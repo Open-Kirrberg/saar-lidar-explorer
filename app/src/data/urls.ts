@@ -5,13 +5,11 @@
  * scripts/release/RELEASING.md) sets them so the site loads everything from absolute data URLs.
  *
  *   VITE_DATA_URL    root of the AOI datasets, pois.geojson and data/shared/   (manifest.ts dataRootUrl)
- *   VITE_PRINT_URL   root of the 3D-print series (`<root><series>/index.json`); default `<dataRoot>print/`
  *   VITE_AOIS        comma list of the AOIs the deployment has (e.g. `overall`); default: all known
  *   VITE_VIEWER_URL  castle viewer URL (relative ones resolve against the page); `off` hides the handover
  *   VITE_IMPRESSUM_URL  optional Impressum page (http(s); relative ones resolve against the page),
  *                    linked in „Über & Datenschutz“; unset → no Impressum link (no default)
  */
-import { dataRootUrl } from './manifest';
 
 type Env = Record<string, string | undefined>;
 
@@ -43,12 +41,6 @@ export function isAbsoluteHttpUrl(path: string): boolean {
  */
 export function resolveDataPath(baseUrl: string, path: string): string {
   return isAbsoluteHttpUrl(path) ? path : baseUrl + path;
-}
-
-/** Root URL of the 3D-print series: `VITE_PRINT_URL`, else `<dataRoot>print/`. */
-export function printRootUrl(): string {
-  const custom = env().VITE_PRINT_URL;
-  return custom ? absoluteRoot(custom) : `${dataRootUrl()}print/`;
 }
 
 /** Parse a comma list of AOI ids (`[\w-]+`); empty / unset → null (= all known AOIs). */

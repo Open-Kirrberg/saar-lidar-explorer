@@ -4,7 +4,6 @@
  * `layers.bldg` mask (R0.7), `models.buildings` (F11), `xyz.hist_*` (F14), `candidates` (F15),
  * `pointclouds` (F16).
  */
-import { uxoClassesAllowed } from './publicBuild';
 
 export type HeightEncoding = 'terrarium';
 export type LayerEncoding = 'u8';
@@ -348,20 +347,14 @@ function parseChunkList(list: unknown[], grid: { nx: number; ny: number }, where
 // ---------------------------------------------------------------------------------------------
 // Relict candidates (F15) — contract "Candidates". PRIVATE/local data: hypotheses, never published.
 
-export type CandidateClass = 'pit' | 'mound' | 'linear' | 'rect' | 'platform' | 'crater' | 'crater_field';
+export type CandidateClass = 'pit' | 'mound' | 'linear' | 'rect' | 'platform';
 /** Relict classes (pipeline/detect.py, F15). */
 export const RELICT_CLASSES: readonly CandidateClass[] = ['pit', 'mound', 'linear', 'rect', 'platform'];
 /**
- * F22 UXO indicator classes (saar-lidar-detect): bomb craters and crater fields. Always private —
- * a public build drops them (`uxoClassesAllowed`), the release export strips them.
+ * Every class the explorer reads. Allow-list: any other class in a data file (e.g. private classes of a
+ * sister project, contract "Candidates") is ignored in every build — features, counts, labels, mask codes.
  */
-export const UXO_CLASSES: readonly CandidateClass[] = ['crater', 'crater_field'];
-export const CANDIDATE_CLASSES: readonly CandidateClass[] = [...RELICT_CLASSES, ...UXO_CLASSES];
-export const isUxoClass = (c: unknown): boolean => c === 'crater' || c === 'crater_field';
-/** Shown wherever crater candidates are shown (F22). */
-export const UXO_NOTE_DE = 'Hinweis, keine Aussage über Kampfmittel/Blindgänger';
-/** Fallback display threshold for `crater` when the manifest has no `params.crater_threshold`. */
-export const CRATER_THRESHOLD_DEFAULT = 0.55;
+export const CANDIDATE_CLASSES: readonly CandidateClass[] = RELICT_CLASSES;
 /** Default German class labels (manifest `candidates.classes` overrides per class). */
 export const CANDIDATE_CLASS_LABELS_DE: Readonly<Record<CandidateClass, string>> = {
   pit: 'Grube/Trichter',
@@ -369,20 +362,15 @@ export const CANDIDATE_CLASS_LABELS_DE: Readonly<Record<CandidateClass, string>>
   linear: 'Graben/Wall/Weg',
   rect: 'Rechteckstruktur',
   platform: 'Plattform',
-  crater: 'Bombentrichter (Hypothese)',
-  crater_field: 'Trichterfeld (Hypothese)',
 };
 /** Label for a `linear` candidate with `along_path: true` (known path). */
 export const CANDIDATE_KNOWN_PATH_LABEL_DE = 'Weg (bekannt)';
-/** `class8` mask byte → class (0 = none). */
+/** `class8` mask byte → class (0 = none; other codes are not drawn). */
 export const CANDIDATE_MASK_CODES: Readonly<Record<number, CandidateClass>> = {
-  1: 'pit', 2: 'mound', 3: 'linear', 4: 'rect', 5: 'platform', 6: 'crater', 7: 'crater_field',
+  1: 'pit', 2: 'mound', 3: 'linear', 4: 'rect', 5: 'platform',
 };
 export const isCandidateClass = (v: unknown): v is CandidateClass =>
   typeof v === 'string' && (CANDIDATE_CLASSES as readonly string[]).includes(v);
-/** Class check honouring the public-build rule: UXO classes only when `allowUxo`. */
-export const isAllowedCandidateClass = (v: unknown, allowUxo: boolean): v is CandidateClass =>
-  isCandidateClass(v) && (allowUxo || !isUxoClass(v));
 
 /** Optional u8 class raster per level-0 chunk (500², no apron); raw byte = class code. */
 export interface CandidateMask {
@@ -411,7 +399,7 @@ export interface ManifestCandidates {
   mask?: CandidateMask;
   label_de: string;
   evaluation?: Record<string, unknown>;
-  // F22 additive keys (saar-lidar-detect), all optional and informative.
+  // Additive keys (saar-lidar-detect), all optional and informative.
   generator?: string;
   method_version?: string;
   method_versions?: string[];
@@ -461,11 +449,9 @@ export interface CandidateProps {
   /** pois.geojson id within 50 m, else null. */
   near_known: string | null;
   outline?: CandidateOutline;
-  /** F22, crater_field only: ids of the member craters. */
-  member_ids?: string[];
-  /** F22 (saar-lidar-detect): detector + rule-set + generator version. */
+  /** Optional (saar-lidar-detect): detector + rule-set + generator version. */
   method_version?: string;
-  /** F22 (saar-lidar-detect): ISO year of the terrain data under the candidate. */
+  /** Optional (saar-lidar-detect): ISO year of the terrain data under the candidate. */
   data_date?: string;
 }
 
@@ -493,7 +479,7 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
  * Tolerant parse of the optional `candidates` key (F15): absent/invalid (no path, crs ≠ EPSG:25832)
  * → undefined; optional fields get defaults; a malformed `mask` is dropped.
  */
-export function parseCandidates(v: unknown, grid: { nx: number; ny: number }, allowUxo: boolean = uxoClassesAllowed()): ManifestCandidates | undefined {
+export function parseCandidates(v: unknown, grid: { nx: number; ny: number }): ManifestCandidates | undefined {
   if (v === undefined) return undefined;
   if (!isPlainObject(v) || typeof v.path !== 'string' || !v.path) {
     console.warn('[manifest] candidates: missing path, ignored');
@@ -505,11 +491,11 @@ export function parseCandidates(v: unknown, grid: { nx: number; ny: number }, al
   }
   const counts: Partial<Record<CandidateClass, number>> = {};
   if (isPlainObject(v.counts)) {
-    for (const [k, n] of Object.entries(v.counts)) if (isAllowedCandidateClass(k, allowUxo) && isNum(n)) counts[k] = n;
+    for (const [k, n] of Object.entries(v.counts)) if (isCandidateClass(k) && isNum(n)) counts[k] = n;
   }
   const classes: Record<CandidateClass, string> = { ...CANDIDATE_CLASS_LABELS_DE };
   if (isPlainObject(v.classes)) {
-    for (const [k, l] of Object.entries(v.classes)) if (isAllowedCandidateClass(k, allowUxo) && typeof l === 'string' && l) classes[k] = l;
+    for (const [k, l] of Object.entries(v.classes)) if (isCandidateClass(k) && typeof l === 'string' && l) classes[k] = l;
   }
   let mask: CandidateMask | undefined;
   if (v.mask !== undefined) {
@@ -529,49 +515,46 @@ export function parseCandidates(v: unknown, grid: { nx: number; ny: number }, al
   return {
     path: v.path,
     crs: 'EPSG:25832',
-    featureCount: isNum(v.featureCount) ? Math.max(0, v.featureCount - (allowUxo ? 0 : uxoCount(v.counts))) : 0,
+    featureCount: isNum(v.featureCount) ? knownFeatureCount(v.featureCount, counts) : 0,
     counts,
     classes,
     ...(v.heights === 'baked' ? { heights: 'baked' as const } : {}),
     method: typeof v.method === 'string' ? v.method : '',
     version: isNum(v.version) ? v.version : 0,
     ...(typeof v.generated === 'string' ? { generated: v.generated } : {}),
-    params: isPlainObject(v.params) ? (allowUxo ? v.params : withoutKey(v.params, 'crater_threshold')) : {},
+    params: isPlainObject(v.params) ? v.params : {},
     ...(weights ? { weights } : {}),
     ...(mask ? { mask } : {}),
     label_de: typeof v.label_de === 'string' && v.label_de ? v.label_de : 'Verdachtsflächen',
     ...(isPlainObject(v.evaluation) ? { evaluation: v.evaluation } : {}),
-    ...candidateExtras(v, allowUxo),
+    ...candidateExtras(v),
   };
 }
 
-/** Sum of the crater/crater_field entries of a raw `counts` object (public builds subtract it). */
-function uxoCount(counts: unknown): number {
-  if (!isPlainObject(counts)) return 0;
-  return UXO_CLASSES.reduce((s, c) => s + (isNum(counts[c]) ? (counts[c] as number) : 0), 0);
-}
-function withoutKey(o: Record<string, unknown>, key: string): Record<string, unknown> {
-  const r = { ...o };
-  delete r[key];
-  return r;
+/**
+ * `featureCount` for the classes the explorer reads: the raw count, capped at the sum of the known
+ * per-class counts when there are any (features of other classes are skipped, so not counted).
+ */
+function knownFeatureCount(raw: number, counts: Partial<Record<CandidateClass, number>>): number {
+  const known = Object.values(counts);
+  const n = Math.max(0, raw);
+  return known.length ? Math.min(n, known.reduce((a, b) => a + (b ?? 0), 0)) : n;
 }
 
 const strList = (x: unknown): string[] | undefined =>
   Array.isArray(x) ? x.filter((s): s is string => typeof s === 'string' && s.length > 0) : undefined;
 const optStr = (x: unknown): string | undefined => (typeof x === 'string' && x ? x : undefined);
 
-/** F22 additive keys; in a public build crater entries are removed from the version/detector lists. */
-function candidateExtras(v: Record<string, unknown>, allowUxo: boolean): Partial<ManifestCandidates> {
+/** Additive, informative keys (saar-lidar-detect). */
+function candidateExtras(v: Record<string, unknown>): Partial<ManifestCandidates> {
   const out: Partial<ManifestCandidates> = {};
   const gen = optStr(v.generator);
   if (gen) out.generator = gen;
   const mv = optStr(v.method_version);
-  if (mv && (allowUxo || !/^crater/.test(mv))) out.method_version = mv;
-  let mvs = strList(v.method_versions);
-  if (mvs && !allowUxo) mvs = mvs.filter((s) => !/^crater/.test(s));
+  if (mv) out.method_version = mv;
+  const mvs = strList(v.method_versions);
   if (mvs) out.method_versions = mvs;
-  let det = strList(v.detectors);
-  if (det && !allowUxo) det = det.filter((s) => s !== 'craters');
+  const det = strList(v.detectors);
   if (det) out.detectors = det;
   const dd = strList(v.data_dates);
   if (dd) out.data_dates = dd;

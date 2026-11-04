@@ -37,9 +37,9 @@ describe('shortcut table (HUD "Steuerung" + introduction)', () => {
     expect(missing).toEqual([]);
   });
 
-  it('lists the keys the roadmap notes found missing (G O F X N P L C M B V K, 1–9)', () => {
+  it('lists the keys the roadmap notes found missing (G O X N P L C M B V K, 1–9)', () => {
     const codes = documentedCodes();
-    for (const k of 'GOFXNPLCMBVKH') expect(codes.has(`Key${k}`)).toBe(true);
+    for (const k of 'GOXNPLCMBVK') expect(codes.has(`Key${k}`)).toBe(true);
     for (let d = 0; d <= 9; d++) expect(codes.has(`Digit${d}`)).toBe(true);
   });
 
@@ -65,6 +65,6 @@ describe('shortcut table (HUD "Steuerung" + introduction)', () => {
     expect(html).toContain('<div class="sle-keys-group">Hilfe</div>');
     expect(html).toContain('<kbd>&#60;x&#62;</kbd>');
     expect(html).toContain('a &#38; b');
-    expect(shortcutsHtml(SHORTCUTS.filter((s) => s.short), { short: true })).toContain('Hilfe ein/aus');
+    expect(shortcutsHtml(SHORTCUTS.filter((s) => s.short), { short: true })).toContain('alle Kürzel');
   });
 });

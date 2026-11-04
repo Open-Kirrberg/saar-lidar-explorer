@@ -1,17 +1,5 @@
 /** "Schauen, nicht graben" disclaimer (F8), text from research/03 §Legal notes. */
 import { isolateModalKeys } from './modalKeys';
-import { uxoClassesAllowed } from '../data/publicBuild';
-
-/**
- * F22 crater note — only where crater markings can exist (local builds). The public build never shows craters,
- * so it must not mention them either (docs/adr/0010).
- */
-export function craterDisclaimer(allowed: boolean = uxoClassesAllowed()): string {
-  if (!allowed) return '';
-  return `
-      Bombentrichter- und Trichterfeld-Markierungen sind ein Hinweis, keine Aussage über Kampfmittel/Blindgänger;
-      fehlende Markierungen bedeuten nicht, dass eine Fläche kampfmittelfrei ist.`;
-}
 
 const KEY = 'sle.disclaimer.v1';
 
@@ -38,7 +26,7 @@ export function showDisclaimer(force = false): void {
       Bodendenkmäler sind im Saarland gesetzlich geschützt (SDschG §§ 3, 8) – auch unbekannte.
       Gezielte Suche mit Sonden/Werkzeugen ist genehmigungspflichtig; Funde sind unverzüglich dem
       Landesdenkmalamt Saarland zu melden (§ 16). In Rheinland-Pfalz gilt das DSchG RLP (GDKE).
-      <strong>Kampfmittelgefahr an Bunkern/Kratern – nichts berühren.</strong>${craterDisclaimer()}</p>
+      <strong>Kampfmittelgefahr an Bunkern/Kratern – nichts berühren.</strong></p>
       <p>Viele Waldflächen sind Naturschutz- bzw. Natura-2000-Gebiete: auf den Wegen bleiben.
       Eigene Fundmarker bleiben in diesem Browser; genaue Lagen neuer Funde bitte nicht veröffentlichen.</p>
       <p class="sle-en" lang="en"><em>Look, don't dig. Everything highlighted is a hypothesis from terrain data.
