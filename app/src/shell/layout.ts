@@ -1,4 +1,4 @@
-/** Card layout helper (pure): keep the lens card clear of the shell's splash + „© Quellen“ corner. */
+/** Layout helper (pure): keep floating cards (lens card, zone prompt) clear of the shell's splash + „© Quellen“ corner. */
 
 export interface Box {
   left: number;

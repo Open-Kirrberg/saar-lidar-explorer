@@ -46,3 +46,5 @@
   .sle-tut-icon { font-size: 22px; }
   .sle-tut-card.sheet { top: calc(var(--gap, 8px) + var(--safe-t, 0px)); } /* Orte sheet open: over HUD + minimap */
 }
+/* Inside a zone only the closing card shows; an unfinished step waits until the user is back in the overworld. */
+.sle-zone-active .sle-tut-card:not([data-step='done']) { display: none; }

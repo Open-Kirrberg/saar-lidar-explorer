@@ -12,6 +12,7 @@ import {
 import type { Clock } from '../src/shell/attribution';
 import { SPEED_STEPS, WALK_EYE, fmtSpeedMult, stepSpeed, walkY } from '../src/shell/flight';
 import { TAPE_PX_PER_DEG, aglFill, compass, normDeg, tapeOffset } from '../src/shell/hud';
+import { clearOf } from '../src/shell/layout';
 import { createFeatureRegistry } from '../src/shell/registry';
 import type { FeatureDef, HostHandle } from '../src/shell/registry';
 import { DEFAULT_TIER, TIER_KEY, loadTier, parseTier, saveTier, tierAllows, tierFromQuery } from '../src/shell/tiers';
@@ -447,5 +448,20 @@ describe('game HUD helpers', () => {
     expect(compass(0)).toBe('N');
     expect(compass(47)).toBe('NO');
     expect(compass(-90)).toBe('W');
+  });
+});
+
+describe('zone prompt keeps clear of the splash corner (ADR 0026, V2.8b phone report)', () => {
+  // 390 × 844 phone: full-width prompt at the bottom, splash + „© Quellen“ corner bottom right.
+  const corner = { left: 10, top: 660, right: 380, bottom: 834 };
+  it('lifts a full-width phone prompt above the corner', () => {
+    const prompt = { left: 10, top: 700, right: 380, bottom: 760 };
+    const lift = clearOf(prompt, corner, 844);
+    expect(lift).not.toBeNull();
+    expect(844 - lift!.bottom).toBeLessThanOrEqual(corner.top - 8); // prompt bottom edge sits above the corner
+  });
+  it('leaves a centred desktop prompt alone once the splash has collapsed', () => {
+    const collapsed = { left: 1435, top: 906, right: 1526, bottom: 950 };
+    expect(clearOf({ left: 600, top: 840, right: 936, bottom: 900 }, collapsed, 960)).toBeNull();
   });
 });

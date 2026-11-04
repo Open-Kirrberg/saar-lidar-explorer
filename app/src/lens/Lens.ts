@@ -17,7 +17,7 @@ import { tierAllows } from '../shell/tiers';
 import type { FeatureHost } from '../shell/types';
 import { GLOW_MAX } from '../terrain/TerrainMaterial';
 import { isTyping } from '../ui/keys';
-import { clearOf } from './layout';
+import { clearOf } from '../shell/layout';
 import { GLOW_MIN_SCORE, glowBound, glowCentre, glowPool, packGlow, pickGlow, selectGlow } from './glow';
 import { LENS_DURATION_S, LENS_OFF, advanceLens, lensMix, sameMix, setLensOn } from './lensState';
 import type { LensMix, LensState } from './lensState';

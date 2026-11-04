@@ -6,7 +6,7 @@ import { LENS_DURATION_S, LENS_OFF, advanceLens, ease, lensMix, lensPhase, setLe
 import type { LensState } from '../src/lens/lensState';
 import { gameLookActive, gameLookKey } from '../src/lens/look';
 import { cardText, existingLensMarker, hypothesisTitle, merkenMarker, userNoteOf, withNote } from '../src/lens/merken';
-import { clearOf } from '../src/lens/layout';
+import { clearOf } from '../src/shell/layout';
 import { createLensTargets } from '../src/lens/targets';
 import { LENS_VARIANTS, pickVariant, resolveVariants } from '../src/lens/variants';
 import { loadMarkers, saveMarkers } from '../src/markers/markerStore';

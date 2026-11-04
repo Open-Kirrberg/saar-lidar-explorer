@@ -21,6 +21,7 @@ import type { Shortcut } from '../ui/shortcuts';
 import { registerBuiltins } from './builtins';
 import { openDialog } from './dialog';
 import { openKeysDialog, openSettingsDialog, openShareDialog } from './dialogs';
+import { clearOf } from './layout';
 import { ICONS, createToast, deviceEnv, el } from './dom';
 import { MOVE_LABELS, WALK_EYE, WALK_PITCH, WALK_SPEED, fmtSpeedMult, stepSpeed, walkY } from './flight';
 import type { MoveMode } from './flight';
@@ -393,8 +394,21 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
     const box = el('div', { class: 'sle-prompt', role: 'status' }, el('span', { text: o.text }), btn);
     promptEl = box;
     overlaySlot.appendChild(box);
+    // ADR 0026: the splash + „© Quellen“ corner is never covered. On phones the prompt spans the width, so
+    // lift it above the corner, and re-place it when the splash collapses or the viewport changes.
+    const place = () => {
+      box.style.bottom = '';
+      const lift = clearOf(box.getBoundingClientRect(), corner.getBoundingClientRect(), window.innerHeight);
+      if (lift) box.style.bottom = `${lift.bottom}px`;
+    };
+    place();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
+    ro?.observe(corner);
+    window.addEventListener('resize', place);
     return {
       close: () => {
+        ro?.disconnect();
+        window.removeEventListener('resize', place);
         box.remove();
         if (promptEl === box) promptEl = null;
       },
