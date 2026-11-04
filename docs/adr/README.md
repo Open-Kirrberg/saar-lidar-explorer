@@ -36,7 +36,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0023](0023-multiplayer-trystero-v4.md) | Multiplayer via Trystero in v4 | Accepted | 2026-11-04 | |
 | [0024](0024-rebuild-shell-keep-core.md) | Rebuild the shell, keep the core | Accepted | 2026-11-04 | |
 | [0026](0026-collapsed-attribution.md) | Collapsed attribution behind „© Quellen“ | Proposed | 2026-11-04 | (would: footer rule of 0013) |
-| [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh or Gaussian splats | Proposed | 2026-11-04 | |
+| [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh first, splats later | Accepted | 2026-11-04 | |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 
