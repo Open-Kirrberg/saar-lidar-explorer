@@ -31,18 +31,29 @@ export interface TerrainMeta {
    * The zone package (scripts/export-zone.ts) ships 1789 only: no dtm2025 / ground2025.
    */
   files: { dtm2025?: string; dtm1789: string; ground: string; ground2025?: string };
-  /** Absent = float32 little-endian heights. The zone package quantises dtm1789 (h = offset + v · scale). */
-  encoding?: { dtm1789?: HeightEncoding };
+  /**
+   * Absent = float32 little-endian heights and raw ground bytes. The zone package quantises dtm1789
+   * (h = offset + v · scale), stores gradient residuals and deflates both files.
+   */
+  encoding?: { dtm1789?: HeightEncoding; ground?: { compression?: 'deflate' } };
+  /** File sizes as stored (zone package): the loading progress when the server sends no Content-Length. */
+  bytes?: { dtm1789?: number; ground?: number };
   attribution: string;
   h_range: [number, number];
 }
 
-/** uint16 heights: h = offset + v · scale; v = nodata → NaN. */
+/**
+ * uint16 heights: h = offset + v · scale; v = nodata → NaN. `predictor: 'gradient'`: the file holds
+ * r = v − (left + up − upLeft) mod 2¹⁶ (outside the grid = 0; scripts/zone/package.ts gradientResidual).
+ * `compression: 'deflate'`: the file is a zlib stream (loadTerrain inflates it while it downloads).
+ */
 export interface HeightEncoding {
   dtype: 'uint16';
   offset: number;
   scale: number;
   nodata: number;
+  predictor?: 'gradient';
+  compression?: 'deflate';
 }
 
 export type TerrainEpoch = '1789' | '2025';
@@ -97,25 +108,73 @@ export class TerrainData {
   }
 }
 
-/** Height grid from its file bytes: float32 (no encoding) or uint16 per `enc`; checks the cell count. */
-export function decodeHeights(buf: ArrayBuffer, cells: number, enc?: HeightEncoding): Float32Array {
+/**
+ * Height grid from its (inflated) file bytes: float32 (no encoding) or uint16 per `enc`, with the gradient predictor
+ * undone row by row (`cols` = grid columns); checks the cell count.
+ */
+export function decodeHeights(buf: ArrayBuffer, cells: number, enc?: HeightEncoding, cols = cells): Float32Array {
   if (!enc) {
     if (buf.byteLength !== cells * 4) throw new Error(`terrain: float32 grid has ${buf.byteLength} B, expected ${cells * 4}`);
     return new Float32Array(buf);
   }
-  if (enc.dtype !== 'uint16' || !Number.isFinite(enc.offset) || !(enc.scale > 0)) throw new Error(`terrain: unsupported height encoding ${JSON.stringify(enc)}`);
+  if (enc.dtype !== 'uint16' || !Number.isFinite(enc.offset) || !(enc.scale > 0) || (enc.predictor !== undefined && enc.predictor !== 'gradient')) {
+    throw new Error(`terrain: unsupported height encoding ${JSON.stringify(enc)}`);
+  }
   if (buf.byteLength !== cells * 2) throw new Error(`terrain: uint16 grid has ${buf.byteLength} B, expected ${cells * 2}`);
   const v = new Uint16Array(buf);
+  if (enc.predictor === 'gradient') {
+    if (!(cols > 0) || cells % cols) throw new Error(`terrain: ${cells} cells are not rows of ${cols}`);
+    // in place: v[i] = r + left + up − upLeft (mod 2¹⁶ by the Uint16Array store); the left/up cells are already restored
+    for (let c = 1; c < cols; c++) v[c] += v[c - 1];
+    for (let i0 = cols; i0 < cells; i0 += cols) {
+      v[i0] += v[i0 - cols];
+      for (let i = i0 + 1, end = i0 + cols; i < end; i++) v[i] += v[i - 1] + v[i - cols] - v[i - cols - 1];
+    }
+  }
   const h = new Float32Array(cells);
   for (let i = 0; i < cells; i++) h[i] = v[i] === enc.nodata ? NaN : enc.offset + v[i] * enc.scale;
   return h;
+}
+
+/** A response body as bytes, counted per network chunk (`onChunk`), inflated on the fly if `deflate`. */
+async function readBody(r: Response, deflate: boolean, onChunk: (bytes: number) => void): Promise<ArrayBuffer> {
+  if (!r.body) {
+    const b = await r.arrayBuffer();
+    onChunk(b.byteLength);
+    return deflate ? new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer() : b;
+  }
+  const counted = r.body.pipeThrough(
+    new TransformStream<Uint8Array<ArrayBuffer>, Uint8Array<ArrayBuffer>>({
+      transform(chunk, out) {
+        onChunk(chunk.byteLength);
+        out.enqueue(chunk);
+      },
+    }),
+  );
+  return new Response(deflate ? counted.pipeThrough(new DecompressionStream('deflate')) : counted).arrayBuffer();
+}
+
+const mbDe = (b: number): string => (b / 1e6).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** Loading-screen step of the terrain download: 0.05 → 0.25 by bytes, German label; null while the size is unknown. */
+export function terrainProgress(loaded: number, total: number): { label: string; fraction: number } | null {
+  if (!(total > 0)) return null;
+  const f = Math.min(1, Math.max(0, loaded / total));
+  return { label: `Lade Gelände … ${mbDe(loaded)} von ${mbDe(total)} MB`, fraction: 0.05 + 0.2 * f };
+}
+
+export interface LoadTerrainOptions {
+  signal?: AbortSignal;
+  with2025?: boolean;
+  /** Download progress of the grids (after meta.json): bytes so far and in total (meta `bytes` or Content-Length; 0 = unknown). */
+  onBytes?: (loaded: number, total: number) => void;
 }
 
 /**
  * Terrain of the viewer (viewer/public/terrain/) or of the zone package (<zone>/terrain/). Loads 1789 only unless
  * `with2025` (the 2025 grids then stand in for themselves, else h2025 / ground2025 = the 1789 arrays).
  */
-export async function loadTerrain(base = './terrain/', opts: { signal?: AbortSignal; with2025?: boolean } = {}): Promise<TerrainData> {
+export async function loadTerrain(base = './terrain/', opts: LoadTerrainOptions = {}): Promise<TerrainData> {
   const get = async (file: string): Promise<Response> => {
     const r = await fetch(`${base}${file}`, { signal: opts.signal });
     if (!r.ok) throw new Error(`terrain: ${base}${file} → HTTP ${r.status}`);
@@ -125,10 +184,29 @@ export async function loadTerrain(base = './terrain/', opts: { signal?: AbortSig
   const f = meta.files;
   const want2025 = opts.with2025 === true;
   if (want2025 && !f.dtm2025) throw new Error(`terrain: ${base}meta.json has no dtm2025 (zone package = 1789 only)`);
-  const buf = (file: string | undefined): Promise<ArrayBuffer | null> => (file ? get(file).then((r) => r.arrayBuffer()) : Promise.resolve(null));
-  const [a, b, c, d] = await Promise.all([buf(f.dtm1789), buf(want2025 ? f.dtm2025 : undefined), buf(f.ground), buf(want2025 ? f.ground2025 : undefined)]);
+  const known = meta.bytes ?? {};
+  let loaded = 0;
+  // known sizes count from the start (no jump when a second header arrives); others add their Content-Length
+  let total = (known.dtm1789 ?? 0) + (known.ground ?? 0);
+  const report = () => opts.onBytes?.(loaded, Math.max(total, loaded));
+  const buf = async (file: string | undefined, deflate = false, size?: number): Promise<ArrayBuffer | null> => {
+    if (!file) return null;
+    const r = await get(file);
+    if (size === undefined) total += Number(r.headers.get('content-length')) || 0;
+    report();
+    return readBody(r, deflate, (n) => {
+      loaded += n;
+      report();
+    });
+  };
+  const [a, b, c, d] = await Promise.all([
+    buf(f.dtm1789, meta.encoding?.dtm1789?.compression === 'deflate', known.dtm1789),
+    buf(want2025 ? f.dtm2025 : undefined),
+    buf(f.ground, meta.encoding?.ground?.compression === 'deflate', known.ground),
+    buf(want2025 ? f.ground2025 : undefined),
+  ]);
   const cells = meta.grid.cols * meta.grid.rows;
-  const h1789 = decodeHeights(a!, cells, meta.encoding?.dtm1789);
+  const h1789 = decodeHeights(a!, cells, meta.encoding?.dtm1789, meta.grid.cols);
   const g1789 = new Uint8Array(c!);
   return new TerrainData(meta, h1789, b ? decodeHeights(b, cells) : h1789, g1789, d ? new Uint8Array(d) : g1789);
 }
@@ -1173,22 +1251,5 @@ export class TerrainMesh {
       ch.step = 0;
     }
     if (this.prepass) this.buildDepth();
-  }
-
-  /** Full-resolution meshes around a point (for walk-mode collision). */
-  colliderAround(x: number, z: number, radius = 192): THREE.Mesh[] {
-    const out: THREE.Mesh[] = [];
-    for (const ch of this.chunks) {
-      if (Math.abs(ch.centre.x - x) > radius + CHUNK / 2 || Math.abs(ch.centre.z - z) > radius + CHUNK / 2) continue;
-      let geo = ch.cache.get(1);
-      if (!geo) {
-        geo = this.geometry(ch.r0, ch.c0, 1);
-        ch.cache.set(1, geo);
-      }
-      const m = new THREE.Mesh(geo);
-      m.name = `terrain-collider/${ch.r0}_${ch.c0}`;
-      out.push(m);
-    }
-    return out;
   }
 }

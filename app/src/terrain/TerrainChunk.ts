@@ -144,6 +144,11 @@ export class TerrainChunk {
   lowpassMask = 0;
   /** Selection frame this chunk was last needed (LRU). */
   lastUsed = 0;
+  /**
+   * Image px per chunk side the view needs (perf pass, imageRes.ts), set by Terrain.update() for
+   * drawn and wanted chunks; Infinity (= native size) until the first selection saw this chunk.
+   */
+  imageNeedPx = Infinity;
 
   constructor(
     readonly level: number,
@@ -313,6 +318,11 @@ export class TerrainChunk {
     this.layerApronMask.set(key, mask);
   }
 
+  /** Side (m) of the area one chunk image covers (chunkSize cells, also on clamped edge chunks). */
+  get spanM(): number {
+    return this.grid.chunkSize * this.cellSize;
+  }
+
   /** Edges / size / apron mask of resident image layer `key`. */
   imageInfo(key: string): { size: number; edges: ImageEdges; mask: number } | undefined {
     return this.images.get(key);
@@ -449,11 +459,17 @@ export class TerrainChunk {
     this.uniforms.uHasLowpass.value = 0;
   }
 
+  /** Estimated GPU bytes of this chunk's resident `rgb` image textures. */
+  imageGpuBytes(): number {
+    let b = 0;
+    for (const v of this.imageBytes.values()) b += v;
+    return b;
+  }
+
   /** Estimated GPU bytes of this chunk's textures. */
   gpuBytes(): number {
     const side = heightImageSize(this.grid);
-    let extra = 0;
-    for (const b of this.imageBytes.values()) extra += b;
+    const extra = this.imageGpuBytes();
     return chunkGpuBytes({
       heightSide: side,
       layerSide: this.grid.chunkSize + 2,

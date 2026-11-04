@@ -514,12 +514,15 @@ Paths are written with the level number substituted (`levels/2/dtm/{i}_{j}.png`)
 | relief layer, each resident | 500² × R8 | 250 000 ≈ 0.24 MiB |
 | `rgb` image layer, 1000 px (level-0 `ortho`) | 1000² × RGBA8 (+⅓ mipmaps) | 4 000 000 (≈ 5.3 MB with mips) ≈ 3.8 MiB |
 | `rgb` image layer, 500 px (historic maps, coarse levels) | 500² × RGBA8 (+⅓ mipmaps) | 1 000 000 (≈ 1.3 MB with mips) ≈ 0.95 MiB |
+| `rgb` image layer, 250 / 125 px (decode tiers, see below) | 250² / 125² × RGBA8 (+⅓ mipmaps) | ≈ 0.34 / 0.09 MB with mips |
 | `bldg` mask (level 0, with canopy) | 500² × R8 | 250 000 ≈ 0.24 MiB |
 | building mesh (per chunk with buildings) | vertex buffers, ≈ 25 B/vertex | typically 0.1–2 MB |
 | per-chunk low-pass for live local relief (only while it is shown) | ≈ 502² × R32F | ≈ 0.96 MiB |
 | geometry | shared per LOD spacing, not per chunk | ≈ 0 |
 
 Typical chunk (DTM + 2 resident layers) ≈ **1.5 MB**, with canopy ≈ 2.5 MB, worst case (all 9 level-0 layers + DSM + low-pass) ≈ 5.3 MB. No mipmaps (data textures use Nearest/Linear without mips). The JS heap keeps a ~1 MB Float32 copy of each height texture (HeightQuery, skirts). Overall AOI, everything resident: level 0 ≈ 290 MB (≈ 480 MB with canopy), levels 1–4 (65 chunks) ≈ 100 MB — far below the 1.5 GB acceptance bound. The app still enforces an explicit budget so larger AOIs stay bounded: 600 MiB soft (hard cap 1400 MiB), LRU eviction, coarsest level pinned (`app/src/terrain/budget.ts`); measured peak on an overall flight 382.6 MB.
+
+**Image decode tiers (perf pass).** The files stay at `pixelsPerChunk` (no data change); the app decodes each chunk's `rgb` image at the smallest of P₀, P₀/2, P₀/4 … (≥ 125 px) that still gives ≥ 1 texel per CSS pixel at the chunk's nearest point (`createImageBitmap` resize, `app/src/terrain/imageRes.ts`), re-decodes it when the camera approaches (up) or recedes (down, 20 % band), and under budget pressure halves image detail once before the mesh is coarsened. Byte accounting uses the decoded size. The 1-texel apron is built from neighbour edges resampled to the chunk's own tier, so chunks at different tiers stay seamless.
 
 ## 🌳 Trees (`trees`, optional, V2.4)
 

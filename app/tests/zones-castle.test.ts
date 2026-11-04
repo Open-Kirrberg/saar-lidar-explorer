@@ -30,10 +30,9 @@ function distToEdge([E, N]: EN, ring: readonly EN[]): number {
 describe('zones/schloss-karlsberg/zone.json', () => {
   const m = parseZoneManifest(raw, { modules }).value!;
 
-  it('passes the strict validator with the castle module registered (triangles: ADR 0033 waiver only)', () => {
-    // ADR 0033: garden crowns put ~3.6 M triangles in view; fenced by TRIANGLES_WAIVER in the castle's package.ts
-    expect(validateZoneStrict(raw, { modules }).filter((p) => !p.startsWith('budget.triangles '))).toEqual([]);
-    expect(m.budget!.triangles).toBeLessThanOrEqual(3_700_000);
+  it('passes the strict validator with the castle module registered (ADR 0040: no triangle waiver)', () => {
+    expect(validateZoneStrict(raw, { modules })).toEqual([]);
+    expect(m.budget!.triangles).toBeLessThanOrEqual(1_500_000);
     expect(m.runtime).toEqual({ kind: 'module', module: 'schloss-karlsberg' });
     expect(m.kind).toBe('reconstructed');
     expect(m.evidence.kind).toBe('hypothesis');

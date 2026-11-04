@@ -9,6 +9,7 @@
  */
 import { DataTexture, RGBAFormat, UnsignedByteType, Vector2 } from 'three';
 import type { Texture, WebGLRenderer } from 'three';
+import { resampleStrip } from './imageRes';
 import { opposite, SIDE_BIT, SIDE_OFFSET, SIDES } from './imageSides';
 import type { Side } from './imageSides';
 
@@ -26,8 +27,8 @@ export interface ImageEdges {
 
 /**
  * Compose the (P+2)² apron canvas of `bmp` (P × P). `neighbour(side)` returns the edges of the
- * same-level neighbour on that side (same P), or undefined (→ own edge). Returns the canvas, the
- * image's own edges and the mask (SIDE_BIT) of neighbours used.
+ * same-level neighbour on that side (any decode tier: resampled to P, imageRes.ts), or undefined
+ * (→ own edge). Returns the canvas, the image's own edges and the mask (SIDE_BIT) of neighbours used.
  */
 export function composeImageApron(
   bmp: ImageBitmap,
@@ -44,9 +45,9 @@ export function composeImageApron(
   let mask = 0;
   const strip = (side: Side): Uint8ClampedArray => {
     const nb = neighbour(side);
-    if (nb && nb.size === P) {
+    if (nb) {
       mask |= SIDE_BIT[side];
-      return nb[opposite(side)];
+      return resampleStrip(nb[opposite(side)], nb.size, P);
     }
     return edges[side];
   };

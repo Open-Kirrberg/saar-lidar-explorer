@@ -8,7 +8,8 @@ import { loadSite } from '@model/catalogue.ts';
 import { DEFAULT_BUILD_OPTIONS, makeLayoutFn } from '@model/context.ts';
 import { EYE } from '../src/controls.ts';
 import { STAR_ATTRIBUTION } from '../src/starCatalogue.ts';
-import { decodeHeights, loadTerrain } from '../src/terrain.ts';
+import { deflateSync } from 'node:zlib';
+import { decodeHeights, loadTerrain, terrainProgress } from '../src/terrain.ts';
 import { CASTLE_CROP, CASTLE_FOOTPRINT, ENTRY_COURT_ID, PORTAL_RADIUS_M, WALK_EYE_M, castleEntry, castleFootprint, round1 } from '../../scripts/zone/castle.ts';
 import { type EN, type FootprintGeom, distToRing, inCrop, pointInRing, ringIsSimple, signedArea, zoneFootprint } from '../../scripts/zone/footprint.ts';
 import {
@@ -17,10 +18,11 @@ import {
   computeBudget,
   decodeU16,
   encodeU16,
+  gradientResidual,
   mergeZoneIndex,
   packageTerrainMeta,
   textureGpuBytes,
-  TRIANGLES_WAIVER,
+  DECLARED_TRIANGLES,
   u16LE,
   zoneBbox,
 } from '../../scripts/zone/package.ts';
@@ -98,6 +100,36 @@ describe('terrain u16', () => {
     }
   });
 
+  it('gradient residuals invert exactly (wrap-around, nodata, edges) and shrink a smooth grid under deflate', () => {
+    const cols = 37;
+    const rows = 23;
+    const v = new Uint16Array(cols * rows);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) v[r * cols + c] = 30000 + r * 7 + c * 3 + ((r * c) % 5);
+    v[0] = 0;
+    v[5] = 65534;
+    for (let i = 100; i < 140; i++) v[i] = 65535; // nodata run
+    const res = gradientResidual(v, cols, rows);
+    const enc = { dtype: 'uint16' as const, offset: 100, scale: 0.01, nodata: 65535, predictor: 'gradient' as const };
+    const back = decodeHeights(u16LE(res).buffer as ArrayBuffer, v.length, enc, cols);
+    for (let i = 0; i < v.length; i++) {
+      if (v[i] === 65535) expect(Number.isNaN(back[i])).toBe(true);
+      else expect(back[i]).toBeCloseTo(100 + v[i]! * 0.01, 3);
+    }
+    expect(() => gradientResidual(v, cols, rows + 1)).toThrow(/expected/);
+    expect(() => decodeHeights(u16LE(res).buffer as ArrayBuffer, v.length, enc, 40)).toThrow(/rows of 40/);
+    // a plane: residuals are 0 except the first row / column → deflate packs it far below the raw steps
+    const plane = new Uint16Array(256 * 256);
+    for (let r = 0; r < 256; r++) for (let c = 0; c < 256; c++) plane[r * 256 + c] = 20000 + 13 * r + 29 * c;
+    expect(deflateSync(u16LE(gradientResidual(plane, 256, 256))).length).toBeLessThan(deflateSync(u16LE(plane)).length / 10);
+  });
+
+  it('terrain download progress: 0.05 → 0.25 by bytes, German label, nothing while the size is unknown', () => {
+    expect(terrainProgress(10, 0)).toBeNull();
+    expect(terrainProgress(0, 2_600_000)).toEqual({ label: 'Lade Gelände … 0,0 von 2,6 MB', fraction: 0.05 });
+    expect(terrainProgress(1_300_000, 2_600_000)!.fraction).toBeCloseTo(0.15, 6);
+    expect(terrainProgress(9e6, 2_600_000)!.fraction).toBe(0.25);
+  });
+
   it('refuses ranges that do not fit and wrong file sizes', () => {
     expect(() => encodeU16(Float32Array.from([0, 700]))).toThrow(/does not fit/);
     expect(() => decodeHeights(new ArrayBuffer(10), 6, { dtype: 'uint16', offset: 0, scale: 0.01, nodata: 65535 })).toThrow(/expected 12/);
@@ -110,11 +142,15 @@ describe('terrain u16', () => {
       ground: { cols: 1, rows: 1, counts: {}, counts2025: {}, tag: '1789 (ground.u8): x; 2025 (ground2025.u8): y' },
       files: { dtm2025: 'dtm2025.f32', dtm1789: 'dtm1789.f32', ground: 'ground.u8', ground2025: 'ground2025.u8' },
     };
-    const m = packageTerrainMeta(dev, encodeU16(h).enc, [240.084, 365.823]) as typeof dev & { encoding: unknown; h_range: unknown };
-    expect(m.files).toEqual({ dtm1789: 'dtm1789.u16', ground: 'ground.u8' });
+    const m = packageTerrainMeta(dev, encodeU16(h).enc, [240.084, 365.823], { dtm1789: 123, ground: 45 }) as typeof dev & { encoding: unknown; bytes: unknown; h_range: unknown };
+    expect(m.files).toEqual({ dtm1789: 'dtm1789.u16.deflate', ground: 'ground.u8.deflate' });
     expect(m.ground).not.toHaveProperty('counts2025');
     expect(m.ground.tag).toBe('1789 (ground.u8): x');
-    expect(m.encoding).toEqual({ dtm1789: { dtype: 'uint16', offset: 240, scale: 0.01, nodata: 65535 } });
+    expect(m.encoding).toEqual({
+      dtm1789: { dtype: 'uint16', offset: 240, scale: 0.01, nodata: 65535, predictor: 'gradient', compression: 'deflate' },
+      ground: { compression: 'deflate' },
+    });
+    expect(m.bytes).toEqual({ dtm1789: 123, ground: 45 });
     expect(dev.files).toHaveProperty('dtm2025'); // input untouched
   });
 });
@@ -133,6 +169,31 @@ describe('loadTerrain', () => {
     });
     return urls;
   };
+
+  it('loads the deflated gradient package, streaming the byte progress', async () => {
+    const { data, enc } = encodeU16(heights);
+    const dtm = deflateSync(u16LE(gradientResidual(data, 3, 2)));
+    const gz = deflateSync(ground);
+    const meta = {
+      grid,
+      ground: { cell: 1, cols: 3, rows: 2, classes: {} },
+      files: { dtm1789: 'dtm1789.u16.deflate', ground: 'ground.u8.deflate' },
+      encoding: { dtm1789: { ...enc, predictor: 'gradient', compression: 'deflate' }, ground: { compression: 'deflate' } },
+      bytes: { dtm1789: dtm.length, ground: gz.length },
+      attribution: '',
+      h_range: [250, 260],
+    };
+    serve({ 'meta.json': JSON.stringify(meta), 'dtm1789.u16.deflate': dtm, 'ground.u8.deflate': gz });
+    const seen: [number, number][] = [];
+    const t = await loadTerrain('/z/', { onBytes: (l, tot) => seen.push([l, tot]) });
+    expect(t.h1789[0]).toBeCloseTo(250, 4);
+    expect(t.h1789[3]).toBeCloseTo(252.25, 4);
+    expect(Number.isNaN(t.h1789[4])).toBe(true);
+    expect(t.h1789[5]).toBeCloseTo(260, 4);
+    expect([...t.ground1789]).toEqual([...ground]);
+    expect(seen.at(-1)).toEqual([dtm.length + gz.length, dtm.length + gz.length]);
+    for (const [l, tot] of seen) expect(l).toBeLessThanOrEqual(tot);
+  });
 
   it('loads the quantised package without fetching 2025 grids', async () => {
     const { data, enc } = encodeU16(heights);
@@ -209,16 +270,10 @@ describe('budget', () => {
     expect(budgetProblems(BUDGET_LIMITS, 1_500_000)).toEqual([]);
   });
 
-  it('the committed zone.json declares a budget within the limits, triangles only under the ADR 0033 waiver', () => {
-    expect(budgetProblems(zone.budget, 0, TRIANGLES_WAIVER)).toEqual([]);
-    expect(budgetProblems(zone.budget, 0).every((p) => p.startsWith('budget.triangles '))).toBe(true);
-  });
-
-  it('the triangle waiver only lifts the triangle limit, up to its ceiling', () => {
-    const at = { ...BUDGET_LIMITS, triangles: TRIANGLES_WAIVER };
-    expect(budgetProblems(at, 0, TRIANGLES_WAIVER)).toEqual([]);
-    expect(budgetProblems({ ...at, triangles: TRIANGLES_WAIVER + 1 }, 0, TRIANGLES_WAIVER)).toHaveLength(1);
-    expect(budgetProblems({ ...at, totalBytes: 120_000_001 }, 0, TRIANGLES_WAIVER)).toEqual(['budget.totalBytes 120000001 > 120000000']);
+  it('the committed zone.json declares a budget within the contract limits, triangles included (ADR 0040: no waiver)', () => {
+    expect(budgetProblems(zone.budget, 0)).toEqual([]);
+    expect(zone.budget.triangles).toBe(DECLARED_TRIANGLES);
+    expect(DECLARED_TRIANGLES).toBeLessThanOrEqual(BUDGET_LIMITS.triangles);
   });
 });
 

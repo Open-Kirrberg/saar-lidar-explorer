@@ -5,21 +5,35 @@
 //   pnpm run build && pnpm exec vite preview --port 5242 --strictPort &   # serves dist + public/data
 //   pnpm run perf:zone -- [--url 'http://127.0.0.1:5242/?aoi=karlsberg'] [--zone schloss-karlsberg]
 //                         [--goto KB-B01/B01.2.og-festsaal] [--profiles phone,desktop] [--sample-ms 5000] [--profile]
+//                         [--runs 3] [--shots-dir perf-pass] [--sweep-s 70]
+//
+// Perf pass additions: `--runs N` repeats the whole cold run and prints medians; the Rundflug is swept in 0.5 s steps
+// (`--sweep-s`) for the peak triangles in view; after the goto, frames > 50 / > 100 ms are counted (first-visit hitch);
+// bytes fetched during the cold enter are summed (CDP encodedDataLength); the host's load average goes with every run.
 //
 // Headless Chrome only (puppeteer-core + system Chrome): never a visible window on the desktop. Headless
 // frame pacing is not a phone's — the numbers are a proxy, and the GL renderer is printed so a software
 // fallback is obvious. Writes JSON + JPEGs to the git-ignored docs/shots/ and prints a Markdown table.
 // Never part of the production bundle (scripts/ is not imported by src/).
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
-const SHOTS = join(ROOT, 'docs', 'shots');
 const args = process.argv.slice(2);
 const opt = (name, def) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : def;
+};
+const SHOTS = join(ROOT, 'docs', 'shots');
+const SHOT_DIR = opt('shots-dir', 'v2.7');
+const RUNS = Number(opt('runs', 1));
+const SWEEP_S = Number(opt('sweep-s', 70));
+const load = () => loadavg().map((x) => Math.round(x * 100) / 100);
+const median = (xs) => {
+  const s = xs.filter((x) => x != null && !Number.isNaN(x)).sort((a, b) => a - b);
+  return s.length ? s[Math.floor((s.length - 1) / 2)] : null;
 };
 const URL_ = opt('url', 'http://127.0.0.1:5242/?aoi=karlsberg');
 const ZONE = opt('zone', 'schloss-karlsberg');
@@ -66,13 +80,19 @@ const rafSample = (page, ms) =>
           else {
             dts.shift();
             const s = [...dts].sort((a, b) => a - b);
-            resolve({ fps: (dts.length * 1000) / (t - t0), p50: s[Math.floor(s.length * 0.5)], p95: s[Math.floor(s.length * 0.95)], max: s.at(-1) ?? null });
+            resolve({ fps: (dts.length * 1000) / (t - t0), p50: s[Math.floor(s.length * 0.5)], p95: s[Math.floor(s.length * 0.95)], max: s.at(-1) ?? null, long50: dts.filter((d) => d > 50).length, long100: dts.filter((d) => d > 100).length });
           }
         };
         requestAnimationFrame(tick);
       }),
     ms,
   );
+
+/**
+ * The castle's review clock (KB-I64, clock.ts): after `step`/`goto` hooks the zone holds its frames until the next user
+ * input, so a later rAF window would time an idle canvas. A synthetic keydown with no key hands the frames back.
+ */
+const release = (page) => page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Unidentified' })));
 
 /** Synchronous frame cost via the frame owner (`sle.step` drives the zone) + 1-pixel readback; then counters. */
 const frameStats = (page) =>
@@ -117,11 +137,14 @@ function topSelf(profile, n = 15) {
   return [...by].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, ms]) => `${Math.round(ms)} ms  ${k}`);
 }
 
-async function runProfile(browser, id) {
+async function runProfile(browser, id, run = 0) {
   const p = PROFILES[id];
+  const loadBefore = load();
   const page = await browser.newPage();
   const cdp = await page.createCDPSession();
   await cdp.send('Network.enable');
+  let bytes = 0; // encoded bytes over the wire, all requests of this page
+  cdp.on('Network.loadingFinished', (e) => (bytes += e.encodedDataLength ?? 0));
   await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
   await page.emulate({
     viewport: { width: p.width, height: p.height, deviceScaleFactor: p.dpr, isMobile: p.mobile, hasTouch: p.mobile },
@@ -158,20 +181,50 @@ async function runProfile(browser, id) {
 
   // Enter through the runtime (portal flow without the walk to the portal): cold, cache disabled.
   const t0 = Date.now();
+  const bytes0 = bytes;
   await page.evaluate((zone) => window.sle.zones.enter(zone), ZONE);
   const enterMs = Date.now() - t0;
+  const enterMB = (bytes - bytes0) / 1e6;
   const views = [];
   const sample = async (view, walk = false) => {
     if (walk) await page.keyboard.down('KeyW');
     const raf = await rafSample(page, SAMPLE_MS);
     if (walk) await page.keyboard.up('KeyW');
     const stats = await frameStats(page);
-    const shot = join(SHOTS, 'v2.7', `perf-zone-${id}-${view}.jpg`);
+    if (view !== 'rundflug') await release(page); // any key ends the Rundflug: keep it playing for the sweep
+    const shot = join(SHOTS, SHOT_DIR, `perf-zone-${id}-${view}${RUNS > 1 ? `-r${run}` : ''}.jpg`);
     await page.screenshot({ path: shot, type: 'jpeg', quality: 70 });
     views.push({ view, raf, ...stats, shot });
   };
 
   await sample('rundflug');
+  // Peak triangles in view over the rest of the Rundflug: fixed 0.5 s steps (the tour ends at the spawn by itself).
+  const sweep = await page.evaluate((seconds) => {
+    const h = window.sle.zones.flow.handle();
+    // ADR 0033 / export-zone measure: `inView()` = submitted triangles of visible meshes in the camera frustum (no shadow
+    // pass); `rendered` (renderer.info) also counts the shadow and post passes of that frame.
+    const inView = h.hooks.inView;
+    let max = 0;
+    let maxRendered = 0;
+    let maxCalls = 0;
+    let at = 0;
+    const t0 = performance.now();
+    let worstStep = 0;
+    for (let i = 0; i < seconds * 2; i++) {
+      const ts = performance.now();
+      h.step(1, 0.5);
+      worstStep = Math.max(worstStep, performance.now() - ts);
+      const t = typeof inView === 'function' ? inView().triangles : window.sle.renderer.info.render.triangles;
+      if (t > max) {
+        max = t;
+        at = i / 2;
+      }
+      maxRendered = Math.max(maxRendered, window.sle.renderer.info.render.triangles);
+      maxCalls = Math.max(maxCalls, window.sle.renderer.info.render.calls);
+    }
+    return { maxTriangles: max, maxRendered, atS: at, maxCalls, worstStepMs: worstStep, sweepMs: performance.now() - t0 };
+  }, SWEEP_S);
+  await release(page);
   await page.keyboard.press('KeyW'); // any input ends the Rundflug and lands at the spawn
   await sleep(500);
   await sample('spawn');
@@ -191,6 +244,7 @@ async function runProfile(browser, id) {
     window.sle.renderer.getContext().readPixels(0, 0, 1, 1, 0x1908, 0x1401, new Uint8Array(4));
     return performance.now() - t;
   });
+  await release(page); // goto + step hold the frames: the 3 s after the goto must be real wall-clock frames
   const settle = await rafSample(page, 3000);
   const hot = PROFILE ? topSelf((await cdp.send('Profiler.stop')).profile) : null;
   const walkFrom = await page.evaluate(() => window.sle.zones.flow.handle().hooks.zonePose());
@@ -202,7 +256,7 @@ async function runProfile(browser, id) {
   await sleep(300);
   const after = await page.evaluate(() => window.sle.zones.state());
   await page.close();
-  return { profile: id, ...p, env, software, enterMs, gotoOk, gotoMs, firstFrameMs, settle, hot, walkedM, stateAfterExit: after, views, errors };
+  return { profile: id, run, ...p, loadBefore, loadAfter: load(), env, software, enterMs, enterMB, gotoOk, gotoMs, firstFrameMs, settle, sweep, hot, walkedM, stateAfterExit: after, views, errors };
 }
 
 const browser = await puppeteer.launch({
@@ -211,15 +265,15 @@ const browser = await puppeteer.launch({
   defaultViewport: null,
   args: ['--enable-precise-memory-info', '--no-first-run'],
 });
-mkdirSync(join(SHOTS, 'v2.7'), { recursive: true });
+mkdirSync(join(SHOTS, SHOT_DIR), { recursive: true });
 const results = [];
 try {
-  for (const id of PROFILE_IDS) results.push(await runProfile(browser, id));
+  for (let run = 0; run < RUNS; run++) for (const id of PROFILE_IDS) results.push(await runProfile(browser, id, run));
 } finally {
   await browser.close();
 }
 
-const out = join(SHOTS, `perf-zone-${ZONE}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`);
+const out = join(SHOTS, SHOT_DIR, `perf-zone-${ZONE}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`);
 writeFileSync(out, JSON.stringify({ url: URL_, zone: ZONE, goto: GOTO, date: new Date().toISOString(), results }, null, 2));
 
 console.log(`\n| Profile | View | rAF fps (p95, max ms) | step ms | JS heap MB | triangles | calls | quality |`);
@@ -231,8 +285,20 @@ for (const r of results) {
   }
 }
 for (const r of results) {
-  console.log(`\n${r.label}: enter ${r1(r.enterMs / 1000)} s; goto ${GOTO} ${r.gotoOk ? 'ok' : 'FAILED'} in ${r1(r.gotoMs / 1000)} s, first frame there ${r1(r.firstFrameMs)} ms, next 3 s ${r1(r.settle?.fps)} fps (max ${r1(r.settle?.max)} ms); walked ${r1(r.walkedM)} m; after exit: ${r.stateAfterExit}; GL "${r.env.glRenderer}"${r.software ? ' ⚠️ SOFTWARE (fps invalid)' : ''}; ${r.env.visibility}; buffer ${r.env.drawingBuffer}; errors ${r.errors.length}`);
+  console.log(`\n${r.label} run ${r.run} (load ${r.loadBefore.join(' ')} → ${r.loadAfter.join(' ')}): enter ${r1(r.enterMs / 1000)} s / ${r1(r.enterMB)} MB; Rundflug sweep peak ${(r.sweep.maxTriangles / 1e6).toFixed(2)} M tris in view at +${r.sweep.atS} s (rendered incl. shadow ≤ ${(r.sweep.maxRendered / 1e6).toFixed(2)} M), ≤ ${r.sweep.maxCalls} calls, worst step ${r1(r.sweep.worstStepMs)} ms; after goto: ${r.settle?.long50 ?? '?'} frames > 50 ms, ${r.settle?.long100 ?? '?'} > 100 ms; goto ${GOTO} ${r.gotoOk ? 'ok' : 'FAILED'} in ${r1(r.gotoMs / 1000)} s, first frame there ${r1(r.firstFrameMs)} ms, next 3 s ${r1(r.settle?.fps)} fps (max ${r1(r.settle?.max)} ms); walked ${r1(r.walkedM)} m; after exit: ${r.stateAfterExit}; GL "${r.env.glRenderer}"${r.software ? ' ⚠️ SOFTWARE (fps invalid)' : ''}; ${r.env.visibility}; buffer ${r.env.drawingBuffer}; errors ${r.errors.length}`);
   for (const e of r.errors.slice(0, 5)) console.log(`  ! ${e.slice(0, 200)}`);
   if (r.hot) console.log(`  hot (goto + 3 s):\n    ${r.hot.join('\n    ')}`);
+}
+if (RUNS > 1) {
+  console.log(`\n**Medians over ${RUNS} runs**\n\n| Profile | View | rAF fps | p95 ms | max ms | step ms | triangles | calls |\n|---|---|---|---|---|---|---|---|`);
+  for (const id of PROFILE_IDS) {
+    const rs = results.filter((r) => r.profile === id);
+    for (const view of rs[0].views.map((v) => v.view)) {
+      const vs = rs.map((r) => r.views.find((v) => v.view === view));
+      console.log(`| ${id} | ${view} | ${r1(median(vs.map((v) => v.raf?.fps)))} | ${r1(median(vs.map((v) => v.raf?.p95)))} | ${r1(median(vs.map((v) => v.raf?.max)))} | ${r1(median(vs.map((v) => v.stepMs)))} | ${(median(vs.map((v) => v.triangles)) / 1e6).toFixed(2)} M | ${median(vs.map((v) => v.calls))} |`);
+    }
+    const m = (f) => r1(median(rs.map(f)));
+    console.log(`| ${id} | enter s / MB · goto s · first frame ms · after-goto max ms, >50, >100 · sweep peak M tris | ${m((r) => r.enterMs / 1000)} / ${m((r) => r.enterMB)} · ${m((r) => r.gotoMs / 1000)} · ${m((r) => r.firstFrameMs)} · ${m((r) => r.settle?.max)}, ${m((r) => r.settle?.long50)}, ${m((r) => r.settle?.long100)} · ${(median(rs.map((r) => r.sweep.maxTriangles)) / 1e6).toFixed(2)} | load ${rs.map((r) => r.loadBefore[0]).join(', ')} | | | | | |`);
+  }
 }
 console.log(`\nJSON: ${out}`);

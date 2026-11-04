@@ -35,6 +35,7 @@ import {
   rootNodes,
 } from './levels';
 import { composeImageApron, opposite, patchImageApron, SIDE_BIT, SIDE_OFFSET, SIDES } from './imageApron';
+import { imageTiers, resampleStrip, resizeTarget, screenPxPerMetre, tierFor } from './imageRes';
 import type { Side } from './imageApron';
 import { APRON_NEIGHBOURS, buildLayerApron } from './layerApron';
 import { selectNodes } from './quadtree';
@@ -88,6 +89,12 @@ export interface StreamingSettings {
   offscreenScale: number;
   /** DSM (canopy) is streamed for drawn level-0 chunks closer than this (m). */
   canopyDistance: number;
+  /**
+   * `rgb` image textures (ortho, historic maps) are decoded per chunk at the smallest tier
+   * (P₀, P₀/2, P₀/4 …) giving ≥ imageDetail texels per CSS pixel at the chunk's nearest point
+   * (imageRes.ts). 1 = default; Infinity = always native size (pre-perf-pass behaviour).
+   */
+  imageDetail: number;
 }
 
 export interface StreamStats {
@@ -95,6 +102,12 @@ export interface StreamStats {
   levels: Array<{ level: number; cellSize: number; resident: number; drawn: number }>;
   /** Estimated GPU MiB of resident chunk textures. */
   gpuMB: number;
+  /** … of those the selection keeps (drawn, ancestors, wanted) — what the budget logic compares. */
+  keptMB: number;
+  /** … of resident `rgb` image textures. */
+  imageMB: number;
+  /** Budget pressure factor on image detail (1 = by need; < 1 = images downgraded before the mesh coarsens). */
+  imageScale: number;
   budgetMB: number;
   /** Jobs waiting / running, and their sum. */
   queue: number;
@@ -188,6 +201,7 @@ export class Terrain extends Group {
     maxInFlight: 6,
     offscreenScale: 0.5,
     canopyDistance: 2000,
+    imageDetail: 1,
   };
   /** Holds the canopy meshes (child of the terrain, rendered after it). */
   readonly canopyGroup = new Group();
@@ -223,6 +237,10 @@ export class Terrain extends Group {
   private active = new Set<string>();
   private frame = 0;
   private effError = 1;
+  /** Budget pressure on image detail (halved/doubled with a cooldown, see update()). */
+  private imageScale = 1;
+  private imageScaleFrame = 0;
+  private keptBytes = 0;
   private evictedCount = 0;
   private readonly nodeCache = new Map<string, { d: number; v: boolean }>();
   stats = { visible: 0, triangles: 0, canopyVisible: 0 };
@@ -426,7 +444,7 @@ export class Terrain extends Group {
    * Install image layer `key` on `c` with a 1-texel apron from resident same-level neighbours,
    * then write `c`'s edges into those neighbours' aprons on the GPU (seam fix, imageApron.ts).
    */
-  private installImage(c: TerrainChunk, key: string, bmp: ImageBitmap): void {
+  private installImage(c: TerrainChunk, key: string, bmp: ImageBitmap, replaced = false): void {
     const nbChunk = (side: Side) => {
       const [di, dj] = SIDE_OFFSET[side];
       return this.chunks.get(nodeKey(c.level, c.i + di, c.j + dj));
@@ -440,21 +458,61 @@ export class Terrain extends Group {
       const info = nb?.imageInfo(key);
       const tex = nb?.texture(key);
       const far = opposite(side);
-      if (!nb || !info || !tex || info.size !== edges.size || info.mask & SIDE_BIT[far]) continue;
-      patchImageApron(this.renderer, tex, far, edges[side], edges.size);
+      // A resized image (other decode tier) re-patches neighbours whose apron already held its old edge.
+      if (!nb || !info || !tex || (info.mask & SIDE_BIT[far] && !replaced)) continue;
+      patchImageApron(this.renderer, tex, far, resampleStrip(edges[side], edges.size, info.size), info.size);
       nb.markImageApron(key, SIDE_BIT[far]);
     }
   }
 
-  /** Fetch + decode a colour image (browser colour management on, unlike data layers). */
-  private async fetchImage(url: string): Promise<ImageBitmap> {
+  /**
+   * Fetch + decode a colour image (browser colour management on, unlike data layers), downscaled
+   * to `size`² when that is below the native `native` px (decode tier, imageRes.ts).
+   */
+  private async fetchImage(url: string, size = Infinity, native = Infinity): Promise<ImageBitmap> {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
     const blob = await res.blob();
     if (blob.type && !blob.type.startsWith('image/') && blob.type !== 'application/octet-stream') {
       throw new Error(`Not an image (${blob.type}): ${url}`);
     }
+    if (size < native) return createImageBitmap(blob, { resizeWidth: size, resizeHeight: size, resizeQuality: 'medium' });
     return createImageBitmap(blob);
+  }
+
+  /** Decode tiers of image `img` (native pixelsPerChunk first). */
+  private tiers(img: ImageLayerSource): number[] {
+    return imageTiers(img.pixelsPerChunk);
+  }
+
+  /** Decode size for image `img` on chunk `c` by the last selection's need. */
+  private imageDecodeSize(c: TerrainChunk, img: ImageLayerSource): number {
+    return tierFor(this.tiers(img), c.imageNeedPx);
+  }
+
+  /**
+   * Re-decode resident image `key` of `c` at the tier its need asks for (approach → upgrade, far /
+   * budget pressure → downgrade). The old texture stays bound until the new one is installed.
+   */
+  private imageResizeJob(c: TerrainChunk, key: string, priority: number, pressure: boolean): Job {
+    return {
+      id: `img:${c.key}:${key}`,
+      priority,
+      run: async () => {
+        const img = this.imageSource(c.level, key);
+        const cur = c.imageInfo(key)?.size;
+        if (!img || !cur || this.chunks.get(c.key) !== c) return;
+        const target = resizeTarget(this.tiers(img), cur, c.imageNeedPx, pressure);
+        if (target === null) return;
+        try {
+          const bmp = await this.fetchImage(chunkUrl(this.baseUrl, img.path, c.i, c.j), target, img.pixelsPerChunk);
+          if (this.chunks.get(c.key) === c && c.imageInfo(key)?.size === cur) this.installImage(c, key, bmp, true);
+          else bmp.close();
+        } catch (err) {
+          console.warn(`[terrain] resize ${key} ${c.key}: ${String(err)}`);
+        }
+      },
+    };
   }
 
   private dtmJob(n: NodeId, priority: number): Job {
@@ -514,7 +572,8 @@ export class Terrain extends Group {
         if (!img && !src) return;
         try {
           if (img) {
-            const bmp = await this.fetchImage(chunkUrl(this.baseUrl, img.path, chunk.i, chunk.j));
+            const size = this.imageDecodeSize(chunk, img);
+            const bmp = await this.fetchImage(chunkUrl(this.baseUrl, img.path, chunk.i, chunk.j), size, img.pixelsPerChunk);
             if (this.chunks.get(chunk.key) === chunk && !chunk.hasLayer(key)) this.installImage(chunk, key, bmp);
             else bmp.close();
             return;
@@ -678,6 +737,9 @@ export class Terrain extends Group {
     return {
       levels,
       gpuMB: r(this.gpuBytes() / MiB),
+      keptMB: r(this.keptBytes / MiB),
+      imageMB: r([...this.chunks.values()].reduce((a, c) => a + c.imageGpuBytes(), 0) / MiB),
+      imageScale: this.imageScale,
       budgetMB: r(clampBudget(this.streaming.budget) / MiB),
       queue: this.pending.length,
       inFlight: this.inFlight.size,
@@ -800,19 +862,38 @@ export class Terrain extends Group {
     const wantLayers = (c: TerrainChunk, prio: number) => {
       for (const k of this.neededLayers(c)) if (!c.hasLayer(k)) jobs.push(this.layerJob(c, k, prio));
     };
+    // Image px per chunk side the view needs (decode tier, imageRes.ts): CSS pixels per metre at
+    // the chunk's nearest point (1 texel per CSS px = ½ per device px on a 2× screen; independent
+    // of the quality preset's pixel-ratio cap), coarser off-screen and under budget pressure.
+    const r = this._renderer;
+    const viewportPx = (r && r.domElement.height / r.getPixelRatio()) || 1080;
+    const imageNeed = (c: TerrainChunk, d: number, v: boolean) => {
+      c.imageNeedPx = screenPxPerMetre(viewportPx, fov, d) * (v ? 1 : s.offscreenScale) * s.imageDetail * this.imageScale * c.spanM;
+    };
+    const pressure = this.imageScale < 1;
     for (const w of sel.want) {
       const key = nodeKey(w.node.level, w.node.i, w.node.j);
       const c = this.chunks.get(key);
       if (!c) {
         if (!this.failed.has(key)) jobs.push(this.dtmJob(w.node, w.priority));
-      } else wantLayers(c, w.priority + 0.5);
+      } else {
+        const { d, v } = this.nodeInfo(w.node);
+        imageNeed(c, d, v);
+        wantLayers(c, w.priority + 0.5);
+      }
     }
     const lp = this.usesLowpass();
     const canopy = this.canopyWanted();
     for (const c of this.drawn) {
       const { d, v } = this.nodeInfo({ level: c.level, i: c.i, j: c.j });
       const prio = (v ? 0 : 1e7) + d;
+      imageNeed(c, d, v);
       wantLayers(c, prio);
+      for (const k of this.neededLayers(c)) {
+        const img = this.imageSource(c.level, k);
+        const cur = img && c.imageInfo(k)?.size;
+        if (cur && resizeTarget(this.tiers(img), cur, c.imageNeedPx, pressure) !== null) jobs.push(this.imageResizeJob(c, k, prio + 0.25, pressure));
+      }
       if (lp && this.lowpassStale(c)) jobs.push(this.lowpassJob(c, prio + 1));
       if (canopy && c.level === 0 && !c.canopy && !this.canopyFailed.has(c.key) && d < s.canopyDistance) {
         jobs.push(this.dsmJob(c, prio + 2));
@@ -827,11 +908,16 @@ export class Terrain extends Group {
     const top = this.levels.length - 1;
     const entries: LruEntry[] = [];
     let kept = 0;
+    let keptImages = 0;
     for (const c of this.chunks.values()) {
       const bytes = c.gpuBytes();
       entries.push({ key: c.key, bytes, lastUsed: c.lastUsed, pinned: c.level === top });
-      if (sel.keep.has(c.key) || c.level === top) kept += bytes;
+      if (sel.keep.has(c.key) || c.level === top) {
+        kept += bytes;
+        keptImages += c.imageGpuBytes();
+      }
     }
+    this.keptBytes = kept;
     for (const key of planEviction(entries, budget, sel.keep)) {
       const c = this.chunks.get(key);
       if (c) this.evict(c);
@@ -845,7 +931,22 @@ export class Terrain extends Group {
         for (const k of c.layerKeys()) if (k !== a && k !== b && k !== lc && !(k === BLDG_KEY && c.canopy)) c.removeLayer(k);
       }
     }
-    this.effError = adaptThreshold(this.effError, 1, kept, budget);
+    // Over budget: first halve the image detail (one decode tier, min 0.5 = one tier below need)
+    // while images are a large share of the kept set, then coarsen the mesh. Recovery in reverse
+    // order: geometry back to the base threshold, then images (cooldowns let the resizes land).
+    const since = this.frame - this.imageScaleFrame;
+    if (kept > budget && this.imageScale > 0.5 && keptImages > 0.25 * kept) {
+      if (since > 60) {
+        this.imageScale /= 2;
+        this.imageScaleFrame = this.frame;
+      }
+    } else {
+      this.effError = adaptThreshold(this.effError, 1, kept, budget);
+      if (this.imageScale < 1 && this.effError <= 1 && kept < 0.5 * budget && since > 120) {
+        this.imageScale = Math.min(1, this.imageScale * 2);
+        this.imageScaleFrame = this.frame;
+      }
+    }
 
     this.cull(camera, false);
   }

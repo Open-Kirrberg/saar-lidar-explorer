@@ -13,9 +13,9 @@ The explorer v2 drives these items. Order and acceptance: explorer backlog **V2.
 | Id | Item | Status | Why |
 |---|---|---|---|
 | KB-I102 | Trees without popping: stable id per tree, LOD by cross-fade (no reseeding between mid / close / hero tiers), lower wind sway | `[~]` CHM trees outside the footprint done (V2.7) | [ADR 0017](../../../docs/adr/0017-real-trees-from-chm.md) |
-| KB-I103 | Phone budget: phone proxy 30 fps everywhere. V2.7 run: Rundflug 58 fps, spawn 60, Festsaal walk 27–56 | `[~]` | [ADR 0028](../../../docs/adr/0028-phone-proxy-headroom.md) |
-| KB-I105 | Garden-crown impostors (far crowns as cards or billboards) to bring the triangles in view from 3.63 M to ≤ 1.5 M, then drop `TRIANGLES_WAIVER` | `[ ]` | [ADR 0033](../../../docs/adr/0033-castle-module-zone.md) |
-| KB-I106 | First-visit hitch: on the phone proxy, „Gehe zu“ into a room stalls 0.2–4.8 s (CPU profile: shader program compiles, synchronous LOD2 / interior builds). Precompile with `renderer.compileAsync` during loading, spread LOD2 builds over frames | `[ ]` | [ADR 0028](../../../docs/adr/0028-phone-proxy-headroom.md) |
+| KB-I107 | First Rundflug frame still compiles ≈ 9 programs (shadow depth, post chain, two leaf and terrain variants): ≈ 0.4 s on the phone proxy. Add them to the loading-screen warm-up (`viewer/src/precompile.ts`) | `[ ]` | [ADR 0028](../../../docs/adr/0028-phone-proxy-headroom.md) |
+| KB-I108 | Draw calls: 580–615 per frame on the phone (Rundflug, Festsaal walk). The proxy holds 60 fps, but real phones pay per call; merge static interior parts and garden instances | `[ ]` | [ADR 0028](../../../docs/adr/0028-phone-proxy-headroom.md) |
+| KB-I109 | Landscape desktop views see ≈ 2.1 M triangles in the Rundflug (phone viewport 1.36 M). Fine for desktop; push the crown hull distance down on Hoch only if a desktop struggles | `[ ]` | [ADR 0040](../../../docs/adr/0040-castle-triangles-phone-viewport.md) |
 
 ## 📋 Open from waves 0–11
 
@@ -31,14 +31,14 @@ The explorer v2 drives these items. Order and acceptance: explorer backlog **V2.
 | KB-I48 | Festbeleuchtung: the „Dezember 1785“ scene | 🧊 festivals return as v3 events ([ADR 0020](../../../docs/adr/0020-remove-move-out-freeze.md)) |
 | KB-I49 | Physically based atmosphere | `[ ]` |
 | KB-I54 | Source acquisition (requests from research/09–11) | `[?]` |
-| KB-I65 | Sky and post cost at retina, CPU per frame | `[~]` (folds into KB-I103) |
+| KB-I65 | Sky and post cost at retina, CPU per frame | `[~]` (phone part done with KB-I103; retina still open) |
 | KB-I78 | Lawn and meadow blades: retina cost | `[~]` (→ KB-I94) |
 | KB-I79 | End-side orientation audit for rotated `axisRect` buildings | `[ ]` |
 | KB-I83 | Ehrenhof sand: ruts, camber, lane end, staffage | `[~]` |
 | KB-I90 | Non-mirror glass for hotbed and glasshouse lights (`glass.frame` key) | `[ ]` |
 | KB-I91 | Foliage back-light rim under cloud and moon shadow | `[ ]` |
 | KB-I92 | Interior reveal gradation, TF-08 coping | `[~]` |
-| KB-I94 | Retina headroom: idle bench owed | `[~]` (folds into KB-I103) |
+| KB-I94 | Retina headroom: idle bench owed | `[~]` (phone part done with KB-I103; retina still open) |
 | KB-I98 | Shaded window reveals (laibung to the glass or baked AO) | `[ ]` |
 | KB-I100 | Plan elevations draw the KB-B01 garden-front relief | `[ ]` |
 

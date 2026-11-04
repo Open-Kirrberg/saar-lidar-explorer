@@ -21,8 +21,11 @@ import { buildExterior } from '@model/exterior/index.ts';
 import { siteBuildings, sitePois } from '@model/site/index.ts';
 import { buildFeatures } from '@model/site/features.ts';
 import { isDrapedWay } from '@model/site/drive.ts';
-import { TerrainMesh, loadTerrain, terrainMaterial } from './terrain.ts';
+import { TerrainMesh, loadTerrain, terrainMaterial, terrainProgress } from './terrain.ts';
 import { freezeSceneRoot, freezeStatic } from './staticMatrices.ts';
+import { ShaderWarmer, type WarmLightState } from './precompile.ts';
+import { sceneMsaa } from './postMath.ts';
+import { type ColliderPiece, LruCache, mergeWorld, pieceFrom, terrainTileGeometry, tilesAround } from './colliders.ts';
 import { Controls, EYE, type Mode, isTyping } from './controls.ts';
 import { EXPLORER_DEFAULT_URL, type Handover, backTarget, headingToYaw, liftAboveGround, pickWalkStart, pitchToRad, poseFromCamera, poseToLocal, walkFallbackYaw } from './handover.ts';
 import { KARLSBERG_LAT, KARLSBERG_LON, dayOfYear, sunPosition } from './sun.ts';
@@ -37,6 +40,7 @@ import { lawnZoneInput } from './lawnZones.ts';
 import { siteFeatures } from '@model/site/access.ts';
 import { foliageUniforms, tickFoliage, useFoliage } from './foliage.ts';
 import { LeafCards, siteCardOptions } from './leafCards.ts';
+import { SiteCrownLod } from './siteTreeLod.ts';
 import { Atmosphere, InteriorLook, type LightState, RENDER_ORDER, installHeightFog, installShadowTaps, useSkyShDiffuse, useTerrainVertexLight } from './atmosphere.ts';
 import { addCandleFlames, addMantelCandelabra, addPortalLanterns, addTableCandles, lanternLights, prepareLitWindows, setCandles, setWindowFest, setWindowGlow } from './night.ts';
 import { CandleLights, installCandleFalloff } from './candleLight.ts';
@@ -327,7 +331,14 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
   // ---------------------------------------------------------------- world
   const materials = createMaterials({ textureBase: `${base}textures/`, sets: textureManifest.sets as unknown as { name: string; real_size_m: [number, number] }[], anisotropy: renderer.capabilities.getMaxAnisotropy() });
   progress('Lade Gelände …', 0.05);
-  const terrain = await loadTerrain(`${base}terrain/`);
+  // byte-weighted: the terrain download is the one long wait before the CPU stages (0.05 → 0.25)
+  const terrain = await loadTerrain(`${base}terrain/`, {
+    signal,
+    onBytes: (loaded, total) => {
+      const f = terrainProgress(loaded, total);
+      if (f) progress(f.label, f.fraction);
+    },
+  });
   if (signal?.aborted) {
     post.dispose();
     if (ownsRenderer) renderer.dispose();
@@ -465,6 +476,18 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
       else if (m.userData.groundLit) useSkyShDiffuse(m);
     });
   }
+  // KB-I105: far garden crowns are drawn as their hulls (siteTreeLod.ts); twins added here, their material patched alike
+  const siteLod = new SiteCrownLod((m) => {
+    useSkyShDiffuse(m, { leaf: true });
+    useFoliage(m);
+  });
+  {
+    const crowns: THREE.InstancedMesh[] = [];
+    features.group.traverse((o) => {
+      if ((o as THREE.InstancedMesh).isInstancedMesh && o.userData.part === 'vegetation') crowns.push(o as THREE.InstancedMesh);
+    });
+    for (const im of crowns) siteLod.register(im);
+  }
   // KB-I44 review: exterior vegetation is culled while the camera is inside a building (the windows are over-exposed
   // for the indoor EV); the forest does this itself (`forestLod.indoor`), the site trees are listed here
   const siteVegetation: THREE.Object3D[] = [];
@@ -573,6 +596,57 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
   const INTERIOR_DIST = 45;
   /** Storey index of every catalogue room (KB-I42 shell mode: ground-level rooms). */
   const roomStorey = new Map<string, number>(spec.buildings.flatMap((b) => (b.rooms ?? []).map((r) => [r.id, r.storey] as [string, number])));
+  /** KB-I106: at most this many room lights burn at once (model/src/interior: ≤ 4 per building, nearest building only). */
+  const ROOM_LIGHT_SLOTS = 4;
+  const lightFill = new THREE.Group();
+  lightFill.name = 'room-light-fill';
+  for (let i = 0; i < ROOM_LIGHT_SLOTS; i++) {
+    const l = new THREE.PointLight('#000000', 0, 1, 2);
+    l.visible = false;
+    lightFill.add(l);
+  }
+  scene.add(lightFill);
+
+  /**
+   * KB-I106 shader warm-up (precompile.ts) for the light states a visitor meets by day: outdoors (no point light) and
+   * indoors (ROOM_LIGHT_SLOTS), into a target of the post chain's scene format.
+   */
+  function lightStates(): WarmLightState[] {
+    const points: THREE.PointLight[] = [];
+    scene.traverse((o) => {
+      if ((o as THREE.PointLight).isPointLight) points.push(o as THREE.PointLight);
+    });
+    const set = (indoors: boolean) => () => {
+      const vis = points.map((l) => l.visible);
+      const pool = candles.group.visible;
+      candles.group.visible = false;
+      for (const l of points) l.visible = false;
+      if (indoors) for (const l of lightFill.children) l.visible = true;
+      return () => {
+        points.forEach((l, i) => (l.visible = vis[i]));
+        candles.group.visible = pool;
+      };
+    };
+    return [
+      { id: 'out', apply: set(false) },
+      { id: 'in', apply: set(true) },
+    ];
+  }
+  const warmer = new ShaderWarmer({
+    renderer,
+    scene,
+    camera,
+    states: lightStates,
+    samples: () => {
+      const dpr = active ? renderer.getPixelRatio() : effectiveDpr(devicePixelRatio, QUALITY[state.quality].dprCap, 1);
+      return sceneMsaa(post.settings.msaa, Math.floor(viewW * dpr) * Math.floor(viewH * dpr));
+    },
+    shadows: () => shadowsOn(),
+  });
+  /** Warm new groups in the background (LOD2 builds while the zone runs). */
+  function warmLater(roots: readonly THREE.Object3D[]): void {
+    void warmer.warm(roots).catch((e) => console.warn('[viewer] shader warm-up', e));
+  }
   function updateInteriorBudget(): void {
     const p = camera.position;
     let nearest: BuildingEntry | null = null;
@@ -596,6 +670,7 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
         nearest = e;
       }
     }
+    let roomLightsOn = 0;
     for (const e of entries.values()) {
       const inner = e.levels[2]?.getObjectByName(`${e.b.id}/interior`);
       if (!inner) continue;
@@ -616,18 +691,29 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
           }
         }
       // wave 11: while the candle pool lights the visitor's room, the rooms' own lights stay off (candleLight.ts)
-      for (const l of lights) l.visible = !candlesOn && roomLightOn(e === nearest && nd < 20, inside, l.intensity) && lightOnStorey(roomStorey.get(l.userData.roomId as string), storey, l.getWorldPosition(lp).distanceTo(p));
+      for (const l of lights) {
+        l.visible = !candlesOn && roomLightOn(e === nearest && nd < 20, inside, l.intensity) && lightOnStorey(roomStorey.get(l.userData.roomId as string), storey, l.getWorldPosition(lp).distanceTo(p));
+        if (l.visible) roomLightsOn++;
+      }
     }
+    // KB-I106: indoors by day the scene always holds ROOM_LIGHT_SLOTS point lights (unused at intensity 0), so walking
+    // from room to room never changes the light count and recompiles nothing (as the candle pool at night)
+    const fill = inside && !candlesOn ? Math.max(0, ROOM_LIGHT_SLOTS - roomLightsOn) : 0;
+    lightFill.children.forEach((l, i) => (l.visible = i < fill));
   }
 
   /** Lazily build LOD2 (detail + interior) for buildings near the camera. */
+  /** KB-I106: LOD2 builds so far (count, ms, slowest) for the perf probes (`skb.lod2Stats()`). */
+  const lod2Stats = { built: 0, ms: 0, maxMs: 0, maxId: '' };
   function updateLod2(all = false, at?: THREE.Vector3): void {
     const p = at ?? camera.position; // KB-I46: the Rundflug builds ahead of the camera
     let built = false;
+    const fresh: BuildingEntry[] = [];
     for (const e of entries.values()) {
       const d = Math.hypot(p.x - e.centre.x, p.z - e.centre.z) - e.radius;
       if (d < LOD2_DIST && !e.levels[2] && !built) {
         built = true;
+        const tb = performance.now();
         const g2 = buildExterior(e.b, ctxAt(2));
         // interiors: warm room environment instead of the sky, lights and candles on the light budget (KB-I06)
         const inner = g2.getObjectByName(`${e.b.id}/interior`);
@@ -658,10 +744,21 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
           l.addLevel(obj, dist);
         }
         shadowDirty = true;
-        applyDisplay();
+        fresh.push(e);
+        const ms = performance.now() - tb;
+        lod2Stats.built++;
+        lod2Stats.ms += ms;
+        if (ms > lod2Stats.maxMs) {
+          lod2Stats.maxMs = ms;
+          lod2Stats.maxId = e.b.id;
+        }
         if (all) built = false;
       }
     }
+    if (!fresh.length) return;
+    applyDisplay(fresh);
+    // KB-I106: compile the new group's programs now (outdoors and indoors), the driver links them before they show
+    warmLater(fresh.map((e) => e.levels[2]!));
   }
 
   // ---------------------------------------------------------------- display (Gewissheit, Dächer)
@@ -672,8 +769,8 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
   };
   const translucent = new THREE.MeshStandardMaterial({ color: '#e8dcc0', roughness: 0.9, transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide });
 
-  function applyDisplay(): void {
-    for (const e of entries.values()) {
+  function applyDisplay(only?: readonly BuildingEntry[]): void {
+    for (const e of only ?? entries.values()) {
       const conf = e.b.confidence;
       e.lod.visible = !(state.lowConfidence === 'hide' && conf === 'low');
       e.lod.traverse((o) => {
@@ -748,37 +845,86 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
   controls.ground = terrain.sample;
   offs.push(() => controls.dispose());
   let colliderCentre = new THREE.Vector3(1e9, 0, 0);
+  /**
+   * KB-I106: walk colliders as cached pieces (colliders.ts): terrain tiles and building level groups within COLLIDER_R
+   * of the camera, built once each. A refresh (walk moved COLLIDER_MOVE m, goto, mode change) only builds what is new.
+   */
+  const COLLIDER_R = 60;
+  const COLLIDER_MOVE = 20;
+  const colliderCache = new LruCache<ColliderPiece | null>(96);
+  const colliderStats = { built: 0, triangles: 0, ms: 0 };
+  function piece(key: string, make: () => THREE.BufferGeometry | null): ColliderPiece | null {
+    if (colliderCache.has(key)) return colliderCache.get(key)!;
+    const t = performance.now();
+    const geo = make();
+    const pc = geo ? pieceFrom(key, geo) : null;
+    colliderCache.set(key, pc);
+    colliderStats.built++;
+    colliderStats.triangles += pc?.triangles ?? 0;
+    colliderStats.ms += performance.now() - t;
+    return pc;
+  }
+  /** Collider meshes of a building level group: interiors only their explicit colliders, no roofs, glass, frames. */
+  function buildingColliderMeshes(e: BuildingEntry, g: THREE.Group): THREE.Mesh[] {
+    const meshes: THREE.Mesh[] = [];
+    e.lod.updateMatrixWorld(true);
+    g.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const ud = m.userData as { collider?: boolean; material?: string; part?: string };
+      const mat = ud.material ?? '';
+      // interiors: only their explicit (invisible) colliders - floors, walls with open doorways, stair ramps
+      let inInterior = false;
+      for (let q: THREE.Object3D | null = m; q && q !== g; q = q.parent) if (q.name.endsWith('/interior')) inInterior = true;
+      if (inInterior) {
+        if (ud.collider !== true) return;
+      } else if (ud.collider === false || ud.part === 'roof' || /glass|wood\.frame|metal\.|wood\.shutter|wood\.door/.test(mat)) return;
+      meshes.push(m);
+    });
+    return meshes;
+  }
+  /** Keys of the pieces around (x, z): terrain tiles, building levels (LOD2 if built, else LOD1), the site features. */
+  function colliderKeysAt(x: number, z: number): { key: string; make: () => THREE.BufferGeometry | null }[] {
+    const out: { key: string; make: () => THREE.BufferGeometry | null }[] = [];
+    const grid = terrain.meta.grid;
+    for (const [r0, c0] of tilesAround(x, z, COLLIDER_R, grid, E0, N0))
+      out.push({ key: `t/${r0}_${c0}`, make: () => terrainTileGeometry(terrain.h, grid, r0, c0, (c) => terrain.cellX(c), (r) => terrain.cellZ(r)) });
+    for (const e of entries.values()) {
+      if (Math.hypot(x - e.centre.x, z - e.centre.z) - e.radius > COLLIDER_R) continue;
+      const lvl = e.levels[2] ? 2 : 1;
+      const g = e.levels[lvl];
+      if (!g) continue;
+      out.push({ key: `b/${e.b.id}/${lvl}`, make: () => mergeWorld(buildingColliderMeshes(e, g)) });
+    }
+    out.push({ key: 'features', make: () => mergeWorld(features.colliders) });
+    return out;
+  }
   function refreshColliders(force = false, anyMode = false): void {
     if (controls.mode !== 'walk' && !anyMode) return;
     const p = camera.position;
-    if (!force && Math.hypot(p.x - colliderCentre.x, p.z - colliderCentre.z) < 60) return;
+    if (!force && Math.hypot(p.x - colliderCentre.x, p.z - colliderCentre.z) < COLLIDER_MOVE) return;
     colliderCentre = p.clone();
-    const meshes: THREE.Mesh[] = terrainMesh.colliderAround(p.x, p.z, 130);
-    for (const e of entries.values()) {
-      if (Math.hypot(p.x - e.centre.x, p.z - e.centre.z) - e.radius > 130) continue;
-      const g = e.levels[2] ?? e.levels[1];
-      if (!g) continue;
-      e.lod.updateMatrixWorld(true);
-      g.traverse((o) => {
-        const m = o as THREE.Mesh;
-        if (!m.isMesh) return;
-        const ud = m.userData as { collider?: boolean; material?: string; part?: string };
-        const mat = ud.material ?? '';
-        // interiors: only their explicit (invisible) colliders - floors, walls with open doorways, stair ramps
-        let inInterior = false;
-        for (let q: THREE.Object3D | null = m; q && q !== g; q = q.parent) if (q.name.endsWith('/interior')) inInterior = true;
-        if (inInterior) {
-          if (ud.collider !== true) return;
-        } else if (ud.collider === false || ud.part === 'roof' || /glass|wood\.frame|metal\.|wood\.shutter|wood\.door/.test(mat)) return;
-        const c = new THREE.Mesh(m.geometry);
-        c.matrixAutoUpdate = false;
-        c.matrixWorld.copy(m.matrixWorld);
-        c.updateWorldMatrix = () => {};
-        meshes.push(c);
-      });
+    const keys = colliderKeysAt(p.x, p.z);
+    const pieces: ColliderPiece[] = [];
+    for (const k of keys) {
+      const pc = piece(k.key, k.make);
+      if (pc) pieces.push(pc);
     }
-    for (const m of features.colliders) meshes.push(m);
-    controls.setColliders(meshes);
+    colliderCache.prune(new Set(keys.map((k) => k.key)));
+    controls.setColliders(pieces);
+  }
+  /**
+   * KB-I106 idle prewarm: build at most `budgetMs` of missing collider pieces around `at` (one piece at least), so a
+   * later goto or walk there finds them cached. Returns true when everything around `at` is built.
+   */
+  function prewarmColliders(at: THREE.Vector3, budgetMs: number): boolean {
+    const t = performance.now();
+    for (const k of colliderKeysAt(at.x, at.z)) {
+      if (colliderCache.has(k.key)) continue;
+      if (performance.now() - t > budgetMs) return false;
+      piece(k.key, k.make);
+    }
+    return true;
   }
   controls.onModeChange = (m: Mode) => {
     hud?.setMode(m);
@@ -1314,6 +1460,8 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
       shadowDirty = true;
     }
     if (forestLod.update(camera)) shadowDirty = true;
+    siteLod.indoor = inside;
+    siteLod.update(camera);
     leafCards.group.visible = !inside;
     leafCards.update(camera);
     vines.indoor = inside;
@@ -1411,7 +1559,37 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
   }
   updateSun();
   applyDisplay();
+  await warmUp();
   progress('Bereit', 1);
+
+  /**
+   * KB-I106: what the first view needs, built behind the loading screen instead of in the first frames: LOD2 detail,
+   * interiors and walk colliders around the spawn (zone mode: zone.json spawns; standalone: the default highlight), then
+   * every program of the scene for both light states, and wait (without blocking) until the driver has linked them.
+   */
+  async function warmUp(): Promise<void> {
+    const spawns = Object.values((ctx.manifest as { spawns?: Record<string, ZonePose> } | undefined)?.spawns ?? {});
+    const places = spawns.map((sp) => {
+      const l = zonePoseToLocal(sp);
+      return new THREE.Vector3(l.x, 0, l.z);
+    });
+    if (!zoneMode && !handover) {
+      const d = pois.find((x) => x.id === DEFAULT_HIGHLIGHT);
+      if (d) places.push(new THREE.Vector3(d.position.x, 0, d.position.z));
+    }
+    progress('Erzeuge Innenräume …', 0.85);
+    await yieldFrame();
+    for (const at of places) {
+      updateLod2(true, at);
+      prewarmColliders(at, Infinity);
+      if (signal?.aborted) throw abortError();
+      await yieldFrame();
+    }
+    progress('Bereite Shader vor …', 0.92);
+    await yieldFrame();
+    await warmer.warm([scene], signal);
+    if (signal?.aborted) throw abortError();
+  }
 
   // ---------------------------------------------------------------- enter / exit
   let saved: RendererSnapshot | null = null;
@@ -1601,6 +1779,8 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
     windowPull,
     /** Forest tiles (KB-I10): `skb.forest.stats()`; A/B with `skb.forest.nearDistance = 1e9` (all tiles near). */
     forest: forestLod,
+    /** KB-I105 garden-crown stand-ins: `skb.siteTrees.stats()`; A/B with `skb.siteTrees.near = 1e9` (all full). */
+    siteTrees: siteLod,
     /** Foliage shading (KB-I44): `skb.foliage.uFolOn.value = 0` for an A/B, `uFolWind` 0 = calm. */
     foliage: foliageUniforms,
     /** Near-tree leaf cards (wave 6): `skb.leafCards.setEnabled(false)` for an A/B, `.stats()`, `.far` (m). */
@@ -1765,6 +1945,12 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
     },
     triangles,
     inView,
+    /** KB-I106 walk colliders: pieces built so far (count, triangles, ms), cached, active around the camera. */
+    prewarmColliders: (x: number, z: number, budgetMs = 1e9) => prewarmColliders(new THREE.Vector3(x, 0, z), budgetMs),
+    /** KB-I106: LOD2 builds (count, ms, slowest) and shader precompiles (calls, ms, materials) so far. */
+    lod2Stats: () => ({ ...lod2Stats }),
+    warmStats: () => ({ ...warmer.stats, programs: renderer.info.programs?.length ?? 0 }),
+    colliders: () => ({ ...colliderStats, cached: colliderCache.size, active: controls.pieces.length, activeTriangles: controls.pieces.reduce((n, p) => n + p.triangles, 0) }),
     /**
      * KB-I46 capture hook: show the Rundflug at a deterministic frame. `id` = 'rundflug' with `t` in seconds of the whole
      * tour, or a shot id ('anflug', 'ehrenhof', 'garten', 'galerie', 'orangerie', 'goldene-stunde') with `t` 0…1 of that
@@ -1898,6 +2084,8 @@ export async function createCastle(ctx: ZoneMountContext, standalone?: Standalon
       for (const off of offs.splice(0).reverse()) off();
       for (const q of pendingQueries.splice(0)) gl2.deleteQuery(q);
       disposeScene();
+      colliderCache.clear();
+      warmer.dispose();
       post.dispose();
       mirrors.dispose();
       (tmat.userData.bake as { dispose?: () => void } | undefined)?.dispose?.();

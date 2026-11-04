@@ -17,13 +17,11 @@ export const BUDGET_LIMITS = {
 export const MODULE_GZIP_LIMIT = 1_500_000;
 
 /**
- * ADR 0033 waiver: the garden's instanced tree crowns and shrubs (plus the shared CHM trees) put up to 3.63 M
- * triangles in view (`skb.inView()` over the Rundflug and the highlights; the quality presets do not change geometry),
- * over the contract's 1.5 M. Until they get impostors
- * (improvement backlog), the phone-proxy frame rate (ADR 0028) is the gate and this ceiling fences the overrun:
- * more triangles, or anything else over budget, still fails.
+ * Declared triangles in view (ADR 0040, supersedes the ADR 0033 waiver): `skb.inView()` max over the Rundflug and the
+ * highlights in the phone-proxy viewport (390 × 844, `pnpm run perf:zone` sweep), 1.36 M since the far garden crowns
+ * became hulls (KB-I105), rounded up. A landscape desktop view sees more (≈ 2.1 M); the contract budget is the phone's.
  */
-export const TRIANGLES_WAIVER = 3_700_000;
+export const DECLARED_TRIANGLES = 1_400_000;
 
 export interface ZoneBudget {
   downloadBytes: number;
@@ -42,6 +40,10 @@ export interface U16Encoding {
   offset: number;
   scale: number;
   nodata: number;
+  /** The file stores gradient residuals (`gradientResidual`), not the steps themselves. */
+  predictor?: 'gradient';
+  /** The file is a zlib/deflate stream (RFC 1950; the browser's `DecompressionStream('deflate')`). */
+  compression?: 'deflate';
 }
 
 /**
@@ -76,6 +78,28 @@ export function decodeU16(data: Uint16Array, enc: Pick<U16Encoding, 'offset' | '
   return out;
 }
 
+/**
+ * Gradient predictor (PNG Paeth's simpler cousin, as in TIFF/LERC terrain codecs): residual = v − (left + up − upLeft)
+ * mod 2¹⁶, outside the grid = 0. Lossless (nodata survives exactly); on the 1 m DTM the residuals are mostly 0 ± a few
+ * cm, so deflate packs the 11.4 MB uint16 grid into ≈ 2.5 MB (raw deflate: ≈ 8 MB). The viewer's `decodeHeights`
+ * inverts it.
+ */
+export function gradientResidual(v: Uint16Array, cols: number, rows: number): Uint16Array {
+  if (v.length !== cols * rows) throw new Error(`gradientResidual: ${v.length} values, expected ${cols * rows}`);
+  const out = new Uint16Array(v.length);
+  for (let r = 0; r < rows; r++) {
+    const i0 = r * cols;
+    for (let c = 0; c < cols; c++) {
+      const i = i0 + c;
+      const left = c ? v[i - 1]! : 0;
+      const up = r ? v[i - cols]! : 0;
+      const upLeft = r && c ? v[i - cols - 1]! : 0;
+      out[i] = v[i]! - left - up + upLeft; // Uint16Array stores mod 2¹⁶
+    }
+  }
+  return out;
+}
+
 /** Little-endian bytes, independent of the host's byte order. */
 export function u16LE(data: Uint16Array): Uint8Array {
   const out = new Uint8Array(data.length * 2);
@@ -93,16 +117,18 @@ export function f32FromLE(bytes: Uint8Array): Float32Array {
   return out;
 }
 
-export const PACKAGE_TERRAIN_FILES = { dtm1789: 'dtm1789.u16', ground: 'ground.u8' } as const;
+export const PACKAGE_TERRAIN_FILES = { dtm1789: 'dtm1789.u16.deflate', ground: 'ground.u8.deflate' } as const;
 
 /**
  * The package's terrain/meta.json from the viewer's: 1789 only (no dtm2025, ground2025, counts2025), the dtm as
- * uint16 with an `encoding` block, `h_range` of the 1789 heights.
+ * uint16 gradient residuals and the ground classes, both deflated, with an `encoding` block, the file sizes in
+ * `bytes` (loading progress without Content-Length) and `h_range` of the 1789 heights.
  */
 export function packageTerrainMeta(
   dev: Record<string, unknown>,
   enc: U16Encoding,
   hRange: [number, number],
+  bytes: { dtm1789: number; ground: number },
 ): Record<string, unknown> {
   const meta = structuredClone(dev);
   const grid = meta.grid as Record<string, unknown> | undefined;
@@ -114,7 +140,8 @@ export function packageTerrainMeta(
   delete ground.counts2025;
   if (typeof ground.tag === 'string') ground.tag = ground.tag.split('; 2025 (')[0]!;
   meta.files = { ...PACKAGE_TERRAIN_FILES };
-  meta.encoding = { dtm1789: { ...enc } };
+  meta.encoding = { dtm1789: { ...enc, predictor: 'gradient', compression: 'deflate' }, ground: { compression: 'deflate' } };
+  meta.bytes = { ...bytes };
   meta.h_range = hRange;
   return meta;
 }
@@ -213,7 +240,7 @@ export function computeBudget(files: readonly PackageFile[], moduleBytes: number
   return { downloadBytes: first + moduleBytes, totalBytes: total + moduleBytes, triangles, textureBytesGpu: gpu };
 }
 
-/** Limit violations (empty = within budget). `trianglesCeiling` replaces the triangle limit (waiver, ADR 0033). */
+/** Limit violations (empty = within budget). `trianglesCeiling` replaces the triangle limit (no zone uses one since ADR 0040). */
 export function budgetProblems(b: ZoneBudget, moduleBytes: number, trianglesCeiling: number = BUDGET_LIMITS.triangles): string[] {
   const out: string[] = [];
   const limits: ZoneBudget = { ...BUDGET_LIMITS, triangles: trianglesCeiling };

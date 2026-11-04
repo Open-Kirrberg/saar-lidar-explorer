@@ -79,6 +79,28 @@ export const CLOSE_DIST = 300;
 export const HERO_DIST = 100;
 /** Camera travel (m) before the tiers are recomputed. */
 const TIER_STEP = 8;
+/**
+ * KB-I105: the tiers take only crowns in view. A crown out of view stays a mid dome in its tile mesh, so the tier
+ * meshes (drawn without frustum culling: the set surrounds the camera) no longer submit the ~2/3 of their crowns and
+ * cards behind and beside the camera. The view test widens the frustum by TIER_MARGIN_DEG (and the crown radius), and
+ * the tiers are recomputed when the view has turned TIER_TURN_DEG, so a crown entering the screen is already tiered.
+ * The caps are applied before the view test (nearest first over all directions), so every crown in view gets exactly
+ * the tier it had before; only crowns out of view change.
+ */
+export const TIER_MARGIN_DEG = 14;
+const TIER_TURN_DEG = 6;
+/** Bounding radius of a unit tier crown (clumps scatter past the unit envelope). */
+const TIER_CROWN_R = 1.5;
+
+/**
+ * Whether a crown (centre `c`, radius `r`) seen from `p` lies in the frustum widened by the angle with tangent
+ * `tanMargin` (the sphere grows by its distance × tanMargin). Pure.
+ */
+export function tierInView(frustum: THREE.Frustum, c: THREE.Vector3, r: number, p: THREE.Vector3, tanMargin: number, sphere = new THREE.Sphere()): boolean {
+  sphere.center.copy(c);
+  sphere.radius = r + c.distanceTo(p) * tanMargin;
+  return frustum.intersectsSphere(sphere);
+}
 /** Instance caps of the close tier (per variant) and of the hero tier (all variants together, nearest first). */
 const TIER_CAP = 4000;
 export const HERO_CAP = 700;
@@ -110,7 +132,18 @@ interface CrownItem {
   shrub: boolean;
   /** tier drawing it now: −1 tile mesh, 0 close, 1 hero */
   tier: number;
+  /** state last written to the tile meshes: tier · 2 + (1 within the fringe's reach); NaN = build order */
+  drawn: number;
 }
+
+/**
+ * KB-I105: the fringe cards (no shadows) are drawn only on mid crowns in view (the tiers' widened frustum) and within
+ * this distance (m). They shrink away by FOREST_FRINGE.far, but a near tile reaches ~870 m from the camera (box within
+ * 420 m, 320 m wide), and a tile mesh is culled only as a whole, so most of its crowns can lie out of view. The tile
+ * meshes list those crowns first and the fringe draws only them (+ TIER_STEP: the camera moves that far between
+ * updates). The opaque mid crowns keep every instance (they cast the cached shadows).
+ */
+export const FRINGE_REACH = FOREST_FRINGE.far + TIER_STEP;
 /**
  * Crown detail (KB-I44, KB-I66). 'full': tile meshes draw lumpy mid domes, plus the close and hero tiers near the
  * camera. 'lite': about the wave-2 budget (20-face domes everywhere, no tiers) for low-end presets and A/B benches
@@ -201,8 +234,12 @@ export class Forest {
   heroDistance = HERO_DIST;
   /** close-tier crowns per variant (nearest first; KB-I66: as many as carry leaf cards) */
   closeCap: number = FOREST_CARD_CAP.close;
+  /** KB-I105: frustum margin (deg) of the tier view test; < 0 = tiers in all directions (A/B `skb.forest.tierMargin = -1`) */
+  tierMargin = TIER_MARGIN_DEG;
   private tiers: { crowns: THREE.InstancedMesh[]; shrubs: THREE.InstancedMesh[] }[] | null = null;
   private tierAt = new THREE.Vector3(1e9, 1e9, 1e9);
+  private tierDir = new THREE.Vector3();
+  private tierMarginAt = NaN;
   /**
    * Camera inside a building (set by the viewer each frame): the forest is not drawn. Seen from a room the windows
    * are over-exposed for the indoor EV (KB-I06), so the forest behind them does not read; drawn, its crowns cost
@@ -517,7 +554,7 @@ export class Forest {
         im.setMatrixAt(j, m);
         im.setColorAt(j, c);
       }
-      items.push({ m: m.clone(), c: c.clone(), v: which[i], shrub, tier: -1 });
+      items.push({ m: m.clone(), c: c.clone(), v: which[i], shrub, tier: -1, drawn: NaN });
       if (solitary(p)) {
         farSolo.setMatrixAt(si, m);
         farSolo.setColorAt(si, c);
@@ -631,14 +668,21 @@ export class Forest {
       t.far.visible = level === 1;
       changed = true;
     }
-    if (CROWN_DETAIL[this.detail].tiers && (changed || p.distanceToSquared(this.tierAt) > TIER_STEP * TIER_STEP)) this.updateTiers(p);
+    if (CROWN_DETAIL[this.detail].tiers && (changed || p.distanceToSquared(this.tierAt) > TIER_STEP * TIER_STEP || this.turned(camera))) this.updateTiers(camera);
     return changed;
   }
 
   /** Force a tier update now (after changing the tier distances). */
   refreshTiers(camera: THREE.Camera): void {
     this.tierAt.set(1e9, 1e9, 1e9);
-    this.updateTiers(camera.position);
+    this.updateTiers(camera);
+  }
+
+  /** The view turned TIER_TURN_DEG since the last tier update (or the margin changed). */
+  private turned(camera: THREE.Camera): boolean {
+    if (this.tierMargin !== this.tierMarginAt) return true;
+    if (this.tierMargin < 0) return false;
+    return camera.getWorldDirection(new THREE.Vector3()).dot(this.tierDir) < Math.cos((TIER_TURN_DEG * Math.PI) / 180);
   }
 
   /**
@@ -646,8 +690,16 @@ export class Forest {
    * meshes (mid crowns) to shared tier meshes. Only matrices are rewritten, when the camera has moved TIER_STEP m. The
    * shadow map is not marked dirty: all tiers share the crown envelope.
    */
-  private updateTiers(p: THREE.Vector3): void {
+  private updateTiers(camera: THREE.Camera): void {
+    const p = camera.position;
     this.tierAt.copy(p);
+    camera.updateMatrixWorld();
+    camera.getWorldDirection(this.tierDir);
+    this.tierMarginAt = this.tierMargin;
+    const viewTest = this.tierMargin >= 0;
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const tanMargin = Math.tan((Math.max(0, this.tierMargin) * Math.PI) / 180);
+    const sphere = new THREE.Sphere();
     if (!this.tiers) {
       this.tiers = tierGeometries().map((g, k) => {
         const name = k ? 'hero' : 'close';
@@ -676,11 +728,9 @@ export class Forest {
     //    instances front to back lets early depth rejection skip the hidden clumps behind them (desktop GPUs; tile-
     //    based GPUs remove hidden opaque fragments anyway)
     const cand: { it: CrownItem; d2: number }[] = [];
-    const touched: Tile[] = [];
     for (const t of this.tiles) {
       const inRange = t.level === 0 && t.box.distanceToPoint(p) < reach;
       if (!inRange && !t.tiered) continue;
-      touched.push(t);
       for (const it of t.items) it.tier = -1;
       if (!inRange) continue;
       for (const it of t.items) {
@@ -690,46 +740,71 @@ export class Forest {
     }
     cand.sort((x, y) => x.d2 - y.d2);
     const fills = tiers.map((t) => ({ c: t.crowns.map(() => 0), s: t.shrubs.map(() => 0) }));
+    // cap accounting over all directions (nearest first), so a crown in view keeps the tier it would have without the view test
+    const used = tiers.map((t) => ({ c: t.crowns.map(() => 0), s: t.shrubs.map(() => 0) }));
     let heroN = 0;
     // KB-I66: the close tier only takes the crowns that get cards (FOREST_CARD_CAP per variant, nearest first)
     const caps = [Math.min(TIER_CAP, this.closeCap), TIER_CAP];
     for (const { it, d2 } of cand) {
       let k = d2 < hero2 && heroN < HERO_CAP ? 1 : d2 < close2 ? 0 : -1;
       if (k < 0) continue;
-      let f = it.shrub ? fills[k].s : fills[k].c;
-      if (f[it.v] >= caps[k]) {
+      let u = it.shrub ? used[k].s : used[k].c;
+      if (u[it.v] >= caps[k]) {
         if (k === 1 && d2 < close2) k = 0;
         else continue;
-        f = it.shrub ? fills[k].s : fills[k].c;
-        if (f[it.v] >= caps[k]) continue;
+        u = it.shrub ? used[k].s : used[k].c;
+        if (u[it.v] >= caps[k]) continue;
       }
       if (k === 1) heroN++;
+      u[it.v]++;
+      if (viewTest && !tierInView(frustum, e.setFromMatrixPosition(it.m), TIER_CROWN_R * it.m.getMaxScaleOnAxis(), p, tanMargin, sphere)) continue;
+      const f = it.shrub ? fills[k].s : fills[k].c;
       const im = it.shrub ? tiers[k].shrubs[it.v] : tiers[k].crowns[it.v];
       im.setMatrixAt(f[it.v], it.m);
       im.setColorAt(f[it.v], it.c);
       f[it.v]++;
       it.tier = k;
     }
-    // 2. the tile meshes draw the rest (mid crowns)
-    for (const t of touched) {
+    // 2. the tile meshes draw the rest (mid crowns): near tiles list the crowns in view within FRINGE_REACH first, and
+    //    their fringe draws only those; a tile is rewritten only when an item changed tier or fringe state
+    const reach2 = FRINGE_REACH * FRINGE_REACH;
+    for (const t of this.tiles) {
+      if (t.level !== 0 && !t.tiered) continue;
+      let tiered = 0;
+      let dirty = false;
+      for (const it of t.items) {
+        if (it.tier >= 0) tiered++;
+        let ring = 1;
+        if (t.level === 0 && it.tier < 0 && !it.shrub) {
+          e.setFromMatrixPosition(it.m);
+          ring = e.distanceToSquared(p) < reach2 && (!viewTest || tierInView(frustum, e, TIER_CROWN_R * it.m.getMaxScaleOnAxis(), p, tanMargin, sphere)) ? 1 : 0;
+        }
+        const st = it.tier * 2 + ring;
+        if (st !== it.drawn) {
+          it.drawn = st;
+          dirty = true;
+        }
+      }
+      t.tiered = tiered;
+      if (!dirty) continue;
+      // per variant: the crowns within reach from 0, the others after them
+      const inC = t.crowns.map(() => 0);
+      const inS = t.shrubs.map(() => 0);
+      for (const it of t.items) if (it.tier < 0 && it.drawn & 1) (it.shrub ? inS : inC)[it.v]++;
       const fc = t.crowns.map(() => 0);
       const fs = t.shrubs.map(() => 0);
-      let tiered = 0;
+      const gc = [...inC];
+      const gs = [...inS];
       for (const it of t.items) {
-        if (it.tier >= 0) {
-          tiered++;
-          continue;
-        }
+        if (it.tier >= 0) continue;
         const im = it.shrub ? t.shrubs[it.v] : t.crowns[it.v];
-        const g = it.shrub ? fs : fc;
+        const g = it.drawn & 1 ? (it.shrub ? fs : fc) : it.shrub ? gs : gc;
         im.setMatrixAt(g[it.v], it.m);
         im.setColorAt(g[it.v], it.c);
         g[it.v]++;
       }
-      if (tiered === 0 && t.tiered === 0) continue;
-      t.tiered = tiered;
       [...t.crowns, ...t.shrubs].forEach((im, k) => {
-        im.count = k < t.crowns.length ? fc[k] : fs[k - t.crowns.length];
+        im.count = k < t.crowns.length ? gc[k] : gs[k - t.crowns.length];
         im.instanceMatrix.needsUpdate = true;
         if (im.instanceColor) im.instanceColor.needsUpdate = true;
       });

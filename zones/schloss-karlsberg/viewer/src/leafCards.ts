@@ -217,6 +217,8 @@ const CLIPPED: Record<string, { size: number; density: number; push: number; max
 export function siteCardOptions(im: THREE.InstancedMesh): CardOptions | null {
   const mat = im.material as THREE.Material;
   if (Array.isArray(mat) || mat.name !== 'vegetation.leaf' || !im.geometry.getAttribute('crown')) return null;
+  // KB-I105: the hull stand-ins of far crowns (siteTreeLod.ts) take no cards
+  if (im.userData.lod === 'far') return null;
   const species = String(im.userData.species ?? '');
   if (!im.geometry.boundingBox) im.geometry.computeBoundingBox();
   const bb = im.geometry.boundingBox!;
@@ -328,6 +330,9 @@ interface StaticSource {
   cards: THREE.InstancedMesh;
   /** instance centres (world) and a reach (m) added to the distance test */
   centres: Float32Array;
+  /** the source's instance matrices and colours as registered (KB-I105: the source mesh is rewritten by its LOD) */
+  mats: Float32Array;
+  cols: Float32Array | null;
   reach: number;
 }
 interface SharedSource {
@@ -392,7 +397,9 @@ export class LeafCards {
       centres.set([v.x, v.y, v.z], i * 3);
     }
     if (!src.geometry.boundingSphere) src.geometry.computeBoundingSphere();
-    this.statics.push({ src, cards, centres, reach: (src.geometry.boundingSphere?.radius ?? 2) * 1.5 });
+    const mats = new Float32Array(src.instanceMatrix.array.subarray(0, src.count * 16));
+    const cols = src.instanceColor ? new Float32Array(src.instanceColor.array.subarray(0, src.count * 3)) : null;
+    this.statics.push({ src, cards, centres, mats, cols, reach: (src.geometry.boundingSphere?.radius ?? 2) * 1.5 });
   }
 
   /** Cards for an instanced crown mesh whose instances are already sorted nearest first (forest hero tier). */
@@ -459,7 +466,7 @@ export class LeafCards {
         const r = this.far + s.reach;
         const r2 = r * r;
         const C = s.centres;
-        for (let i = 0; i < s.src.count; i++) {
+        for (let i = 0; i < C.length / 3; i++) {
           const dx = C[i * 3] - p.x;
           const dy = C[i * 3 + 1] - p.y;
           const dz = C[i * 3 + 2] - p.z;
@@ -470,12 +477,8 @@ export class LeafCards {
       }
       const n = Math.min(cap, list.length);
       for (let k = 0; k < n; k++) {
-        s.src.getMatrixAt(list[k].i, m);
-        s.cards.setMatrixAt(k, m);
-        if (s.src.instanceColor) {
-          s.src.getColorAt(list[k].i, c);
-          s.cards.setColorAt(k, c);
-        }
+        s.cards.setMatrixAt(k, m.fromArray(s.mats, list[k].i * 16));
+        if (s.cols) s.cards.setColorAt(k, c.fromArray(s.cols, list[k].i * 3));
       }
       s.cards.count = n;
       s.cards.instanceMatrix.needsUpdate = true;
