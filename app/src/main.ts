@@ -12,6 +12,7 @@ import { getLocate } from './locate';
 import { bindHash, createStore, hashDisplayPatch, normDeg, parseHash } from './state';
 import type { AppState, Store } from './state';
 import { createSky } from './terrain/Sky';
+import { installTrees } from './trees';
 import { Terrain } from './terrain/Terrain';
 import type { StreamStats } from './terrain/Terrain';
 import { resolveStartAoi } from './ui/startAoi';
@@ -240,6 +241,7 @@ async function main(): Promise<void> {
     areaNote: `Gebiet: ${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''}`,
   });
   registerZones(ctx); // V2.6b: zone portals (Standard), loading screen, enter / leave
+  installTrees(ctx); // V2.4 CHM trees: 🟢 Standard feature `trees`, updated via ctx.onFrame (app/README „Bäume“)
 
   // ---- frame loop -----------------------------------------------------------------------------
   const timer = new Timer();

@@ -32,7 +32,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Skill:** `sle-renderer`
 
 ## V2.4 — Real trees from the CHM 🌲
-- [ ] **Why:** green curtains in the explorer; popping and moving trees in the castle ([0017](../../../../docs/adr/0017-real-trees-from-chm.md)).
+- [x] **Why:** green curtains in the explorer; popping and moving trees in the castle ([0017](../../../../docs/adr/0017-real-trees-from-chm.md)).
 - **Approach:** contract first: new `trees` layer (per chunk: id, E, N, h, crown r, type). Pipeline: CHM local maxima + watershed crowns. Renderer: instanced trees, LOD by stable id with cross-fade, wind amplitude low. Castle viewer consumes the same layer outside its modelled garden.
 - **Acceptance:** tree count vs. a hand count on 3 plots (±15 %); no tree changes position between LOD levels (test); 30 fps on the reference phone over forest.
 - **Skill:** `sle-pipeline` → `sle-renderer`
@@ -75,4 +75,5 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - V2.2: downgrading a tier reloads the page when a v1 module has no teardown (hash keeps the view); Labor is cramped on phones; „aerial ground“ default comes with V2.5.
 - V2.3: `ctx.shell` is null while features mount → tier comes from the host handle. Portals on the minimap via `minimap.setPortals([{id,E,N,label}])` (wire at V2.6b merge). Old `heading + gridConvergence` was off by ≤ 0.085° (Mercator skew) → bearing is projected now.
 - V2.6b: Testraum (built-in procedural fixture zone) shows only in dev, `?aoi=fixture` or `?testraum`; `gltf` zone runtime arrives with the bakery (V2.8). E = *Betreten* near a portal (Space still climbs). Not yet: freeing overworld GPU memory inside a zone, deep links into a zone.
+- V2.4b: far LOD costs ≈ 100 draw calls on desktop (merge far tiles if a device struggles); dither grain visible on crowns mid-fade; relief is bare beyond tree range (3 km Hoch, 1050 m Mobil); castle does not yet use `decodeTrees`; no trunk collision. Proxy runs were loaded by a sibling's `pgtool` job, so absolute ms are inflated.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).
