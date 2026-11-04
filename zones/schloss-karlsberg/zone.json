@@ -142,9 +142,9 @@
   },
   "capture": null,
   "budget": {
-    "downloadBytes": 18712578,
-    "totalBytes": 18712578,
-    "triangles": 3700000,
+    "downloadBytes": 9450270,
+    "totalBytes": 9450270,
+    "triangles": 1400000,
     "textureBytesGpu": 100663288
   },
   "generator": "zones/schloss-karlsberg export-zone"

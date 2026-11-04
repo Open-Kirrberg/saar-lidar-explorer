@@ -656,6 +656,29 @@ pnpm run perf:zone -- --url 'http://127.0.0.1:5241/?aoi=karlsberg'   # castle zo
 - The lens itself adds ≤ 3 ms (desktop, 24 rings near the castle at 2880 × 1800). Most of that is the ring loop, which was tightened (see *Spiel-Look & Relikt-Blick*).
 - Runs that overlapped another session's perf script were 2–5× slower and were discarded. Compare only runs without parallel GPU load.
 
+**v2 perf pass** (2026-11-04, headless, ANGLE Metal on the M4 Max. These are proxy numbers, not phone numbers. Before = a build of `0bae96b` with its own zone package, after = this pass, each on its own preview port):
+
+| 📱 phone proxy | Before | After | Load avg |
+|---|---|---|---|
+| Castle zone, Rundflug (3 cold runs, median) | 58 fps · step 24.5 ms · peak **2.78 M** tris in view | 59.5 fps · step 22.1 ms · peak **1.36 M** | 2.4–3.8 |
+| Castle zone, spawn | 60 fps · 2.23 M | 60 fps · 1.17 M | 2.4–3.8 |
+| Castle zone, „Gehe zu“ Festsaal | 1.6 s sync; next 3 s max frame 150 ms | 0 s; max 33 ms | 2.4–3.8 |
+| Castle zone, Festsaal walk | 56 fps · max frame **317 ms** | 60 fps · max 17 ms | 2.4–3.8 |
+| Cold castle enter (4G) | 26.9 s · 17.1 MB | **18.2 s** · 9.1 MB | 2.4–3.8 |
+| Overworld ortho terrain GPU (Kirrberg / Forest / Castle) | 174 / 189 / 170 MB | 139 / 152 / 159 MB (relief look 72–89) | 2.5–6.5 |
+| 🖥️ Overworld ortho terrain GPU, desktop | 459 / 476 / 447 MB | 246 / 288 / 288 MB (relief 149–207) | 4.2–5.6 |
+
+- 🌄 **Aerial ground by need:** each chunk's ortho is decoded at 1000, 500, 250 or 125 px, whichever is the smallest that gives ≥ 1 texel per CSS px at the chunk's nearest point (`terrain/imageRes.ts`). The chunk re-decodes sharper as you approach and smaller as you move away, with a 20 % band against flicker. Over budget, image detail halves before the mesh coarsens. With a forced 220 MB desktop budget, `pixelError` stays at 1 (it was 2.4). Resampled 1-texel aprons keep the seams closed. `streaming.imageDetail` (default 1, `Infinity` = old behaviour). No data change. Drawn levels and `pixelError` are the same as with the relief look in all views.
+- ⚠️ In one long session the phone's terrain GPU still climbs to its 200 MB cap: the LRU keeps chunks you have left until the cap. Compare kept bytes, not the total. Phone `mobil` detail 0.75 (`ui/quality.ts`) would give 118–131 MB with no measurable sharpness loss; that is not done yet.
+- 🏰 The castle-zone details are in the castle's CHANGELOG (KB-I103/105/106) and [ADR 0040](../docs/adr/0040-castle-triangles-phone-viewport.md).
+- 🧪 Scripts: `pnpm run perf -- --ortho both [--rounds 3]` A/Bs the aerial ground against the relief look in the same page and drops image textures for the relief rounds. `pnpm run perf:zone -- --runs 3 --shots-dir perf-pass` gives medians and also reports:
+  - the Rundflug triangle peak (`inView()` sweep in 0.5 s steps),
+  - frames > 50 / > 100 ms after „Gehe zu“,
+  - bytes fetched during the enter,
+  - the load average.
+
+  It hands the frames back to the castle after `step` hooks (the castle's review clock held them, which hid the hitch before).
+
 ## Known gaps
 
 - Messen (F17): no editing of finished measurements (delete + redraw); no measurement import; the rubber band is a straight (not draped) preview; the area is horizontal only (no 3D surface area). Exports are not written by the Export button in automated checks (GeoJSON content was checked via `measurementsToGeoJSON`).

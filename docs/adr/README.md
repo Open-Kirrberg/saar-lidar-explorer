@@ -46,7 +46,8 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0036](0036-game-minimap.md) | Game minimap: round dial, heading-up by default, CSS rotation | Accepted | 2026-11-04 | v1 minimap header (folgen/klein/groß/Vollbild) |
 | [0037](0037-zone-runtime-host.md) | Zone runtime host: shared renderer, frame ownership, built-in Testraum | Accepted | 2026-11-04 | |
 | [0038](0038-first-flight-tutorial.md) | First-flight tutorial: five self-completing steps to the castle, v1 tour stays in Entdecker | Accepted | 2026-11-04 | v1 intro overlay (removed in V2.2) |
-| [0033](0033-castle-module-zone.md) | Castle as module zone #1: own HUD, shared trees, triangle waiver | Accepted | 2026-11-04 | castle URL handover from the explorer, 1789/2025 switch |
+| [0033](0033-castle-module-zone.md) | Castle as module zone #1: own HUD, shared trees, triangle waiver | Accepted (waiver superseded by [0040](0040-castle-triangles-phone-viewport.md)) | 2026-11-04 | castle URL handover from the explorer, 1789/2025 switch |
+| [0040](0040-castle-triangles-phone-viewport.md) | Castle triangles within 1.5 M in the phone viewport: far crown hulls, waiver dropped | Accepted | 2026-11-04 | ADR 0033 triangle waiver (3.7 M) |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 

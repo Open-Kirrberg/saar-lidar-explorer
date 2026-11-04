@@ -4,6 +4,9 @@
 //   pnpm run build && pnpm exec vite preview --port 5241 --strictPort &   # serves dist + public/data
 //   pnpm run perf -- [--url http://127.0.0.1:5241/?aoi=overall] [--profiles phone,desktop] [--headed]
 //                    [--lens off|on|both]   # V2.5: also measure with the Relikt-Blick lens on (view id +lens)
+//                    [--ortho both] [--rounds 3]   # perf pass: aerial ground vs relief look in the SAME page,
+//                                         # alternating rounds per view, medians (view id +relief)
+//                    [--shots-dir perf-pass]       # sub-folder of docs/shots/ for JSON + JPEGs
 //
 // Drives the system Chrome (puppeteer-core, no browser download) headless by default, so no window
 // opens on the desktop; `--headed` (V2.0 method) shows the page. Per profile: cold load (cache disabled)
@@ -12,16 +15,17 @@
 // readback, read memory. Writes JSON + screenshots to the git-ignored docs/shots/ and prints a
 // Markdown table. Never part of the production bundle (scripts/ is not imported by src/).
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { loadavg } from 'node:os';
 import { join, resolve } from 'node:path';
 import puppeteer from 'puppeteer-core';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
-const SHOTS = join(ROOT, 'docs', 'shots');
 const args = process.argv.slice(2);
 const opt = (name, def) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : def;
 };
+const SHOTS = join(ROOT, 'docs', 'shots', opt('shots-dir', ''));
 const URL_ = opt('url', 'http://127.0.0.1:5241/?aoi=overall');
 const PROFILE_IDS = opt('profiles', 'phone,desktop').split(',');
 const HEADLESS = !args.includes('--headed'); // headless by default: never pop up Chrome windows on the user's desktop
@@ -29,6 +33,14 @@ const CHROME = opt('chrome', process.env.CHROME_PATH ?? '/Applications/Google Ch
 const UNCAPPED = args.includes('--uncapped'); // no vsync: rAF fps = headroom above the display rate
 const SAMPLE_MS = Number(opt('sample-ms', 5000));
 const LENS = { off: [false], on: [true], both: [false, true] }[opt('lens', 'off')] ?? [false];
+/** Perf pass: A/B the ground look in one page. `relief` = the classic VAT display, `ortho` = the V2.5 aerial ground. */
+const ORTHO_AB = opt('ortho', 'off') === 'both';
+const ROUNDS = Number(opt('rounds', 3));
+const median = (xs) => {
+  const s = xs.filter((x) => x != null && !Number.isNaN(x)).sort((a, b) => a - b);
+  return s.length ? s[Math.floor((s.length - 1) / 2)] : null;
+};
+const load = () => loadavg().map((x) => Math.round(x * 100) / 100);
 
 /** Low-end phone proxy (ADR 0028): Chrome emulation, 4× CPU throttle, target 30 fps. */
 const PROFILES = {
@@ -66,6 +78,77 @@ async function waitSettled(page, timeoutMs) {
 async function dismissDialogs(page) {
   await page.evaluate(() => document.querySelectorAll('[data-act="ok"]').forEach((b) => b.offsetParent && b.click()));
   await page.keyboard.press('Escape');
+}
+
+/**
+ * Aerial ground (`ortho`, V2.5 game look) vs the relief look (`vat`) at one view, in the same page: ROUNDS alternating
+ * rounds; each switches the display, waits until streaming settles, then times 15 × step(1) + readback. Medians.
+ */
+async function orthoAB(page, id, v) {
+  const looks = ['ortho', 'vat'];
+  const acc = Object.fromEntries(looks.map((k) => [k, []]));
+  for (let r = 0; r < ROUNDS; r++)
+    for (const key of r % 2 ? [...looks].reverse() : looks) {
+      await page.evaluate((key) => {
+        const t = window.sle.terrain;
+        t.setDisplay(key);
+        // relief look: free the resident image textures (LRU would keep them until budget pressure), so terrain GPU
+        // shows what the relief look itself needs; they stream back on the next ortho round
+        if (key !== 'ortho') t.dropImageLayers?.();
+        window.sle.step(5);
+      }, key);
+      await sleep(300);
+      await waitSettled(page, 120_000);
+      acc[key].push(
+        await page.evaluate(() => {
+          const s = window.sle;
+          const gl = s.renderer.getContext();
+          const px = new Uint8Array(4);
+          s.step(5);
+          const t0 = performance.now();
+          for (let i = 0; i < 15; i++) {
+            s.step(1);
+            gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+          }
+          const st = s.terrainStats();
+          return {
+            stepMs: (performance.now() - t0) / 15,
+            terrainGpuMB: st.gpuMB,
+            pixelError: st.pixelError,
+            drawnByLevel: st.levels.map((l) => l.drawn).join('/'),
+            triangles: s.renderer.info.render.triangles,
+            calls: s.renderer.info.render.calls,
+          };
+        }),
+      );
+    }
+  const out = [];
+  for (const key of looks) {
+    const xs = acc[key];
+    const shot = join(SHOTS, `perf-${id}-${v.id}-${key}.jpg`);
+    await page.evaluate((key) => {
+      window.sle.terrain.setDisplay(key);
+      window.sle.step(5);
+    }, key);
+    await waitSettled(page, 60_000);
+    await page.evaluate(() => window.sle.step(2));
+    await page.screenshot({ path: shot, type: 'jpeg', quality: 70 });
+    out.push({
+      view: `${v.id}:${key}`,
+      ab: true,
+      stepMs: median(xs.map((x) => x.stepMs)),
+      terrainGpuMB: median(xs.map((x) => x.terrainGpuMB)),
+      pixelError: median(xs.map((x) => x.pixelError)),
+      drawnByLevel: xs.at(-1).drawnByLevel,
+      triangles: median(xs.map((x) => x.triangles)),
+      calls: median(xs.map((x) => x.calls)),
+      rounds: xs.length,
+      shot,
+      loadavg: load(),
+    });
+  }
+  await page.evaluate(() => window.sle.terrain.setDisplay('ortho'));
+  return out;
 }
 
 async function runProfile(browser, id) {
@@ -199,7 +282,8 @@ async function runProfile(browser, id) {
     });
     const shot = join(SHOTS, `perf-${id}-${v.id}.jpg`);
     await page.screenshot({ path: shot, type: 'jpeg', quality: 70 });
-    views.push({ view: v.id, settleMs: viewSettleMs, raf, stepMs, ...mem, shot });
+    views.push({ view: v.id, settleMs: viewSettleMs, raf, stepMs, ...mem, shot, loadavg: load() });
+    if (ORTHO_AB && !lens) views.push(...(await orthoAB(page, id, v)));
   }
   await page.close();
   return { profile: id, ...p, ceilingFps, uncapped: UNCAPPED, readyMs, settleMs, env, software, views, errors };
@@ -220,15 +304,23 @@ try {
 }
 
 const out = join(SHOTS, `perf-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`);
-writeFileSync(out, JSON.stringify({ url: URL_, date: new Date().toISOString(), results }, null, 2));
+writeFileSync(out, JSON.stringify({ url: URL_, date: new Date().toISOString(), loadavg: load(), results }, null, 2));
+console.log(`\nload average at the end: ${load().join(' ')}`);
 
 console.log(`\n| Profile | View | rAF fps (p95 ms) | step ms | JS heap MB | terrain GPU MB | triangles | calls | view settle s | trees (near/mid/far inst.) |`);
 console.log(`|---|---|---|---|---|---|---|---|---|---|`);
 for (const r of results) {
-  for (const v of r.views) {
+  for (const v of r.views.filter((x) => !x.ab)) {
     const fps = v.raf ? `${r1(v.raf.fps)} (${r1(v.raf.p95)})` : 'n/a (hidden)';
     console.log(`| ${r.profile} | ${v.view} | ${fps} | ${r1(v.stepMs)} | ${r1(v.heapMB)} | ${r1(v.terrainGpuMB)} | ${(v.triangles / 1e6).toFixed(2)} M | ${v.calls} | ${v.settleMs == null ? 'timeout' : r1(v.settleMs / 1000)} | ${v.trees ? `${v.trees.instances.near}/${v.trees.instances.mid}/${v.trees.instances.far} · ${v.trees.meshes} meshes · ${r1(v.trees.gpuMB)} MB` : '–'} |`);
   }
+}
+if (ORTHO_AB) {
+  console.log(`\n| Profile | View:look | step ms (median) | terrain GPU MB | pixelError (×) | drawn L0/L1/L2/L3/L4 | triangles | calls | load avg |`);
+  console.log(`|---|---|---|---|---|---|---|---|---|`);
+  for (const r of results)
+    for (const v of r.views.filter((x) => x.ab))
+      console.log(`| ${r.profile} | ${v.view} | ${r1(v.stepMs)} | ${r1(v.terrainGpuMB)} | ${v.pixelError} | ${v.drawnByLevel} | ${(v.triangles / 1e6).toFixed(2)} M | ${v.calls} | ${v.loadavg[0]} |`);
 }
 for (const r of results) {
   console.log(`\n${r.label}: idle rAF ceiling ${r1(r.ceilingFps)} fps${r.uncapped ? ' (vsync off)' : ''}; ready ${r1(r.readyMs / 1000)} s, settled +${r.settleMs == null ? 'timeout' : r1(r.settleMs / 1000) + ' s'}; GL "${r.env.glRenderer}"${r.software ? ' ⚠️ SOFTWARE (fps invalid)' : ''}; ${r.env.visibility}; buffer ${r.env.drawingBuffer} (pixelRatio ${r.env.pixelRatio}); errors ${r.errors.length}`);

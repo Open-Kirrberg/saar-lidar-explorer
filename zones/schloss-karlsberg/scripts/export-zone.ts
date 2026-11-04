@@ -5,8 +5,8 @@
  *   pnpm run export:zone -- --out <dataRoot>      # another data root (the folder that holds zones/)
  *   pnpm run export:zone -- --update-source       # write footprint, portal, spawn and budget back into zone.json
  *     --module-bytes <n>   gzip size of the castle's lazy zone chunk (default 1 500 000 = the contract's cap)
- *     --triangles <n>      max triangles in view (default 3 700 000 = skb.inView() max 3.63 M, rounded up; over the
- *                          contract's 1.5 M under the ADR 0033 waiver, capped by TRIANGLES_WAIVER)
+ *     --triangles <n>      max triangles in view (default DECLARED_TRIANGLES = 1 400 000: skb.inView() max 1.36 M over the
+ *                          Rundflug in the phone-proxy viewport, rounded up; ADR 0040, no waiver)
  *     --sips               downscale textures with macOS sips instead of the pipeline's Pillow
  *
  * Source of truth is zones/schloss-karlsberg/zone.json (committed). Footprint, portal and spawn are recomputed from
@@ -15,8 +15,9 @@
  *
  *   zones/schloss-karlsberg/zone.json              source + budget + generated
  *   zones/schloss-karlsberg/terrain/meta.json      viewer terrain meta, 1789 only, `encoding.dtm1789`
- *   zones/schloss-karlsberg/terrain/dtm1789.u16    1789 DTM, uint16 cm steps above floor(h_min) (≤ 5 mm error)
- *   zones/schloss-karlsberg/terrain/ground.u8      1789 ground classes (copied)
+ *   zones/schloss-karlsberg/terrain/dtm1789.u16.deflate  1789 DTM, uint16 cm steps above floor(h_min) (≤ 5 mm error),
+ *                                                  gradient residuals, deflated
+ *   zones/schloss-karlsberg/terrain/ground.u8.deflate    1789 ground classes, deflated
  *   zones/schloss-karlsberg/textures/<set>/{diff,nor_gl,arm}.jpg   Poly Haven CC0, 1024² / 1024² / 512²
  *   zones/index.json                               merged: other zones kept
  *
@@ -26,6 +27,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, lstatSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { deflateSync, inflateSync } from 'node:zlib';
 import { parseArgs } from 'node:util';
 import { loadSite } from '../model/src/index.ts';
 import { DEFAULT_BUILD_OPTIONS, makeLayoutFn } from '../model/src/context.ts';
@@ -40,10 +42,11 @@ import {
   encodeU16,
   f32FromLE,
   finiteRange,
+  gradientResidual,
   mergeZoneIndex,
   packageTerrainMeta,
   PACKAGE_TERRAIN_FILES,
-  TRIANGLES_WAIVER,
+  DECLARED_TRIANGLES,
   u16LE,
   zoneBbox,
 } from './zone/package.ts';
@@ -75,7 +78,7 @@ const { values: args } = parseArgs({
   options: {
     out: { type: 'string', default: resolve(ROOT, '../../app/public/data/') },
     'module-bytes': { type: 'string', default: '1500000' },
-    triangles: { type: 'string', default: '3700000' },
+    triangles: { type: 'string', default: String(DECLARED_TRIANGLES) },
     'update-source': { type: 'boolean', default: false },
     sips: { type: 'boolean', default: false },
   },
@@ -178,10 +181,17 @@ let maxErr = 0;
 for (let i = 0; i < h1789.length; i++) if (!Number.isNaN(h1789[i]!)) maxErr = Math.max(maxErr, Math.abs(back[i]! - h1789[i]!));
 if (maxErr > 0.0051) fail(`u16 round trip error ${maxErr} m > 5 mm`);
 const hRange = finiteRange(h1789);
-writeFile(`terrain/${PACKAGE_TERRAIN_FILES.dtm1789}`, u16LE(u16));
-writeFile(`terrain/${PACKAGE_TERRAIN_FILES.ground}`, ground);
-writeFile('terrain/meta.json', `${JSON.stringify(packageTerrainMeta(devMeta, enc, hRange))}\n`);
-log(`terrain: u16 offset ${enc.offset} m, scale ${enc.scale} m, round trip ≤ ${(maxErr * 1000).toFixed(2)} mm`);
+// gradient residuals + deflate (level 9: ≈ 5 s here, 11.4 → ≈ 2.5 MB; the phone's 4G download is the cold-enter cost)
+const dtmZ = deflateSync(u16LE(gradientResidual(u16, g.cols, g.rows)), { level: 9 });
+const groundZ = deflateSync(ground, { level: 9 });
+if (!inflateSync(groundZ).equals(ground)) fail('ground deflate round trip differs');
+writeFile(`terrain/${PACKAGE_TERRAIN_FILES.dtm1789}`, dtmZ);
+writeFile(`terrain/${PACKAGE_TERRAIN_FILES.ground}`, groundZ);
+writeFile('terrain/meta.json', `${JSON.stringify(packageTerrainMeta(devMeta, enc, hRange, { dtm1789: dtmZ.length, ground: groundZ.length }))}\n`);
+log(
+  `terrain: u16 offset ${enc.offset} m, scale ${enc.scale} m, round trip ≤ ${(maxErr * 1000).toFixed(2)} mm; ` +
+    `deflated dtm ${(dtmZ.length / 1e6).toFixed(2)} MB (raw ${((u16.length * 2) / 1e6).toFixed(2)}), ground ${(groundZ.length / 1e6).toFixed(2)} MB`,
+);
 
 // ---------------------------------------------------------------- textures
 const manifestTex = JSON.parse(readFileSync(resolve(ROOT, 'viewer/textures.json'), 'utf8')) as {
@@ -238,9 +248,8 @@ for (let i = 0; i < 4; i++) {
   if (JSON.stringify(next) === JSON.stringify(budget)) break;
   budget = next;
 }
-const problems = budgetProblems(budget, moduleBytes, TRIANGLES_WAIVER);
+const problems = budgetProblems(budget, moduleBytes);
 if (problems.length) fail(`over budget (docs/zone-contract.md): ${problems.join('; ')}`);
-for (const p of budgetProblems(budget, moduleBytes)) console.warn(`[export:zone] waived (ADR 0033): ${p}`);
 writeFileSync(join(ZONE_DIR, 'zone.json'), text);
 
 // ---------------------------------------------------------------- index
@@ -267,5 +276,5 @@ const mb = (b: number): string => `${(b / 1e6).toFixed(2)} MB`;
 log(`wrote ${relative(process.cwd(), ZONE_DIR)}/ (${files.length + 1} files) and zones/index.json, bbox ${JSON.stringify(bboxEN)}`);
 log(
   `budget: download ${mb(budget.downloadBytes)} / 30, total ${mb(budget.totalBytes)} / 120, GPU textures ${mb(budget.textureBytesGpu)} / 128, ` +
-    `triangles ${budget.triangles} / 1 500 000 (declared, waiver ≤ ${TRIANGLES_WAIVER}), module ${mb(moduleBytes)} gzip (declared)`,
+    `triangles ${budget.triangles} / 1 500 000 (declared, phone viewport), module ${mb(moduleBytes)} gzip (declared)`,
 );

@@ -4,7 +4,7 @@
  * mouse look with pointer lock (click the canvas), G walk / F fly.
  */
 import * as THREE from 'three';
-import { MeshBVH, type ExtendedTriangle } from 'three-mesh-bvh';
+import { type ColliderPiece, pushOutPieces, raycastPieces } from './colliders.ts';
 import { WALK_STEP_MAX } from '@model/site/access.ts';
 
 export type Mode = 'fly' | 'walk';
@@ -27,8 +27,8 @@ export class Controls {
   keys = new Set<string>();
   velocityY = 0;
   onGround = false;
-  bvh: MeshBVH | null = null;
-  bvhMesh: THREE.Mesh | null = null;
+  /** Walk colliders around the camera (colliders.ts, KB-I106: cached pieces, owned by the caller's cache). */
+  pieces: readonly ColliderPiece[] = [];
   /** Terrain sampler (local x, z) -> h for fly-mode ground clearance and speed scaling. */
   ground: (x: number, z: number) => number = () => NaN;
   onModeChange: (m: Mode) => void = () => {};
@@ -144,9 +144,7 @@ export class Controls {
     this.enabled = false;
     for (const r of this.removers) r();
     this.removers = [];
-    this.bvh = null;
-    this.bvhMesh?.geometry.dispose();
-    this.bvhMesh = null;
+    this.pieces = [];
   }
 
   setMode(m: Mode): void {
@@ -180,38 +178,14 @@ export class Controls {
     this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
   }
 
-  setColliders(meshes: THREE.Mesh[]): void {
-    if (!meshes.length) {
-      this.bvh = null;
-      return;
-    }
-    // merge into one geometry in world space
-    let n = 0;
-    for (const m of meshes) n += (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count);
-    const pos = new Float32Array(n * 3);
-    let k = 0;
-    const v = new THREE.Vector3();
-    for (const m of meshes) {
-      m.updateWorldMatrix(true, false);
-      const p = m.geometry.attributes.position;
-      const idx = m.geometry.index;
-      const cnt = idx ? idx.count : p.count;
-      for (let i = 0; i < cnt; i++) {
-        v.fromBufferAttribute(p, idx ? idx.getX(i) : i).applyMatrix4(m.matrixWorld);
-        pos[k++] = v.x;
-        pos[k++] = v.y;
-        pos[k++] = v.z;
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.bvh = new MeshBVH(geo);
-    this.bvhMesh = new THREE.Mesh(geo);
+  /** The walk colliders around the camera (castle.ts refreshColliders; pieces stay owned by its cache). */
+  setColliders(pieces: readonly ColliderPiece[]): void {
+    this.pieces = pieces;
   }
 
   /** Highest collider surface below p (within `range`), NaN if none. */
   groundBelow(p: THREE.Vector3, range = 3): number {
-    if (!this.bvh) return this.ground(p.x, p.z);
+    if (!this.pieces.length) return this.ground(p.x, p.z);
     // centre + 4 probes on the capsule rim: small gaps (thresholds, joints) are bridged
     let best = -Infinity;
     for (const [dx, dz] of [
@@ -222,7 +196,7 @@ export class Controls {
       [0, -RADIUS * 0.8],
     ]) {
       const ray = new THREE.Ray(new THREE.Vector3(p.x + dx, p.y + 0.6, p.z + dz), new THREE.Vector3(0, -1, 0));
-      const hit = this.bvh.raycastFirst(ray, THREE.DoubleSide);
+      const hit = raycastPieces(this.pieces, ray, range + 0.6);
       if (hit && hit.distance < range + 0.6) best = Math.max(best, hit.point.y);
     }
     if (best > -Infinity) return best;
@@ -287,7 +261,7 @@ export class Controls {
 
   /** Push the capsule (feet + STEP_MAX … head) out of the colliders. */
   private collide(p: THREE.Vector3): void {
-    if (!this.bvh) return;
+    if (!this.pieces.length) return;
     const r = RADIUS;
     const bottom = p.y - EYE + STEP_MAX + r;
     const top = p.y + 0.1;
@@ -297,25 +271,8 @@ export class Controls {
     this.tmpBox.expandByPoint(this.seg.start).expandByPoint(this.seg.end);
     this.tmpBox.min.addScalar(-r);
     this.tmpBox.max.addScalar(r);
-    const triPoint = new THREE.Vector3();
-    const capPoint = new THREE.Vector3();
     const seg = this.seg;
-    this.bvh.shapecast({
-      intersectsBounds: (box) => box.intersectsBox(this.tmpBox),
-      intersectsTriangle: (tri: ExtendedTriangle) => {
-        const dist = tri.closestPointToSegment(seg, triPoint, capPoint);
-        if (dist < r) {
-          const depth = r - dist;
-          const dir = capPoint.sub(triPoint).normalize();
-          dir.y = 0; // walls push horizontally only; floors are handled by the ground probe
-          if (dir.lengthSq() < 1e-6) return false;
-          dir.normalize();
-          seg.start.addScaledVector(dir, depth);
-          seg.end.addScaledVector(dir, depth);
-        }
-        return false;
-      },
-    });
+    pushOutPieces(this.pieces, seg, this.tmpBox, r);
     p.x = seg.start.x;
     p.z = seg.start.z;
   }

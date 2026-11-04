@@ -4,6 +4,9 @@ One line per shipped item, newest first. Numbers and details go in the commit me
 
 | Date | Item | What |
 |---|---|---|
+| 2026-11-04 | KB-I106 | ⚡ No first-visit hitch: walk colliders cached per tile and building, interiors, colliders and shaders warmed behind the loading screen; package 19.7 → 9.5 MB (deflated predicted terrain), byte progress while loading |
+| 2026-11-04 | KB-I105 | 🌳 Far garden crowns as 70-triangle hulls with leaf-cluster relief; forest tiers and fringe cards only in view: Rundflug 2.8 → 1.4 M triangles, waiver dropped ([ADR 0040](../../docs/adr/0040-castle-triangles-phone-viewport.md)) |
+| 2026-11-04 | KB-I103 | 📱 Phone proxy ≥ 30 fps in the Rundflug, at the spawn and on the Festsaal walk (58–60 fps, max frame after „Gehe zu“ 317 → 33 ms) |
 | 2026-11-04 | KB-I104 | 🏰 Zone #1 of the explorer: `zone.json` + `export:zone` package, `mountZone` on the shared renderer, Rundflug entry, today's CHM trees outside the footprint ([ADR 0033](../../docs/adr/0033-castle-module-zone.md)) |
 | 2026-11-04 | KB-I101 | 🎚️ UI by tiers: 1789 only, 8 „Gehe zu“ highlights, Gewissheit, one quality setting, Kino default; Vollmondnacht removed, festivals frozen |
 | 2026-11-04 | docs | 📚 README 1 524 → ≈ 70 lines, this changelog, backlog trimmed to open items; long forms frozen in `docs/history/` |
