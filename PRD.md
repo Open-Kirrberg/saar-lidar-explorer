@@ -73,16 +73,14 @@ Item-level backlog: [`.claude/skills/sle-roadmap/references/roadmap.md`](.claude
 
 ## ❓ Open questions
 
-Decisions with options → `Proposed` ADRs ([0027](docs/adr/0027-captured-zone-method.md) mesh vs splats = Q-36). Still open:
+Decisions with options → `Proposed` ADRs (none open). Still open:
 
 | Q | Question | Blocks | Lean |
 |---|---|---|---|
 | Q-32 | 🤝 Heritage partner (LDA Saarland, Heimatverein Kirrberg, Saarforst): who talks to them, when? | v3 on-site, *Mein Standort*, F18 outside Labor | Nobody owns it yet |
 | Q-34 | ☁️ v5 hosting: ≈ 22 000 km² ≈ 650 GB, beyond GitHub Pages | v5 | Contracts must not assume one small AOI |
 | Q-35 | 🏷️ Product name for the public | — | Rename later |
-| Q-36 | 🥖 Bakery location and footage from Hoon | Zone #2 | Pending |
 | Q-15 | 🔍 F15 precision unknown (recall 8/18 at 30 m on `overall`) | Glow quality in the lens | Review a few hundred candidates in Labor, then tune |
-| Q-12 | 💾 GPU budget: ortho + buildings + trees near the 600 MiB soft cap | Phone | Distance-based ortho resolution |
 
 🧊 Parked v1 questions (Q-6 … Q-31): [PRD v1 §8](docs/history/prd-v1.md#8-open-questions).
 

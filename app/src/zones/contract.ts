@@ -69,12 +69,27 @@ export interface ZoneEvidence {
   disclaimer_de: string;
 }
 
+/** V2.8b: scale correction of a captured zone (contract „Scale correction“). */
+export interface ZoneCaptureScale {
+  /** 0.5–2: the runtime scales assets and spawns by it about `pivotLocal`. */
+  factor: number;
+  /** Zone frame pivot (x, y, z). */
+  pivotLocal: Vec3;
+  metresPerUnit?: number;
+  source?: string;
+  relUncertainty?: number;
+}
+
 export interface ZoneCapture {
   date: string;
   method: 'photogrammetry-mesh';
   georef: { method: string; controlPoints: number; rmsError_m: number };
   privacy: string;
+  scale?: ZoneCaptureScale;
 }
+
+export const SCALE_FACTOR_MIN = 0.5;
+export const SCALE_FACTOR_MAX = 2;
 
 export interface ZoneBudget {
   downloadBytes: number;
@@ -290,12 +305,30 @@ function parseCapture(raw: unknown, kind: ZoneKind, warn: (m: string) => void): 
     isObj(g) && str(g.method) && fin(g.controlPoints) && g.controlPoints >= 0 && fin(g.rmsError_m) && g.rmsError_m >= 0 &&
     str(raw.privacy);
   if (!ok) return warn('capture: invalid (date, method, georef{method, controlPoints, rmsError_m}, privacy)'), null;
-  return {
+  const cap: ZoneCapture = {
     date: raw.date as string,
     method: 'photogrammetry-mesh',
     georef: { method: str((g as Record<string, unknown>).method)!, controlPoints: (g as { controlPoints: number }).controlPoints, rmsError_m: (g as { rmsError_m: number }).rmsError_m },
     privacy: str(raw.privacy, 300)!,
   };
+  if (raw.scale !== undefined) {
+    const scale = parseCaptureScale(raw.scale);
+    if (scale) cap.scale = scale;
+    else warn(`capture.scale: invalid (factor ${SCALE_FACTOR_MIN}–${SCALE_FACTOR_MAX}, pivotLocal [x, y, z]) → factor 1`);
+  }
+  return cap;
+}
+
+export function parseCaptureScale(raw: unknown): ZoneCaptureScale | null {
+  if (!isObj(raw)) return null;
+  const pivot = parseVec3(raw.pivotLocal);
+  if (!fin(raw.factor) || raw.factor < SCALE_FACTOR_MIN || raw.factor > SCALE_FACTOR_MAX || !pivot) return null;
+  const out: ZoneCaptureScale = { factor: raw.factor, pivotLocal: pivot };
+  if (fin(raw.metresPerUnit) && raw.metresPerUnit > 0) out.metresPerUnit = raw.metresPerUnit;
+  const src = str(raw.source, 40);
+  if (src) out.source = src;
+  if (fin(raw.relUncertainty) && raw.relUncertainty >= 0) out.relUncertainty = raw.relUncertainty;
+  return out;
 }
 
 function parseBudget(raw: unknown, warn: (m: string) => void): ZoneBudget | null {

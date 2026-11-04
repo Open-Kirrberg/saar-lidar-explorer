@@ -49,6 +49,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0033](0033-castle-module-zone.md) | Castle as module zone #1: own HUD, shared trees, triangle waiver | Accepted (waiver superseded by [0040](0040-castle-triangles-phone-viewport.md)) | 2026-11-04 | castle URL handover from the explorer, 1789/2025 switch |
 | [0039](0039-capture-tool-beside-video2world.md) | Shared capture tool in `tools/capture/`; castle `video2world/` stays as HMS evidence | Accepted | 2026-11-04 | 0029 (video2world line) |
 | [0040](0040-castle-triangles-phone-viewport.md) | Castle triangles within 1.5 M in the phone viewport: far crown hulls, waiver dropped | Accepted | 2026-11-04 | ADR 0033 triangle waiver (3.7 M) |
+| [0041](0041-gltf-zone-runtime-walk-on-mesh.md) | Generic glTF zone runtime: coarse-first LODs, walk on the captured mesh, scale as data | Accepted | 2026-11-04 | |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 

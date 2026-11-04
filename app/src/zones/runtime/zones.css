@@ -56,3 +56,25 @@
   .sle-zone-title { font-size: 14px; padding: 6px 10px; }
   .sle-zone-foot { right: 12px; bottom: calc(112px + var(--safe-b, 0px)); }
 }
+
+/* V2.8b glTF zones (gltfZone.ts): float toggle below *Verlassen*, two-button walk pad, first-time hint. */
+.sle-zone-gltf-ui { position: absolute; inset: 0; pointer-events: none; }
+.sle-zone-gltf-ui > * { pointer-events: auto; }
+.sle-zone-float {
+  position: absolute; top: calc(72px + var(--safe-t, 0px)); right: calc(12px + var(--safe-r, 0px));
+  min-height: 40px; padding: 4px 14px; border-radius: 10px; font-size: 14px;
+}
+.sle-zone-float[aria-pressed='true'] { background: rgba(255, 207, 90, 0.3); border-color: #ffcf5a; }
+.sle-zone-gltf-ui .sle-zone-walkpad { flex-direction: column; gap: 10px; }
+@media (pointer: coarse) { .sle-zone-gltf-ui .sle-zone-walkpad { display: flex; } }
+.sle-zone-hint {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(44px + var(--safe-b, 0px)); margin: 0;
+  padding: 6px 14px; border-radius: 999px; background: rgba(20, 22, 26, 0.7); color: #eee; font-size: 13px;
+  white-space: nowrap; pointer-events: none !important; transition: opacity 0.8s;
+}
+.sle-zone-hint-off { opacity: 0; }
+/* Phones: the walk pad owns the lower right; footer text and hint keep clear of it. */
+@media (pointer: coarse) {
+  .sle-zone-active .sle-overlay-slot:has(.sle-zone-gltf-ui) .sle-zone-foot { right: calc(124px + var(--safe-r, 0px)); bottom: calc(8px + var(--safe-b, 0px)); }
+  .sle-zone-hint { top: calc(120px + var(--safe-t, 0px)); bottom: auto; white-space: normal; text-align: center; max-width: calc(100vw - 32px); }
+}

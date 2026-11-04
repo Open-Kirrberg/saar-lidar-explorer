@@ -4,6 +4,8 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-04 | V2.8 | 🥖 Bäckerei Heusser as zone #2: capture tool `tools/capture/` (video → blurred frames → mesh → georeferenced zone package, ≈ 1.15 h per zone) + generic glTF zone runtime, walk on the captured mesh (ADR 0027, 0039, 0041) |
+| 2026-11-04 | perf | ⚡ Phone-proxy pass: castle Festsaal stall gone, castle under 1.5 M triangles, cold enter 18 s, ortho sharpness by screen need (ADR 0040) |
 | 2026-11-04 | V2.7 | 🏰 Schloss Karlsberg as zone #1 behind its portal: 1789 only, Kino look, Rundflug entry, „Gehe zu“ 8 highlights, shared CHM trees, one quality setting (ADR 0033) |
 | 2026-11-04 | V2.9 | ✨ First-flight tutorial (5 self-completing steps to the castle, `pnpm run first-run` walkthrough) + RLP attribution year 2026 and dataset links in „© Quellen“ (ADR 0038) |
 | 2026-11-04 | V2.5 | 🔍 Game look (aerial ground) + *Relikt-Blick* lens: trees fade, relief blends in, candidates glow; variants + *Zeitreise* in Entdecker; *Merken* with a private note (ADR 0035) |

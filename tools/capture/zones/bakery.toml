@@ -60,3 +60,34 @@ crop_below_m = -6          # relative to the DTM ground under the zone
 crop_above_m = 25
 texture_px = { medium = 4096, reduced = 2048 }
 preview_detail = "medium"
+
+[package]                  # zone package (docs/zone-contract.md) -> app/public/data/zones/bakery/ + zones/index.json
+name_de = "Bäckerei Heusser"
+summary_de = "Ein Gang durch die Bäckerei in Kirrberg: von der Straße in den Laden und hinten durch den Durchgang. Aus einem Handvideo berechnet, mit Erlaubnis der Inhaber."
+portal_label_de = "Bäckerei betreten"
+disclaimer_de = "Echter Ort, aus einem Handvideo berechnet: Glas und Theke fehlen teils, Maße ± 11 %. Personen und Kennzeichen unkenntlich gemacht."
+privacy_de = "Kennzeichen und Personen vor der Rekonstruktion unscharf, Nahaufnahmen von Personen verworfen, ein Beinfragment im Laden aus der Textur entfernt"
+attribution = [
+  "Aufnahme Bäckerei Heusser, Kirrberg, mit Erlaubnis der Inhaber, eigenes Werk",
+  "Georeferenz: LoD2-Gebäude und DGM1 © GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0",
+]
+sources_de = ["Handvideo (DJI, Weitwinkel), 437 Schlüsselbilder, Apple Object Capture"]
+footage_date = "2026-11-04"   # camera clock unset (MP4 says 2019-04-18); date the footage arrived. Replace with the real day.
+confidence = "med"
+look = "natur"
+lods = ["medium", "reduced"]  # finest first
+until_m = [60]                # medium within 60 m of the scene bbox (the whole walk), reduced beyond
+ktx2_quality = 160            # ETC1S quality 1-255
+texture_px = { medium = 3072, reduced = 2048 }   # KTX2 atlas side; the wasm Basis encoder caps at ~12 Mpix (4096² fails)
+spawn_index = 0               # camera pose in video order: 0 = first street frame
+eye_m = 1.6
+portal_radius_m = 40
+# One tape measurement fixes the scale (camera-height prior, +-11 %): factor = true length / length in the zone.
+# Applied by the runtime about capture.scale.pivotLocal (the LoD2 corner); edit here + `run.sh bakery package`,
+# or edit capture.scale.factor in the generated zone.json directly.
+scale_factor = 1.0
+
+# Privacy (H13): texels of faces inside these spheres (zone frame) are inpainted in every LOD.
+[[package.privacy_mask]]
+center = [5.95, 244.8, -1.45]   # blurred legs of a person baked into the shop floor (medium atlas ~ px 2390-2560, 3072-3320)
+radius = 0.6

@@ -9,6 +9,7 @@ import type { Minimap } from '../map/Minimap';
 import type { MarkerManager } from '../markers/MarkerManager';
 import type { FeatureDef } from './registry';
 import type { Tier } from './tiers';
+import type { QualityLevel } from '../ui/settings';
 import type { MoveMode } from './flight';
 import type { Toast } from './dom';
 import type { DialogHandle, DialogOptions } from './dialog';
@@ -91,6 +92,8 @@ export interface ShellApi {
   /** Persisted locally; `source` is a store-style tag (avoids feedback loops in listeners). */
   setTier(t: Tier, source?: string): void;
   onTier(cb: (t: Tier, source: string) => void): () => void;
+  /** V2.8b: current render quality level (zones forward it to their runtime). */
+  quality?(): QualityLevel;
   /** Tier-gated registry: mount from `def.tier` on, unmount below it. Returns an unregister function. */
   registerFeature(def: FeatureDef<FeatureHost>): () => void;
   isMounted(id: string): boolean;

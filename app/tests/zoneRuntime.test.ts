@@ -364,9 +364,11 @@ describe('built-in Testraum + portal markers', () => {
     const warn = vi.fn();
     const fetched = { ...zone(), name_de: 'Aus dem Paket' };
     const gltf = { ...zone(), id: 'laden', runtime: { kind: 'gltf' as const } };
-    const merged = mergeZones([zone()], [fetched, gltf], warn);
+    const merged = mergeZones([zone()], [fetched, gltf], warn, { modules: { testraum: true }, gltf: false });
     expect(merged.map((z) => z.name_de)).toEqual(['Aus dem Paket']);
     expect(warn).toHaveBeenCalledTimes(1);
+    // V2.8b: this build has the glTF runtime, so `kind: "gltf"` packages stay
+    expect(mergeZones([zone()], [fetched, gltf], warn).map((z) => z.id)).toEqual(['testraum', 'laden']);
     expect(promptText(zone())).toBe('Testraum betreten');
     expect(portalInfos(merged)[0]).toMatchObject({ zoneId: 'testraum', portalId: PORTAL, radius_m: 40, facing_deg: 180 });
   });

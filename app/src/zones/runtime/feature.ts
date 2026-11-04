@@ -22,7 +22,7 @@ import type { ZoneFlow } from './flow';
 import { PortalMarker } from './marker';
 import { overworldPose, restoreRig, rigSnapshot } from './overworld';
 import type { RigSnapshot } from './overworld';
-import { ZONE_MODULES, zoneModuleNames } from './modules';
+import { GLTF_RUNTIME, ZONE_MODULES, zoneModuleNames } from './modules';
 import { overworldTreeSource } from './sharedTrees';
 import './zones.css';
 
@@ -102,18 +102,24 @@ export const portalInfos = (zones: readonly ZoneManifest[]): ZonePortalInfo[] =>
 export const promptText = (z: Pick<ZoneManifest, 'name_de'>): string => `${z.name_de} betreten`;
 
 /** Built-ins first, fetched packages win on the same id; zones without a runtime in this build drop out. */
-export function mergeZones(builtin: readonly ZoneManifest[], fetched: readonly ZoneManifest[], warn: (m: string) => void): ZoneManifest[] {
+export function mergeZones(
+  builtin: readonly ZoneManifest[],
+  fetched: readonly ZoneManifest[],
+  warn: (m: string) => void,
+  runtimes: { modules: Readonly<Record<string, unknown>>; gltf: boolean } = { modules: ZONE_MODULES, gltf: !!GLTF_RUNTIME },
+): ZoneManifest[] {
   const byId = new Map<string, ZoneManifest>();
   for (const z of [...builtin, ...fetched]) byId.set(z.id, z);
   return [...byId.values()].filter((z) => {
-    if (z.runtime.kind === 'module' && ZONE_MODULES[z.runtime.module]) return true;
+    if (z.runtime.kind === 'module' && runtimes.modules[z.runtime.module]) return true;
+    if (z.runtime.kind === 'gltf' && runtimes.gltf) return true;
     warn(`[zone ${z.id}] runtime ${z.runtime.kind} not in this build, zone absent`);
     return false;
   });
 }
 
 async function loadModule(zone: ZoneManifest): Promise<ZoneModule> {
-  const loader = zone.runtime.kind === 'module' ? ZONE_MODULES[zone.runtime.module] : undefined;
+  const loader = zone.runtime.kind === 'module' ? ZONE_MODULES[zone.runtime.module] : GLTF_RUNTIME;
   if (!loader) throw Object.assign(new Error(`no runtime for ${zone.id}`), { userMessage: MSG_NO_RUNTIME });
   const m = (await loader()) as ZoneModule & { default?: ZoneModule };
   const mod = typeof m.mountZone === 'function' ? m : m.default;
@@ -198,6 +204,7 @@ export function mountZones(h: FeatureHost): () => void {
         baseUrl: `${dataRootUrl()}zones/${zone.id}/`,
         manifest: zone,
         tier: shell.tier(),
+        quality: shell.quality?.() ?? 'auto',
         footprintEN: zone.footprint.map(([E, N]) => [E, N] as [number, number]),
         // V2.7: today's CHM trees around the footprint (the zone decides what it draws of them)
         trees: zone.preset.trees === 'shared' ? overworldTreeSource(manifest, terrain.baseUrl) : undefined,

@@ -53,7 +53,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Skill:** castle skills in `zones/schloss-karlsberg/.claude/skills/`
 
 ## V2.8 — Captured zone pipeline + bakery 🥖
-- [~] V2.8a capture tool + georeferenced bakery mesh done (`tools/capture/`, ADR 0027 Accepted, 0039); V2.8b bakery zone package + gltf runtime open.
+- [x] V2.8a capture tool + georeferenced bakery mesh (`tools/capture/`, ADR 0027 Accepted, 0039); V2.8b bakery zone + glTF runtime (ADR 0041).
 - **Approach:** move `zones/schloss-karlsberg/video2world/` (→ `tools/capture/`) out of the castle into a shared tool; automate it: video → frames → mesh (or splats, ADR [0027](../../../../docs/adr/0027-captured-zone-method.md)) → scale + georeference → zone package. Measure hours per zone.
 - **Acceptance:** U3 works; one command from footage to zone; time per zone recorded.
 
@@ -81,4 +81,5 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - V2.7 → perf pass (ADR 0040): proxy Festsaal walk 60 fps (worst frame 317 → 17 ms), Rundflug ≤ 1.36 M triangles (waiver dropped; a wide desktop window sees ≈ 2.1 M), cold enter 26.9 → 18.2 s on 4G (9.1 MB). Left: ≈ 0.4 s one-off shader prep on the first Rundflug frame; 580–615 draw calls in the castle (the proxy doesn't model this cost); phone terrain memory reaches its 200 MB cap in long sessions (phone detail 0.75 in `ui/quality.ts` would give 118–131 MB). The castle package is generated: `cd zones/schloss-karlsberg && pnpm run export:zone` (without it the portal is absent).
 - V2.9 walkthrough after V2.7: `pnpm run first-run` PASS into the castle — 390 px touch 4 actions, desktop 5 actions.
 - V2.8a: bakery scale rests on an assumed 1.35 m camera height → ±11 % (±1.1 m at 10 m from the checked corner); **one tape measurement** (shop depth or facade width) fixes it — ask the humans. Runner-up georef fit 6.8 m along the facade (score 0.89) ruled out by the passage wall. Capture run ≈ 1.1 h on an M4 Max (mesh 54 min) + human privacy review. COLMAP poses are off by median 1.5 m vs Object Capture — a later splat run starts from Object Capture poses.
+- V2.8b: `pnpm run perf:gltf` needs a production preview (`vite preview`, use `localhost`, it binds IPv6); the dev server times out under 4G throttling. Footage date in the package = arrival day (camera clock unset) → set the real date. Mesh has holes + mirror geometry under the shiny floor (the walker steps over them). Last courtyard shot faces a meter box.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).
