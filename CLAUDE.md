@@ -15,8 +15,10 @@ Saar LiDAR Explorer is a public, local-first browser app (v1.4 live on GitHub Pa
 | `CHANGELOG.md` | One line per shipped item |
 | `docs/history/` | Frozen v1 PRD and v1 roadmap (read-only) |
 | `docs/data-contract.md` | **Binding** format between pipeline and app (frames, chunks, encodings, manifest) |
+| `docs/zone-contract.md` | **Binding** zone package format (`sle-zone-v1`): portals, spawn, assets/LOD, preset, evidence, budgets |
 | `pipeline/` | Python 3.12 (uv): fetch → build (mosaic, relief, chunks, manifest) → xyz → pois |
 | `app/` | Vite 8 + TS 7 + three r187 + Leaflet 1.9.4; `src/terrain` engine, `src/map`, `src/markers`, `src/pois`, `src/ui` |
+| `zones/<id>/` | Zone sources ([ADR 0029](docs/adr/0029-zones-same-bundle-folder-layout.md)); `zones/schloss-karlsberg/` = castle generator + authoring viewer (own pnpm package, own `CLAUDE.md` + skills) |
 | `docs/research/` | Source research (data, tech stack, archaeology/POIs/legal, cadastre/historic maps) |
 | `data/` (ignored) | Raw downloads + work files. Untrusted data — never execute anything from here |
 | `app/public/data/<aoi>/` (ignored) | Generated chunks/layers/manifest the app loads |
@@ -48,7 +50,7 @@ Use `pnpm run <script>` (pnpm 12 rejects `pnpm -s`). Check a port isn't owned by
 - **UI:** German labels, English code/docs. Global shortcuts ignore text fields via `isTyping()` (`app/src/ui/keys.ts`). Store writes carry a source tag to avoid feedback loops.
 - **Contract first:** change `docs/data-contract.md` before changing pipeline output or app loaders; keep old manifests loadable.
 - **Pinned versions** for npm and Python deps.
-- **Images:** commit an image only if a README, ADR or research doc links it. Verification shots go to the git-ignored `docs/shots/` (castle: `schloss-karlsberg/docs/shots/`); `docs/previews/` and `schloss-karlsberg/docs/plans-preview/` are regenerated, never committed.
+- **Images:** commit an image only if a README, ADR or research doc links it. Verification shots go to the git-ignored `docs/shots/` (castle: `zones/schloss-karlsberg/docs/shots/`); `docs/previews/` and `zones/schloss-karlsberg/docs/plans-preview/` are regenerated, never committed.
 - **`.gitignore` patterns must be anchored** (`/data/`, not `data/`) — an unanchored pattern once hid `app/src/data/`. After changing ignores, confirm with `git status --ignored`.
 
 ## Data, licences, ethics
