@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "serve:local": "pnpm run build && vite preview --host 127.0.0.1 --port 5250 --strictPort",
     "test": "vitest run",
-    "fixture": "tsx scripts/make-fixture.ts"
+    "fixture": "tsx scripts/make-fixture.ts",
+    "perf": "node scripts/perf-proxy.mjs"
   },
   "dependencies": {
     "leaflet": "1.9.4",
@@ -26,6 +27,7 @@
     "@types/three": "0.187.0",
     "@vitejs/plugin-basic-ssl": "2.3.0",
     "pngjs": "7.0.0",
+    "puppeteer-core": "25.16.0",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vite": "8.3.5",
