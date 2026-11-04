@@ -22,7 +22,7 @@ Explore your home area like a game: fly or walk over the **real** Kirrberg, Homb
 3. 🧹 **Simple by default.** About 8 controls for new users; more behind *Entdecker* and *Labor* ([0019](docs/adr/0019-feature-tiers.md)).
 4. 🏭 **Zones are cheap to make.** One zone contract, two kinds; captured zones from video via an automated pipeline.
 5. 🔍 **Simple relict finding.** Lens, glow, *Merken* with a note. Never on-site guidance ([0021](docs/adr/0021-quests-virtual-only.md)).
-6. 📱 **Desktop = phone.** Web richer, phone simpler; 2021 mid-range phone at 30 fps.
+6. 📱 **Desktop = phone.** Web richer, phone simpler; 30 fps on the low-end proxy, 60 fps on a Pixel 9 ([0028](docs/adr/0028-phone-proxy-headroom.md)).
 
 ## 🚫 Non-goals (v2)
 
@@ -57,7 +57,7 @@ Full table and the remove / freeze list: [0019](docs/adr/0019-feature-tiers.md) 
 | 🧊 Freeze | *Mein Standort* · point cloud · castle festivals · plan sheets / glTF |
 | 🗑️ / 📦 | AOI switcher, HUD shortcut list, debug panel (dev only), tree collision, 3D parcels, castle 2025 switch, many castle toggles · F21 print → own tool · F22 craters → private repo |
 
-**v2 is done when:** the new shell runs on desktop and phone, CHM trees are in the overworld, the castle (#1) and the bakery (#2) are behind portals, and simple relict finding works, all measured on the reference phone.
+**v2 is done when:** the new shell runs on desktop and phone, CHM trees are in the overworld, the castle (#1) and the bakery (#2) are behind portals, and simple relict finding works, all measured on the phone proxy ([0028](docs/adr/0028-phone-proxy-headroom.md)).
 
 ## 🗺️ Roadmap
 
@@ -81,7 +81,6 @@ Decisions with options → `Proposed` ADRs ([0026](docs/adr/0026-collapsed-attri
 | Q-34 | ☁️ v5 hosting: ≈ 22 000 km² ≈ 650 GB, beyond GitHub Pages | v5 | Contracts must not assume one small AOI |
 | Q-35 | 🏷️ Product name for the public | — | Rename later |
 | Q-36 | 🥖 Bakery location and footage from Hoon | Zone #2 | Pending |
-| Q-22 | 📱 Never run on a real phone (iOS Safari, Android Chrome, GPS, gestures, rAF) | v2 done criterion | Test before the shell rebuild |
 | Q-15 | 🔍 F15 precision unknown (recall 8/18 at 30 m on `overall`) | Glow quality in the lens | Review a few hundred candidates in Labor, then tune |
 | Q-12 | 💾 GPU budget: ortho + buildings + trees near the 600 MiB soft cap | Phone | Distance-based ortho resolution |
 

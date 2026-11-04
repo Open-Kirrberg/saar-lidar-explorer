@@ -413,6 +413,51 @@ Classified ALS 2025 points (`manifest.pointclouds`, contract format `sle-pts-v1`
 
 F21 moved to the separate local repo `sle-print` in V2.1.
 
+## Performance 📏
+
+Yardstick: [ADR 0028](../docs/adr/0028-phone-proxy-headroom.md). The low-end proxy targets 30 fps; real phones are tested by humans only.
+
+```sh
+pnpm run build && pnpm exec vite preview --port 5241 --strictPort --host 127.0.0.1 &
+pnpm run perf                                  # phone proxy + desktop; JSON + shots → docs/shots/perf-*
+pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
+```
+
+**Method** (`scripts/perf-proxy.mjs`, puppeteer-core with the system Chrome, headed so rAF runs and WebGL uses the real GPU; not part of the bundle):
+
+| Step | What |
+|---|---|
+| Profiles | **phone**: 390 × 844, DPR 3, touch, 4× CPU throttle, 4G (9 Mbit/s, 150 ms RTT) · **desktop**: 1440 × 900, DPR 2, no throttle |
+| Load | Cold load (cache off) → `sle:ready` = first rendered terrain; then + time until the streaming queue is empty |
+| Views | `sle.flyTo(E, N, {duration: 0})`, wait until streaming settles (`terrainStats().pending == 0`), first-run dialogs dismissed |
+| fps | rAF frames over 5 s (p95 frame time), plus the idle-page rAF **ceiling** = display refresh |
+| step ms | 30 × synchronous `sle.step(1)` + 1-pixel `readPixels` (CPU + GPU finish), mean |
+| Memory | `performance.memory.usedJSHeapSize`, `terrainStats().gpuMB` (terrain textures), `renderer.info` triangles/calls |
+
+**Baseline V2.0** (2026-11-04, v1.5 build on `main`, `?aoi=overall`, MacBook Pro M4 Max, Chrome, ANGLE Metal — no SwiftShader; median of 3 runs):
+
+| Profile | View (E/N, AGL, pitch) | rAF fps | step ms | JS heap MB | terrain GPU MB | triangles | calls | view streamed in |
+|---|---|---|---|---|---|---|---|---|
+| 📱 phone | Kirrberg church (381455/5462119, 150 m, −30°) | 50 = cap | 5.1 | 125 | 78 | 1.67 M | 26 | 13.8 s |
+| 📱 phone | Forest, Karlsberg plateau (382556/5465632, 60 m, −15°) | 50 = cap | 5.7 | 167 | 117 | 1.35 M | 17 | 15.6 s |
+| 📱 phone | Schloss Karlsberg (382195/5466095, 120 m, −35°) | 50 = cap | 4.0 | 169 | 117 | 0.75 M | 8 | 0.5 s |
+| 🖥️ desktop | Kirrberg church | 50 = cap | 7.4 | 235 | 160 | 3.08 M | 75 | < 1 s |
+| 🖥️ desktop | Forest, Karlsberg plateau | 50 = cap | 4.6 | 275 | 203 | 2.12 M | 55 | < 1 s |
+| 🖥️ desktop | Schloss Karlsberg | 50 = cap | 6.8 | 298 | 213 | 1.81 M | 39 | < 1 s |
+
+| Load | 📱 phone (4G) | 🖥️ desktop (localhost) |
+|---|---|---|
+| `sle:ready` (first terrain) | 3.2 s | 0.4 s |
+| + streaming done at start view | + 19.7 s | + 0.9 s |
+
+**Read it right:**
+- rAF fps sat at the host display's refresh rate in every view (50 Hz external display; one run on the 120 Hz panel gave 120 fps everywhere, phone proxy included). So: no frame-rate bottleneck on this host — **not** a phone number.
+- The proxy throttles the **CPU only**. The phone's GPU (fill rate at DPR 3; the app caps the pixel ratio at 1.5 → 585 × 1266 buffer), shader cost and GPU memory are not modelled. `step ms` (≤ 6 ms against a 33 ms budget at 30 fps) is the proxy's main signal.
+- The phone layout draws less (castle view: 8 calls, 0.75 M triangles) than desktop.
+- Load times use a local server; the phone's 4G emulation is the only network model. Streaming at a new view (≈ 14–15 s on 4G) is the slowest felt thing on the proxy.
+- `--uncapped` (vsync off) exists but gave inconsistent rAF numbers; don't use it for baselines.
+- Console: 404s for absent AOIs (`homburg`, `kirrberg`) and `print/` (F21) probes — expected, no other errors.
+
 ## Known gaps
 
 - Messen (F17): no editing of finished measurements (delete + redraw); no measurement import; the rubber band is a straight (not draped) preview; the area is horizontal only (no 3D surface area). Exports are not written by the Export button in automated checks (GeoJSON content was checked via `measurementsToGeoJSON`).

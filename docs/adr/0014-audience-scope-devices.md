@@ -1,6 +1,6 @@
 # 0014 · 👥 Audience: Kirrberg public · area frozen · desktop = phone
 
-- **Status:** Accepted · 2026-11-04
+- **Status:** Superseded by 0028 (reference-phone line) · Accepted · 2026-11-04
 - **Origin:** v2 workshop with Hoon · [PRD v1 §1–3](../history/prd-v1.md#1-vision)
 
 ## Context

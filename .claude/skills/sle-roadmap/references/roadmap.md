@@ -4,12 +4,12 @@ Ordered by dependency. Each item: **why** · **approach** · **acceptance** · *
 
 Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 
-**v2 is done when:** the new shell runs on desktop + phone, CHM trees are in the overworld, castle (#1) and bakery (#2) are behind portals, and simple relict finding (lens, glow, *Merken*) works, all measured on the reference phone (2021 mid-range, 30 fps).
+**v2 is done when:** the new shell runs on desktop + phone, CHM trees are in the overworld, castle (#1) and bakery (#2) are behind portals, and simple relict finding (lens, glow, *Merken*) works, all measured on the phone proxy (ADR 0028: Chrome emulation, 4× CPU, 30 fps; Pixel 9 at 60 fps as headroom).
 
 ---
 
 ## V2.0 — Baseline 📏 (first)
-- [~] **Why:** every v2 item is judged on the phone; we have never measured one (Q-22).
+- [x] **Why:** every v2 item is judged on the phone; we have never measured one (Q-22).
 - **Approach:** run the v1.4 public build on a real mid-range Android + iOS Safari; record fps, memory and load time at 3 fixed views (`window.sle.flyTo`). ✅ Done: castle test skips without generated terrain; `verify.sh castle` gate.
 - **Acceptance:** numbers in the commit + `app/README.md` "Performance".
 - **Skill:** `sle-renderer` · ADR [0014](../../../../docs/adr/0014-audience-scope-devices.md)
@@ -71,4 +71,5 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - V2.1: `scripts/release/export_data.py` still stages `data/print/` into `saar-lidar-data-2`; F21 now lives in `../sle-print` → drop that staging at V2.10 (humans decide whether the published 3MF series stays).
 - V2.1: *Vollmondnacht*, shadow/cloud/resolution toggles never existed in the explorer (castle-only); only *Dunst* was removed.
 - Castle vitest: heavy builds time out at 5 s under parallel load → `testTimeout: 30_000`.
+- V2.0 proxy throttles CPU only; phone GPU fill rate is not modelled → keep pixel ratio caps conservative. Worktree data symlinks show as untracked (`/data/` patterns don't match symlinks) — never `git add -A` in sibling worktrees.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).

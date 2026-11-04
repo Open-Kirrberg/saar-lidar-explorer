@@ -24,7 +24,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0012](0012-github-pages-release.md) | Public hosting: GitHub Pages via `scripts/release/` | Accepted | 2026-11-02 | v1 non-goal "local only" |
 | [0013](0013-attribution-every-source.md) | Attribution for every source | Accepted | 2026-11-01 | |
 | **🎮 v2 — game shell** | | | | |
-| [0014](0014-audience-scope-devices.md) | Audience: Kirrberg public · area frozen · desktop = phone | Accepted | 2026-11-04 | v1 "personal tool" |
+| [0014](0014-audience-scope-devices.md) | Audience: Kirrberg public · area frozen · desktop = phone | Superseded by 0028 (reference-phone line) · Accepted | 2026-11-04 | v1 "personal tool" |
 | [0015](0015-overworld-zones-portals.md) | Overworld + zones behind portals | Accepted | 2026-11-04 | |
 | [0016](0016-zone-kinds-zone-contract.md) | Two zone kinds, one zone contract | Accepted | 2026-11-04 | |
 | [0017](0017-real-trees-from-chm.md) | Real trees from the CHM, shared by all worlds | Accepted | 2026-11-04 | v1 F5 canopy drape |
@@ -35,6 +35,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0022](0022-local-first-no-accounts.md) | Local-first, no accounts | Accepted | 2026-11-04 | |
 | [0023](0023-multiplayer-trystero-v4.md) | Multiplayer via Trystero in v4 | Accepted | 2026-11-04 | |
 | [0024](0024-rebuild-shell-keep-core.md) | Rebuild the shell, keep the core | Accepted | 2026-11-04 | |
+| [0028](0028-phone-proxy-headroom.md) | Phone proxy (Chrome, 4× CPU, 30 fps) + headroom rule (Pixel 9, 60 fps) | Accepted | 2026-11-04 | 0014 reference-phone line |
 | [0026](0026-collapsed-attribution.md) | Collapsed attribution behind „© Quellen“ | Accepted | 2026-11-04 | 0013 (footer rule) |
 | [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh or Gaussian splats | Proposed | 2026-11-04 | |
 | [0029](0029-zones-same-bundle-folder-layout.md) | Zones run in the explorer bundle; zone sources in `zones/<id>/` | Accepted | 2026-11-04 | (ends: castle as separate app + URL handover) |
