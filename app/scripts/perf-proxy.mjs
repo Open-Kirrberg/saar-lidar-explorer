@@ -48,7 +48,11 @@ async function waitSettled(page, timeoutMs) {
   const t0 = Date.now();
   let quiet = 0;
   while (Date.now() - t0 < timeoutMs) {
-    const pending = await page.evaluate(() => window.sle.terrainStats().pending);
+    // V2.4: trees stream separately (window.sleTrees); count them as pending too.
+    const pending = await page.evaluate(() => {
+      const t = window.sleTrees?.stats?.();
+      return window.sle.terrainStats().pending + (t ? t.pending + t.loading : 0);
+    });
     quiet = pending === 0 ? quiet + 1 : 0;
     if (quiet >= 3) return Date.now() - t0;
     await sleep(100);
@@ -179,6 +183,10 @@ async function runProfile(browser, id) {
         textures: info.memory.textures,
         terrainGpuMB: st.gpuMB,
         chunks: st.levels.reduce((a, l) => a + l.resident, 0),
+        trees: (() => {
+          const t = window.sleTrees?.stats?.();
+          return t ? { resident: t.trees, chunks: t.resident, instances: t.instances, meshes: t.meshes, triangles: t.triangles, gpuMB: t.gpuBytes / 2 ** 20, maxDistance: t.params.max } : null;
+        })(),
       };
     });
     const shot = join(SHOTS, `perf-${id}-${v.id}.jpg`);
@@ -206,12 +214,12 @@ try {
 const out = join(SHOTS, `perf-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.json`);
 writeFileSync(out, JSON.stringify({ url: URL_, date: new Date().toISOString(), results }, null, 2));
 
-console.log(`\n| Profile | View | rAF fps (p95 ms) | step ms | JS heap MB | terrain GPU MB | triangles | calls | view settle s |`);
-console.log(`|---|---|---|---|---|---|---|---|---|`);
+console.log(`\n| Profile | View | rAF fps (p95 ms) | step ms | JS heap MB | terrain GPU MB | triangles | calls | view settle s | trees (near/mid/far inst.) |`);
+console.log(`|---|---|---|---|---|---|---|---|---|---|`);
 for (const r of results) {
   for (const v of r.views) {
     const fps = v.raf ? `${r1(v.raf.fps)} (${r1(v.raf.p95)})` : 'n/a (hidden)';
-    console.log(`| ${r.profile} | ${v.view} | ${fps} | ${r1(v.stepMs)} | ${r1(v.heapMB)} | ${r1(v.terrainGpuMB)} | ${(v.triangles / 1e6).toFixed(2)} M | ${v.calls} | ${v.settleMs == null ? 'timeout' : r1(v.settleMs / 1000)} |`);
+    console.log(`| ${r.profile} | ${v.view} | ${fps} | ${r1(v.stepMs)} | ${r1(v.heapMB)} | ${r1(v.terrainGpuMB)} | ${(v.triangles / 1e6).toFixed(2)} M | ${v.calls} | ${v.settleMs == null ? 'timeout' : r1(v.settleMs / 1000)} | ${v.trees ? `${v.trees.instances.near}/${v.trees.instances.mid}/${v.trees.instances.far} · ${v.trees.meshes} meshes · ${r1(v.trees.gpuMB)} MB` : '–'} |`);
   }
 }
 for (const r of results) {

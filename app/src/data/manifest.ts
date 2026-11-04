@@ -2,8 +2,10 @@
  * Manifest types + loader for docs/data-contract.md (v2; v1 manifests load as a single level).
  * Optional additive keys: `vectors` (F10/F12), `rgb` image layers → `imageLayers` (F13/F14),
  * `layers.bldg` mask (R0.7), `models.buildings` (F11), `xyz.hist_*` (F14), `candidates` (F15),
- * `pointclouds` (F16).
+ * `pointclouds` (F16), `trees` (V2.4, parsed in trees/treeData.ts).
  */
+import { parseTrees } from '../trees/treeData';
+import type { ManifestTrees } from '../trees/treeData';
 
 export type HeightEncoding = 'terrarium';
 export type LayerEncoding = 'u8';
@@ -130,6 +132,8 @@ export interface Manifest {
   candidates?: ManifestCandidates;
   /** Optional point clouds for focus areas (F16, 'sle-pts-v1'); see "Point clouds" in docs/data-contract.md. */
   pointclouds?: ManifestPointClouds;
+  /** Optional CHM trees (V2.4, 'sle-trees-v1'); see "Trees" in docs/data-contract.md. */
+  trees?: ManifestTrees;
   /**
    * Resolution levels fine → coarse, contiguous from level 0 (always ≥ 1 entry after
    * validateManifest; v1 manifests and v2 manifests without valid coarse levels give [level 0]).
@@ -940,6 +944,9 @@ export function validateManifest(m: unknown): Manifest {
   const pointclouds = parsePointClouds((x as { pointclouds?: unknown }).pointclouds);
   if (pointclouds) out.pointclouds = pointclouds;
   else delete out.pointclouds;
+  const trees = parseTrees((x as { trees?: unknown }).trees, top.chunks);
+  if (trees) out.trees = trees;
+  else delete out.trees;
   return out;
 }
 

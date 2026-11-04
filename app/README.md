@@ -141,6 +141,10 @@ src/
   buildings/ F11 LoD2 buildings: select.ts (pure: chunk rects, distance plan with hysteresis, surface
            fallback), BuildingMaterial.ts (clay ShaderMaterial, shared uExag/uHRef/sun/fog uniforms),
            BuildingLayer.ts (GLTFLoader streaming per level-0 chunk), Buildings.ts (card "Gebäude", key G)
+  trees/   V2.4 CHM trees (see *Bäume*): treeData.ts (pure: sle-trees-v1 decode/encode, fmix32 ids/ranks, manifest
+           tolerance, instance rows, gather), lod.ts (pure: density, rank prefix, crown scale, LOD bands — TS twins of the
+           GLSL), treeShapes.ts (pure: lathe meshes per LOD), TreeMaterial.ts (GLSL3 instanced shader, dither cross-fade),
+           TreeLayer.ts (chunk streaming, near/mid/far meshes, stats), index.ts (`installTrees`, feature `trees`)
   candidates/ F15 Verdachtsflächen: candidateData.ts (pure: parse, labels, filter, N/P order, outlines,
            marker text), reviewStore.ts (pure: localStorage `sle.candidates.v1.<aoi>`, re-attach ≤ 3 m,
            export), colors.ts, CandidateLayer.ts (outlines/circles via DrapedLines, selection on top),
@@ -172,7 +176,7 @@ src/
        feature registry), tiers.ts (pure), attribution.ts (pure: source rows, splash timer), flight.ts (pure: walk height, speed steps), builtins.ts
        (the v1 features as registry entries), host.ts (per-feature wrappers), hud.ts, sources.ts („© Quellen“), dialog.ts, dialogs.ts, dom.ts, types.ts, shell.css
 scripts/  make-fixture.ts, fixture-terrain.ts, fixture-imagery.ts (synthetic ortho / 1840 map, DSM roofs, `bldg` mask), fixture-buildings.ts (gabled houses → glb per chunk, F11)
-tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, stretch, percentiles, blend), footprint, markers (+ parcel helpers, QGIS-style null/empty import), pois, state (hash parse/format), displayState, skirts, latestBuild, manifest (`vectors` tolerance, v1/v2 `levels`), vectors (frame E−E0 / z=−(N−N0), densify, drape, spatial lookup, labels incl. hidden `Flur 0`), streaming (levels, quadtree selection, budget/LRU, low-pass region, pyramid, `heightAtDisplayed`), vectorData (baked z, buckets), aoiStreaming (start AOI, focus outlines, pending count, fly-to refinement), buildings (chunk rects/plan/hysteresis, surface classes, glb round-trip through GLTFLoader), candidates + candidatesManifest (parse/tolerance, labels incl. `along_path`, filter, N/P order, outlines, review store re-attach, confirm → reset → confirm reuses the marker, default min score), measure (lengths, area vs shoelace, ground factor, profile sampling, slope, formatting, GeoJSON, fetch limit), report (coordinate formats incl. DMS carry, escaping, template has no script + only this marker, tile maths, scale bar, file names), pointcloud + pointcloudsManifest (`sle-pts-v1` decode/encode round trip and header checks, LOD wish/budget water-fill, streaming plan, residency cap with hysteresis, styles/prefs, `pointclouds` tolerance), reconstruction (sle-recon-v1 tolerance, AOI offset, handover URLs both ways, footprints, prefs, glb load + picking at 1×/3×, ghost mode), touchGestures (gesture math + fake-DOM runs of pan/pinch/twist/tilt/double tap/inertia/long press), mobileMode (layout/quality detection, Relief cycle, sheets), locate (AOI test, distances, nearest point, German messages, privacy radius), print3d (tile ids ↔ UTM, index/series.json parsing + warnings, tile/set datum, totals, shared edges and keys per datum, `setKeys` for incomplete sets, CLI command incl. `--datum`, display cells, outline runs, prefs)
+tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, stretch, percentiles, blend), footprint, markers (+ parcel helpers, QGIS-style null/empty import), pois, state (hash parse/format), displayState, skirts, latestBuild, manifest (`vectors` tolerance, v1/v2 `levels`), vectors (frame E−E0 / z=−(N−N0), densify, drape, spatial lookup, labels incl. hidden `Flur 0`), streaming (levels, quadtree selection, budget/LRU, low-pass region, pyramid, `heightAtDisplayed`), vectorData (baked z, buckets), aoiStreaming (start AOI, focus outlines, pending count, fly-to refinement), buildings (chunk rects/plan/hysteresis, surface classes, glb round-trip through GLTFLoader), candidates + candidatesManifest (parse/tolerance, labels incl. `along_path`, filter, N/P order, outlines, review store re-attach, confirm → reset → confirm reuses the marker, default min score), measure (lengths, area vs shoelace, ground factor, profile sampling, slope, formatting, GeoJSON, fetch limit), report (coordinate formats incl. DMS carry, escaping, template has no script + only this marker, tile maths, scale bar, file names), pointcloud + pointcloudsManifest (`sle-pts-v1` decode/encode round trip and header checks, LOD wish/budget water-fill, streaming plan, residency cap with hysteresis, styles/prefs, `pointclouds` tolerance), reconstruction (sle-recon-v1 tolerance, AOI offset, handover URLs both ways, footprints, prefs, glb load + picking at 1×/3×, ghost mode), trees (sle-trees-v1 round trip + header checks, fmix32/id, `trees` tolerance, world frame, nested rank prefixes, crown scale, exactly-one-LOD cross-fade, same anchor in every LOD, lathe winding/budgets), touchGestures (gesture math + fake-DOM runs of pan/pinch/twist/tilt/double tap/inertia/long press), mobileMode (layout/quality detection, Relief cycle, sheets), locate (AOI test, distances, nearest point, German messages, privacy radius), print3d (tile ids ↔ UTM, index/series.json parsing + warnings, tile/set datum, totals, shared edges and keys per datum, `setKeys` for incomplete sets, CLI command incl. `--datum`, display cells, outline runs, prefs)
 ```
 
 ### URL hash
@@ -209,7 +213,8 @@ tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, st
   - **Default:** `vat` if the manifest has it, otherwise live hillshade.
 - **Value pass (auto contrast):** `uValuePass = 1` writes raw physical values (R base, G overlay, B/A valid flags) into a float render target: 384 px wide from the current camera (*Sichtbereich*) or 1024² from a top-down orthographic camera over the whole AOI (*Gesamtgebiet*). It is read back asynchronously (`readRenderTargetPixelsAsync`) and stretched to the 2–98 % percentiles (`relief.ts percentileStretch`, symmetric about 0 for diverging maps).
 - **Canopy (F5):** a second mesh per chunk with the DSM as height texture, sharing the terrain's LOD geometries, exaggeration and culling. The fragment shader computes CHM = DSM − DTM per pixel (both 502² textures), colours it with a green ramp, lights it with the sun and discards it below *Mindesthöhe*, so open ground keeps the analytic relief. *Transparent* also drops near-vertical crown-edge "curtains" so the ground stays readable. With the forest or canopy collision on, the DSM (≈ 1 MB per chunk) streams only for **drawn level-0 chunks within 2 km** of the camera (`streaming.canopyDistance`), so the canopy ends ≈ 1.9 km out; `ensureCanopy()` waits until every such chunk has its canopy (its jobs survive the per-frame queue rebuild). DSM chunks that fail are skipped (not retried until reload).
-- **Exaggeration** (`uExag`, 1–5×) is a shared uniform used by terrain, canopy, `surfaceY`/`collisionY`, picking and the HUD (true heights); changing it keeps the camera's true height.
+- **Trees (V2.4)** replace the canopy in the default look: instanced CHM trees, see *Bäume*. The canopy stays in the relief lab (🔴 Labor); while it is on, the trees hide.
+- **Exaggeration** (`uExag`, 1–5×) is a shared uniform used by terrain, canopy, trees, `surfaceY`/`collisionY`, picking and the HUD (true heights); changing it keeps the camera's true height.
 - Distance haze (`uFogDensity`) and the sky dome give depth cues. Colours are written in display space, with no three.js colour management in the custom shaders.
 
 ### Extension points
@@ -254,6 +259,7 @@ desktop                                        phone (≤ 600 px)
 | `places` | 🟢 standard | | *Orte* drawer (nearest places, search) |
 | `zone-portals` | 🟢 standard | | V2.6b portal markers, „… betreten“ prompt, loading screen, zones ([below](#zones-v26b-)) |
 | `osm-paths` / `buildings` | 🟢 standard | 🔴 labor | 3D layers; their cards in Labor (only with `vectors` / `models.buildings`) |
+| `trees` | 🟢 standard | | V2.4 CHM trees (only with `trees`); switch „Bäume“ in *Einstellungen* (see *Bäume*) |
 | `quality`, `exaggeration` | 🟡 entdecker | | sections in *Einstellungen* |
 | `reconstruction`, `tour` | 🟡 entdecker | | *Werkzeuge* cards (Rekonstruktion 1789, Tour) |
 | `relief-lab`, `flight-tech`, `hud-full` | 🔴 labor | | *Darstellung*, *Flug & Technik*, NN/Kurs/E/N/fps HUD rows |
@@ -408,6 +414,37 @@ All registered as shell features in `src/shell/builtins.ts` (see *Shell*).
 - **Picking/culling:** meshes don't raycast (CPU positions are not exaggerated) — `pickAt` still hits the terrain; per-mesh bounding spheres follow the exaggeration for frustum culling.
 - **Default on** (orientation in towns; buildings don't hide relief under the forest), persisted in localStorage `sle.buildings.v1`. Off frees the meshes. Debug handle: `window.sleBuildings` (`layer.stats`).
 
+## Bäume (V2.4) 🌲
+
+`src/trees/`, one call in `main.ts`: `installTrees(ctx)`. It adds the layer, updates it via `ctx.onFrame` and registers the 🟢 Standard feature `trees` (switch „Bäume“ in *Einstellungen*, `localStorage sle.trees.v1`, default on). Data: contract „Trees“ (`sle-trees-v1`, `trees/{i}_{j}.bin` per 500 m chunk, records sorted by `fmix32(id)`); no `trees` in the manifest → inert API, no feature. Decisions: [ADR 0017](../docs/adr/0017-real-trees-from-chm.md), [0030](../docs/adr/0030-conifer-fill-trees.md), [0034](../docs/adr/0034-tree-lod-rank-prefix-dither.md).
+
+```ts
+installTrees(ctx) → TreesApi { available, visible, on, update(dt) /* only without onFrame */, setVisible(on),
+                               setLensFade(0…1) /* V2.5 lens: dithered fade-out per tree */, stats(), layer, dispose() }
+import { decodeTrees, treeChunkRef } from 'app/src/trees/treeData'   // pure, DOM/three-free: castle zone reuse
+window.sleTrees.stats() → { resident, loading, failed, trees, instances: { near, mid, far }, meshes, triangles, gpuBytes, params }
+```
+
+| Piece | How |
+|---|---|
+| 📦 Streaming | per chunk, planned by the buildings' pure `planChunks`: load ≤ `max` + 150 m, drop > 1.25·`max` + 300 m, ≤ 4 fetches, failed chunks never retried. One interleaved instance buffer per chunk, 8 floats/tree `(x, g, z, h, r, rank, seed, kind)` ≈ 7.3 MB at Hoch |
+| ⛰️ Ground | anchor `y = hRef + (g − hRef)·exag` from the record's `g`; trees themselves are not exaggerated. Trunks and far cones reach `0.5 + 0.0012·d` m below the ground |
+| 🌲 Shapes | lathe meshes from per-kind profiles (conifer: tiers, broadleaf: round crown on a long trunk, unknown: ovoid), `h` and `r` from the record, ±10 % `r` and rotation from the id seed. Near: 7 sides + trunk · mid: 5 sides + trunk · far: 5-sided cone to the ground (≤ 20 tris) |
+| 🎲 Thinning | density `D(d)` = 1 up to `full`, then `(full/d)²`, 0 at `max`. A tree is drawn while `rank = fmix32(id)/2³²` < `D·(1+fade)`: nested **prefixes** of the record order, so each chunk's `instanceCount` is one binary search; trees dither in/out over the last 8 % of rank. Crown radius × `min(2.5, 1/√falloff)` keeps the thinned far forest closed |
+| 🔀 Cross-fade | near / mid / far read identical rows (near = verbatim copy of the rows within its radius) → same position in every LOD. Bands `[0.75, 1]·nearEnd` and `[0.8, 1]·midEnd`: inner mesh keeps a pixel if `t < w`, outer if `t ≥ w` (`w = 1 − smoothstep`, `t` = screen IGN dither + per-tree offset) → every pixel from exactly one LOD, no alpha sorting. Outside its interval an instance collapses in the vertex shader |
+| ⚙️ Quality | vegetation radius = `streaming.canopyDistance`: Hoch 2000 → `max` 3000 m · Mittel 2250 · Niedrig 1500 · Mobil 1050 (`lodParams`) |
+| 🍃 Wind / fill | sway ≤ 1.2 % of `h` at the top, same formula in every LOD. Fill trees (`type & 0x80`) look the same; their row keeps `kind + 4` |
+| 🧪 Labor | relief lab *Wald* ≠ aus shows the F5 DSM canopy instead (trees hidden, F5 code unchanged) |
+
+**Checked** (overall, `scripts/trees-shots.mjs` → `docs/shots/v24b/`, git-ignored):
+
+| Check | Result |
+|---|---|
+| `g` vs. rendered terrain | = 1 m DTM within 2 mm (p95) up to 1.5 km, 3 views; coarse far terrain ±2.1 m beyond (sub-pixel there) |
+| Count | resident trees = manifest counts (205,831 in 100 chunks, 0 mismatches); every record drawn within `full` |
+| Ortho, H7 plots | P3 orchard tree-for-tree on the crowns; P2 broadleaf density and gaps; P1 spruce block vs. broadleaf margin and path |
+| No popping | unit tests (same anchor, exactly-one-LOD, monotone visibility, conservative prefix); 240 m frame-diff walk: peaks follow the trees-off peaks, no isolated spikes |
+
 ## Rekonstruktion 1789 (F19)
 
 `src/reconstruction/`, registered in `shell/builtins.ts` (`initReconstruction`, async). The dataset is **not** in the manifest: the app fetches `<data root>shared/karlsberg1789/index.json` (contract "Shared datasets", sle-recon-v1), written by the castle viewer (`cd schloss-karlsberg && pnpm run export:explorer`). 404 / invalid / outside the AOI → no card, no keys, one console line. `vite build` does not copy `public/data/shared/` into `dist/` (`preview` serves it from the data dir).
@@ -539,6 +576,21 @@ pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 - `--uncapped` (vsync off) exists but gave inconsistent rAF numbers; don't use it for baselines.
 - Console: 404s for absent AOIs (`homburg`, `kirrberg`) and `print/` (F21) probes — expected, no other errors.
 
+**V2.4b trees** (2026-11-04, same machine, `?aoi=overall`; trees off → on in the *same page*, 20 alternating rounds of 15 × `step(1)` + `readPixels`, median; headless, host loaded by a parallel photogrammetry job, so absolute ms are ≈ 1.2–2× the quiet baseline above):
+
+| Profile | View | step ms off → on | Δ (median of pairs) | calls | triangles | tree instances near / mid / far | tree GPU |
+|---|---|---|---|---|---|---|---|
+| 📱 phone (Mobil, `max` 1050 m) | Kirrberg | 7.9 → 7.9 | +0.9 | 22 → 33 | 1.75 → 2.19 M | 482 / 15 k / 26 k | 1.6 MB |
+| 📱 phone | Forest | 7.1 → 8.0 | +1.5 | 25 → 38 | 1.39 → 2.25 M | 898 / 26 k / 51 k | 2.3 MB |
+| 📱 phone | Schloss | 6.0 → 7.0 | +0.9 | 11 → 22 | 0.75 → 1.42 M | 951 / 22 k / 47 k | 2.9 MB |
+| 🖥️ desktop (Hoch, `max` 3000 m) | Kirrberg | 10.5 → 13.5 | +2.0 | 75 → 127 | 3.08 → 4.34 M | 482 / 19 k / 74 k | 7.3 MB |
+| 🖥️ desktop | Forest | 9.0 → 11.3 | +2.6 | 55 → 103 | 2.12 → 3.55 M | 898 / 32 k / 105 k | 7.3 MB |
+| 🖥️ desktop | Schloss | 8.7 → 10.4 | +1.4 | 39 → 73 | 1.81 → 3.45 M | 951 / 30 k / 105 k | 7.3 MB |
+
+- Phone proxy over forest: ≈ 8 ms per frame with trees against the 33 ms budget (30 fps); headed `pnpm run perf` runs sat at the display cap (50 fps) in every view. A quiet-host run before the far crown scale gave phone forest 4.7 → 5.0 ms and desktop forest 3.9 → 7.7 ms (`perf-proxy.mjs`, main vs. branch).
+- `triangles` count every submitted instance, including those the vertex shader collapses (outside its LOD band or thinned out).
+- Tree GPU memory (`stats().gpuBytes`: instance rows; the per-chunk shape copies add ≈ 2 KB per chunk) is ≤ 7.3 MB, far below the 600 MiB soft cap.
+
 ## Known gaps
 
 - Messen (F17): no editing of finished measurements (delete + redraw); no measurement import; the rubber band is a straight (not draped) preview; the area is horizontal only (no 3D surface area). Exports are not written by the Export button in automated checks (GeoJSON content was checked via `measurementsToGeoJSON`).
@@ -548,6 +600,7 @@ pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 - Rekonstruktion 1789 (F19): only the one dataset `shared/karlsberg1789/` is looked up (no discovery of other `shared/<id>/`); no distance fade/LOD (≈ 340 k triangles always drawn while on); where today's LoD2 buildings stand inside the model both are drawn (no masking); the model is not hidden by the canopy; skirts reach 0.5 m below the 2025 DTM, so at high exaggeration they sink visibly deeper into ruin pits (by design). Browser rendering, frame time and the round trip with the viewer were not verified in this build step.
 - Mobile (F20): nothing tested on a real phone (see *Touch (F20)* / *Mein Standort*). A long-press marker leaves Markieren on, and it opens the form by a synthetic canvas tap because `MarkerManager.openForm` is private (a public `openDraftAt(E, N, h)` would fix both). The Markieren hint still mentions keys and clicks. The lil-gui panels (*Darstellung*, *Flug & Technik*) still render 245 px wide inside the 320 px drawer. After *Mein Standort* the camera sits ≈ 200 m above the ground under it (150 m is relative to the target). The compass ignores magnetic declination (≈ 2–3°). The desktop canvas now has `touch-action: none`.
 - Shell (V2.2): Labor is not blocked on phones but is cramped there (long drawer); the default „aerial ground“ look is V2.5's; the tutorial and zone prompt/loading APIs have no caller yet (checked once via `window.sle.shell` in the browser); live flight feel of *Gehen* and real frame pacing were not checked (hidden tab, `step()`).
+- Bäume (V2.4): one far draw call per chunk (≈ 100 at Hoch, ≈ 35 on Mobil); `renderer.info` triangles count every submitted instance, including those the shader collapses. Beyond the vegetation radius (3 km at Hoch) the relief is bare. No trunk collision when walking (ADR 0017). Hidden trees keep their chunks (≈ 7 MB). Real-phone frame time, live flight feel and the castle reuse of `decodeTrees` were not checked.
 - Buildings: bases are matched to the 1 m DTM only; where a coarser terrain level is drawn (far field) the ground may sit slightly off the bases (not measured). Buildings are not pickable. A few LoD2 buildings keep a gap > 0.5 m where the pipeline's 5 m skirt cap applies (2 Karlsberg / 20 overall).
 
 - Live local relief: where a same-level neighbour is not resident, the band within *Relief-Radius* of that edge uses the coarser level's heights (approximate) until the neighbour arrives.

@@ -37,6 +37,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0024](0024-rebuild-shell-keep-core.md) | Rebuild the shell, keep the core | Accepted | 2026-11-04 | |
 | [0028](0028-phone-proxy-headroom.md) | Phone proxy (Chrome, 4× CPU, 30 fps) + headroom rule (Pixel 9, 60 fps) | Accepted | 2026-11-04 | 0014 reference-phone line |
 | [0030](0030-conifer-fill-trees.md) | Conifer fill trees: estimated, flagged | Accepted | 2026-11-04 | |
+| [0034](0034-tree-lod-rank-prefix-dither.md) | Tree LOD: rank prefixes, dithered cross-fade, cones far | Accepted | 2026-11-04 | |
 | [0026](0026-collapsed-attribution.md) | Collapsed attribution behind „© Quellen“ | Accepted | 2026-11-04 | 0013 (footer rule) |
 | [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh or Gaussian splats | Proposed | 2026-11-04 | |
 | [0029](0029-zones-same-bundle-folder-layout.md) | Zones run in the explorer bundle; zone sources in `zones/<id>/` | Accepted | 2026-11-04 | (ends: castle as separate app + URL handover) |
