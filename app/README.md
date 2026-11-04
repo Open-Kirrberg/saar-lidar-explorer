@@ -504,7 +504,7 @@ pnpm run perf                                  # phone proxy + desktop; JSON + s
 pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 ```
 
-**Method** (`scripts/perf-proxy.mjs`, puppeteer-core with the system Chrome, headed so rAF runs and WebGL uses the real GPU; not part of the bundle):
+**Method** (`scripts/perf-proxy.mjs`, puppeteer-core with the system Chrome, headless by default since b1023b4 (`--headed` for the V2.0 method: headed so rAF runs and WebGL uses the real GPU — compare like with like); not part of the bundle):
 
 | Step | What |
 |---|---|
