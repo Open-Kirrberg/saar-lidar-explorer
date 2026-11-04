@@ -14,6 +14,8 @@ export interface SourcesUi {
   button: HTMLButtonElement;
   open(): void;
   timer: CollapseTimer;
+  /** Zone rows shown first while a zone is open (ADR 0026 rule 6); null = overworld only. */
+  setZoneRows(rows: SourceRow[] | null): void;
 }
 
 const link = (l: { label: string; url: string }) => el('a', { href: l.url, target: '_blank', rel: 'noopener', text: l.label });
@@ -42,13 +44,14 @@ export function createSources(opts: {
   interactionTarget: HTMLElement;
 }): SourcesUi {
   const rows = sourceRows(opts.attribution);
+  let zoneRows: SourceRow[] = [];
 
   const open = () => {
     const body = el(
       'div',
       { class: 'sle-src' },
       el('p', { class: 'sle-dim', text: opts.areaNote }),
-      el('ul', { class: 'sle-src-list' }, ...rows.map(rowEl)),
+      el('ul', { class: 'sle-src-list' }, ...[...zoneRows, ...rows].map(rowEl)),
       el(
         'p',
         { class: 'sle-small' },
@@ -122,5 +125,5 @@ export function createSources(opts: {
   t.addEventListener('wheel', onInteract, { passive: true });
   window.addEventListener('keydown', onInteract);
 
-  return { button, open, timer };
+  return { button, open, timer, setZoneRows: (r) => (zoneRows = r ?? []) };
 }

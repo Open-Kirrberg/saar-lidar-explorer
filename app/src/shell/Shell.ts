@@ -9,7 +9,7 @@ import type { KeyValueStore, Settings } from '../ui/settings';
 import { installA11y } from '../ui/a11y';
 import { watchContextLoss } from '../ui/contextLoss';
 import { isTyping } from '../ui/keys';
-import { modalOpen } from '../ui/modalKeys';
+import { isolateModalKeys, modalOpen } from '../ui/modalKeys';
 import { autoQuality } from '../ui/mobileMode';
 import { applyQuality, pixelRatioFor } from '../ui/quality';
 import type { QualityTargets } from '../ui/quality';
@@ -30,7 +30,10 @@ import { createFeatureRegistry } from './registry';
 import { createSources } from './sources';
 import { DEFAULT_TIER, TIER_LABELS, loadTier, saveTier, tierFromQuery } from './tiers';
 import type { Tier } from './tiers';
-import type { FeatureHost, Handle, LoadingHandle, PromptOptions, ShellAnchor, ShellApi, ShellServices } from './types';
+import type { FeatureHost, Handle, LoadingHandle, PromptOptions, ShellAnchor, ShellApi, ShellServices, ZoneLoadingHandle } from './types';
+import { utmToWorld } from '../geo';
+import type { PortalFocus } from '../zones/portal';
+import { fromZoneMode, poseFromView, zoneLoadingText, zoneSourceRows } from './zoneBridge';
 import '../ui/features.css';
 import '../ui/polish.css';
 import './shell.css';
@@ -369,6 +372,10 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
         e.preventDefault();
         e.stopPropagation();
         openKeys();
+      } else if (e.key === 'Enter' && portalCur && !e.repeat && !(e.target as Element | null)?.closest?.('button, a, select, summary')) {
+        e.preventDefault();
+        e.stopPropagation();
+        portalCur.onEnter(portalCur.focus);
       } else if (e.key === 'Escape' && openDrawer && drawers[openDrawer].contains(document.activeElement)) {
         setDrawer(null, false);
         drawerBtns[openDrawer ?? 'places']?.focus({ preventScroll: true });
@@ -394,12 +401,46 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
       },
     };
   };
-  const loading = (title: string): LoadingHandle => {
+  /** Full-screen loading screen; `lines` go under the title, `onCancel` adds „Abbrechen“ + Esc. */
+  const buildLoading = (title: string, lines: HTMLElement[] = [], foot: HTMLElement[] = [], onCancel?: () => void): ZoneLoadingHandle => {
     const fill = el('div', { class: 'sle-load-fill' });
-    const text = el('p', { class: 'sle-load-text', role: 'status' });
+    const text = el('p', { class: 'sle-load-text', role: 'status', 'aria-live': 'polite' });
     const track = el('div', { class: 'sle-load-track', role: 'progressbar', 'aria-label': title, 'aria-valuemin': '0', 'aria-valuemax': '100' }, fill);
-    const screen = el('div', { class: 'sle-loading-screen' }, el('h2', { text: title }), track, text);
+    const actions = el('div', { class: 'sle-load-actions' });
+    const screen = el(
+      'div',
+      { class: 'sle-loading-screen sle-overlay', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+      el('h2', { text: title }),
+      ...lines,
+      track,
+      text,
+      actions,
+      ...foot,
+    );
+    let onEsc: (() => void) | null = null;
+    const setAction = (label: string, fn: () => void) => {
+      const b = el('button', { type: 'button', class: 'sle-btn', text: label });
+      b.addEventListener('click', fn);
+      actions.replaceChildren(b);
+      onEsc = fn;
+      b.focus({ preventScroll: true });
+    };
+    const opener = document.activeElement as HTMLElement | null;
     overlaySlot.appendChild(screen);
+    // Modal while open: no flight keys reach the overworld (Esc = the current action).
+    const unkeys = isolateModalKeys(screen, (e) => {
+      if (e.key !== 'Escape' || !onEsc) return false;
+      onEsc();
+      return true;
+    });
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      unkeys();
+      screen.remove();
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
     const progress = (p: number | null, t?: string) => {
       track.classList.toggle('indeterminate', p === null);
       if (p !== null) {
@@ -410,8 +451,61 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
       if (t !== undefined) text.textContent = t;
     };
     progress(null);
-    return { progress, close: () => screen.remove() };
+    if (onCancel) setAction('Abbrechen', onCancel);
+    return {
+      progress,
+      close,
+      fail(message, onBack) {
+        track.hidden = true;
+        text.textContent = message;
+        text.classList.add('warn');
+        setAction('Zurück', () => {
+          close();
+          onBack();
+        });
+      },
+    };
   };
+  const loading = (title: string): LoadingHandle => buildLoading(title);
+  const zoneLoading: ShellApi['zoneLoading'] = (zone, o = {}) => {
+    const t = zoneLoadingText(zone);
+    return buildLoading(
+      t.title,
+      [el('p', { class: 'sle-load-summary', text: t.summary }), el('p', { class: 'sle-load-evidence', text: t.evidence })],
+      [el('p', { class: 'sle-load-disclaimer', text: t.disclaimer }), el('p', { class: 'sle-load-sources', text: t.sources })],
+      o.onCancel,
+    );
+  };
+
+  // Portal prompt (V2.6): fed with `updatePortalFocus` results; one at a time, same portal = no re-render.
+  let portalCur: { key: string; focus: PortalFocus; onEnter: (f: PortalFocus) => void; handle: Handle } | null = null;
+  const portal: ShellApi['portal'] = (focus, onEnter) => {
+    const key = focus ? `${focus.zoneId}/${focus.portalId}` : '';
+    if (portalCur && portalCur.key === key && focus) {
+      portalCur.focus = focus;
+      portalCur.onEnter = onEnter;
+      return;
+    }
+    portalCur?.handle.close();
+    portalCur = null;
+    if (!focus) return;
+    const cur: NonNullable<typeof portalCur> = {
+      key,
+      focus,
+      onEnter,
+      handle: prompt({ text: focus.label_de, action: 'Betreten', keyHint: 'Enter', onAction: () => cur.onEnter(cur.focus) }),
+    };
+    portalCur = cur;
+  };
+
+  const viewPose: ShellApi['viewPose'] = () => poseFromView(store.get(), moveMode);
+  const applyPose: ShellApi['applyPose'] = (p) => {
+    const w = utmToWorld(p.E, p.N, ctx.manifest.origin);
+    controller.cancelTween();
+    controller.setPose({ x: w.x, z: w.z, y: terrain.toDisplayY(p.h), heading: p.heading_deg, pitch: p.pitch_deg });
+    setMoveMode(fromZoneMode(p.mode));
+  };
+
   const firstRun = () => {
     try {
       return kv?.getItem(TUTORIAL_KEY) !== 'done';
@@ -441,6 +535,11 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
     openSources: sources.open,
     prompt,
     loading,
+    portal,
+    zoneLoading,
+    setZoneSources: (zone) => sources.setZoneRows(zone ? zoneSourceRows(zone) : null),
+    viewPose,
+    applyPose,
     firstRun,
     markTutorialDone() {
       try {
