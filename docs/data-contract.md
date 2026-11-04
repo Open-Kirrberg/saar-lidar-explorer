@@ -2,6 +2,8 @@
 
 The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (git-ignored). The app (`app/`) loads them via `fetch('data/<aoi>/manifest.json')`. Both sides must follow this file; change it only together with a `CHANGELOG.md` line (and an ADR if the change is a decision, e.g. a new layer kind).
 
+**Zones** (detailed places behind portals: castle, bakery, …) have their own binding contract: [zone-contract.md](zone-contract.md) (`sle-zone-v1`, [ADR 0029](adr/0029-zones-same-bundle-folder-layout.md)). Frames, proj4 and attribution rules below apply to zones unchanged.
+
 **Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`.
 
 ## Coordinate frames
