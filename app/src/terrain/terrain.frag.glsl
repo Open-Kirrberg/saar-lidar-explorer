@@ -6,6 +6,8 @@
 // value/stretch/colormap and is blended like any other channel colour.
 // uValuePass = 1 writes the raw physical values instead (R = base, G = overlay, A = valid)
 // for percentile contrast stretching.
+// The Relikt-Blick lens (V2.5, ADR 0035) is a third channel (slot C) mixed over the result with
+// uLensMix, plus a glow around up to GLOW_MAX candidates; it never touches base/overlay.
 
 uniform highp sampler2D uHeight;   // per chunk, R32F
 uniform float uChunkSize;
@@ -21,6 +23,25 @@ uniform vec2 uLayerBRange;
 uniform int uLayerBAlt;
 uniform float uImgPxA;             // per chunk: image px per chunk side (P) in slot A / B; images carry a
 uniform float uImgPxB;             // 1-texel apron ((P+2)²) from their neighbours (seam fix)
+uniform sampler2D uLayerC;         // per chunk: lens slot C (u8 layer with apron, or an sRGB image)
+uniform float uHasLayerC;
+uniform int uLayerCAlt;
+uniform float uImgPxC;
+uniform vec2 uLayerCRange;
+
+uniform float uLensMix;            // 0 = lens off … 1 = lens channel only
+uniform int uLensSrc;              // −1 off, 0/1 live, 7 layer C, 8 image C
+uniform int uLensCmap;
+uniform vec3 uLensStretch;
+uniform float uLensShade;
+uniform vec3 uLensTint;            // multiplies the lens colour (warm paper tint)
+uniform vec4 uGlow[GLOW_MAX];      // candidate glow: world x, z, radius m, strength
+uniform int uGlowCount;
+uniform vec3 uGlowBound;           // x, z, R: each ring centre + 3 × radius lies within R of (x, z)
+uniform vec3 uGlowColor;
+uniform float uGlowTime;
+uniform float uGlowMix;            // glow fade 0–1 (lens transition)
+uniform float uGlowPx;             // metres per pixel at 1 m distance
 
 uniform highp sampler2D uLowpass;  // per chunk: box-blurred heights on the height-image grid (R32F)
 uniform float uHasLowpass;
@@ -157,6 +178,11 @@ bool sourceValue(int src, float h, vec2 g, float hs, vec2 uv, out float v) {
     v = mix(uLayerBRange.x, uLayerBRange.y, texture(uLayerB, uv).r);
     return true;
   }
+  if (src == 7) {
+    if (uHasLayerC < 0.5) return uLayerCAlt == 1 && sourceValue1(g, v);
+    v = mix(uLayerCRange.x, uLayerCRange.y, texture(uLayerC, uv).r);
+    return true;
+  }
   return false;
 }
 
@@ -172,7 +198,38 @@ bool imageColor(int src, vec2 uvImg, out vec3 c) {
   c = vec3(0.0);
   if (src == 5 && uHasLayerA > 0.5) { c = linearToSrgb(texture(uLayerA, (uvImg * uImgPxA + 1.0) / (uImgPxA + 2.0)).rgb); return true; }
   if (src == 6 && uHasLayerB > 0.5) { c = linearToSrgb(texture(uLayerB, (uvImg * uImgPxB + 1.0) / (uImgPxB + 2.0)).rgb); return true; }
+  if (src == 8 && uHasLayerC > 0.5) { c = linearToSrgb(texture(uLayerC, (uvImg * uImgPxC + 1.0) / (uImgPxC + 2.0)).rgb); return true; }
   return false;
+}
+
+// Lens glow: a pulsing rim + soft fill around each candidate (radius ≥ ~8 px on screen, so far
+// candidates stay findable). Returns the glow amount (0 … ~1.5).
+float lensGlow(vec3 w) {
+  float camD = length(w - cameraPosition);
+  float px = max(camD * uGlowPx, 1e-3);   // metres per screen pixel here
+  // A ring reaches 3·max(r, 8 px) + 24 px ≤ 3·r + 48 px: outside the bounding circle no ring can
+  // touch this fragment, so most of the screen skips the loop (it scales with the ring count).
+  vec2 bd = w.xz - uGlowBound.xy;
+  float bR = uGlowBound.z + 48.0 * px;
+  if (uGlowBound.z < 0.0 || dot(bd, bd) > bR * bR) return 0.0;
+  float acc = 0.0;
+  for (int i = 0; i < GLOW_MAX; i++) {
+    if (i >= uGlowCount) break;
+    vec4 gl = uGlow[i];
+    vec2 dv = w.xz - gl.xy;
+    float r = max(gl.z, 8.0 * px);
+    float reach = 3.0 * r + 24.0 * px;
+    float d2 = dot(dv, dv);
+    if (d2 > reach * reach) continue;   // far from this ring: no sqrt, no exp()
+    float d = sqrt(d2);
+    float q = (d - r) / max(0.18 * r, 1.6 * px);
+    float rim = exp(-q * q);
+    float fill = 0.28 * (1.0 - smoothstep(0.0, r, d));
+    float hq = max(d - r, 0.0) / (0.6 * r + 6.0 * px);
+    float halo = 0.35 * exp(-hq * hq);
+    acc += (rim + fill + halo) * gl.w;
+  }
+  return acc;
 }
 
 vec3 blendColor(vec3 b, vec3 o, int mode) {
@@ -235,6 +292,30 @@ void main() {
     col = mix(col, clamp(blendColor(col, oc, uOvlBlend), 0.0, 1.0), uOvlOpacity);
   }
 
+  float glow = 0.0;
+  if (uLensMix > 0.0) {
+    vec3 lc;
+    float lv;
+    bool okL = uLensSrc >= 8 ? imageColor(uLensSrc, uvImg, lc) : sourceValue(uLensSrc, h, g, hs, uv, lv);
+    if (okL && uLensSrc >= 8) {
+      lc *= mix(1.0, shadeLit, uLensShade);
+    } else if (okL) {
+      lc = colorize(lv, uLensCmap, uLensStretch, hs, flatC);
+      if (!flatC) lc *= mix(1.0, shadeLit, uLensShade);
+    } else {
+      // Lens layer still loading (or missing at this level): neutral hillshade.
+      lc = vec3(0.06) + hs * vec3(0.9);
+    }
+    col = mix(col, clamp(lc * uLensTint, 0.0, 1.0), uLensMix);
+    if (uGlowCount > 0 && uGlowMix > 0.0) glow = lensGlow(vWorld) * uGlowMix;
+  }
+
   col = mix(col, col * uLodColor, uLodTint);
-  fragColor = vec4(applyFog(col, vWorld, uFogColor, uFogDensity), 1.0);
+  col = applyFog(col, vWorld, uFogColor, uFogDensity);
+  if (glow > 0.0) {
+    float pulse = 0.78 + 0.22 * sin(uGlowTime * 3.2);
+    float a = clamp(glow * pulse, 0.0, 1.0);
+    col = mix(col, uGlowColor, 0.8 * a) + uGlowColor * 0.25 * a; // emissive: drawn over the haze
+  }
+  fragColor = vec4(col, 1.0);
 }

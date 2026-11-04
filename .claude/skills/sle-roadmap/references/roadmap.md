@@ -38,7 +38,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Skill:** `sle-pipeline` → `sle-renderer`
 
 ## V2.5 — Game look + Relikt-Blick lens 🔍
-- [ ] **Approach:** default look = aerial ground + trees + houses + sky ([0018](../../../../docs/adr/0018-game-look-relikt-blick-lens.md)). Lens: trees fade, relief blends in, candidates glow; 3 variants + *Zeitreise* in Entdecker. *Merken* + note on top of the existing marker store.
+- [x] **Approach:** default look = aerial ground + trees + houses + sky ([0018](../../../../docs/adr/0018-game-look-relikt-blick-lens.md)). Lens: trees fade, relief blends in, candidates glow; 3 variants + *Zeitreise* in Entdecker. *Merken* + note on top of the existing marker store.
 - **Acceptance:** U2 from the PRD works on phone and desktop; relief lab unchanged in Labor.
 - **Skill:** `sle-renderer`, `sle-relict-detection`
 
@@ -76,4 +76,5 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - V2.3: `ctx.shell` is null while features mount → tier comes from the host handle. Portals on the minimap via `minimap.setPortals([{id,E,N,label}])` (wire at V2.6b merge). Old `heading + gridConvergence` was off by ≤ 0.085° (Mercator skew) → bearing is projected now.
 - V2.6b: Testraum (built-in procedural fixture zone) shows only in dev, `?aoi=fixture` or `?testraum`; `gltf` zone runtime arrives with the bakery (V2.8). E = *Betreten* near a portal (Space still climbs). Not yet: freeing overworld GPU memory inside a zone, deep links into a zone.
 - V2.4b: far LOD costs ≈ 100 draw calls on desktop (merge far tiles if a device struggles); dither grain visible on crowns mid-fade; relief is bare beyond tree range (3 km Hoch, 1050 m Mobil); castle does not yet use `decodeTrees`; no trunk collision. Proxy runs were loaded by a sibling's `pgtool` job, so absolute ms are inflated.
+- V2.5: the aerial ground (`ortho`, 1000 px per chunk) fills the terrain texture budget (≈ 200 MB phone, 600 MB desktop vs 78–213 MB with relief) → distant terrain coarsens sooner; candidate for the perf pass. Phone bar has 7–8 items (34–45 px). A lab overlay parked in Standard is off after a reload.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).

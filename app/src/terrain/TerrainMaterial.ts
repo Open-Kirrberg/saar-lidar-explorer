@@ -1,4 +1,4 @@
-import { Color, DataTexture, FloatType, GLSL3, NearestFilter, RedFormat, ShaderMaterial, UnsignedByteType, Vector2, Vector3 } from 'three';
+import { Color, DataTexture, FloatType, GLSL3, NearestFilter, RedFormat, ShaderMaterial, UnsignedByteType, Vector2, Vector3, Vector4 } from 'three';
 import type { IUniform, Texture } from 'three';
 import canopyFragment from './canopy.frag.glsl?raw';
 import heightSample from './heightSample.glsl?raw';
@@ -55,7 +55,33 @@ export interface SharedTerrainUniforms {
   uCanopyMax: IUniform<number>;
   uCanopyOpacity: IUniform<number>;
   uCanopySteepCut: IUniform<number>;
+  /**
+   * Relikt-Blick lens (V2.5, ADR 0035): a third channel mixed over base + overlay with `uLensMix`
+   * (0 = off). Source: relief.ts ShaderSource (live, LayerC or ImageC), own colormap/stretch/shade.
+   */
+  uLensMix: IUniform<number>;
+  uLensSrc: IUniform<number>;
+  uLensCmap: IUniform<number>;
+  uLensStretch: IUniform<Vector3>;
+  uLensShade: IUniform<number>;
+  uLensTint: IUniform<Vector3>;
+  uLayerCRange: IUniform<Vector2>;
+  /** Candidate glow (lens): xz world, radius m, strength; first `uGlowCount` entries are used. */
+  uGlow: IUniform<Vector4[]>;
+  uGlowCount: IUniform<number>;
+  /** Bounding circle of the rings (x, z, R; R < 0 = none) for the shader's early-out. */
+  uGlowBound: IUniform<Vector3>;
+  uGlowColor: IUniform<Vector3>;
+  /** Seconds (pulse phase). */
+  uGlowTime: IUniform<number>;
+  /** Glow fade 0–1 (own channel of the lens transition, independent of the relief mix). */
+  uGlowMix: IUniform<number>;
+  /** Metres per pixel at 1 m distance (2·tan(fov/2) / drawing-buffer height): minimum glow size. */
+  uGlowPx: IUniform<number>;
 }
+
+/** Max candidate glows per frame (uniform array size; keep in sync with GLOW_MAX in terrain.frag.glsl). */
+export const GLOW_MAX = 24;
 
 /** Per-chunk uniforms. */
 export interface ChunkUniforms {
@@ -75,6 +101,11 @@ export interface ChunkUniforms {
   /** Image px per chunk side (without apron) bound in slot A / B (1 when not an image). */
   uImgPxA: IUniform<number>;
   uImgPxB: IUniform<number>;
+  /** Lens slot C (V2.5): layer/image texture, flag, stand-in source, image px. */
+  uLayerC: IUniform<Texture>;
+  uHasLayerC: IUniform<number>;
+  uLayerCAlt: IUniform<number>;
+  uImgPxC: IUniform<number>;
   /** Per-chunk low-pass (live local relief), same pixel grid as uHeight. */
   uLowpass: IUniform<Texture>;
   uHasLowpass: IUniform<number>;
@@ -127,6 +158,20 @@ export function createSharedUniforms(hRef: number, chunkSize: number): SharedTer
     uCanopyMax: { value: 35 },
     uCanopyOpacity: { value: 0.6 },
     uCanopySteepCut: { value: 1e6 },
+    uLensMix: { value: 0 },
+    uLensSrc: { value: ShaderSource.Off },
+    uLensCmap: { value: Colormap.Gray },
+    uLensStretch: { value: new Vector3(0, 1, 1) },
+    uLensShade: { value: 0 },
+    uLensTint: { value: new Vector3(1, 1, 1) },
+    uLayerCRange: { value: new Vector2(0, 1) },
+    uGlow: { value: Array.from({ length: GLOW_MAX }, () => new Vector4()) },
+    uGlowCount: { value: 0 },
+    uGlowBound: { value: new Vector3(0, 0, -1) },
+    uGlowColor: { value: new Vector3(1, 0.62, 0.14) },
+    uGlowTime: { value: 0 },
+    uGlowMix: { value: 0 },
+    uGlowPx: { value: 0.001 },
   };
 }
 
@@ -135,7 +180,7 @@ export function createChunkMaterial(shared: SharedTerrainUniforms, chunk: ChunkU
   return new ShaderMaterial({
     glslVersion: GLSL3,
     vertexShader,
-    fragmentShader: heightSample + '\n' + fragmentShader,
+    fragmentShader: `#define GLOW_MAX ${GLOW_MAX}\n` + heightSample + '\n' + fragmentShader,
     uniforms: { ...shared, ...chunk },
   });
 }

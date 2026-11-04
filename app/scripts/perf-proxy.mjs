@@ -3,6 +3,7 @@
 //
 //   pnpm run build && pnpm exec vite preview --port 5241 --strictPort &   # serves dist + public/data
 //   pnpm run perf -- [--url http://127.0.0.1:5241/?aoi=overall] [--profiles phone,desktop] [--headed]
+//                    [--lens off|on|both]   # V2.5: also measure with the Relikt-Blick lens on (view id +lens)
 //
 // Drives the system Chrome (puppeteer-core, no browser download) headless by default, so no window
 // opens on the desktop; `--headed` (V2.0 method) shows the page. Per profile: cold load (cache disabled)
@@ -27,6 +28,7 @@ const HEADLESS = !args.includes('--headed'); // headless by default: never pop u
 const CHROME = opt('chrome', process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const UNCAPPED = args.includes('--uncapped'); // no vsync: rAF fps = headroom above the display rate
 const SAMPLE_MS = Number(opt('sample-ms', 5000));
+const LENS = { off: [false], on: [true], both: [false, true] }[opt('lens', 'off')] ?? [false];
 
 /** Low-end phone proxy (ADR 0028): Chrome emulation, 4× CPU throttle, target 30 fps. */
 const PROFILES = {
@@ -127,11 +129,17 @@ async function runProfile(browser, id) {
   await page.waitForFunction(() => window.__perf.ready != null, { timeout: 180_000, polling: 200 });
   await waitSettled(page, 120_000);
   await dismissDialogs(page);
-  for (const v of VIEWS) {
+  for (const v0 of VIEWS) for (const lens of LENS) {
+    const v = { ...v0, id: v0.id + (lens ? '+lens' : '') };
     const t0 = Date.now();
     await page.evaluate((v) => {
       void window.sle.flyTo(v.E, v.N, { agl: v.agl, pitch: v.pitch, heading: v.heading, duration: 0 });
     }, v);
+    // Lens on/off (V2.5): 40 steps of 1/60 s finish the ~0.5 s transition even in a hidden tab.
+    await page.evaluate((on) => {
+      window.sleLens?.setOn(on);
+      window.sle.step(40);
+    }, lens);
     await sleep(300); // let a few frames run so the LOD queue reflects the new view
     const settled = await waitSettled(page, 120_000);
     const viewSettleMs = settled == null ? null : Date.now() - t0;

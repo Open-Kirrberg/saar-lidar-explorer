@@ -135,6 +135,8 @@ export class TerrainChunk {
   readonly layerFailed = new Set<string>();
   private slotA: string | null = null;
   private slotB: string | null = null;
+  /** Lens slot C (V2.5 Relikt-Blick). */
+  private slotC: string | null = null;
   private lowpassTex: DataTexture | null = null;
   /** Radius key the current low-pass was built for ('' = none). */
   lowpassKey = '';
@@ -171,6 +173,10 @@ export class TerrainChunk {
       uLayerBAlt: { value: -1 },
       uImgPxA: { value: 1 },
       uImgPxB: { value: 1 },
+      uLayerC: { value: DUMMY_U8 },
+      uHasLayerC: { value: 0 },
+      uLayerCAlt: { value: -1 },
+      uImgPxC: { value: 1 },
       uLowpass: { value: DUMMY_FLOAT },
       uHasLowpass: { value: 0 },
       uSkirtDepth: { value: 10 },
@@ -367,6 +373,7 @@ export class TerrainChunk {
 
   private afterLayerChange(key: string): void {
     if (this.slotA === key || this.slotB === key) this.bindLayers(this.slotA, this.slotB);
+    if (this.slotC === key) this.bindLens(key);
     if (key === BLDG_KEY) this.bindBuildingMask();
   }
 
@@ -396,6 +403,16 @@ export class TerrainChunk {
     this.uniforms.uLayerBAlt.value = altB;
     this.uniforms.uImgPxA.value = (a && this.images.get(a)?.size) || 1;
     this.uniforms.uImgPxB.value = (b && this.images.get(b)?.size) || 1;
+  }
+
+  /** Bind the lens slot C (V2.5); a missing texture → uHasLayerC = 0 (shader: stand-in or hillshade). */
+  bindLens(c: string | null, altC = this.uniforms.uLayerCAlt.value): void {
+    this.slotC = c;
+    const tc = c ? this.layerTextures.get(c) : undefined;
+    this.uniforms.uLayerC.value = tc ?? DUMMY_U8;
+    this.uniforms.uHasLayerC.value = tc ? 1 : 0;
+    this.uniforms.uLayerCAlt.value = altC;
+    this.uniforms.uImgPxC.value = (c && this.images.get(c)?.size) || 1;
   }
 
   /** Back-compat: bind only the base layer. */

@@ -120,6 +120,20 @@ export interface ValueSample {
 
 export type ValueScope = 'view' | 'aoi';
 
+/**
+ * Relikt-Blick lens channel (V2.5, ADR 0035): what slot C shows. `key` = live key, u8 layer or
+ * `rgb` image; colormap/stretch/shade default to the key's channel defaults. The mix itself is the
+ * shared uniform `uLensMix` (animated by the lens, no state here).
+ */
+export interface LensChannel {
+  key: string;
+  colormap?: Colormap;
+  stretch?: Stretch;
+  shade?: number;
+  /** Colour multiplier (r, g, b), default white. */
+  tint?: [number, number, number];
+}
+
 const LIVE_SRC: Record<string, number> = {
   'live-hillshade': ShaderSource.Hillshade,
   'live-slope': ShaderSource.Slope,
@@ -185,6 +199,10 @@ export class Terrain extends Group {
   /** Per display key: colormap / stretch / shade the user last chose. */
   private readonly channelMemory = new Map<string, ChannelSettings>();
   private overlay: OverlaySettings;
+  /** Lens slot C key (null = no lens layer wanted; textures already resident stay cached). */
+  private lensKey: string | null = null;
+  /** 0 = canopy as set by `forest`, 1 = hidden by the lens (V2.5). */
+  private canopyLensFade = 0;
   private readonly listeners = new Set<() => void>();
   private lowpassRadius = 15;
   /** DTM chunks that failed (not retried until reload). */
@@ -526,7 +544,7 @@ export class Terrain extends Group {
           if (this.chunks.get(chunk.key) !== chunk || chunk.canopy) return;
           this.canopyHeights.add(chunk.i, chunk.j, data);
           const part = chunk.setCanopy(data);
-          part.mesh.material.transparent = this.forest.mode === 'transparent';
+          part.mesh.material.transparent = this.forest.mode === 'transparent' || this.canopyLensFade > 0;
           part.mesh.visible = false;
           this.canopyGroup.add(part.mesh);
           this.emit();
@@ -606,17 +624,20 @@ export class Terrain extends Group {
     return this.hasCanopyData() && this.forest.mode !== 'off';
   }
 
-  /** Layers chunk `c` should have for the current display (available at its level, not failed). */
-  private neededLayers(c: TerrainChunk): string[] {
+  /**
+   * Layers chunk `c` should have for the current display (available at its level, not failed);
+   * with `lens`, also the lens slot C layer (requested, but not required for `isComplete`).
+   */
+  private neededLayers(c: TerrainChunk, lens = true): string[] {
     const out: string[] = [];
-    for (const key of [this.layerSlotA(), this.layerSlotB()]) {
+    for (const key of [this.layerSlotA(), this.layerSlotB(), lens ? this.layerSlotC() : null]) {
       if (key && this.hasSource(c.level, key) && !c.layerFailed.has(key) && !out.includes(key)) out.push(key);
     }
     return out;
   }
 
   private isComplete(c: TerrainChunk): boolean {
-    return this.neededLayers(c).every((k) => c.hasLayer(k));
+    return this.neededLayers(c, false).every((k) => c.hasLayer(k));
   }
 
   /** Bind display slots on one chunk (with per-level availability + stand-ins). */
@@ -626,6 +647,8 @@ export class Terrain extends Group {
     const altA = a && !this.hasSource(c.level, a) ? (LAYER_ALT[a] ?? -1) : -1;
     const altB = b && !this.hasSource(c.level, b) ? (LAYER_ALT[b] ?? -1) : -1;
     c.bindLayers(a, b, altA, altB);
+    const lc = this.layerSlotC();
+    c.bindLens(lc, lc && !this.hasSource(c.level, lc) ? (LAYER_ALT[lc] ?? -1) : -1);
   }
 
   private evict(c: TerrainChunk): void {
@@ -817,8 +840,9 @@ export class Terrain extends Group {
       // Kept (drawn + ancestors) chunks alone exceed the budget: drop what they don't display first.
       const a = this.layerSlotA();
       const b = this.layerSlotB();
+      const lc = this.layerSlotC();
       for (const c of this.chunks.values()) {
-        for (const k of c.layerKeys()) if (k !== a && k !== b && !(k === BLDG_KEY && c.canopy)) c.removeLayer(k);
+        for (const k of c.layerKeys()) if (k !== a && k !== b && k !== lc && !(k === BLDG_KEY && c.canopy)) c.removeLayer(k);
       }
     }
     this.effError = adaptThreshold(this.effError, 1, kept, budget);
@@ -1048,6 +1072,53 @@ export class Terrain extends Group {
     return k && !isLiveKey(k) ? k : null;
   }
 
+  private layerSlotC(): string | null {
+    const k = this.lensKey;
+    return k && !isLiveKey(k) ? k : null;
+  }
+
+  /**
+   * Relikt-Blick lens (V2.5): bind `ch` to slot C (null = no lens layer). Streams the layer for the
+   * drawn chunks like the overlay, but finer chunks never wait for it (the shader shows a neutral
+   * hillshade until it arrives). Base/overlay settings, store and URL hash are untouched.
+   */
+  setLens(ch: LensChannel | null): void {
+    const u = this.uniforms;
+    if (!ch || !this.isValidDisplay(ch.key)) {
+      this.lensKey = null;
+      u.uLensSrc.value = ShaderSource.Off;
+    } else {
+      const key = ch.key;
+      this.lensKey = key;
+      const fresh = this.freshChannel(key);
+      u.uLensSrc.value = LIVE_SRC[key] ?? (this.isImageKey(key) ? ShaderSource.ImageC : ShaderSource.LayerC);
+      u.uLensCmap.value = ch.colormap ?? fresh.colormap;
+      const st = ch.stretch ?? fresh.stretch;
+      u.uLensStretch.value.set(st.lo, st.hi, st.gamma);
+      u.uLensShade.value = ch.shade ?? fresh.shade;
+      u.uLensTint.value.set(...(ch.tint ?? [1, 1, 1]));
+      const layer = this.manifest.layers[key];
+      if (layer) u.uLayerCRange.value.set(layer.min, layer.max);
+    }
+    for (const c of this.chunks.values()) this.bindChunk(c);
+  }
+
+  /** Current lens slot key (null = none). */
+  getLens(): string | null {
+    return this.lensKey;
+  }
+
+  /**
+   * Lens fade of the relief lab's DSM canopy (F5): 0 = as `forest` says, 1 = hidden. In between
+   * the canopy is drawn transparent like *Transparent*, with its opacity scaled by 1 − f.
+   */
+  setCanopyLensFade(f: number): void {
+    const v = Math.min(1, Math.max(0, Number.isFinite(f) ? f : 0));
+    if (v === this.canopyLensFade) return;
+    this.canopyLensFade = v;
+    this.applyCanopyLook();
+  }
+
   /** Push channel settings into the shared uniforms and bind layer textures (per level). */
   applyChannels(): void {
     const u = this.uniforms;
@@ -1108,11 +1179,18 @@ export class Terrain extends Group {
    */
   setForest(patch: Partial<ForestSettings>): void {
     Object.assign(this.forest, patch);
+    this.applyCanopyLook();
+    this.emit();
+  }
+
+  /** Canopy visibility / transparency from `forest` and the lens fade (V2.5). */
+  private applyCanopyLook(): void {
     const f = this.forest;
-    const on = f.mode !== 'off' && this.hasCanopyData();
+    const lf = this.canopyLensFade;
+    const on = f.mode !== 'off' && this.hasCanopyData() && lf < 1;
     this.canopyGroup.visible = on;
-    const transparent = f.mode === 'transparent';
-    this.uniforms.uCanopyOpacity.value = transparent ? f.opacity : 1;
+    const transparent = f.mode === 'transparent' || lf > 0;
+    this.uniforms.uCanopyOpacity.value = (f.mode === 'transparent' ? f.opacity : 1) * (1 - lf);
     this.uniforms.uCanopySteepCut.value = transparent ? 3 : 1e6;
     for (const c of this.chunks.values()) {
       const m = c.canopy?.mesh.material;
@@ -1121,7 +1199,6 @@ export class Terrain extends Group {
         m.needsUpdate = true;
       }
     }
-    this.emit();
   }
 
   /**

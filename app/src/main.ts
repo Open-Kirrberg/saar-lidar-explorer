@@ -21,6 +21,7 @@ import { createRefinedFlyTo } from './ui/flyTo';
 import { browserStorage, loadSettings, saveSettings, settingsStatePatch } from './ui/settings';
 import type { LoadProgressLike } from './ui/streaming';
 import { createSettingsRuntime, createShell } from './shell/Shell';
+import { registerLens } from './lens';
 import type { ShellApi } from './shell/types';
 import { registerZones } from './zones/runtime/feature';
 import type { ZonesApi } from './zones/runtime/feature';
@@ -242,6 +243,7 @@ async function main(): Promise<void> {
   });
   registerZones(ctx); // V2.6b: zone portals (Standard), loading screen, enter / leave
   installTrees(ctx); // V2.4 CHM trees: 🟢 Standard feature `trees`, updated via ctx.onFrame (app/README „Bäume“)
+  registerLens(ctx); // V2.5: game look + Relikt-Blick lens (src/lens, ADR 0035)
 
   // ---- frame loop -----------------------------------------------------------------------------
   const timer = new Timer();
