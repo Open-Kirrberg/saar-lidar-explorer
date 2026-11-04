@@ -8,6 +8,21 @@ from pathlib import Path
 PRD_MAX_LINES = 150
 STATUS = re.compile(r"^- \*\*Status:\*\* (Proposed|Accepted|Superseded by (\d{4}))\b", re.M)
 LINK = re.compile(r"\]\(([^)#\s]+)(?:#[^)]*)?\)")
+# Accepted ADRs are never edited (ADR 0025), so their links to moved folders resolve through this map.
+MOVED = {"schloss-karlsberg/": "zones/schloss-karlsberg/"}  # ADR 0029
+
+
+def resolves(root: Path, doc: Path, href: str) -> bool:
+    target = (doc.parent / href).resolve()
+    if target.exists():
+        return True
+    if doc.parent.name != "adr":
+        return False
+    try:
+        rel = target.relative_to(root.resolve()).as_posix()
+    except ValueError:
+        return False
+    return any(rel.startswith(old) and (root / (new + rel[len(old):])).exists() for old, new in MOVED.items())
 
 
 def main(root: Path) -> int:
@@ -32,11 +47,11 @@ def main(root: Path) -> int:
     for target in re.findall(r"\]\((\d{4}-[^)]+\.md)\)", index):
         if not (adr_dir / target).exists():
             errors.append(f"docs/adr/README.md: dead link {target}")
-    for doc in [root / "PRD.md", root / "CHANGELOG.md", root / "README.md", root / "app/README.md", root / "schloss-karlsberg/README.md", root / "schloss-karlsberg/CHANGELOG.md", root / "schloss-karlsberg/docs/improvement-backlog.md", root / "docs/zone-contract.md", adr_dir / "README.md", *adrs]:
+    for doc in [root / "PRD.md", root / "CHANGELOG.md", root / "README.md", root / "app/README.md", root / "zones/schloss-karlsberg/README.md", root / "zones/schloss-karlsberg/CHANGELOG.md", root / "zones/schloss-karlsberg/docs/improvement-backlog.md", root / "docs/zone-contract.md", adr_dir / "README.md", *adrs]:
         for href in LINK.findall(doc.read_text(encoding="utf-8")):
             if "://" in href or href.startswith("mailto:"):
                 continue
-            if not (doc.parent / href).exists():
+            if not resolves(root, doc, href):
                 errors.append(f"{doc.relative_to(root)}: dead link {href}")
     prd_lines = len((root / "PRD.md").read_text(encoding="utf-8").splitlines())
     if prd_lines > PRD_MAX_LINES:

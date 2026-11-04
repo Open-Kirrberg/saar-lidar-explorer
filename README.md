@@ -7,7 +7,7 @@ Explore the **real** Kirrberg, Homburg and Schloss Karlsberg like a game. Fly or
 
 > **Schauen, nicht graben.** Everything the app highlights is a *hypothesis* from terrain data, not a find. See [Heritage and ethics](#heritage-and-ethics).
 
-![Schloss Karlsberg 1789 reconstruction, Ehrenhof at dusk, walking mode](schloss-karlsberg/docs/visual-audit/09-golden-hour-ehrenhof.jpg)
+![Schloss Karlsberg 1789 reconstruction, Ehrenhof at dusk, walking mode](zones/schloss-karlsberg/docs/visual-audit/09-golden-hour-ehrenhof.jpg)
 *The castle zone: Schloss Karlsberg 1789, a researched reconstruction (hypothesis). This is the look the whole world is heading for.*
 
 ## 🧭 Where it is going
@@ -31,7 +31,7 @@ cd ../app && pnpm install && pnpm dev          # without pipeline data it opens 
 .claude/skills/sle-roadmap/scripts/verify.sh   # all gates: app tests + build, docs, pipeline tests
 ```
 
-Serving a build, other data dirs, phone over HTTPS, controls: [app/README.md](app/README.md). Pipeline steps and sources: [pipeline/README.md](pipeline/README.md). Castle viewer: [schloss-karlsberg/README.md](schloss-karlsberg/README.md).
+Serving a build, other data dirs, phone over HTTPS, controls: [app/README.md](app/README.md). Pipeline steps and sources: [pipeline/README.md](pipeline/README.md). Castle viewer: [zones/schloss-karlsberg/README.md](zones/schloss-karlsberg/README.md).
 
 ## ©️ Data sources and licences
 
@@ -58,7 +58,7 @@ The exact attribution strings are written into each dataset's `manifest.json` by
 | [docs/data-contract.md](docs/data-contract.md) | Binding format between pipeline and app |
 | [pipeline/](pipeline/README.md) | Python 3.12 (uv): open data → static chunks, layers, candidates |
 | [app/](app/README.md) | Vite + TypeScript + three.js + Leaflet explorer (German UI) |
-| [schloss-karlsberg/](schloss-karlsberg/README.md) | Researched 3D reconstruction of the palace, 1789 |
+| [zones/schloss-karlsberg/](zones/schloss-karlsberg/README.md) | Researched 3D reconstruction of the palace, 1789 |
 | `docs/research/` | Source research: data, tech stack, archaeology/legal, cadastre/historic maps |
 | `docs/history/` | Frozen v1 PRD and roadmap |
 

@@ -30,9 +30,9 @@ Everything is configured in `release.env` (org, host, repo names, AOI, `XYZ_MAX_
 | `VITE_VIEWER_URL` | `/saar-lidar-explorer/castle/` | castle viewer handover target (same origin is trusted); `off` hides „Schloss betreten“ |
 | `VITE_IMPRESSUM_URL` | – (unset) | optional http(s) link „Impressum“ in *Über & Datenschutz*; set the repo variable `SLE_IMPRESSUM_URL` |
 
-Castle viewer (`schloss-karlsberg/`): `VITE_EXPLORER_URL=/saar-lidar-explorer/` (default return target) and
+Castle viewer (`zones/schloss-karlsberg/`): `VITE_EXPLORER_URL=/saar-lidar-explorer/` (default return target) and
 `vite build --base /saar-lidar-explorer/castle/`. Its back-URL guard accepts local hosts and the page's own origin.
-All URL logic is pure and unit-tested (`app/tests/publicBuild.test.ts`, `schloss-karlsberg/viewer/tests/handover.test.ts`).
+All URL logic is pure and unit-tested (`app/tests/publicBuild.test.ts`, `zones/schloss-karlsberg/viewer/tests/handover.test.ts`).
 GitHub Pages sends `Access-Control-Allow-Origin: *`, so the cross-origin fetches (also from workers, which only
 ever get absolute URLs) work.
 
@@ -49,7 +49,7 @@ Size report: `../_release/data-size-report.txt`. What it does:
 
 - `overall/` → repo 1, except `xyz/`; `manifest.json` rewritten (`xyz.*.url` absolute into repo 2, `maxZoom` ≤
   `XYZ_MAX_ZOOM`, `tileCount`/`bytes` recounted, `release` note). Tiles ≤ z17 → repo 2.
-- `pois.geojson`, `shared/**` → repo 1; `schloss-karlsberg/viewer/public/terrain/` → repo 1 `castle-viewer/terrain/` + `SHA256SUMS`.
+- `pois.geojson`, `shared/**` → repo 1; `zones/schloss-karlsberg/viewer/public/terrain/` → repo 1 `castle-viewer/terrain/` + `SHA256SUMS`.
 - `print/*.json` and per series `index.json` (without `files.stl`), `*.3mf`, `*.png`, `keys/`, `printer/` → repo 2.
   Tile STLs are not published.
 - **F22: UXO candidate classes are stripped** (`crater`, `crater_field` from saar-lidar-detect are private): features
@@ -112,7 +112,7 @@ large refreshes, prefer a fresh orphan commit (`git checkout --orphan new && git
 
 ## 5. Checks before publishing
 
-- `.claude/skills/sle-roadmap/scripts/verify.sh` passes; `pnpm run test` in `app/` and `schloss-karlsberg/`.
+- `.claude/skills/sle-roadmap/scripts/verify.sh` passes; `pnpm run test` in `app/` and `zones/schloss-karlsberg/`.
 - `../_release/data-size-report.txt`: no FAIL; `../_release/secret-scan.md`: HIGH none, INFO reviewed.
 - `../_release/AUDIT.md`: licence + heritage audit.
 - Local smoke test of the public build against the staged data: build with

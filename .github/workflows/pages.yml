@@ -42,7 +42,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: |
             app/pnpm-lock.yaml
-            schloss-karlsberg/pnpm-lock.yaml
+            zones/schloss-karlsberg/pnpm-lock.yaml
 
       - name: Explorer – install, test, build (public mode)
         working-directory: app
@@ -57,13 +57,13 @@ jobs:
       - name: Castle viewer – texture cache (Poly Haven, CC0)
         uses: actions/cache@v6
         with:
-          path: schloss-karlsberg/viewer/public/textures
-          key: textures-${{ hashFiles('schloss-karlsberg/viewer/textures.json', 'schloss-karlsberg/scripts/fetch-textures.sh') }}
+          path: zones/schloss-karlsberg/viewer/public/textures
+          key: textures-${{ hashFiles('zones/schloss-karlsberg/viewer/textures.json', 'zones/schloss-karlsberg/scripts/fetch-textures.sh') }}
 
       - name: Castle viewer – assets and build
         id: castle
         continue-on-error: true
-        working-directory: schloss-karlsberg
+        working-directory: zones/schloss-karlsberg
         env:
           VITE_EXPLORER_URL: /saar-lidar-explorer/
         run: |
