@@ -13,7 +13,8 @@
     "fixture": "tsx scripts/make-fixture.ts",
     "perf": "node scripts/perf-proxy.mjs",
     "first-run": "node scripts/first-run.mjs",
-    "perf:zone": "node scripts/perf-zone.mjs"
+    "perf:zone": "node scripts/perf-zone.mjs",
+    "perf:gltf": "node scripts/perf-gltf-zone.mjs"
   },
   "dependencies": {
     "leaflet": "1.9.4",

@@ -1,0 +1,18 @@
+{
+  "name": "sle-capture-pack",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Zone asset packer for tools/capture (stage `package`): GLB -> meshopt + quantized + KTX2 (ETC1S) + unlit, per the zone contract",
+  "scripts": {
+    "pack": "node pack.mjs"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "jpeg-js": "0.4.4",
+    "ktx2-encoder": "0.6.0",
+    "meshoptimizer": "1.3.0"
+  }
+}

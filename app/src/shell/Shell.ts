@@ -428,6 +428,7 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
 
   api = {
     tier: () => registry.tier(),
+    quality: () => quality,
     setTier,
     onTier(cb) {
       tierListeners.add(cb);

@@ -1,6 +1,6 @@
 """Entry point: `python -I cli.py <zone> [stage ...]` (run.sh wraps it). Stages run in order; default = all.
 
-Stages: frames -> privacy -> sfm -> undistort -> mesh -> georef -> export -> clean
+Stages: frames -> privacy -> sfm -> undistort -> mesh -> georef -> export -> package -> clean
 """
 import importlib
 import os
@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))  # our own code o
 
 from capture.common import load_zone, timed  # noqa: E402
 
-STAGES = ["frames", "privacy", "sfm", "undistort", "mesh", "georef", "export", "clean"]
+STAGES = ["frames", "privacy", "sfm", "undistort", "mesh", "georef", "export", "package", "clean"]
 
 
 def main(argv: list[str]) -> None:

@@ -92,3 +92,22 @@ def test_safe_path():
     assert Z.safe_path("a/b.glb")
     for p in ("../a.glb", "/a.glb", "a//b.glb", "https://x/a.glb", "./a.glb", ""):
         assert not Z.safe_path(p)
+
+
+def _captured(scale) -> dict:
+    m = copy.deepcopy(fixture())
+    m["kind"] = "captured"
+    m["evidence"]["kind"] = "capture"
+    m["capture"] = {"date": "2026-11-04", "method": "photogrammetry-mesh",
+                    "georef": {"method": "lod2-walls+dgm1", "controlPoints": 1, "rmsError_m": 0.16}, "privacy": "blurred"}
+    if scale is not None:
+        m["capture"]["scale"] = scale
+    return m
+
+
+def test_capture_scale():
+    assert Z.validate_manifest(_captured(None)) == []
+    assert Z.validate_manifest(_captured({"factor": 1.04, "pivotLocal": [8.4, 243.5, -5.0], "source": "measured"})) == []
+    bad = "capture.scale: invalid (factor 0.5-2, pivotLocal [x, y, z])"
+    assert bad in Z.validate_manifest(_captured({"factor": 3, "pivotLocal": [0, 0, 0]}))
+    assert bad in Z.validate_manifest(_captured({"factor": 1, "pivotLocal": [0, 0]}))

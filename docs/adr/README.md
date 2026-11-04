@@ -48,6 +48,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0038](0038-first-flight-tutorial.md) | First-flight tutorial: five self-completing steps to the castle, v1 tour stays in Entdecker | Accepted | 2026-11-04 | v1 intro overlay (removed in V2.2) |
 | [0033](0033-castle-module-zone.md) | Castle as module zone #1: own HUD, shared trees, triangle waiver | Accepted | 2026-11-04 | castle URL handover from the explorer, 1789/2025 switch |
 | [0039](0039-capture-tool-beside-video2world.md) | Shared capture tool in `tools/capture/`; castle `video2world/` stays as HMS evidence | Accepted | 2026-11-04 | 0029 (video2world line) |
+| [0041](0041-gltf-zone-runtime-walk-on-mesh.md) | Generic glTF zone runtime: coarse-first LODs, walk on the captured mesh, scale as data | Accepted | 2026-11-04 | |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 

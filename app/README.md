@@ -329,7 +329,7 @@ ctx.setFrameOwner(fn | null)    // while set, fn(dt) replaces the overworld fram
 - **Enter:** controls off, pose + speed + renderer state saved; `shell.loading(name_de)` with summary, disclaimer, attribution and „Abbrechen Esc“; the module chunk loads (0–10 %), then `mountZone` (10–100 %). The zone then owns frames and the shell is hidden.
 - **Leave:** „Verlassen“ / Esc / `ctx.onExit()` → `exit()` + `dispose()` → renderer state + pose restored bit-exactly (re-derived from E/N/h when the exaggeration changed meanwhile). A cancel, a load error or a throwing `frame()` lead to the same path, plus one German toast.
 - **Testraum** (`testraum`, built-in, procedural, no data): in dev, with `?aoi=fixture`, or with `?testraum`. Portal ≈ 382450 / 5466254 (fixture and overall AOI). `?zoneDelay=<ms>` slows its loading for screenshots.
-- Zones with `runtime.kind: "gltf"` stay **absent** until a gltf runtime is registered (bakery, V2.8).
+- **glTF zones (V2.8b, [ADR 0041](../docs/adr/0041-gltf-zone-runtime-walk-on-mesh.md)):** `runtime.kind: "gltf"` → the generic lazy runtime `GLTF_RUNTIME` (`gltfZone.ts`): coarsest LODs first, finer by `until_m`; *Gehen* on the mesh (WASD / drag, touch ▲ Vor ▼ Zurück), *Schweben* toggle; host *Verlassen* + Esc. Zone #2 = Bäckerei Heusser (`bakery`, `?aoi=overall`), built by `tools/capture/run.sh bakery`.
 
 ## Spiel-Look & Relikt-Blick (V2.5) 🔍
 
@@ -588,6 +588,7 @@ pnpm run build && pnpm exec vite preview --port 5241 --strictPort --host 127.0.0
 pnpm run perf                                  # phone proxy + desktop; JSON + shots → docs/shots/perf-*
 pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 pnpm run perf:zone -- --url 'http://127.0.0.1:5241/?aoi=karlsberg'   # castle zone (needs zone data): enter, Rundflug, Festsaal walk (src/zones/README.md)
+pnpm run perf:gltf -- --url 'http://127.0.0.1:5241/?aoi=overall'    # bakery (U3): portal → loading → street → shop → courtyard → back (src/zones/README.md)
 ```
 
 **Method** (`scripts/perf-proxy.mjs`, puppeteer-core with the system Chrome, headless by default since b1023b4 (`--headed` for the V2.0 method: headed so rAF runs and WebGL uses the real GPU — compare like with like); not part of the bundle):

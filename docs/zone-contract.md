@@ -125,9 +125,18 @@ Castle values are illustrative (V2.7 sets the real ones).
   "date": "2026-10-30",                     // footage date (ISO)
   "method": "photogrammetry-mesh",          // v1: "photogrammetry-mesh" (ADR 0027); "splats" is reserved
   "georef": { "method": "lod2+ortho", "controlPoints": 8, "rmsError_m": 0.15 },
-  "privacy": "no people; plates blurred"    // free text, required: what was removed (H13)
+  "privacy": "no people; plates blurred",   // free text, required: what was removed (H13)
+  "scale": {                                // optional (V2.8b): scale correction, see below
+    "factor": 1.0,                          // 0.5–2; the runtime scales every asset and spawn by it about pivotLocal
+    "pivotLocal": [8.39, 243.51, -4.97],    // zone frame; the best-fixed georef point (e.g. the fitted LoD2 corner)
+    "metresPerUnit": 1.4595,                // info: the georef scale already baked into the geometry
+    "source": "camera-height",              // info: "camera-height" (prior) | "measured"
+    "relUncertainty": 0.111                 // info: relative 1-σ scale error of the baked geometry
+  }
 }
 ```
+
+**Scale correction.** Geometry is metric as georeferenced. When the scale rests on a prior (camera height, ± 11 % on the bakery), one tape measurement fixes it without a rebuild: `factor = true length / length in the zone`, written into `capture.scale.factor`. The runtime applies `p' = pivot + factor · (p − pivot)` to assets, colliders and spawns; portals and the footprint are not moved. Missing or invalid → factor 1.
 
 ## 🧱 Assets
 
@@ -140,7 +149,7 @@ Castle values are illustrative (V2.7 sets the real ones).
 | Allowed extensions | the four above + `KHR_texture_transform`, `KHR_materials_emissive_strength` | anything else in `extensionsRequired` → asset rejected |
 | Per-part evidence | `evidence.perPart = "_CONF"`: SCALAR `UNSIGNED_BYTE` vertex attribute, 0 low · 1 med · 2 high (as sle-recon-v1). `"extras"`: node `extras: { "confidence": "high"|"med"|"low", "evidence": "D"|"I"|"HMS"… }` | the *Gewissheit* control ([0011](adr/0011-castle-evidence-no-hms.md), [0019](adr/0019-feature-tiers.md)) |
 | Node names | `<assetId>/<part>[/<detail>]`, read from the glTF JSON (three sanitises `Object3D.name`) | picking, *Gehe zu* |
-| Colliders | `role: "collider"`: one low-poly mesh, never drawn; missing → walk mode collides with `scene` LOD1 | phone budget |
+| Colliders | `role: "collider"`: one low-poly mesh, never drawn; missing → walk mode collides with the `scene` assets' coarsest LOD (the first one loaded) | phone budget |
 | Privacy | **No people, no readable licence plates**, no house numbers other than the zone's own | H13, ADR 0009 |
 
 **LOD.** The runtime picks per asset the first level whose `until_m` ≥ the camera's distance to `bboxLocal` (null = ∞) and keeps the previous level drawn until the next one has loaded (no hole, no pop to nothing). Coarse first: the first-view set is every asset's last LOD.
@@ -219,15 +228,15 @@ interface ZoneHandle {
 | Frames | zone poses are true heights (exaggeration 1, frame `x = E − E0`, `y = h`, `z = −(N − N0)`) |
 | Keys | Esc leaves (host, capture phase). A zone binds its own keys and must remove them in `exit()` |
 | Renderer | the host snapshots and restores tone mapping, exposure, clear colour/alpha, colour space, `autoClear`, shadows, pixel ratio |
-| `gltf` | no generic gltf runtime yet → such zones are **absent** (tolerance rule) until one is registered (V2.8) |
+| `gltf` | the app's generic runtime (V2.8b, `app/src/zones/runtime/gltfZone.ts`, lazy chunk, `hostChrome: true`): loads every `scene` asset's coarsest LOD before the loading screen closes, then finer levels by `until_m` (the coarse one stays drawn until the fine one is ready); walk mode on the colliders (ground ray + wall capsule), „Schweben“ without collision; `capture.scale` applied; quality `niedrig` keeps the coarsest LOD |
 
 ## 🧪 Examples
 
 | | 🏰 Castle (reconstructed) | 🥖 Bakery (captured) | 🧪 Fixture |
 |---|---|---|---|
 | `runtime` | `module: "schloss-karlsberg"` (generator + viewer code, lazy chunk) | `gltf` | `gltf` |
-| assets | optional (terrain, textures fetched by the module) | `street`, `shop`, `courtyard` (2 LODs each) + `collider` | one 2-LOD box |
-| `evidence` | `hypothesis`, `_CONF` | `capture`, `none`, `capture.georef.rmsError_m` | `hypothesis`, `extras` |
-| preset | `kino`, sky shared, 1789-07-15 19:30 | `natur`, sky shared, `now` | `dokumentation`, `none` |
+| assets | optional (terrain, textures fetched by the module) | one `scene` asset, 2 LODs (100 k tris + 3072² KTX2, 50 k + 2048²), no collider | one 2-LOD box |
+| `evidence` | `hypothesis`, `_CONF` | `capture`, `none`, `capture.georef.rmsError_m`, `capture.scale` | `hypothesis`, `extras` |
+| preset | `kino`, sky shared, 1789-07-15 19:30 | `natur`, sky shared, trees none, `now` | `dokumentation`, `none` |
 
 The full fixture is [`app/tests/fixtures/zones/fixture/zone.json`](../app/tests/fixtures/zones/fixture/zone.json) (inside the `fixture` AOI).

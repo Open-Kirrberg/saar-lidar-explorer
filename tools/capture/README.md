@@ -1,12 +1,13 @@
-# 🎥 tools/capture — video → georeferenced zone mesh
+# 🎥 tools/capture — video → zone package
 
-One command turns a handheld walk-through video into a textured, georeferenced GLB for a **captured zone**
-([ADR 0016](../../docs/adr/0016-zone-kinds-zone-contract.md), method: [ADR 0027](../../docs/adr/0027-captured-zone-method.md)).
-Zone packaging (portal, spawn, manifest) is the zone contract's job, not this tool's.
+One command turns a handheld walk-through video into a georeferenced, walkable **captured zone**
+([ADR 0016](../../docs/adr/0016-zone-kinds-zone-contract.md), method: [ADR 0027](../../docs/adr/0027-captured-zone-method.md),
+runtime: [ADR 0041](../../docs/adr/0041-gltf-zone-runtime-walk-on-mesh.md)). It ends in
+`app/public/data/zones/<zone>/` + an entry in `zones/index.json`, valid per [`sle-zone-v1`](../../docs/zone-contract.md).
 
 ```bash
 tools/capture/run.sh bakery                    # all stages
-tools/capture/run.sh bakery georef export      # selected stages (each reads the previous stage's output)
+tools/capture/run.sh bakery georef export package   # selected stages (each reads the previous stage's output; ≈ 45 s)
 cd tools/capture && uv run python -I -m pytest # tests
 ```
 
@@ -18,7 +19,7 @@ Everything generated stays in the git-ignored `data/work/zones/<zone>/`; QA rend
 
 ```mermaid
 flowchart LR
-  V[video] --> F[frames] --> P[privacy] --> S[sfm] --> U[undistort] --> M[mesh] --> G[georef] --> E[export] --> C[clean]
+  V[video] --> F[frames] --> P[privacy] --> S[sfm] --> U[undistort] --> M[mesh] --> G[georef] --> E[export] --> K[package] --> C[clean]
   L[(LoD2 walls + footprints)] --> G
   D[(DGM1)] --> G
 ```
@@ -32,6 +33,7 @@ flowchart LR
 | `mesh` | Dense reconstruction, meshing, decimation and texture baking at several detail levels in one alignment | Apple Object Capture (`swift/pgtool.swift`) |
 | `georef` | Level → scale from camera height → indoor/outdoor cameras → plan fit vs LoD2 (fixed scale) → height from DGM1 → residuals | numpy/scipy, `capture/similarity.py` |
 | `export` | Crop, transform to the zone-local frame, downsize texture (JPEG), GLB per LOD + sidecar JSON + preview renders | trimesh |
+| `package` | Zone package: GLB → meshopt + quantized + KTX2 ETC1S atlas + unlit (`pack/pack.mjs`), privacy-mask texels inpainted, spawn = first camera, portal, footprint = padded hull of mesh + cameras, `zone.json` + `zones/index.json` merge, strict check (`pipeline/zones.py`); `walkPath` (cameras every 1.5 m) for `perf:gltf` | gltf-transform, ktx2-encoder (Basis wasm), meshoptimizer |
 | `clean` | Delete unblurred raw frames, COLMAP database + duplicate model (≈ 1.3 GB on the bakery) | — |
 
 Every stage appends its wall-clock time to `data/work/zones/<zone>/timings.json` (the "hours per zone" metric).
@@ -80,11 +82,11 @@ Bäckerei Heusser, Eckstr. 3, 66424 Homburg-Kirrberg (consented, PRD H6). One ha
 
 ### ⏱️ Timings (Apple M4 Max, 64 GB, 2026-11-04)
 
-| frames | privacy | sfm | undistort | mesh | georef | export | clean | **total** |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 36 s | 203 s ¹ | 600 s | 11 s | 3250 s | 10 s | 1 s | 1 s | **4110 s ≈ 1.1 h** |
+| frames | privacy | sfm | undistort | mesh | georef | export | package | clean | **total** |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 36 s | 203 s ¹ | 600 s | 11 s | 3250 s | 17 s | 1 s | 30 s | 1 s | **4147 s ≈ 1.15 h** |
 
-¹ Detector caches warm; 479 s cold → **≈ 1.2 h** from scratch, plus the human privacy review. Work dir 2.7 GB before `clean`, 1.4 GB after.
+¹ Detector caches warm; 479 s cold → **≈ 1.2 h** from scratch, plus the human privacy review (frames + texture atlas). Work dir 2.7 GB before `clean`, 1.4 GB after. Re-packaging after a fix (`georef export package`) takes ≈ 45 s.
 
 ### 🧱 Result
 
@@ -100,6 +102,17 @@ Bäckerei Heusser, Eckstr. 3, 66424 Homburg-Kirrberg (consented, PRD H6). One ha
   reprojection) and Object Capture.
 - Privacy: 363 frames blurred, 1540 boxes (137 plate tracks, 119 person tracks). Reviewed: `people_frames = [0, 1240]`
   (staff + customers in the shop); after it, only small or distant people, all blurred.
+
+**Zone package** (`app/public/data/zones/bakery/`, git-ignored):
+
+| | `scene/medium.glb` | `scene/reduced.glb` |
+|---|---:|---:|
+| Triangles | 100,000 | 50,000 |
+| Atlas (KTX2 ETC1S, q 160) | 3072² ² | 2048² |
+| File | 2.19 MB | 1.05 MB |
+| `until_m` | 60 (the whole walk) | ∞ (first view, collider) |
+
+² The wasm Basis encoder fails above ~12 Mpix, so 4096² is not possible here. GPU texture budget 18 MB. Spawn = first street frame; portal *Bäckerei betreten*, radius 40 m.
 
 ### 📐 Georeference residuals (target ≤ 0.5 m)
 
@@ -122,8 +135,22 @@ separate the two positions. Three things decide:
 A ± 11 % scale error moves points 10 m from the corner by up to ± 1.1 m. Only a measured length (tape, or the
 eaves in a higher shot) would remove it.
 
+### 🔒 Texture atlas check (H13, before shipping)
+Looked at the whole reduced atlas and all 16 tiles (1024²) of the medium atlas: no face and no readable plate. One leg
+fragment (already blurred) on the shop floor is removed by `[[package.privacy_mask]]` (sphere r 0.6 m, all LODs;
+136 k / 40 k texels inpainted). Repeat this check after every `mesh` or `export` run.
+
+### 📏 Fixing the scale with one tape measurement
+1. Measure one straight length on site (e.g. shop door width, counter length).
+2. Measure the same length in the zone (*Schweben*, `sle.zones.flow.handle().debug().pose` at both ends).
+3. `scale_factor = true / zone` in `zones/bakery.toml` → `run.sh bakery package` (or edit `capture.scale.factor` in
+   `zone.json`). The runtime scales about the fitted LoD2 corner (`capture.scale.pivotLocal`); also set
+   `capture.scale.source = "measured"`.
+
 ### ⚠️ Known limits
 - Glass, the display counter and plants come out weak or missing.
+- The footage date in `zone.json` is the delivery day: the camera clock was unset (MP4 says 2019). Replace in the TOML.
+- Mesh holes and mirror geometry under the shiny floor stay; the walker steps over them (ADR 0041).
 - **COLMAP poses are calibration-only.** After a similarity fit, its global-mapper trajectory disagrees with Object
   Capture's by median 1.5 m (p90 4.3 m). A splat run should start from `mesh/poses.json` + `mesh/points.ply` on
   `frames/undistorted` (pinhole K in `undistort.json`).
@@ -142,11 +169,13 @@ eaves in a higher shot) would remove it.
 | pycolmap | 4.2.1 |
 | OpenCV (headless) | 5.0.0.93 |
 | numpy / scipy / trimesh / rasterio | 2.5.4 / 1.18.1 / 5.2.0 / 1.5.2 |
+| Node / pnpm (stage `package`, `pack/`) | 22.22 / 11.0.5 |
+| gltf-transform / ktx2-encoder / meshoptimizer / jpeg-js | 4.5.1 / 0.6.0 / 1.3.0 / 0.4.4 (pinned, `pack/pnpm-lock.yaml`) |
 | YOLOX-s | OpenCV zoo `object_detection_yolox_2022nov.onnx`, sha256 `c5c2d13e…998063`, Apache-2.0 |
 
 ## 📜 Licences
 
-- Footage: own capture with the business's consent (H6). Meshes and textures stay in `data/` until a zone release
-  goes through `scripts/release/`.
+- Footage: own capture with the business's consent (H6), credited in `zone.json` → loading screen. Meshes and textures stay
+  in `data/` / `app/public/data/` (git-ignored) until a zone release goes through `scripts/release/`.
 - LoD2 + DGM1 for georeferencing: © GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0.
 - YOLOX model weights: Apache-2.0 (downloaded on first run to `data/work/capture/models/`, hash-checked).

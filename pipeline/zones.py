@@ -281,6 +281,12 @@ def validate_manifest(m, modules: set[str] | None = None) -> list[str]:
         )
         if not ok:
             e("capture: invalid (date, method, georef{method, controlPoints, rmsError_m}, privacy)")
+        sc = cap.get("scale") if isinstance(cap, dict) else None
+        if sc is not None:
+            piv = sc.get("pivotLocal") if isinstance(sc, dict) else None
+            if not (isinstance(sc, dict) and _num(sc.get("factor")) and 0.5 <= sc["factor"] <= 2
+                    and isinstance(piv, list) and len(piv) == 3 and all(_num(v) for v in piv)):
+                e("capture.scale: invalid (factor 0.5-2, pivotLocal [x, y, z])")
     elif cap is not None:
         e("capture: only for captured zones")
 
