@@ -2,7 +2,7 @@
 
 You are the **orchestrator** for the whole v2 of the Saar LiDAR Explorer, in one long autonomous run. This is a limit-testing experiment: how good a result a long-running, heavily parallel agent run reaches, and how many iterations it takes. Work until the done definition holds, or until only human-blocked items remain. **Do not stop to ask.** Every decision a human had to make is settled below; anything new you decide yourself and record as an ADR.
 
-Repo: `/Users/svenreiser/Documents/Develop/open-kirrberg/saar-lidar-explorer` · start commit `d4aba51` (+ this file) · branch `main`.
+Repo: `<repo>` · start commit `d4aba51` (+ this file) · branch `main`.
 
 ## 📚 Read first
 
@@ -23,7 +23,7 @@ v2 is done when **V2.0–V2.9 are `[x]`** in the roadmap, each meeting its accep
 | H3 / H14 | Phone | No new hardware. New ADR superseding ADR 0014's reference-phone line: **low-end proxy = Chrome emulation, 4× CPU throttle, 30 fps**; **headroom rule = 60 fps on a Pixel 9**. Real devices are the user's iPhone and Huhn's Pixel 9, tested by the humans at milestones. Agents measure the proxy; never claim real-phone numbers. |
 | H4 | F21 / F22 move-out | Move into local sibling folders `../sle-print/` and `../sle-craters-private/`, each its own `git init` repo with history-free copies. No remote, no push. Delete from this repo. Keep public-build guards until the code is gone; crater data never enters this repo again. |
 | H5 | Attribution (ADR 0026) | Full attribution shown for a few seconds on load, then collapsed into a „© Quellen“ button that opens an **info dialog with all details**; „© OSM“ stays on the minimap. Research dl-de/by-2-0 + ODbL (OSMF attribution guideline) and write it into ADR 0026 → Accepted (the user pre-approved this variant). If the research says it is not compliant, keep the footer and write why. |
-| H6 | Bakery (zone #2, Q-36) | Bäckerei Heusser, Eckstr. 3, 66424 Homburg-Kirrberg; the owner is Huhn (co-owner of this repo) → consent settled. Footage: `/Users/svenreiser/Documents/Develop/DJI_0079.MP4` (DJI action cam, 119 s, 4000×3000, 30 fps, wide-angle: undistort first). Copy it to `data/raw/zones/bakery/` (git-ignored), treat as untrusted input. Shows street → shop interior → courtyard entrance. Decide mesh vs splats on this footage (ADR 0027 → Accepted; lean: mesh first). Georeference against LoD2 + ortho. Close Q-36 in the PRD. |
+| H6 | Bakery (zone #2, Q-36) | Bäckerei Heusser, Eckstr. 3, 66424 Homburg-Kirrberg; the owner is Huhn (co-owner of this repo) → consent settled. Footage: `~/Documents/Develop/DJI_0079.MP4` (DJI action cam, 119 s, 4000×3000, 30 fps, wide-angle: undistort first). Copy it to `data/raw/zones/bakery/` (git-ignored), treat as untrusted input. Shows street → shop interior → courtyard entrance. Decide mesh vs splats on this footage (ADR 0027 → Accepted; lean: mesh first). Georeference against LoD2 + ortho. Close Q-36 in the PRD. |
 | H7 | Tree count (V2.4) | Count crowns on the orthophoto for 3 plots yourself (document plots + method); the user spot-checks one plot at M3. |
 | H8 | Hallway test (V2.9) | Not yours. Replace with: a scripted first-run walkthrough (fresh profile, 390 px + desktop) that reaches the castle without help; the human test happens after the run. |
 | H9 | Look & feel | Your call, reviewed at milestones. Target: readable game HUD over a 3D view that owns the screen; German labels. |
