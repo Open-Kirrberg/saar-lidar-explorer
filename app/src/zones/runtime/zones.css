@@ -1,0 +1,58 @@
+/* V2.6b zone portals + zone chrome (feature.ts). Shell slot rules: shell.css „overlay slot“. */
+
+/* In a zone the overworld UI is out of the way (still mounted); only the overlay slot shows. */
+.sle-zone-active #sle-shell > :not(.sle-overlay-slot):not(.sle-tutorial-slot),
+.sle-zone-active .sle-labels3d,
+.sle-zone-active #crosshair,
+.sle-zone-active #lock-hint { display: none !important; }
+
+/* 3D portal label (Labels3D). */
+.sle-zone-label {
+  display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 10px; border-radius: 10px;
+  background: rgba(20, 16, 6, 0.78); border: 1px solid #ffcf5a; color: #ffe8b0; font-size: 13px; white-space: nowrap;
+  box-shadow: 0 0 14px rgba(255, 207, 90, 0.45); pointer-events: none;
+}
+.sle-zone-label span { font-size: 11px; color: #e0c58a; }
+
+.sle-zone-badge {
+  display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: rgba(255, 207, 90, 0.18); color: #ffcf5a; border: 1px solid rgba(255, 207, 90, 0.5);
+}
+
+/* Loading-screen extras (sit above the shell's .sle-loading-screen in the same slot). */
+.sle-zone-loadinfo {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(12vh + var(--safe-b, 0px));
+  width: min(460px, calc(100vw - 32px)); display: flex; flex-direction: column; align-items: center; gap: 8px;
+  text-align: center; pointer-events: auto; color: var(--ui-fg, #eee);
+}
+.sle-zone-loadinfo p { margin: 0; }
+.sle-zone-summary { font-size: 15px; line-height: 1.4; }
+.sle-zone-disclaimer { font-size: 13px; color: #ffcf5a; }
+.sle-zone-attr { font-size: 11px; color: var(--ui-dim, #aaa); }
+.sle-zone-loadinfo .sle-btn, .sle-zone-leave { min-height: 44px; padding: 6px 16px; font-size: 14px; border-radius: 10px; }
+.sle-zone-loadinfo kbd, .sle-zone-leave kbd { font: inherit; font-size: 12px; background: rgba(255, 255, 255, 0.2); border-radius: 3px; padding: 0 4px; }
+
+/* Zone layer (the zone's own HUD) and the host chrome above it. */
+.sle-zone-layer { position: absolute; inset: 0; pointer-events: none; }
+.sle-zone-layer > * { pointer-events: auto; }
+.sle-zone-chrome { position: absolute; inset: 0; pointer-events: none; }
+.sle-zone-top {
+  position: absolute; top: calc(12px + var(--safe-t, 0px)); left: calc(12px + var(--safe-l, 0px)); right: calc(12px + var(--safe-r, 0px));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.sle-zone-title {
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 12px; pointer-events: auto;
+  background: var(--ui-bg-strong, rgba(20, 22, 26, 0.85)); color: var(--ui-fg, #eee); font-size: 16px;
+}
+.sle-zone-leave { pointer-events: auto; box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35); }
+.sle-zone-foot {
+  position: absolute; left: calc(12px + var(--safe-l, 0px)); bottom: calc(8px + var(--safe-b, 0px)); right: 120px; margin: 0;
+  font-size: 11px; color: rgba(255, 255, 255, 0.75); text-shadow: 0 1px 2px #000; pointer-events: none;
+}
+.sle-zone-walkpad { position: absolute; right: calc(16px + var(--safe-r, 0px)); bottom: calc(40px + var(--safe-b, 0px)); display: none; }
+.sle-zone-walkpad .sle-btn { min-width: 88px; min-height: 64px; font-size: 16px; border-radius: 16px; touch-action: none; }
+@media (pointer: coarse) { .sle-zone-walkpad { display: block; } }
+@media (max-width: 600px) {
+  .sle-zone-title { font-size: 14px; padding: 6px 10px; }
+  .sle-zone-foot { right: 12px; bottom: calc(112px + var(--safe-b, 0px)); }
+}

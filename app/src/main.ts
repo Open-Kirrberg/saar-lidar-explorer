@@ -21,6 +21,8 @@ import { browserStorage, loadSettings, saveSettings, settingsStatePatch } from '
 import type { LoadProgressLike } from './ui/streaming';
 import { createSettingsRuntime, createShell } from './shell/Shell';
 import type { ShellApi } from './shell/types';
+import { registerZones } from './zones/runtime/feature';
+import type { ZonesApi } from './zones/runtime/feature';
 import './ui/style.css';
 
 /** Everything other modules (minimap, markers, POIs) need. Also exposed as `window.sle`. */
@@ -54,6 +56,13 @@ export interface AppContext {
   shell: ShellApi;
   /** Run `cb(dt)` every frame right after the controller update (before render). Returns an unsubscribe. */
   onFrame(cb: (dt: number) => void): () => void;
+  /**
+   * V2.6b zones: while set, `owner(dt)` runs instead of the overworld frame (no controller, streaming,
+   * frame hooks, render or store sync), on the same rAF / `step()`. null = overworld again.
+   */
+  setFrameOwner(owner: ((dt: number) => void) | null): void;
+  /** V2.6b: zone portals + enter/exit (src/zones/runtime/feature.ts); set while the feature is mounted. */
+  zones?: ZonesApi;
 }
 
 declare global {
@@ -193,7 +202,11 @@ async function main(): Promise<void> {
   const touch = new TouchController(controller, renderer.domElement, (x, y) => pickAt(x, y)?.point ?? null, terrain);
 
   const frameHooks = new Set<(dt: number) => void>();
+  let frameOwner: ((dt: number) => void) | null = null;
   const ctx: AppContext = {
+    setFrameOwner(owner) {
+      frameOwner = owner;
+    },
     shell: null as unknown as ShellApi, // set right below, before any feature mounts
     onFrame(cb) {
       frameHooks.add(cb);
@@ -226,6 +239,7 @@ async function main(): Promise<void> {
     loadProgress: () => ({ progress: loadProgress, done: loadDone }),
     areaNote: `Gebiet: ${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''}`,
   });
+  registerZones(ctx); // V2.6b: zone portals (Standard), loading screen, enter / leave
 
   // ---- frame loop -----------------------------------------------------------------------------
   const timer = new Timer();
@@ -251,6 +265,7 @@ async function main(): Promise<void> {
   };
 
   function frame(dt: number): void {
+    if (frameOwner) return frameOwner(dt); // inside a zone (V2.6b): the zone renders
     touch.update(dt); // F20: touch inertia / double-tap zoom (before terrain following)
     controller.update(dt);
     for (const h of frameHooks) h(dt);

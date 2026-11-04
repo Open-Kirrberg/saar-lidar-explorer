@@ -252,6 +252,7 @@ desktop                                        phone (≤ 600 px)
 | `markers` | 🟢 standard | 🔴 labor | MarkerManager, long-press form; list card in Labor |
 | `minimap` | 🟢 standard | | v1 Leaflet minimap in `slots.minimap` (V2.3 replaces it) |
 | `places` | 🟢 standard | | *Orte* drawer (nearest places, search) |
+| `zone-portals` | 🟢 standard | | V2.6b portal markers, „… betreten“ prompt, loading screen, zones ([below](#zones-v26b-)) |
 | `osm-paths` / `buildings` | 🟢 standard | 🔴 labor | 3D layers; their cards in Labor (only with `vectors` / `models.buildings`) |
 | `quality`, `exaggeration` | 🟡 entdecker | | sections in *Einstellungen* |
 | `reconstruction`, `tour` | 🟡 entdecker | | *Werkzeuge* cards (Rekonstruktion 1789, Tour) |
@@ -283,6 +284,29 @@ ctx.onFrame((dt) => …): () => void   // runs after controller.update, before r
 - Lens (V2.5): a Standard feature that appends its toggle to `shell.slots.lens` (it then shows in the bar); variants as an Entdecker feature with a `settings` section.
 - Keys: pass `shortcuts` rows (with `feature: id`) so the *Steuerung* dialog lists them while mounted; bind keys yourself with `isTyping()` and `modalOpen()` guards.
 - Tests: `tests/shell.test.ts` (tiers, registry incl. async/stale mounts and reload-needed, attribution rows + splash timer, walk/speed, keybind rows).
+
+## Zones (V2.6b) 🚪
+
+`src/zones/runtime/` ([README](src/zones/README.md), [ADR 0037](../docs/adr/0037-zone-runtime-host.md)). A zone is a module from **this** build, selected by `runtime.module` ([zone contract → Runtime API](../docs/zone-contract.md#-runtime-api-v26b)).
+
+```ts
+// register a zone module (V2.7 castle, bakery runtime): one line in src/zones/runtime/modules.ts
+'schloss-karlsberg': () => import('…/zone'),          // module exports mountZone (+ optional hostChrome)
+
+mountZone(ctx: ZoneMountContext): Promise<ZoneHandle>
+// ctx  { container, renderer, baseUrl, manifest, tier?, quality?, footprintEN?, onExit(), onProgress(label_de, f), signal }
+// handle { enter(spawn), exit(): ZonePose | void, frame(dt), resize(w, h), setTier?, setQuality?, dispose() }
+
+ctx.zones: { portals(), zones(), state(), enter(zoneId, portalId?), exit(), cancel() }   // window.sle.zones
+zonePortals(): ZonePortalInfo[]; onZonePortals(cb): () => void   // minimap (V2.3): { zoneId, portalId, name_de, label_de, E, N, radius_m, facing_deg, kind }
+ctx.setFrameOwner(fn | null)    // while set, fn(dt) replaces the overworld frame (same rAF / step())
+```
+
+- **Portal:** gold ring + beam + gate at the displayed ground (`toDisplayY(h)` or `surfaceY`), label „Name · Hypothese“. Within `radius_m` the prompt „… betreten · Betreten E“ appears, it hides beyond `radius_m · 1.1`. While it shows, **E enters** (it does not climb; Space still climbs).
+- **Enter:** controls off, pose + speed + renderer state saved; `shell.loading(name_de)` with summary, disclaimer, attribution and „Abbrechen Esc“; the module chunk loads (0–10 %), then `mountZone` (10–100 %). The zone then owns frames and the shell is hidden.
+- **Leave:** „Verlassen“ / Esc / `ctx.onExit()` → `exit()` + `dispose()` → renderer state + pose restored bit-exactly (re-derived from E/N/h when the exaggeration changed meanwhile). A cancel, a load error or a throwing `frame()` lead to the same path, plus one German toast.
+- **Testraum** (`testraum`, built-in, procedural, no data): in dev, with `?aoi=fixture`, or with `?testraum`. Portal ≈ 382450 / 5466254 (fixture and overall AOI). `?zoneDelay=<ms>` slows its loading for screenshots.
+- Zones with `runtime.kind: "gltf"` stay **absent** until a gltf runtime is registered (bakery, V2.8).
 
 ## Relief lab (Darstellung)
 
