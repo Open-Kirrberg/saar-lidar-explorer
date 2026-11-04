@@ -5,7 +5,7 @@
  * | id             | tier      | panel from | what                                              |
  * |----------------|-----------|------------|---------------------------------------------------|
  * | markers        | standard  | labor      | marker store + 3D pins (core); list/GeoJSON card  |
- * | minimap        | standard  |            | Leaflet minimap in `slots.minimap` (V2.3 rebuilds) |
+ * | minimap        | standard  |            | game minimap in `slots.minimap` (V2.3, ADR 0036)   |
  * | places         | standard  |            | „Orte“ drawer (F7) + 3D labels                     |
  * | osm-paths      | standard  | labor      | OSM ways in 3D (F10); card + F12 lookup in Labor  |
  * | buildings      | standard  | labor      | LoD2 houses (F11); card in Labor                  |
@@ -93,9 +93,15 @@ export function registerBuiltins(shell: ShellApi, d: BuiltinDeps): void {
       const mm = new Minimap(h.shell.slots.minimap, ctx, {
         onPoiClick: (p) => poiFly?.(p.id),
         onMarkerClick: (mk) => services.markers?.flyTo(mk),
+        shell: h.shell,
       });
       services.minimap = mm;
       services.markers?.onChange((list) => mm.setMarkers(list));
+      // V2.6b hook: when the zones runtime exposes `zonePortals()`, call `mm.setPortals(...)` here.
+      return () => {
+        mm.destroy();
+        services.minimap = null;
+      };
     },
   });
   reg({

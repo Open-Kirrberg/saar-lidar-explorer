@@ -41,6 +41,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh or Gaussian splats | Proposed | 2026-11-04 | |
 | [0029](0029-zones-same-bundle-folder-layout.md) | Zones run in the explorer bundle; zone sources in `zones/<id>/` | Accepted | 2026-11-04 | (ends: castle as separate app + URL handover) |
 | [0032](0032-shell-layout-tier-registry.md) | Shell layout and tier-gated feature registry | Accepted | 2026-11-04 | v1 Einfach layout, intro overlay |
+| [0036](0036-game-minimap.md) | Game minimap: round dial, heading-up by default, CSS rotation | Accepted | 2026-11-04 | v1 minimap header (folgen/klein/groß/Vollbild) |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 
