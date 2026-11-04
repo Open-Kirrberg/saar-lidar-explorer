@@ -1,29 +1,38 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import './minimap.css';
 import { Ray, Vector3 } from 'three';
-import { gridConvergenceDeg, utmToWgs84, worldToWgs84, wgs84ToUtm } from '../geo';
+import { utmToWgs84, worldToWgs84, wgs84ToUtm } from '../geo';
 import type { AppContext } from '../main';
+import type { ShellApi } from '../shell/types';
 import type { Marker } from '../markers/markerStore';
 import type { Poi } from '../pois/pois';
 import { POI_TYPE_LABELS } from '../pois/pois';
+import { isTyping } from '../ui/keys';
+import { modalOpen } from '../ui/modalKeys';
 import { FOCUS_AREAS, bboxRing } from './aois';
+import { horizontalFovDeg, minimapPose, northBadgeOffset, unrotatePoint, wedgePath } from './bearing';
+import type { MapMode } from './bearing';
 import { borderNdc, footprintFromRays } from './footprint';
 import { DOP_WMS, mergeOverlayPrefs, syncOverlayPrefs, xyzOverlay } from './overlays';
 import { resolveDataPath } from '../data/urls';
 import type { RayHit, V3 } from './footprint';
 
-const PREFS_KEY = 'sle.map.v1';
+const PREFS_KEY = 'sle.map.v2';
+/** v1 prefs (size/collapsed/follow are gone; base, overlays and relief opacity carry over into Labor). */
+const PREFS_KEY_V1 = 'sle.map.v1';
 const CP_WMS = 'https://geoportal.saarland.de/gdi-sl/inspirewms_Flurstuecke_Grundstuecke_ALKIS?';
 const FOOTPRINT_MAX_DIST = 2500;
 const FOOTPRINT_INTERVAL_MS = 150;
-
-type Size = 's' | 'l' | 'full';
+const OSM_LINK = '<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+const TOPO_LINK = '<a href="https://opentopomap.org" target="_blank" rel="noopener">OpenTopoMap</a>';
 
 interface Prefs {
-  size: Size;
-  collapsed: boolean;
-  follow: boolean;
+  /** Compact minimap orientation (the full-screen map is always north-up). */
+  mode: MapMode;
+  /** Zoom of the compact minimap. */
   zoom: number;
+  /** Labor only: base layer, overlays and relief opacity of the layer control. */
   base: string;
   overlays: string[];
   reliefOpacity: number;
@@ -32,14 +41,17 @@ interface Prefs {
 }
 
 const FOCUS_OVERLAY = 'Schwerpunktgebiete';
+const AOI_OVERLAY = 'Untersuchungsgebiet';
+const POI_OVERLAY = 'Bekannte Orte';
+const MARKER_OVERLAY = 'Fundmarker';
+/** Standard / Entdecker: a game map, no layer choice (ADR 0036). */
+const GAME_OVERLAYS = [AOI_OVERLAY, POI_OVERLAY, MARKER_OVERLAY];
 
 const DEFAULT_PREFS: Prefs = {
-  size: 's',
-  collapsed: false,
-  follow: true,
+  mode: 'heading',
   zoom: 15,
   base: 'OpenStreetMap',
-  overlays: ['Relief: VAT (Kombination)', 'Untersuchungsgebiet', FOCUS_OVERLAY, 'Bekannte Orte', 'Fundmarker'],
+  overlays: ['Relief: VAT (Kombination)', AOI_OVERLAY, FOCUS_OVERLAY, POI_OVERLAY, MARKER_OVERLAY],
   reliefOpacity: 0.55,
 };
 
@@ -47,6 +59,13 @@ function loadPrefs(): Prefs {
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (raw) return { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Partial<Prefs>) };
+    const v1 = localStorage.getItem(PREFS_KEY_V1);
+    if (v1) {
+      const o = JSON.parse(v1) as Partial<Prefs>;
+      const keep: Partial<Prefs> = {};
+      for (const k of ['zoom', 'base', 'overlays', 'reliefOpacity', 'knownOverlays'] as const) if (o[k] !== undefined) Object.assign(keep, { [k]: o[k] });
+      return { ...DEFAULT_PREFS, ...keep };
+    }
   } catch {
     /* private mode etc. */
   }
@@ -55,36 +74,64 @@ function loadPrefs(): Prefs {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
+/** A zone portal on the map (V2.6b `zonePortals()` feeds this through `setPortals`). */
+export interface MapPortal {
+  id: string;
+  E: number;
+  N: number;
+  /** German label, e.g. „Schloss Karlsberg 1789“. */
+  label: string;
+}
+
 export interface MinimapCallbacks {
   onPoiClick?: (poi: Poi) => void;
   onMarkerClick?: (m: Marker) => void;
+  /** Default: fly to the portal. */
+  onPortalClick?: (p: MapPortal) => void;
+  /** Tier source (the feature host's shell; `ctx.shell` is not set yet while features mount). */
+  shell?: Pick<ShellApi, 'tier' | 'onTier'>;
 }
 
 /**
- * Leaflet minimap in #minimap (F4): OSM/OpenTopoMap base, own relief XYZ overlays, AOI outline,
- * INSPIRE CP WMS (Flurstücke), POIs, user markers, camera marker + view footprint; click → flyTo.
+ * Game minimap (V2.3, ADR 0036) in the shell's `slots.minimap`: round dial, player centred, FOV-correct
+ * view cone, north-up / heading-up (CSS-rotated Leaflet container), click-to-fly, one button to a
+ * full-screen north-up map. Standard/Entdecker show OSM + AOI outline + places + markers + portals;
+ * Labor adds the v1 layer control (relief, ortho, historic maps, cadastre), relief opacity and the
+ * ray-cast view footprint.
  */
 export class Minimap {
   readonly map: L.Map;
   private readonly prefs: Prefs;
   private readonly root: HTMLElement;
-  private readonly camMarker: L.Marker;
+  private readonly mapEl: HTMLElement;
+  private readonly northBtn: HTMLButtonElement;
+  private readonly centerBtn: HTMLButtonElement;
+  private readonly attrEl: HTMLElement;
+  private readonly player: L.Marker;
   private readonly footprint: L.Polygon;
   private readonly poiLayer = L.layerGroup();
   private readonly markerLayer = L.layerGroup();
+  private readonly portalLayer = L.layerGroup();
   private readonly reliefLayers: L.TileLayer[] = [];
-  private followInput!: HTMLInputElement;
+  private readonly bases: Record<string, L.Layer>;
+  private readonly overlays: Record<string, L.Layer>;
+  private readonly fullControls: L.Control[] = [];
+  private readonly offs: Array<() => void> = [];
   private camPending = false;
   private lastFootprint = 0;
   private footprintTimer: ReturnType<typeof setTimeout> | null = null;
-  private convergence = 0;
-  /** Saved values of prefs that currently hold a transient (not persisted) in-memory value. */
-  private readonly unsaved: Partial<Prefs> = {};
-  /** Bounds to show once the map has a size (it may be hidden in the mobile sheet). */
-  private pendingBounds: L.LatLngBounds | null = null;
-  /** Zoom before showBounds(); restored by endTemporaryView(). */
-  private zoomBefore: number | null = null;
-  private fitting = false;
+  /** Current CSS rotation of the Leaflet container (deg). */
+  private rotation = 0;
+  private full = false;
+  /** Full-screen map follows the player until dragged. The compact dial always follows. */
+  private follow = true;
+  private compactZoom: number;
+  /** showBounds() opened the full-screen map; endTemporaryView() closes it again. */
+  private temporaryFull = false;
+  private coneFov = 0;
+  private coneRadius = 0;
+  private labor = false;
+  private destroyed = false;
 
   constructor(
     container: HTMLElement,
@@ -93,54 +140,61 @@ export class Minimap {
   ) {
     this.root = container;
     this.prefs = loadPrefs();
+    this.compactZoom = this.prefs.zoom;
     const { manifest } = ctx;
-    container.classList.add('sle-minimap');
+    container.classList.add('gmm');
     container.innerHTML = `
-      <div class="mm-bar">
-        <button class="mm-collapse" title="Karte ein-/ausklappen" aria-expanded="true">▾</button>
-        <span class="mm-title">Karte</span>
-        <label class="mm-follow" title="Karte folgt der Kamera"><input type="checkbox"> folgen</label>
-        <span class="mm-sizes" role="group" aria-label="Kartengröße">
-          <button data-size="s">klein</button><button data-size="l">groß</button><button data-size="full">Vollbild</button>
-        </span>
-      </div>
-      <div class="mm-map"></div>`;
-    const mapEl = container.querySelector<HTMLElement>('.mm-map')!;
+      <div class="gmm-dial"><div class="gmm-map" role="application" aria-label="Karte – klicken, um dorthin zu fliegen"></div></div>
+      <div class="gmm-ring" aria-hidden="true"></div>
+      <button type="button" class="gmm-btn gmm-north" title="Karte drehen: Blickrichtung oben / Norden oben"><span>N</span></button>
+      <button type="button" class="gmm-btn gmm-expand" title="Große Karte" aria-label="Große Karte öffnen">
+        <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 10V4h6M20 14v6h-6M4 4l6 6M20 20l-6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button type="button" class="gmm-btn gmm-close" title="Karte schließen (Esc)" aria-label="Große Karte schließen">✕</button>
+      <button type="button" class="gmm-btn gmm-center" title="Auf meine Position zentrieren" aria-label="Zentrieren" hidden>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <div class="gmm-attr"></div>`;
+    this.mapEl = container.querySelector<HTMLElement>('.gmm-map')!;
+    this.northBtn = container.querySelector<HTMLButtonElement>('.gmm-north')!;
+    this.centerBtn = container.querySelector<HTMLButtonElement>('.gmm-center')!;
+    this.attrEl = container.querySelector<HTMLElement>('.gmm-attr')!;
 
     const E0 = manifest.origin.E0 + manifest.size.width / 2;
     const N0 = manifest.origin.N0 + manifest.size.height / 2;
     const c0 = utmToWgs84(E0, N0);
-    this.convergence = gridConvergenceDeg(E0, N0);
 
-    this.map = L.map(mapEl, {
+    this.map = L.map(this.mapEl, {
       center: [c0.lat, c0.lon],
       zoom: this.prefs.zoom,
       minZoom: 10,
       maxZoom: 20,
-      zoomControl: true,
+      zoomControl: false,
+      attributionControl: false, // compact: own „© OpenStreetMap“ line outside the dial; full: Leaflet control
       keyboard: false, // arrow keys belong to the drone
       doubleClickZoom: false, // a click flies; avoid double flights
-      attributionControl: true,
+      boxZoom: false,
+      dragging: false, // the dial is player-centred; the full-screen map can be dragged
+      scrollWheelZoom: 'center',
+      touchZoom: 'center',
     });
-    this.map.attributionControl.setPrefix('<a href="https://leafletjs.com" title="Leaflet">Leaflet</a>');
 
     // ---- base layers (OSM tile usage policy: attribution, no prefetch/bulk) ----
     const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 20,
       maxNativeZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende',
+      attribution: `&copy; ${OSM_LINK}-Mitwirkende`,
     });
     const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom: 20,
       maxNativeZoom: 17,
       subdomains: 'abc',
-      attribution:
-        'Kartendaten: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende, SRTM | Darstellung: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
+      attribution: `Kartendaten: &copy; ${OSM_LINK}-Mitwirkende, SRTM | Darstellung: &copy; ${TOPO_LINK} (CC-BY-SA)`,
     });
     const blank = L.layerGroup();
-    const bases: Record<string, L.Layer> = { OpenStreetMap: osm, OpenTopoMap: topo, 'Kein Hintergrund': blank };
+    this.bases = { OpenStreetMap: osm, OpenTopoMap: topo, 'Kein Hintergrund': blank };
 
-    // ---- overlays ----
+    // ---- overlays (all of them in Labor; GAME_OVERLAYS below) ----
     const overlays: Record<string, L.Layer> = {};
     const baseUrl = ctx.terrain.baseUrl; // the AOI actually loaded (fixture fallback included)
     const shortAttr = esc(manifest.attribution.split(';')[0] ?? manifest.attribution);
@@ -195,21 +249,22 @@ export class Minimap {
       maxZoom: 20,
       attribution: cadastreAttr,
     } as L.WMSOptions);
-    overlays['Untersuchungsgebiet'] = this.aoiOutline();
+    overlays[AOI_OVERLAY] = this.aoiOutline();
     overlays[FOCUS_OVERLAY] = this.focusOutlines();
-    overlays['Bekannte Orte'] = this.poiLayer;
-    overlays['Fundmarker'] = this.markerLayer;
+    overlays[POI_OVERLAY] = this.poiLayer;
+    overlays[MARKER_OVERLAY] = this.markerLayer;
+    this.overlays = overlays;
 
     // Overlays added in a later version are on by default once, even with saved prefs.
-    // Prefs saved before knownOverlays existed knew everything except the focus areas.
     // Prefs are global: knownOverlays is a union over all AOIs visited (mergeOverlayPrefs).
     this.savePrefs(mergeOverlayPrefs(this.prefs, Object.keys(overlays), DEFAULT_PREFS.overlays, [FOCUS_OVERLAY]));
 
-    (bases[this.prefs.base] ?? osm).addTo(this.map);
-    for (const [name, layer] of Object.entries(overlays)) if (this.prefs.overlays.includes(name)) layer.addTo(this.map);
-    L.control.layers(bases, overlays, { collapsed: true, position: 'topright' }).addTo(this.map);
-    this.map.on('baselayerchange', (e: L.LayersControlEvent) => this.savePrefs({ base: e.name }));
-    const syncOverlays = () =>
+    // Only the Labor layer control fires these (programmatic add/remove does not).
+    this.map.on('baselayerchange', (e: L.LayersControlEvent) => {
+      this.savePrefs({ base: e.name });
+      this.renderAttribution();
+    });
+    this.map.on('overlayadd overlayremove', () =>
       this.savePrefs({
         // Keep saved on-states of overlays this AOI doesn't define (e.g. hist_*/relief in the fixture).
         overlays: syncOverlayPrefs(
@@ -217,103 +272,144 @@ export class Minimap {
           Object.keys(overlays),
           Object.entries(overlays).filter(([, l]) => this.map.hasLayer(l)).map(([n]) => n),
         ),
-      });
-    this.map.on('overlayadd overlayremove', syncOverlays);
+      }),
+    );
 
-    if (this.reliefLayers.length) this.addOpacityControl();
-
-    // ---- camera marker + footprint ----
+    // ---- player (arrow + view cone) and Labor footprint ----
     this.footprint = L.polygon([], {
       color: '#ffb000',
       weight: 1.5,
       fillColor: '#ffd27a',
       fillOpacity: 0.18,
       interactive: false,
-    }).addTo(this.map);
-    this.camMarker = L.marker([c0.lat, c0.lon], {
-      icon: L.divIcon({
-        className: 'mm-cam-icon',
-        html: `<div class="mm-cam"><svg viewBox="-12 -12 24 24" width="26" height="26" aria-hidden="true">
-          <path d="M0,-10 L7,8 L0,4 L-7,8 Z" fill="#ff5a1f" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg></div>`,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13],
-      }),
-      interactive: false,
-      keyboard: false,
-      zIndexOffset: 1000,
-    }).addTo(this.map);
+    });
+    this.player = L.marker([c0.lat, c0.lon], { interactive: false, keyboard: false, zIndexOffset: 1000 });
+    this.updatePlayerIcon();
+    this.player.addTo(this.map);
+    this.portalLayer.addTo(this.map);
 
     // ---- interactions ----
-    this.map.on('click', (e: L.LeafletMouseEvent) => this.flyToLatLng(e.latlng));
+    this.map.on('click', (e: L.LeafletMouseEvent) => this.flyToLatLng(this.eventLatLng(e)));
     this.map.on('dragstart', () => this.setFollow(false));
     this.map.on('zoomend', () => {
-      if (this.fitting) this.setTransient('zoom', this.map.getZoom());
-      else this.savePrefs({ zoom: this.map.getZoom() });
-      if (this.prefs.follow) this.recenter();
+      if (!this.full) {
+        this.compactZoom = this.map.getZoom();
+        this.savePrefs({ zoom: this.compactZoom });
+      }
+      if (this.full ? this.follow : true) this.recenter();
     });
+    this.northBtn.addEventListener('click', () => this.setMode(this.prefs.mode === 'heading' ? 'north' : 'heading'));
+    container.querySelector('.gmm-expand')!.addEventListener('click', () => this.setFull(true));
+    container.querySelector('.gmm-close')!.addEventListener('click', () => this.setFull(false));
+    this.centerBtn.addEventListener('click', () => this.setFollow(true));
+    for (const b of [this.northBtn, this.centerBtn, ...container.querySelectorAll<HTMLElement>('.gmm-btn, .gmm-attr')]) {
+      L.DomEvent.disableClickPropagation(b);
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'Escape' && this.full && !isTyping(e.target) && !modalOpen(e.target)) {
+        e.preventDefault();
+        this.setFull(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    this.offs.push(() => window.removeEventListener('keydown', onKey));
 
-    this.bindBar();
-    new ResizeObserver(() => {
-      if (this.prefs.collapsed) return;
+    const ro = new ResizeObserver(() => {
       this.map.invalidateSize({ animate: false });
-      if (!this.applyPendingBounds() && this.prefs.follow) this.recenter();
-      this.scheduleCamera(true);
-    }).observe(mapEl);
-    this.applySize();
-    ctx.store.subscribe(() => this.scheduleCamera(), ['E', 'N', 'h', 'heading', 'pitch']);
-    window.addEventListener('sle:ready', () => this.scheduleCamera(true));
+      this.updatePlayerIcon();
+      this.placeNorthBadge();
+      if (this.full && !this.follow) this.scheduleCamera(true);
+      else {
+        this.recenter();
+        this.scheduleCamera(true);
+      }
+    });
+    ro.observe(this.mapEl);
+    this.offs.push(() => ro.disconnect());
+
+    // The minimap never writes camera keys; ignore its own tag anyway (store convention).
+    this.offs.push(ctx.store.subscribe((_s, _c, source) => source !== 'map' && this.scheduleCamera(), ['E', 'N', 'h', 'heading', 'pitch']));
+    const onReady = () => this.scheduleCamera(true);
+    window.addEventListener('sle:ready', onReady);
+    this.offs.push(() => window.removeEventListener('sle:ready', onReady));
+    const shell = this.shell();
+    if (shell) this.offs.push(shell.onTier(() => this.applyTier()));
+
+    this.applyTier();
+    this.applyMode();
     this.scheduleCamera(true);
   }
 
   // ---- public ---------------------------------------------------------------------------------
 
-  /**
-   * F20 mobile "Karte" sheet: the map must be expanded while the sheet shows it. `persist` = false
-   * keeps the change in memory only, so later pref saves (zoom, base layer…) don't overwrite the
-   * saved desktop preference. Re-measures the map (it may have been hidden).
-   */
-  get collapsed(): boolean {
-    return this.prefs.collapsed;
+  /** 'north' | 'heading' of the compact dial (persisted). */
+  get mode(): MapMode {
+    return this.prefs.mode;
   }
 
-  setCollapsed(collapsed: boolean, persist = false): void {
-    if (persist) this.savePrefs({ collapsed });
-    else this.setTransient('collapsed', collapsed);
-    this.applySize();
-    if (!collapsed) {
-      this.map.invalidateSize({ animate: false });
-      if (!this.applyPendingBounds() && this.prefs.follow) this.recenter();
+  setMode(mode: MapMode): void {
+    this.savePrefs({ mode });
+    this.applyMode();
+    this.scheduleCamera();
+  }
+
+  /** Whether the full-screen map is open. */
+  get isFull(): boolean {
+    return this.full;
+  }
+
+  /** Open / close the full-screen north-up map (draggable, zoom buttons; layer control in Labor). */
+  setFull(on: boolean): void {
+    if (on === this.full) return;
+    this.temporaryFull = false;
+    this.full = on;
+    this.root.classList.toggle('gmm-full', on);
+    for (const c of this.fullControls.splice(0)) c.remove();
+    const m = this.map;
+    if (on) {
+      m.dragging.enable();
+      m.options.scrollWheelZoom = true;
+      m.options.touchZoom = true;
+      m.boxZoom.enable();
+      this.fullControls.push(L.control.zoom({ position: 'bottomright', zoomInTitle: 'Hineinzoomen', zoomOutTitle: 'Herauszoomen' }));
+      const attr = L.control.attribution({ position: 'bottomright' });
+      attr.setPrefix('<a href="https://leafletjs.com" title="Leaflet">Leaflet</a>');
+      this.fullControls.push(attr);
+      if (this.labor) {
+        this.fullControls.push(L.control.layers(this.bases, this.overlays, { collapsed: true, position: 'topleft' }));
+        if (this.reliefLayers.length) this.fullControls.push(this.opacityControl());
+      }
+      for (const c of this.fullControls) c.addTo(m);
+    } else {
+      m.dragging.disable();
+      m.options.scrollWheelZoom = 'center';
+      m.options.touchZoom = 'center';
+      m.boxZoom.disable();
+      if (m.getZoom() !== this.compactZoom) m.setZoom(this.compactZoom, { animate: false });
     }
+    this.setFollow(true);
+    this.applyMode();
+    this.root.querySelector<HTMLElement>(on ? '.gmm-close' : '.gmm-expand')?.focus({ preventScroll: true });
+    // Size changes are picked up by the ResizeObserver.
   }
 
   /**
-   * Temporarily stop following and show `points` (e.g. the AOI and the user's position). Nothing
-   * is persisted; `endTemporaryView()` restores follow + zoom. While the map is hidden or 0-sized
-   * (mobile sheet closed) the fit waits until the map is shown.
+   * Temporarily show `points` (e.g. the AOI and the user's position) on the full-screen map.
+   * `endTemporaryView()` closes it again. Nothing is persisted.
    */
   showBounds(points: L.LatLngExpression[]): void {
-    if (this.zoomBefore === null) this.zoomBefore = this.map.getZoom();
-    this.setFollow(false, false);
-    this.pendingBounds = L.latLngBounds(points);
-    if (!this.prefs.collapsed) this.map.invalidateSize({ animate: false });
-    this.applyPendingBounds();
+    const wasFull = this.full;
+    this.setFull(true);
+    this.temporaryFull = !wasFull;
+    this.setFollow(false);
+    this.map.invalidateSize({ animate: false });
+    this.map.fitBounds(L.latLngBounds(points), { padding: [16, 16], maxZoom: 15, animate: false });
   }
 
-  /** Undo `showBounds()`: restore the saved follow state and the previous zoom. */
+  /** Undo `showBounds()`. */
   endTemporaryView(): void {
-    this.pendingBounds = null;
-    const zoom = this.zoomBefore;
-    this.zoomBefore = null;
-    if ('follow' in this.unsaved) this.setFollow(this.unsaved.follow!, false);
-    if (zoom !== null && zoom !== this.map.getZoom()) {
-      this.fitting = true;
-      try {
-        this.map.setZoom(zoom, { animate: false });
-      } finally {
-        this.fitting = false;
-      }
-    }
-    if (this.prefs.follow) this.recenter();
+    if (this.temporaryFull) this.setFull(false);
+    else this.setFollow(true);
   }
 
   setPois(pois: Poi[]): void {
@@ -328,7 +424,10 @@ export class Minimap {
         bubblingMouseEvents: false,
       })
         .bindTooltip(`${esc(p.name)}<br><small>${esc(POI_TYPE_LABELS[p.type])}</small>`, { direction: 'top', offset: [0, -4] })
-        .on('click', () => this.cb.onPoiClick?.(p))
+        .on('click', () => {
+          this.cb.onPoiClick?.(p);
+          this.afterFly();
+        })
         .addTo(this.poiLayer);
     }
   }
@@ -346,20 +445,78 @@ export class Minimap {
         bubblingMouseEvents: false,
       })
         .bindTooltip(`${esc(m.title)}<br><small>${esc(m.category)}</small>`, { direction: 'top', offset: [0, -5] })
-        .on('click', () => this.cb.onMarkerClick?.(m))
+        .on('click', () => {
+          this.cb.onMarkerClick?.(m);
+          this.afterFly();
+        })
         .addTo(this.markerLayer);
     }
   }
 
-  /** `persist` = false changes follow in memory only (the saved preference stays). */
-  setFollow(on: boolean, persist = true): void {
-    if (persist) this.savePrefs({ follow: on });
-    else this.setTransient('follow', on);
-    if (this.followInput) this.followInput.checked = on;
+  /**
+   * Zone portals as door icons (hook for V2.6b: `services.minimap?.setPortals(zonePortals())`).
+   * Shown in every tier; a click flies there (or calls `onPortalClick`).
+   */
+  setPortals(portals: MapPortal[]): void {
+    this.portalLayer.clearLayers();
+    for (const p of portals) {
+      const ll = utmToWgs84(p.E, p.N);
+      L.marker([ll.lat, ll.lon], {
+        icon: L.divIcon({
+          className: 'gmm-portal-icon',
+          html: `<div class="gmm-portal"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path d="M6 21V10a6 6 0 0 1 12 0v11Z" fill="#ffe7a3" stroke="#5a3a00" stroke-width="1.6"/><circle cx="14.5" cy="15" r="1.2" fill="#5a3a00"/></svg></div>`,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13],
+        }),
+        keyboard: false,
+        bubblingMouseEvents: false,
+        zIndexOffset: 500,
+        title: p.label,
+      })
+        .bindTooltip(esc(p.label), { direction: 'top', offset: [0, -12] })
+        .on('click', () => {
+          if (this.cb.onPortalClick) this.cb.onPortalClick(p);
+          else void this.ctx.flyTo(p.E, p.N, { agl: Math.max(this.ctx.controller.agl, 40), lookAt: true });
+          this.afterFly();
+        })
+        .addTo(this.portalLayer);
+    }
+  }
+
+  /** Full-screen map: follow the player (or stop after a drag). The compact dial always follows. */
+  setFollow(on: boolean): void {
+    this.follow = on;
+    this.centerBtn.hidden = on || !this.full;
     if (on) this.recenter();
   }
 
+  /** Remove the map and all listeners (feature unmount). */
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    for (const off of this.offs.splice(0)) off();
+    if (this.footprintTimer) clearTimeout(this.footprintTimer);
+    this.map.remove();
+    this.root.classList.remove('gmm', 'gmm-full', 'gmm-heading');
+    this.root.innerHTML = '';
+  }
+
   // ---- internals ------------------------------------------------------------------------------
+
+  private shell(): Pick<ShellApi, 'tier' | 'onTier'> | null {
+    return this.cb.shell ?? (this.ctx.shell as ShellApi | null) ?? null;
+  }
+
+  /** Leaflet's own latlng is wrong on a CSS-rotated container: undo the rotation around its centre. */
+  private eventLatLng(e: L.LeafletMouseEvent): L.LatLng {
+    if (!this.rotation) return e.latlng;
+    const ev = e.originalEvent;
+    const r = this.mapEl.getBoundingClientRect(); // rotation keeps the centre
+    const size = this.map.getSize();
+    const p = unrotatePoint(ev.clientX - (r.left + r.width / 2), ev.clientY - (r.top + r.height / 2), this.rotation, size.x, size.y);
+    return this.map.containerPointToLatLng(L.point(p.x, p.y));
+  }
 
   private flyToLatLng(ll: L.LatLng): void {
     const { E, N } = wgs84ToUtm(ll.lat, ll.lng);
@@ -367,7 +524,115 @@ export class Minimap {
     const pitch = Math.min(Math.max(store.get().pitch, -89), -20);
     // Keep the current height above ground (display metres), centre the clicked point in view.
     void this.ctx.flyTo(E, N, { agl: Math.max(controller.agl, 10), pitch, lookAt: true });
-    this.setFollow(true);
+    this.afterFly();
+  }
+
+  /** After a click-to-fly the full-screen map closes, so the flight is visible. */
+  private afterFly(): void {
+    if (this.full) this.setFull(false);
+    else this.setFollow(true);
+  }
+
+  private applyTier(): void {
+    const labor = this.shell()?.tier() === 'labor';
+    this.labor = labor;
+    const m = this.map;
+    const baseName = labor ? this.prefs.base : 'OpenStreetMap';
+    for (const [name, layer] of Object.entries(this.bases)) {
+      if (name === baseName || (!(baseName in this.bases) && name === 'OpenStreetMap')) layer.addTo(m);
+      else layer.remove();
+    }
+    const on = labor ? this.prefs.overlays : GAME_OVERLAYS;
+    for (const [name, layer] of Object.entries(this.overlays)) {
+      if (on.includes(name)) layer.addTo(m);
+      else layer.remove();
+    }
+    if (labor) this.footprint.addTo(m);
+    else this.footprint.remove();
+    if (this.full) {
+      // Rebuild the full-screen controls for the new tier.
+      this.setFull(false);
+      this.setFull(true);
+    }
+    this.renderAttribution();
+    this.scheduleCamera(true);
+  }
+
+  private applyMode(): void {
+    const heading = !this.full && this.prefs.mode === 'heading';
+    this.root.classList.toggle('gmm-heading', heading);
+    this.northBtn.setAttribute('aria-pressed', String(heading));
+    this.northBtn.setAttribute('aria-label', heading ? 'Karte: Blickrichtung oben (umschalten auf Norden oben)' : 'Karte: Norden oben (umschalten auf Blickrichtung oben)');
+    if (!heading) this.setRotation(0);
+  }
+
+  private setRotation(deg: number): void {
+    const d = Math.abs(deg) < 1e-6 ? 0 : deg;
+    if (d === this.rotation) return;
+    this.rotation = d;
+    this.mapEl.style.transform = d ? `rotate(${d.toFixed(3)}deg)` : '';
+    this.placeNorthBadge();
+  }
+
+  private placeNorthBadge(): void {
+    // Just inside the rim, so the badge never leaves the screen at the top edge.
+    const r = this.mapEl.clientWidth / 2;
+    const o = northBadgeOffset(this.rotation, Math.max(r - 15, 0));
+    this.northBtn.style.setProperty('--nx', `${o.x.toFixed(1)}px`);
+    this.northBtn.style.setProperty('--ny', `${o.y.toFixed(1)}px`);
+  }
+
+  /** „© OpenStreetMap“ (linked) stays visible under the compact dial (ADR 0026); full map: Leaflet control. */
+  private renderAttribution(): void {
+    const topo = this.labor && this.map.hasLayer(this.bases.OpenTopoMap);
+    this.attrEl.innerHTML = `&copy; ${OSM_LINK}${topo ? ` · ${TOPO_LINK}` : ''}`;
+  }
+
+  /** Player arrow + FOV-correct view cone (one divIcon, rotated as a whole). */
+  private updatePlayerIcon(): void {
+    const cam = this.ctx.camera as { fov?: number; aspect?: number };
+    const fov = horizontalFovDeg(cam.fov ?? 60, cam.aspect ?? 1.6);
+    const w = this.mapEl.clientWidth || 180;
+    const radius = Math.round(this.full ? 110 : Math.max(36, w * 0.44));
+    if (Math.abs(fov - this.coneFov) < 0.25 && radius === this.coneRadius) return;
+    this.coneFov = fov;
+    this.coneRadius = radius;
+    const R = radius;
+    this.player.setIcon(
+      L.divIcon({
+        className: 'gmm-player-icon',
+        html: `<div class="gmm-player" style="width:${2 * R}px;height:${2 * R}px"><svg viewBox="${-R} ${-R} ${2 * R} ${2 * R}" width="${2 * R}" height="${2 * R}" aria-hidden="true">
+          <defs><radialGradient id="gmm-cone-g" cx="0" cy="0" r="${R}" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#ffb000" stop-opacity="0.55"/><stop offset="1" stop-color="#ffb000" stop-opacity="0.05"/></radialGradient></defs>
+          <path class="gmm-cone" d="${wedgePath(fov, R)}" fill="url(#gmm-cone-g)" stroke="#ff8a00" stroke-opacity="0.7" stroke-width="1"/>
+          <path d="M0,-10 L7,8 L0,4 L-7,8 Z" fill="#ff5a1f" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg></div>`,
+        iconSize: [2 * R, 2 * R],
+        iconAnchor: [R, R],
+      }),
+    );
+    this.lastArrow = NaN;
+  }
+
+  private lastArrow = NaN;
+
+  private opacityControl(): L.Control {
+    const Ctl = L.Control.extend({
+      onAdd: () => {
+        const div = L.DomUtil.create('div', 'leaflet-bar mm-opacity');
+        div.innerHTML = `<label title="Deckkraft der Relief-Ebenen">Relief <input type="range" min="0" max="1" step="0.05"></label>`;
+        const input = div.querySelector('input')!;
+        input.value = String(this.prefs.reliefOpacity);
+        input.addEventListener('input', () => {
+          const v = Number(input.value);
+          for (const l of this.reliefLayers) l.setOpacity(v);
+          this.savePrefs({ reliefOpacity: v });
+        });
+        L.DomEvent.disableClickPropagation(div);
+        L.DomEvent.disableScrollPropagation(div);
+        return div;
+      },
+    });
+    return new Ctl({ position: 'bottomleft' });
   }
 
   /** Outline of the loaded AOI (solid red, tooltip with its name and size). */
@@ -406,88 +671,13 @@ export class Minimap {
     });
   }
 
-  private addOpacityControl(): void {
-    const Ctl = L.Control.extend({
-      onAdd: () => {
-        const div = L.DomUtil.create('div', 'leaflet-bar mm-opacity');
-        div.innerHTML = `<label title="Deckkraft der Relief-Ebenen">Relief <input type="range" min="0" max="1" step="0.05"></label>`;
-        const input = div.querySelector('input')!;
-        input.value = String(this.prefs.reliefOpacity);
-        input.addEventListener('input', () => {
-          const v = Number(input.value);
-          for (const l of this.reliefLayers) l.setOpacity(v);
-          this.savePrefs({ reliefOpacity: v });
-        });
-        L.DomEvent.disableClickPropagation(div);
-        L.DomEvent.disableScrollPropagation(div);
-        return div;
-      },
-    });
-    new Ctl({ position: 'bottomleft' }).addTo(this.map);
-  }
-
-  private bindBar(): void {
-    const bar = this.root.querySelector<HTMLElement>('.mm-bar')!;
-    this.followInput = bar.querySelector<HTMLInputElement>('.mm-follow input')!;
-    this.followInput.checked = this.prefs.follow;
-    this.followInput.addEventListener('change', () => this.setFollow(this.followInput.checked));
-    for (const b of bar.querySelectorAll<HTMLButtonElement>('[data-size]')) {
-      b.addEventListener('click', () => {
-        this.savePrefs({ size: b.dataset.size as Size, collapsed: false });
-        this.applySize();
-      });
-    }
-    bar.querySelector('.mm-collapse')!.addEventListener('click', () => {
-      this.savePrefs({ collapsed: !this.prefs.collapsed });
-      this.applySize();
-    });
-  }
-
-  private applySize(): void {
-    const r = this.root;
-    r.classList.remove('size-s', 'size-l', 'size-full');
-    r.classList.add(`size-${this.prefs.size}`);
-    r.classList.toggle('collapsed', this.prefs.collapsed);
-    const btn = r.querySelector<HTMLElement>('.mm-collapse')!;
-    btn.textContent = this.prefs.collapsed ? '▸' : '▾';
-    btn.setAttribute('aria-expanded', String(!this.prefs.collapsed));
-    for (const b of r.querySelectorAll<HTMLElement>('[data-size]')) b.classList.toggle('active', b.dataset.size === this.prefs.size);
-    // Map size changes are picked up by the ResizeObserver (also during the CSS transition).
-    this.scheduleCamera(true);
-  }
-
   private savePrefs(patch: Partial<Prefs>): void {
     Object.assign(this.prefs, patch);
-    for (const k of Object.keys(patch) as Array<keyof Prefs>) delete this.unsaved[k];
     try {
-      // Transient in-memory values (sheet-forced expand, locate fit) never reach storage.
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ ...this.prefs, ...this.unsaved }));
+      localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs));
     } catch {
       /* ignore */
     }
-  }
-
-  /** Change a pref in memory only; the saved value is kept and written by later saves. */
-  private setTransient<K extends keyof Prefs>(key: K, value: Prefs[K]): void {
-    if (!(key in this.unsaved)) (this.unsaved as Record<K, Prefs[K]>)[key] = this.prefs[key];
-    this.prefs[key] = value;
-    if (this.unsaved[key] === value) delete this.unsaved[key];
-  }
-
-  /** Fit pending bounds once the map has a real size. Returns true when it fitted. */
-  private applyPendingBounds(): boolean {
-    const b = this.pendingBounds;
-    if (!b || this.prefs.collapsed) return false;
-    const size = this.map.getSize();
-    if (size.x <= 0 || size.y <= 0) return false;
-    this.pendingBounds = null;
-    this.fitting = true;
-    try {
-      this.map.fitBounds(b, { padding: [16, 16], maxZoom: 15, animate: false });
-    } finally {
-      this.fitting = false;
-    }
-    return true;
   }
 
   private recenter(): void {
@@ -500,30 +690,37 @@ export class Minimap {
   /** Coalesce camera updates to one per animation frame; footprint additionally throttled. */
   private scheduleCamera(forceFootprint = false): void {
     if (forceFootprint) this.lastFootprint = 0;
-    if (this.camPending) return;
+    if (this.camPending || this.destroyed) return;
     this.camPending = true;
     requestAnimationFrame(() => {
       this.camPending = false;
-      this.updateCamera();
+      if (!this.destroyed) this.updateCamera();
     });
   }
 
-  private updateCamera(): void {
-    if (this.prefs.collapsed) return;
+  /** Synchronous update (also used by `window.sle.step` checks via the store subscription). */
+  updateCamera(): void {
     const s = this.ctx.store.get();
     if (!s.E && !s.N) return;
+    const pose = minimapPose(this.full ? 'north' : this.prefs.mode, s.heading, s.E, s.N);
+    this.setRotation(pose.mapRotation);
+    this.updatePlayerIcon();
     const ll = utmToWgs84(s.E, s.N);
     const latlng = L.latLng(ll.lat, ll.lon);
-    this.camMarker.setLatLng(latlng);
-    const el = this.camMarker.getElement()?.querySelector<HTMLElement>('.mm-cam');
-    if (el) el.style.transform = `rotate(${s.heading + this.convergence}deg)`;
-
-    if (this.prefs.follow) {
+    this.player.setLatLng(latlng);
+    if (pose.arrow !== this.lastArrow) {
+      const el = this.player.getElement()?.querySelector<HTMLElement>('.gmm-player');
+      if (el) {
+        el.style.transform = `rotate(${pose.arrow.toFixed(3)}deg)`;
+        this.lastArrow = pose.arrow;
+      }
+    }
+    if (!this.full || this.follow) {
       const p = this.map.latLngToContainerPoint(latlng);
       const c = this.map.getSize().divideBy(2);
-      if (p.distanceTo(c) > 2) this.map.setView(latlng, this.map.getZoom(), { animate: false });
+      if (p.distanceTo(c) > 0.5) this.map.setView(latlng, this.map.getZoom(), { animate: false });
     }
-
+    if (!this.labor) return;
     const now = performance.now();
     if (now - this.lastFootprint >= FOOTPRINT_INTERVAL_MS) {
       this.lastFootprint = now;

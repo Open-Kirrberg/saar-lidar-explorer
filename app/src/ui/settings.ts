@@ -63,6 +63,7 @@ export const PREF_KEYS: readonly string[] = [
   'sle.buildings.v1',
   'sle.vectors.v1',
   'sle.map.v1',
+  'sle.map.v2', // V2.3 game minimap (mode, zoom, Labor layers)
   'sle.pointcloud.v1',
   'sle.pois.v1',
   'sle.candidates.prefs.v1',

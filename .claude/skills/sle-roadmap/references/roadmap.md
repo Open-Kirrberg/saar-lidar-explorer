@@ -27,7 +27,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Skill:** `sle-renderer`
 
 ## V2.3 — Game minimap 🧭
-- [ ] **Approach:** rebuild the minimap panel on Leaflet ([0006](../../../../docs/adr/0006-leaflet-minimap.md)): player centred, view cone, north-up/heading-up, minimal chrome, click-to-fly kept.
+- [x] **Approach:** rebuild the minimap panel on Leaflet ([0006](../../../../docs/adr/0006-leaflet-minimap.md)): player centred, view cone, north-up/heading-up, minimal chrome, click-to-fly kept.
 - **Acceptance:** heading matches 3D within 1° incl. grid convergence (numeric test).
 - **Skill:** `sle-renderer`
 
@@ -73,4 +73,5 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - Castle vitest: heavy builds time out at 5 s under parallel load → `testTimeout: 30_000`.
 - V2.0 proxy throttles CPU only; phone GPU fill rate is not modelled → keep pixel ratio caps conservative. Worktree data symlinks show as untracked (`/data/` patterns don't match symlinks) — never `git add -A` in sibling worktrees.
 - V2.2: downgrading a tier reloads the page when a v1 module has no teardown (hash keeps the view); Labor is cramped on phones; „aerial ground“ default comes with V2.5.
+- V2.3: `ctx.shell` is null while features mount → tier comes from the host handle. Portals on the minimap via `minimap.setPortals([{id,E,N,label}])` (wire at V2.6b merge). Old `heading + gridConvergence` was off by ≤ 0.085° (Mercator skew) → bearing is projected now.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).

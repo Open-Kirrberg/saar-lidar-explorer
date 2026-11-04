@@ -133,7 +133,7 @@ src/
            velocity, inertia, double tap), TouchController.ts (Pointer Events, map gestures via setPose), touchContext.ts (long press)
   locate/  F20 Mein Standort: locateMath.ts (pure: AOI test, distance text, nearest point, privacy radius), LocateLayer.ts
            (3D dot + draped accuracy ring, minimap dot/circle/arrow), Locate.ts (geolocation, Folgen, Kompass), index.ts (card), locate.css
-  map/  Minimap.ts (Leaflet), footprint.ts (pure), aois.ts (pure: known AOIs, focus outlines, start AOI choice),
+  map/  Minimap.ts (Leaflet game minimap), minimap.css, bearing.ts (pure: heading → map bearing, rotation, cone, click unrotate), footprint.ts (pure), aois.ts (pure: known AOIs, focus outlines, start AOI choice),
         overlays.ts (pure: XYZ relief vs. historic-map overlays, TrueDOP20 WMS)
   pois/ pois.ts (pure), PoiPanel.ts
   markers/ markerStore.ts (pure), parcel.ts (local lookup hook → WFS 414; `lookupParcelLocal` = local only, F18),
@@ -216,9 +216,9 @@ tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, st
 
 - **Minimap / map sync:**
   - Subscribe with `store.subscribe((s, changed, source) => …, ['E','N','heading','pitch'])`.
-  - Write with `store.set({...}, 'map')`. Camera-driven updates use the source `'camera'`, hash edits use `'hash'`.
+  - Write with `store.set({...}, 'map')` (the minimap itself ignores `'map'` writes; today it writes none, flights go through `ctx.flyTo`). Camera-driven updates use the source `'camera'`, hash edits use `'hash'`.
   - Click-to-fly: `ctx.flyTo(E, N, { agl, heading, pitch, lookAt, duration })` returns `Promise<boolean>`: `true` when the camera arrives, `false` if user input interrupts it.
-  - Heading is relative to grid north. On Web Mercator, use `heading + gridConvergenceDeg(E, N)` (≈ −1.2°).
+  - Heading is relative to grid north. On Web Mercator use `mapBearingDeg(heading, E, N)` (`map/bearing.ts`, convergence ≈ −1.2° + Mercator skew ≤ 0.1°).
   - Slots: `shell.slots.minimap` (top-right) and the feature host's `panel` (the *Werkzeuge* drawer); see *Shell* for every slot.
 - **Markers / picking:**
   - `ctx.pickAt(clientX, clientY)` returns `{ point, E, N, h }`.
@@ -250,7 +250,7 @@ desktop                                        phone (≤ 600 px)
 | Feature id | Tier | Panel from | What |
 |---|---|---|---|
 | `markers` | 🟢 standard | 🔴 labor | MarkerManager, long-press form; list card in Labor |
-| `minimap` | 🟢 standard | | v1 Leaflet minimap in `slots.minimap` (V2.3 replaces it) |
+| `minimap` | 🟢 standard | | game minimap in `slots.minimap` (V2.3, ADR 0036); Labor: layer control on the full-screen map |
 | `places` | 🟢 standard | | *Orte* drawer (nearest places, search) |
 | `osm-paths` / `buildings` | 🟢 standard | 🔴 labor | 3D layers; their cards in Labor (only with `vectors` / `models.buildings`) |
 | `quality`, `exaggeration` | 🟡 entdecker | | sections in *Einstellungen* |
@@ -329,23 +329,23 @@ Preset shortcuts count the presets available for the AOI (`Shift` + 1–N in the
 
 All registered as shell features in `src/shell/builtins.ts` (see *Shell*).
 
-- **Minimap (F4)**, `src/map/Minimap.ts`, Leaflet 1.9.4 in `#minimap`:
-  - AOI: solid red outline of the loaded AOI (*Untersuchungsgebiet*) plus *Schwerpunktgebiete*: dashed outlines of the three focus areas with German tooltips (`map/aois.ts`). The relief XYZ comes from the AOI actually loaded.
-  - Header bar: collapse ▾, `folgen` (follow camera), size `klein` / `groß` / `Vollbild`. Settings persist in localStorage `sle.map.v1`.
-  - Base layers: OpenStreetMap (default), OpenTopoMap, none. OSM tile policy: visible attribution, default Leaflet loading only (no prefetch / bulk download).
-  - Overlays (layer control, top right):
-    - every `manifest.xyz` relief layer (`vat`, `slrm`), with a shared opacity slider at the bottom left;
-    - `xyz.hist_*` historic maps (F14, e.g. *Karte 1836–41 (Bayer. Positionsblätter)*; label/attribution from the manifest, own opacity 85 %);
-    - **Luftbild (DOP20)** (F13): live WMS `sl_dop20_rgb` of the Saarland TrueDOP20 (`geoportal.saarland.de/freewms/truedop`, EPSG:3857, JPEG, z ≥ 12, bounded to the layer extent — Saarland only, the RLP side stays empty), off by default;
-    - AOI outline;
-    - **Flurstücke** (INSPIRE CP WMS `CP.CadastralParcel`, style `CP.CadastralParcel.LabelOnReferencePoint`, parcel numbers, z ≥ 16) and **Gemarkung/Flur** (`CP.CadastralZoning`, z ≥ 15);
-    - Bekannte Orte;
-    - Fundmarker.
-  - Camera marker: the arrow is rotated by `heading + gridConvergenceDeg` (≈ −1.2°).
-  - View footprint: 12 rays through the screen border are intersected with the terrain (`terrain.intersectRay`). Misses and hits farther than 2.5 km are clamped to 2.5 km along the ray's horizontal direction. Pure logic is in `src/map/footprint.ts`, updated at most every 150 ms.
-  - **Click on the map → `ctx.flyTo`**: keeps the current AGL and centres the clicked point in view (pitch ≤ −20°). Map keyboard and double-click zoom are off so they don't fight the drone keys or fly twice.
-  - Dragging the map turns `folgen` off. Clicking (fly) or ticking the box turns it back on.
-  - The URL hash keeps coming from the camera (`bindHash`), so map clicks show up in the bookmark once the flight settles.
+- **Minimap (F4 → V2.3 game minimap, ADR 0036)**, `src/map/Minimap.ts` + `bearing.ts` + `minimap.css`, Leaflet 1.9.4 in `shell.slots.minimap`:
+
+  | | Compact dial (184 px, phone 128 px) | Full-screen map (⤢) |
+  |---|---|---|
+  | Orientation | heading-up (default) or north-up via the „N“ rim badge | always north-up |
+  | Centre | player, always | follows until dragged; ◎ *Zentrieren* |
+  | Zoom | wheel / pinch around the centre | + / −, wheel, pinch, drag |
+  | Attribution | „© OpenStreetMap“ (linked) under the dial | Leaflet control |
+  | Labor extras | footprint | + layer control, relief opacity |
+
+  - Prefs: localStorage `sle.map.v2` (`mode`, `zoom`, Labor `base`/`overlays`/`reliefOpacity`; seeded once from `sle.map.v1`).
+  - Player: arrow + view cone in one divIcon, rotated by `mapBearingDeg` (projected 10 m step in Web Mercator = grid heading + convergence + Mercator skew). Cone opening = horizontal FOV of the 3D camera; radius ≈ 44 % of the dial. Heading-up rotates the Leaflet container by −bearing (CSS); `tests/minimapBearing.test.ts` checks against a three.js camera at 7 spots × 9 headings × 3 pitches, both modes: < 0.05° (limit 1°).
+  - **Click → `ctx.flyTo`**: on the rotated dial the click is un-rotated around the container centre (`unrotatePoint`) before `containerPointToLatLng`. Keeps the AGL, pitch ≤ −20°, centres the point. A click on the full-screen map (or on a place/marker/portal) closes it. Esc closes it too.
+  - Layers in Standard/Entdecker: OSM, AOI outline, *Bekannte Orte*, *Fundmarker*, zone portals. Labor: the v1 set (relief XYZ with opacity slider, `hist_*`, live DOP20 WMS, Flurstücke/Gemarkung WMS, focus outlines) chosen in the layer control on the full-screen map. Other modules (candidates, reconstruction, point clouds) still add their own layers to `minimap.map`.
+  - Footprint (Labor): 12 rays through the screen border against `terrain.intersectRay`, clamped to 2.5 km, ≤ every 150 ms (`footprint.ts`).
+  - Zone portals: `minimap.setPortals([{ id, E, N, label }])` draws glowing door icons; click flies there (or `onPortalClick`). Hook for V2.6b `zonePortals()` — not wired yet.
+  - `showBounds(points)` / `endTemporaryView()` open and close the full-screen map for a temporary fit (Locate).
 - **Bekannte Orte (F7)**, `src/pois/`:
   - `pois.ts` (pure): parse `public/data/pois.geojson`, group by type (German labels, fixed order), forgiving search (case-, umlaut- and ß-insensitive; all words must match).
   - `PoiPanel.ts`: the *Orte* drawer (Standard) with search, `nur im Gebiet`, and `in 3D zeigen`.
@@ -523,7 +523,7 @@ pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 - Punktwolke (F16): no eye-dome lighting; point bytes (10 B GPU + 10 B CPU per resident point) are not counted in the terrain's GPU estimate/LRU; *Gelände ausblenden* also pauses auto contrast while on; colour modes Höhe/ü. Grund/Intensität, the point-size slider and frame pacing while tiles stream in flight were not checked. Areas exist only where the pipeline wrote them (`overall`: all three, `karlsberg`: Schloss Karlsberg; `homburg` after a rebuild, `kirrberg` none).
 - Rekonstruktion 1789 (F19): only the one dataset `shared/karlsberg1789/` is looked up (no discovery of other `shared/<id>/`); no distance fade/LOD (≈ 340 k triangles always drawn while on); where today's LoD2 buildings stand inside the model both are drawn (no masking); the model is not hidden by the canopy; skirts reach 0.5 m below the 2025 DTM, so at high exaggeration they sink visibly deeper into ruin pits (by design). Browser rendering, frame time and the round trip with the viewer were not verified in this build step.
 - Mobile (F20): nothing tested on a real phone (see *Touch (F20)* / *Mein Standort*). A long-press marker leaves Markieren on, and it opens the form by a synthetic canvas tap because `MarkerManager.openForm` is private (a public `openDraftAt(E, N, h)` would fix both). The Markieren hint still mentions keys and clicks. The lil-gui panels (*Darstellung*, *Flug & Technik*) still render 245 px wide inside the 320 px drawer. After *Mein Standort* the camera sits ≈ 200 m above the ground under it (150 m is relative to the target). The compass ignores magnetic declination (≈ 2–3°). The desktop canvas now has `touch-action: none`.
-- Shell (V2.2): Labor is not blocked on phones but is cramped there (long drawer); the v1 minimap chrome (small header buttons, < 44 px) stays until V2.3; the default „aerial ground“ look is V2.5's; the tutorial and zone prompt/loading APIs have no caller yet (checked once via `window.sle.shell` in the browser); live flight feel of *Gehen* and real frame pacing were not checked (hidden tab, `step()`).
+- Shell (V2.2): Labor is not blocked on phones but is cramped there (long drawer); the default „aerial ground“ look is V2.5's; the tutorial and zone prompt/loading APIs have no caller yet (checked once via `window.sle.shell` in the browser); live flight feel of *Gehen* and real frame pacing were not checked (hidden tab, `step()`).
 - Buildings: bases are matched to the 1 m DTM only; where a coarser terrain level is drawn (far field) the ground may sit slightly off the bases (not measured). Buildings are not pickable. A few LoD2 buildings keep a gap > 0.5 m where the pipeline's 5 m skirt cap applies (2 Karlsberg / 20 overall).
 
 - Live local relief: where a same-level neighbour is not resident, the band within *Relief-Radius* of that edge uses the coarser level's heights (approximate) until the neighbour arrives.
