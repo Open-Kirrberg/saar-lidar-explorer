@@ -181,6 +181,46 @@ overworld ──Betreten (portal in range)──▶ loading ──assets ready�
 - `runtime.module` must name a zone module registered in the app build; unknown → zone absent.
 - Unknown keys are ignored everywhere. Strings are text, never HTML; nothing from a package is executed (module zones are code from **this** repo, selected by name only).
 
+## 🔌 Runtime API (V2.6b)
+
+Additive; packages are unchanged. How the explorer hosts a `runtime.kind: "module"` zone ([ADR 0037](adr/0037-zone-runtime-host.md)). Types: [`app/src/zones/runtime/api.ts`](../app/src/zones/runtime/api.ts).
+
+```ts
+interface ZoneModule {                     // the lazy chunk named by runtime.module (registered in ZONE_MODULES)
+  mountZone(ctx: ZoneMountContext): Promise<ZoneHandle>;
+  hostChrome?: boolean;                    // default true: host draws title, badge, „Verlassen“, attribution
+}
+interface ZoneMountContext {
+  container: HTMLElement;                  // full-screen zone HUD layer, removed on exit
+  renderer: WebGLRenderer;                 // the explorer's — shared, one GL context
+  baseUrl: string;                         // "<dataRoot>zones/<id>/", asset paths are relative to it
+  manifest: ZoneManifest;                  // parsed zone.json
+  tier?: 'standard' | 'entdecker' | 'labor';
+  quality?: 'auto' | 'hoch' | 'mittel' | 'niedrig' | 'mobil';
+  footprintEN?: [number, number][];
+  onExit(): void;                          // ask the host to leave
+  onProgress(label_de: string, fraction: number): void;   // 0–1 of the zone's own work
+  signal: AbortSignal;                     // aborted on „Abbrechen“; a late handle is disposed
+}
+interface ZoneHandle {
+  enter(spawn: Pose): void;                // once, after mount; host calls resize() first
+  frame(dt: number): void;                 // update + render; the overworld renders nothing meanwhile
+  resize(width: number, height: number): void;            // CSS px
+  exit(): Pose | void;                     // stop input, leave the renderer as found
+  setTier?(t): void; setQuality?(q): void;
+  dispose(): void;                         // free GPU + DOM; handle dead
+}
+```
+
+| Rule | |
+|---|---|
+| Order | `mountZone` → `resize` → `enter(spawn)` → `frame(dt)`… → `exit()` → `dispose()` |
+| Errors | rejected `mountZone`, aborted load, throwing `frame()` → host runs `exit()` + `dispose()` (each guarded), restores the overworld, one German toast |
+| Frames | zone poses are true heights (exaggeration 1, frame `x = E − E0`, `y = h`, `z = −(N − N0)`) |
+| Keys | Esc leaves (host, capture phase). A zone binds its own keys and must remove them in `exit()` |
+| Renderer | the host snapshots and restores tone mapping, exposure, clear colour/alpha, colour space, `autoClear`, shadows, pixel ratio |
+| `gltf` | no generic gltf runtime yet → such zones are **absent** (tolerance rule) until one is registered (V2.8) |
+
 ## 🧪 Examples
 
 | | 🏰 Castle (reconstructed) | 🥖 Bakery (captured) | 🧪 Fixture |

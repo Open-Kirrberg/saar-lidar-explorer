@@ -43,7 +43,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Skill:** `sle-renderer`, `sle-relict-detection`
 
 ## V2.6 — Zone contract + portal 🚪
-- [ ] **Approach:** write the zone contract next to `docs/data-contract.md` ([0016](../../../../docs/adr/0016-zone-kinds-zone-contract.md)): footprint, portal, spawn, assets/LOD, preset, attribution, evidence. Decide same bundle vs. separate app (new ADR). Portal + loading screen in the overworld.
+- [x] **Approach:** write the zone contract next to `docs/data-contract.md` ([0016](../../../../docs/adr/0016-zone-kinds-zone-contract.md)): footprint, portal, spawn, assets/LOD, preset, attribution, evidence. Decide same bundle vs. separate app (new ADR). Portal + loading screen in the overworld.
 - **Acceptance:** contract + ADR; a test zone (fixture) enterable and leavable, camera pose restored. Decide the zone folder layout and move `schloss-karlsberg/` there (done: `zones/schloss-karlsberg/`, ADR 0029) (≈ 140 path refs: Pages workflow, release scripts, `../` paths).
 - **Skill:** `sle-pipeline`, `sle-renderer`
 
@@ -74,4 +74,5 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - V2.0 proxy throttles CPU only; phone GPU fill rate is not modelled → keep pixel ratio caps conservative. Worktree data symlinks show as untracked (`/data/` patterns don't match symlinks) — never `git add -A` in sibling worktrees.
 - V2.2: downgrading a tier reloads the page when a v1 module has no teardown (hash keeps the view); Labor is cramped on phones; „aerial ground“ default comes with V2.5.
 - V2.3: `ctx.shell` is null while features mount → tier comes from the host handle. Portals on the minimap via `minimap.setPortals([{id,E,N,label}])` (wire at V2.6b merge). Old `heading + gridConvergence` was off by ≤ 0.085° (Mercator skew) → bearing is projected now.
+- V2.6b: Testraum (built-in procedural fixture zone) shows only in dev, `?aoi=fixture` or `?testraum`; `gltf` zone runtime arrives with the bakery (V2.8). E = *Betreten* near a portal (Space still climbs). Not yet: freeing overworld GPU memory inside a zone, deep links into a zone.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).

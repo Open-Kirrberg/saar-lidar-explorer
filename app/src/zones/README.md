@@ -1,6 +1,6 @@
 # 🚪 `src/zones/` — zone contract runtime (V2.6)
 
-Pure logic for zones behind portals ([zone contract](../../../docs/zone-contract.md), [ADR 0029](../../../docs/adr/0029-zones-same-bundle-folder-layout.md)). No three.js, no DOM; the shell (V2.2) wires it.
+Pure logic for zones behind portals ([zone contract](../../../docs/zone-contract.md), [ADR 0029](../../../docs/adr/0029-zones-same-bundle-folder-layout.md)). No three.js, no DOM; `runtime/` (V2.6b) wires it into the shell.
 
 | File | What |
 |---|---|
@@ -18,4 +18,23 @@ s = zoneSession(s, { type: 'loaded', zoneId });                 // mount runtime
 s = zoneSession(s, { type: 'exit' });                           // unmount, cam.setPose(s.restorePose), then 'restored'
 ```
 
-Tests: `tests/zones.test.ts` (fixture zone `tests/fixtures/zones/fixture/zone.json`, inside the `fixture` AOI: enter → zone → exit restores the pose).
+## 🎮 `runtime/` — portals, loading screen, enter / leave (V2.6b)
+
+| File | What |
+|---|---|
+| `api.ts` | **Runtime API** types: `ZoneModule`, `ZoneMountContext`, `ZoneHandle` (contract → *Runtime API*) |
+| `modules.ts` | `ZONE_MODULES` registry: name → lazy `import()`; one line per zone module |
+| `flow.ts` | `createZoneFlow` (pure, ports injected): enter → loading → mount → zone → exit/cancel/fail → restore; `createPortalPrompter` |
+| `overworld.ts` | Pose capture / bit-exact restore of the drone rig (re-derived from E/N/h if the exaggeration changed) |
+| `marker.ts` | 3D portal marker: ring + beam + gate, y = displayed ground (exaggeration-safe), scales with distance |
+| `feature.ts` | Standard feature `zone-portals`: loads zones, markers + labels, prompt (E), loading screen, *Verlassen* chrome, `zonePortals()` |
+| `builtin.ts` · `testRoom.ts` · `collide.ts` | 🧪 built-in *Testraum* (dev, `?aoi=fixture`, `?testraum`): procedural hut, walk collision |
+| `zones.css` | Loading info, zone chrome; hides the overworld shell while `#app.sle-zone-active` |
+
+```text
+ E / „Betreten“ ─▶ freeze overworld · save pose ─▶ loading (import() 0–10 %, mountZone 10–100 %) ─▶ zone owns frames
+                      ▲                               │ Abbrechen / Esc / error                       │ Verlassen / Esc / frame error
+                      └──── restore pose exactly ◀────┴───────────────────────────────────────────────┘
+```
+
+Tests: `tests/zones.test.ts` (fixture zone `tests/fixtures/zones/fixture/zone.json`, inside the `fixture` AOI: enter → zone → exit restores the pose). `tests/zoneRuntime.test.ts`: flow round trip, cancel / error paths, prompt hysteresis, rig restore, Testraum walls.

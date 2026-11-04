@@ -4,6 +4,7 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-04 | V2.6 | 🚪 Zone contract `sle-zone-v1`, castle moved to `zones/`, portals + loading screen + *Testraum*, pose restored on exit (ADR 0029, 0037) |
 | 2026-11-04 | V2.3 | 🧭 Game minimap: round player-centred dial, view cone, heading-up / north-up, full-screen map (ADR 0036) |
 | 2026-11-04 | V2.2 | 🧹 New game shell: tiers Standard / Entdecker / Labor, *Gehen* mode, *Steuerung* dialog, „© Quellen“ (ADR 0026, 0032) |
 | 2026-11-04 | V2.0 | 📏 Baseline on the phone proxy (Chrome, 4× CPU, 4G) + `pnpm run perf`; ADR 0028 proxy + Pixel 9 headroom rule |

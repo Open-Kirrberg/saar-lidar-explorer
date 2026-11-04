@@ -28,6 +28,7 @@ import { Minimap } from '../map/Minimap';
 import { MarkerManager } from '../markers/MarkerManager';
 import { initMeasure } from '../measure';
 import { createPoiPanel } from '../pois/PoiPanel';
+import { onZonePortals } from '../zones/runtime/feature';
 import { initReconstruction } from '../reconstruction/Reconstruction';
 import { openReportDialog } from '../report/ReportDialog';
 import { EXAG_RANGE, clampExaggeration } from '../state';
@@ -97,8 +98,11 @@ export function registerBuiltins(shell: ShellApi, d: BuiltinDeps): void {
       });
       services.minimap = mm;
       services.markers?.onChange((list) => mm.setMarkers(list));
-      // V2.6b hook: when the zones runtime exposes `zonePortals()`, call `mm.setPortals(...)` here.
+      const offPortals = onZonePortals((list) =>
+        mm.setPortals(list.map((p) => ({ id: `${p.zoneId}/${p.portalId}`, E: p.E, N: p.N, label: p.name_de }))),
+      );
       return () => {
+        offPortals();
         mm.destroy();
         services.minimap = null;
       };
