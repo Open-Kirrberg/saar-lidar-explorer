@@ -1,6 +1,6 @@
 # 0013 · ©️ Attribution for every source
 
-- **Status:** Accepted · 2026-11-01
+- **Status:** Accepted · 2026-11-01 · footer rule superseded by [0026](0026-collapsed-attribution.md)
 - **Origin:** [PRD v1 §9](../history/prd-v1.md#9-decisions-log)
 
 ## Decision
