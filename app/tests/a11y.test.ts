@@ -40,10 +40,12 @@ describe('contrast (panel text ≥ 4.5:1)', () => {
     expect(contrastRatio(parseHex('#1c1c1c'), accent)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('attribution footer stays readable over white terrain', () => {
-    const m = /#attribution \{[^}]*background:\s*(rgba\([^)]+\))/.exec(style)!;
-    const f = rgba(m[1]);
+  it('shell splash, bar, drawers and „© Quellen“ (--ui-bg-strong) stay readable over white terrain', () => {
+    const f = rgba(varValue(style, '--ui-bg-strong'));
     expect(contrastRatio(dim, over(f.rgb, f.a, white))).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(accent, over(f.rgb, f.a, white))).toBeGreaterThanOrEqual(4.5);
+    // Sources rows (#2a2f34) in the dialog.
+    expect(contrastRatio(dim, parseHex('#2a2f34'))).toBeGreaterThanOrEqual(4.5);
   });
 });
 

@@ -62,11 +62,11 @@ URL parameters:
 | `R` | Rekonstruktion 1789 (F19 hypothetical Schloss Karlsberg model) on/off (only if the shared dataset `data/shared/karlsberg1789/` exists and overlaps the AOI; default off) |
 | `T` / `Shift`+`T` | *Schloss betreten*: hand the camera over to the castle viewer (fly / *zu Fuß*); only with the layer on and within 300 m of the palace |
 | `M` | Markieren (find marker) mode on/off; `Esc` cancels |
-| `?` | Intro overlay with all shortcuts (also the `?` toolbar button); does not change speed |
-| `Esc` | Ends the tour / closes the intro (besides releasing pointer lock and cancelling Markieren/Messen) |
+| `?` | *Steuerung* dialog with every shortcut of the mounted features (also the *Steuerung* button); does not change speed |
+| `Esc` | Closes the open dialog / drawer, ends the tour (besides releasing pointer lock and cancelling Markieren/Messen) |
 | Gamepad (standard mapping) | Left stick moves, right stick looks, `LT`/`RT` descend/climb, `LB`/`RB` change speed |
 
-The table above and the intro overlay come from (the HUD shows only "`?` alle Tastenkürzel" since V2.1) `src/ui/shortcuts.ts`; `tests/shortcuts.test.ts` scans `src/` for bound `e.code`/`k.has` keys and fails when one is missing there. `Space`/`Enter` on a keyboard-focused button activate the button and are not flight keys.
+The table above and the *Steuerung* dialog come from `src/ui/shortcuts.ts` (rows carry a `feature` id; the dialog lists only rows of mounted features, see *Shell*); `tests/shortcuts.test.ts` scans `src/` for bound `e.code`/`k.has` keys and fails when one is missing there. `Space`/`Enter` on a keyboard-focused button activate the button and are not flight keys.
 
 Speed is `baseSpeed · clamp(AGL/50, 0.2, 20) · multiplier`, with exponential acceleration and damping. A minimum clearance of 2 m (configurable) keeps the camera above the terrain.
 
@@ -84,9 +84,9 @@ On touch screens fingers use map gestures by default (`src/controls/TouchControl
 | Double tap | Zoom toward the tapped point, halving the distance (off while Markieren/Messen own taps) |
 | Long press (≈ 600 ms) | Context action (`touchContext.ts`): while Messen is on, add a measuring point; otherwise switch Markieren on and open the Fundmarker form at that spot (window event `sle:longpress`) |
 
-The gestures drive `DroneController.setPose`, so minimum clearance, store/URL hash and minimap stay in sync. **Einfach** layout (`src/ui/mobile.ts`; *Einstellungen → Ansicht: Automatisch / Einfach / Vollständig*, automatic = touch-first device or < 820 px wide): full-screen 3D, bottom bar *Standort · Relief · Ebenen · Karte · Mehr*; *Relief* cycles a few curated looks, *Ebenen*/*Karte*/*Mehr* open bottom sheets (layer toggles, the minimap, the whole desktop panel). `html.sle-touch` hides keyboard hints on coarse pointers. Touches that start on UI (bars, sheets, minimap, panel) never reach the canvas, so they don't move the camera; there is no on-screen joystick for `'drone'` mode. Any `flyTo` stops the pan inertia. Two-finger gestures are classified once the fingers have moved 12 px (`classifyTwoFinger`).
+The gestures drive `DroneController.setPose`, so minimum clearance, store/URL hash and minimap stay in sync. Phones (≤ 600 px) get the same shell as the desktop with an icon-only action bar and drawers as bottom sheets (see *Shell*; the v1 *Einfach* layout is gone since V2.2). `html.sle-touch` hides keyboard hints on coarse pointers. Touches that start on UI (bar, drawers, minimap) never reach the canvas, so they don't move the camera; there is no on-screen joystick for `'drone'` mode. Any `flyTo` stops the pan inertia. Two-finger gestures are classified once the fingers have moved 12 px (`classifyTwoFinger`).
 
-**Phone defaults:** on a touch-first phone (coarse pointer and shorter side < 820 px) the *Mobil* quality preset applies automatically unless a level was picked before (`qualityPicked` in `sle.settings.v1`; the stored level stays *Hoch*, so a later desktop visit is unaffected). The HUD shows a collapsed *Gesten* list instead of keys, the intro has a touch variant, and pull-to-refresh is off. **WebGL context loss** (`ui/contextLoss.ts`, common on phones under memory pressure): an overlay „Grafik wird neu geladen …“, then a page reload — the URL hash keeps pose and look.
+**Phone defaults:** on a touch-first phone (coarse pointer and shorter side < 820 px) the *Mobil* quality preset applies automatically unless a level was picked before (`qualityPicked` in `sle.settings.v1`; the stored level stays *Hoch*, so a later desktop visit is unaffected). The *Steuerung* dialog adds the touch gestures, and pull-to-refresh is off. **WebGL context loss** (`ui/contextLoss.ts`, common on phones under memory pressure): an overlay „Grafik wird neu geladen …“, then a page reload — the URL hash keeps pose and look.
 
 ## Architecture
 
@@ -166,9 +166,11 @@ src/
            vectorData.ts (pure GeoJSON → buckets, baked heights) parsed in vectors.worker.ts via vectorLoader.ts
   ui/  startAoi.ts (start AOI; no switcher UI since V2.1), flyTo.ts (fly-to re-aimed as finer data streams in),
        streaming.ts (pure: pending count for "Lade Details …", fly-to refinement rule),
-       displayState.ts (store ⇄ Terrain bridge for overlay/opacity/forest), reliefPanel.ts + relief.css ("Darstellung"), gui.ts (lil-gui "Flug & Technik"; LOD/Debug folder in dev only), hud.ts, style.css, features.ts/.css, Labels3D.ts, disclaimer.ts, panelSection.ts,
-       F20: mobileMode.ts (pure: Einfach/Vollständig detection, auto Mobil quality, Relief cycle, sheet state, swipe), mobile.ts + mobile.css
-       (top bar, bottom bar, sheets, Standort pill), sheet.ts (bottom sheet), contextLoss.ts (WebGL context loss → reload)
+       displayState.ts (store ⇄ Terrain bridge for overlay/opacity/forest), reliefPanel.ts + relief.css ("Darstellung"), gui.ts (lil-gui "Flug & Technik"; LOD/Debug folder in dev only), style.css (base vars), features.css + polish.css (card/toast/a11y styles), Labels3D.ts, disclaimer.ts, about.ts, panelSection.ts,
+       mobileMode.ts (pure: auto Mobil quality, touch gestures list), quality.ts, settings.ts, shortcuts.ts, contextLoss.ts (WebGL context loss → reload)
+  shell/ V2.2 game shell (see *Shell*): Shell.ts (layout, bar, drawers, dialogs wiring, walk mode, extension APIs), registry.ts (pure tier-gated
+       feature registry), tiers.ts (pure), attribution.ts (pure: source rows, splash timer), flight.ts (pure: walk height, speed steps), builtins.ts
+       (the v1 features as registry entries), host.ts (per-feature wrappers), hud.ts, sources.ts („© Quellen“), dialog.ts, dialogs.ts, dom.ts, types.ts, shell.css
 scripts/  make-fixture.ts, fixture-terrain.ts, fixture-imagery.ts (synthetic ortho / 1840 map, DSM roofs, `bldg` mask), fixture-buildings.ts (gabled houses → glb per chunk, F11)
 tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, stretch, percentiles, blend), footprint, markers (+ parcel helpers, QGIS-style null/empty import), pois, state (hash parse/format), displayState, skirts, latestBuild, manifest (`vectors` tolerance, v1/v2 `levels`), vectors (frame E−E0 / z=−(N−N0), densify, drape, spatial lookup, labels incl. hidden `Flur 0`), streaming (levels, quadtree selection, budget/LRU, low-pass region, pyramid, `heightAtDisplayed`), vectorData (baked z, buckets), aoiStreaming (start AOI, focus outlines, pending count, fly-to refinement), buildings (chunk rects/plan/hysteresis, surface classes, glb round-trip through GLTFLoader), candidates + candidatesManifest (parse/tolerance, labels incl. `along_path`, filter, N/P order, outlines, review store re-attach, confirm → reset → confirm reuses the marker, default min score), measure (lengths, area vs shoelace, ground factor, profile sampling, slope, formatting, GeoJSON, fetch limit), report (coordinate formats incl. DMS carry, escaping, template has no script + only this marker, tile maths, scale bar, file names), pointcloud + pointcloudsManifest (`sle-pts-v1` decode/encode round trip and header checks, LOD wish/budget water-fill, streaming plan, residency cap with hysteresis, styles/prefs, `pointclouds` tolerance), reconstruction (sle-recon-v1 tolerance, AOI offset, handover URLs both ways, footprints, prefs, glb load + picking at 1×/3×, ghost mode), touchGestures (gesture math + fake-DOM runs of pan/pinch/twist/tilt/double tap/inertia/long press), mobileMode (layout/quality detection, Relief cycle, sheets), locate (AOI test, distances, nearest point, German messages, privacy radius), print3d (tile ids ↔ UTM, index/series.json parsing + warnings, tile/set datum, totals, shared edges and keys per datum, `setKeys` for incomplete sets, CLI command incl. `--datum`, display cells, outline runs, prefs)
 ```
@@ -217,7 +219,7 @@ tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, st
   - Write with `store.set({...}, 'map')`. Camera-driven updates use the source `'camera'`, hash edits use `'hash'`.
   - Click-to-fly: `ctx.flyTo(E, N, { agl, heading, pitch, lookAt, duration })` returns `Promise<boolean>`: `true` when the camera arrives, `false` if user input interrupts it.
   - Heading is relative to grid north. On Web Mercator, use `heading + gridConvergenceDeg(E, N)` (≈ −1.2°).
-  - Slots: `#minimap` (bottom-left) and `#panel` (right; lil-gui lives there, so append your own blocks).
+  - Slots: `shell.slots.minimap` (top-right) and the feature host's `panel` (the *Werkzeuge* drawer); see *Shell* for every slot.
 - **Markers / picking:**
   - `ctx.pickAt(clientX, clientY)` returns `{ point, E, N, h }`.
   - `raycaster.intersectObject(terrain)` also works: `Terrain.raycast` marches the displaced height field. Chunk meshes have raycasting disabled because their CPU geometry is not displaced.
@@ -226,6 +228,61 @@ tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, st
 - **Ground vs. canopy:** `terrain.surfaceY` is always the bare earth (DTM). The drone uses `terrain.collisionGround` (`collisionY`): the DTM (canopy collision removed in V2.1; you fly through the crowns).
 - `window.sle` is the `AppContext`. `window` fires `sle:ready` once the coarsest level is resident (the loading box then hides; further streaming shows as "Lade Details … n" with a spinner in the HUD). `window.sle.terrainStats()` returns the streaming stats (resident/drawn chunks per level, `pending`, GPU estimate, evictions).
 - `window.sle.step(frames = 1, dt = 1/60)` advances frames synchronously (controller, LOD, render, store sync). Automated Chrome tabs are often reported as hidden, which pauses rAF; use `step()` to render for screenshots and measurements.
+
+## Shell (V2.2) 🧹
+
+`src/shell/` rebuilds the UI around the kept core (terrain engine, store, markers): ADR 0019 (tiers), 0024 (rebuild the shell), 0026 (attribution), 0032 (shell layout + registry). One component set serves desktop and phone (≤ 600 px).
+
+```text
+desktop                                        phone (≤ 600 px)
+┌───────────────────────────────────────────┐  ┌──────────────────────┐
+│ HUD (über Grund · km/h · Kurs)      Karte │  │ HUD             Karte│
+│ ┌ Drawer ─┐                               │  │                      │
+│ │ Orte /  │                               │  │ ┌ Drawer (sheet) ──┐ │
+│ │ Werkz.  │      [Markieren · Messen]     │  │ │        © Quellen │ │
+│ └─────────┘ [Fliegen|−×1+|Orte|…|Einst.]  │  │ └──────────────────┘ │
+│                                 © Quellen │  │ [icon bar, aria-lbl] │
+└───────────────────────────────────────────┘  └──────────────────────┘
+```
+
+**Tiers** (*Einstellungen → Stufe*, `localStorage sle.tier.v1`, default Standard; `?tier=labor` overrides for one visit and is dropped when the user picks a tier):
+
+| Feature id | Tier | Panel from | What |
+|---|---|---|---|
+| `markers` | 🟢 standard | 🔴 labor | MarkerManager, long-press form; list card in Labor |
+| `minimap` | 🟢 standard | | v1 Leaflet minimap in `slots.minimap` (V2.3 replaces it) |
+| `places` | 🟢 standard | | *Orte* drawer (nearest places, search) |
+| `osm-paths` / `buildings` | 🟢 standard | 🔴 labor | 3D layers; their cards in Labor (only with `vectors` / `models.buildings`) |
+| `quality`, `exaggeration` | 🟡 entdecker | | sections in *Einstellungen* |
+| `reconstruction`, `tour` | 🟡 entdecker | | *Werkzeuge* cards (Rekonstruktion 1789, Tour) |
+| `relief-lab`, `flight-tech`, `hud-full` | 🔴 labor | | *Darstellung*, *Flug & Technik*, NN/Kurs/E/N/fps HUD rows |
+| `candidates`, `marker-tool`, `measure` | 🔴 labor | | F15 review, Markieren + F18 Meldung, F17 Messen |
+
+Standard shows: Fliegen/Gehen, Tempo − / +, Orte, Teilen (+ QR), Steuerung, Einstellungen, minimap, „© Quellen“ (+ the lens slot for V2.5).
+
+**Rules.** A feature below the current tier is *unmounted* (its wrapper DOM removed, its teardown run), never hidden by CSS. v1 modules without a teardown (global keys) cause a reload on downgrade (toast „Stufe …: wird neu geladen …“; the hash keeps the view); upgrades mount live. `Gehen` keeps the eye `1.7 m` (display) over `terrain.collisionGround`, `×1` speed, pitch −5°; any flight key switches back to fly. The splash („Schauen, nicht graben“ + short source lines) collapses after 8 s or on ×; canvas interaction collapses it only after 5 s; „© Quellen“ (≥ 44 px, `z-index` above drawers and the full-screen map) opens *Quellen und Lizenzen* (manifest rows verbatim + dataset URIs + NOTICE.md link).
+
+**Extension points** (`ctx.shell` = `window.sle.shell`, types in `src/shell/types.ts`; siblings call these instead of editing `src/shell/`):
+
+```ts
+shell.registerFeature({ id, tier, label, panelTier?, available?, shortcuts?, replaces?,
+  mount(h: FeatureHost): void | (() => void) | Promise<void | (() => void)> }): () => void  // unregister
+// FeatureHost: { ctx, shell, panel, tools, places, hud, settings, overlay, services: { labels, markers, minimap, toast } }
+shell.tier(): Tier; shell.setTier(t, source?); shell.onTier((t, source) => …): () => void; shell.isMounted(id)
+shell.slots.minimap | .lens | .overlay | .tutorial   // V2.3 minimap · V2.5 lens toggle · V2.6 portal/loading · V2.9 tutorial
+shell.anchor('move-mode'|'speed'|'minimap'|'places'|'lens'|'share'|'keys'|'settings'|'sources'|'tools'): HTMLElement | null
+shell.prompt({ text, action, onAction, keyHint? }): { close() }                  // V2.6 zone portal prompt
+shell.loading(title): { progress(p: number | null, text?), close() }            // V2.6 loading screen
+shell.firstRun(): boolean; shell.markTutorialDone(); shell.mountTutorial((layer, shell) => teardown?): () => void  // V2.9
+shell.openDialog({ id, title, body, wide?, onClose? }); shell.openKeys(); shell.openSettings(); shell.openSources(); shell.toast(text, warn?)
+shell.moveMode(): 'fly' | 'walk'; shell.setMoveMode(m)
+ctx.onFrame((dt) => …): () => void   // runs after controller.update, before render
+```
+
+- Minimap (V2.3): `registerFeature({ id: 'minimap', replaces: 'minimap', tier: 'standard', … })` and render into `h.shell.slots.minimap`; set `h.services.minimap` if markers should sync.
+- Lens (V2.5): a Standard feature that appends its toggle to `shell.slots.lens` (it then shows in the bar); variants as an Entdecker feature with a `settings` section.
+- Keys: pass `shortcuts` rows (with `feature: id`) so the *Steuerung* dialog lists them while mounted; bind keys yourself with `isTyping()` and `modalOpen()` guards.
+- Tests: `tests/shell.test.ts` (tiers, registry incl. async/stale mounts and reload-needed, attribution rows + splash timer, walk/speed, keybind rows).
 
 ## Relief lab (Darstellung)
 
@@ -270,7 +327,7 @@ Preset shortcuts count the presets available for the AOI (`Shift` + 1–N in the
 
 ## Map, known sites, find markers, disclaimer
 
-All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` right after `window.sle` is set).
+All registered as shell features in `src/shell/builtins.ts` (see *Shell*).
 
 - **Minimap (F4)**, `src/map/Minimap.ts`, Leaflet 1.9.4 in `#minimap`:
   - AOI: solid red outline of the loaded AOI (*Untersuchungsgebiet*) plus *Schwerpunktgebiete*: dashed outlines of the three focus areas with German tooltips (`map/aois.ts`). The relief XYZ comes from the AOI actually loaded.
@@ -291,7 +348,7 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
   - The URL hash keeps coming from the camera (`bindHash`), so map clicks show up in the bookmark once the flight settles.
 - **Bekannte Orte (F7)**, `src/pois/`:
   - `pois.ts` (pure): parse `public/data/pois.geojson`, group by type (German labels, fixed order), forgiving search (case-, umlaut- and ß-insensitive; all words must match).
-  - `PoiPanel.ts`: card in `#panel` with search, `nur im Gebiet`, and `in 3D zeigen`.
+  - `PoiPanel.ts`: the *Orte* drawer (Standard) with search, `nur im Gebiet`, and `in 3D zeigen`.
   - Click (list, map dot or 3D label) → `flyToSite`: oblique view 120 m away at 60 m AGL, approaching from the current direction.
   - 3D labels use `src/ui/Labels3D.ts`: a three.js `CSS2DRenderer` in its own scene and rAF loop. Labels follow the displayed terrain, are hidden beyond 3.5 km, and are dimmed when terrain occludes them (round-robin ray test).
 - **Fundmarker (F6)**, `src/markers/`:
@@ -309,7 +366,7 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
 
 ## Wege & Flurstücke (F10, F12)
 
-`src/vectors/`, wired by one call in `features.ts`; card *Wege* (OSM in 3D), hidden without `vectors.osm`. Since V2.1 Flurstücke are **not drawn in 3D** (no lines, no Flurnummern, no `F` key); their data still loads for the local parcel lookup, and the 2D WMS overlay stays on the minimap. Parcel-line and label notes below are historical.
+`src/vectors/`, registered in `shell/builtins.ts`; card *Wege* (OSM in 3D), hidden without `vectors.osm`. Since V2.1 Flurstücke are **not drawn in 3D** (no lines, no Flurnummern, no `F` key); their data still loads for the local parcel lookup, and the 2D WMS overlay stays on the minimap. Parcel-line and label notes below are historical.
 
 - **Loading:** GeoJSON is fetched and parsed in `vectors.worker.ts` (main-thread fallback if the worker fails), producing per-chunk segment buckets (`vectorData.ts`). With `heights: "baked"` the file's z is used per vertex; vertices without z are sampled from `HeightQuery` and re-sampled when height data changes. Overall parcels (42 MB) take ≈ 1.1 s in the worker.
 - **Lines** are screen-space ribbons: one instance per ≤ 2 m segment (start/end with the *true* DTM height — baked or from `HeightQuery` — and a style index), expanded in the vertex shader to a constant pixel width with a dark casing in the same pass. The shader shares the terrain's `uExag`/`uHRef`/fog uniform objects: `y = hRef + (h − hRef)·exag + 0.3·exag`. Against z-fighting with coarse LODs: a view-space pull toward the camera (0.15 % of the distance × exag) plus `polygonOffset`. `alphaToCoverage` (MSAA) gives soft edges and the distance fade without blending artefacts. Segments are bucketed per 500 m chunk (frustum + distance culling). Bucket meshes exist only within a build radius of the camera (fade end + 500 m: parcels ≈ 2.1 km, OSM 6.5 km) and are disposed beyond it with hysteresis.
@@ -320,7 +377,7 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
 
 ## Gebäude (F11)
 
-`src/buildings/`, wired by one call in `features.ts`; the card is hidden when the manifest has no `models.buildings`.
+`src/buildings/`, registered in `shell/builtins.ts`; the card is hidden when the manifest has no `models.buildings`.
 
 - **Streaming:** one glb per level-0 chunk (contract "Models"), fetched with three's `GLTFLoader` when the chunk rect (grown by 60 m, buildings poke over edges) is within 2 km of the camera, nearest first, ≤ 3 fetches in flight; disposed beyond 2.6 km (hysteresis band in between). A failing chunk (404/parse) is skipped until reload. Planned in `select.ts` (pure, tested), driven from `scene.onBeforeRender` (also by `sle.step()`).
 - **Material:** a `ShaderMaterial` (not `MeshLambertMaterial` + `onBeforeCompile`) sharing the terrain's uniform objects: `y = hRef + (y − hRef)·exag` in the vertex shader on the true heights in the glb, normal `(nx, ny/exag, nz)`; Lambert from the terrain sun (`uSunAz/uSunEl`) + hemisphere ambient; the terrain's haze. Colours are display-space like the terrain shaders (no scene lights, no colour management). Clay walls, terracotta roofs, grey ground/closure from the `_surface` attribute (fallback: classified from normals). Back faces are lit from the visible side (robust to flipped LoD2 winding). Screen-door fade 1.5–1.95 km so chunks don't pop.
@@ -329,7 +386,7 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
 
 ## Rekonstruktion 1789 (F19)
 
-`src/reconstruction/`, wired by one call in `features.ts` (`initReconstruction`, async). The dataset is **not** in the manifest: the app fetches `<data root>shared/karlsberg1789/index.json` (contract "Shared datasets", sle-recon-v1), written by the castle viewer (`cd zones/schloss-karlsberg && pnpm run export:explorer`). 404 / invalid / outside the AOI → no card, no keys, one console line. `vite build` does not copy `public/data/shared/` into `dist/` (`preview` serves it from the data dir).
+`src/reconstruction/`, registered in `shell/builtins.ts` (`initReconstruction`, async). The dataset is **not** in the manifest: the app fetches `<data root>shared/karlsberg1789/index.json` (contract "Shared datasets", sle-recon-v1), written by the castle viewer (`cd zones/schloss-karlsberg && pnpm run export:explorer`). 404 / invalid / outside the AOI → no card, no keys, one console line. `vite build` does not copy `public/data/shared/` into `dist/` (`preview` serves it from the data dir).
 
 - **Model:** one glb (`buildings.glb`: ≈ 92 nodes, LOD1 exterior, `COLOR_0` + `_CONF`, `EXT_meshopt_compression` decoded with three's bundled `meshopt_decoder.module.js`), loaded on first switch-on, freed when switched off. The layer group is translated by `(E0_model − E0_aoi, 0, −(N0_model − N0_aoi))` so `karlsberg` and `overall` line up; any node transform (quantization) is baked into float positions. Building ids come from the raw glTF node names (`GLTFLoader` sanitises `Object3D.name`, `site:x` → `sitex`).
 - **Material** (`ReconMaterial.ts`): `ShaderMaterial` like the LoD2 buildings — shares the terrain's `uExag`/`uHRef`/sun/fog uniform objects, exaggeration applied in world space in the vertex shader. *Farbe*: **Material** (COLOR_0, linear → sRGB) or **Konfidenz** (`_CONF`: hoch `#009E73`, mittel `#E69F00`, niedrig `#CC79A7` — Okabe–Ito, colour-blind safe, legend with words; minimap outlines for *niedrig* are dashed too). **Deckkraft** 15–100 % (*Geister-Modus*): below 100 % a depth-only pre-pass (opaque list, after the terrain) plus a blended colour pass (depth "≤"), so only the front surface is blended over today's ruins.
@@ -340,7 +397,7 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
 
 ## Messen (F17)
 
-`src/measure/`, wired by one call in `features.ts` (`initMeasure`); toolbar button *Messen* and card *Messen*. Debug handle `window.sleMeasure` (`addVertexUtm(E, N)`, `finish()`, `list`).
+`src/measure/`, registered in `shell/builtins.ts` (`initMeasure`); toolbar button *Messen* and card *Messen*. Debug handle `window.sleMeasure` (`addVertexUtm(E, N)`, `finish()`, `list`).
 
 - **Modes:** Strecke (polyline), Fläche (polygon), Höhenprofil (polyline), Punkt. `L` / button toggles; mutually exclusive with *Markieren* (`exclusiveWith`), `controller.opts.lockOnClick` is restored to the value found before the first mode started. Clicks ≤ 4 px / < 600 ms → `ctx.pickAt`; the second click of a double-click adds no vertex.
 - **Metrics** (pure, `geometry.ts`, `profile.ts`, `model.ts`, tested in `tests/measure.test.ts`): horizontal length / perimeter / shoelace area in the UTM grid (primary values; they match Leaflet's spherical distance to ≈ 0.3 %). *Naturmaß* = grid · ground factor (1/k · (R + h + 48 m geoid)/R; k ≈ 0.99977 here, total ≈ +0.028 %). 3D length, Δh, ascent/descent, min/max/avg height and slope (Ø/max, central difference over 2 m) from DTM samples every ≤ 0.5 m (vertices exact).
@@ -352,7 +409,7 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
 
 ## Verdachtsflächen (F15)
 
-`src/candidates/`, wired by one call in `features.ts`; card *Verdachtsflächen* (only if the manifest has `candidates`). Data from `pipeline/detect.py` (contract "Candidates"); **hypotheses, private, local only**. Debug handle `window.sleCandidates`.
+`src/candidates/`, registered in `shell/builtins.ts`; card *Verdachtsflächen* (only if the manifest has `candidates`). Data from `pipeline/detect.py` (contract "Candidates"); **hypotheses, private, local only**. Debug handle `window.sleCandidates`.
 
 - **Display:** outlines (or a circle of `diameter_m`, 5 m fallback) as `DrapedLines` with baked heights (else terrain sampling), exaggeration in the shader; colour per class, grey for "Weg (bekannt)" (`linear` + `along_path`; `near_path` is informative only); minimap circles only while the layer is on. `X` toggles (persisted per AOI in `sle.candidates.prefs.v1.<aoi>` together with the filter, `candidates/prefs.ts`; the first AOI opened inherits the old shared key once, with the min score reset to that AOI's default, then the old key is deleted).
 - **Filter:** class chips + "Weg (bekannt)", min-score slider starting at `params.min_score` (0.3), not the mask threshold. `N`/`P` step through the visible candidates in score order and fly there (`flyToSiteExag` / `framing.ts`, 45–160 m out: aims at the **displayed** height at any exaggeration and raises the camera when a ridge would block the view; also used by markers, measurements and the report); both ignore text fields and modifier keys.
@@ -373,7 +430,7 @@ All wired by `src/ui/features.ts` (`initFeatures(ctx)`, one call in `main.ts` ri
 
 ## Punktwolke (F16)
 
-🧊 **Frozen in V2.1:** code and tests stay, but `features.ts` no longer wires it (no card, no `C`, not in the bundle).
+🧊 **Frozen in V2.1:** code and tests stay, but `shell/builtins.ts` does not register it (no card, no `C`, not in the bundle).
 
 Classified ALS 2025 points (`manifest.pointclouds`, contract format `sle-pts-v1`) for the focus areas. Off by default; nothing is fetched until the card's *anzeigen* or `C` switches it on.
 
@@ -385,15 +442,15 @@ Classified ALS 2025 points (`manifest.pointclouds`, contract format `sle-pts-v1`
 
 ## Einstellungen, Teilen, Einführung, Tour, Qualität (final polish, v1.0)
 
-`src/ui/polish.ts` wires everything below (toolbar buttons *Teilen*, *QR*, *Tour*, *?*; card *Einstellungen & Hilfe*).
+Since V2.2 the shell wires everything below (bar buttons *Teilen* — with the QR code inside — *Steuerung*, *Einstellungen*; the *Tour* card from Entdecker on).
 
 - **Settings** (`settings.ts`): one versioned localStorage key `sle.settings.v1` — display (layer/overlay/opacity/forest), exaggeration, sun, quality, flight tempo, HUD help, intro seen. The URL hash always wins over it. All access in try/catch: without storage (checked in an iframe whose `localStorage` throws) the app runs with defaults. *Einstellungen zurücksetzen* needs a second click ("Wirklich zurücksetzen? Nochmal klicken"), clears every `sle.*` preference key (incl. per-AOI ones) and reloads with only the camera pose in the hash; `sle.markers.v1`, `sle.candidates.v1.<aoi>` and `sle.measure.v1.<aoi>` are never touched.
 - **Ansicht teilen** (toolbar *Teilen* / card button): copies `location.href` (pose, display, exaggeration, sun, active preset — see *URL hash*) to the clipboard and shows a toast ("Ohne Fundmarker/Verdachtsflächen"). Markers, candidates and measurements never enter a link. `clipboard.ts` (pure, tested) waits ≤ 1.5 s for `navigator.clipboard.writeText` (it never settles without user activation), then tries `execCommand('copy')`, else the toast shows the link selectable for manual copying.
 - **QR-Code zur Website** (toolbar *QR*, simple layout: *Mehr → QR-Code zur Website*; `src/share/`): modal (Esc, Tab trapped) with *Website* / *Diese Ansicht* (public URL + the same `formatHash` as *Teilen*; disabled while the view would reveal the user's position), QR as inline SVG (`qrcode-generator` 2.0.4, MIT, level M, 4-module quiet zone, offline), the URL as selectable text, *Link kopieren*, *QR als PNG speichern*. Public URL: `VITE_PUBLIC_URL` (default `https://open-kirrberg.github.io/saar-lidar-explorer/`, `share/publicUrl.ts`).
-- **Einführung** (`onboarding.ts`): German first-run overlay shown after the disclaimer, with *nicht mehr zeigen*; `?` or the `?` button reopens it; `Esc` closes. Lists all shortcuts from `shortcuts.ts`. Like the disclaimer it is modal (`modalKeys.ts`): no key reaches the app's shortcuts while it is open, Tab stays inside.
+- **Einführung:** the v1 intro overlay is gone (V2.2); the *Steuerung* dialog lists the shortcuts, and V2.9 adds a first-flight tutorial through `shell.mountTutorial`.
 - **Tour** (`tour.ts` data, pure + tested; `TourGuide.ts`): 7 stops (Schloss Karlsberg, Orangerie, Karlsbergweiher, Schwanenweiher, Burgruine Merburg, Grabhügel „Rabenhorst“, Hohenburg/Schlossberg), each with a relief preset, distance/height and hedged German text; only stops inside the loaded AOI (karlsberg 3, overall 7). *Weiter*/*Zurück*, *Weiter* on the last stop or `Esc` ends it (an open intro, disclaimer, marker form or report dialog gets its own `Esc` first); with `prefers-reduced-motion` the camera jumps instead of flying.
 - **Qualität** (`quality.ts`, pure + tested): *Hoch* (= engine defaults) / *Mittel* / *Niedrig* (+ *Mobil* since F20: pixel ratio ≤ 1.5, pixel error 2, 200 MiB, canopy 700 m, LOD × 0.6, labels × 0.5, buildings 800 m, 0.5 M points; auto on phones, see *Touch (F20)*) set only existing knobs — pixel ratio cap 2 / 1.5 / 1, terrain pixel error 1 / 1.5 / 2.5, GPU budget 600 / 450 / 300 MiB, canopy distance 2000 / 1500 / 1000 m, mesh LOD distances and 3D label distance × 1 / 0.75 / 0.5, building load radius 2000 / 1500 / 1000 m, point budget 3 / 2 / 1 M (only when a preset is picked, and never over a budget the user set with the point-cloud slider). A window resize re-applies only the pixel ratio, so manual *LOD / Debug* slider changes survive. Measured on overall (DPR 2, low oblique view, synchronous `step()` + readPixels, 2 runs): Hoch 2.5–3.1 ms (1.90 M tris, 35 calls), Mittel 1.9–2.5 ms (1.57 M, 28), Niedrig 1.5–2.4 ms (1.15 M, 20).
-- **Accessibility** (`a11y.ts`, `contrast.ts`, `polish.css`): `:focus-visible` ring (2 px amber) on every control (115 checked), `aria-label` on icon-only buttons, quality buttons as an ARIA radio group (arrow keys), `Space`/`Enter` on a focused button are not flight keys, HUD/footer backgrounds darkened so dim text stays ≥ 4.5:1 even over white terrain (lowest measured 5.56:1). The attribution footer wraps to 2–3 lines; its height is the CSS variable `--footer-h` and all bottom-anchored UI (toolbar, minimap, panel, toasts, tour) sits above it.
+- **Accessibility** (`a11y.ts`, `contrast.ts`, `polish.css`): `:focus-visible` ring (2 px amber) on every control (115 checked), `aria-label` on icon-only buttons, quality buttons as an ARIA radio group (arrow keys), `Space`/`Enter` on a focused button are not flight keys, HUD/bar/drawer backgrounds darkened so dim text stays ≥ 4.5:1 even over white terrain (lowest measured 5.56:1). Since V2.2 the attribution footer is replaced by the splash + „© Quellen“ (ADR 0026); bottom-anchored v1 UI (toasts, tour, mode hints) sits above the action bar via `--above-footer`.
 
 ## Mein Standort & Handy im WLAN (F20)
 
@@ -465,7 +522,8 @@ pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 - Meldung (F18): without `flurstuecke.polygons` (old manifests) the label-point fallback still misses large forest parcels. Notes over ≈ 1000 characters push the print to a third page (the dialog warns). No postal address/phone for the authorities (none in the research). Printing from a real browser dialog and an occluded marker were not checked.
 - Punktwolke (F16): no eye-dome lighting; point bytes (10 B GPU + 10 B CPU per resident point) are not counted in the terrain's GPU estimate/LRU; *Gelände ausblenden* also pauses auto contrast while on; colour modes Höhe/ü. Grund/Intensität, the point-size slider and frame pacing while tiles stream in flight were not checked. Areas exist only where the pipeline wrote them (`overall`: all three, `karlsberg`: Schloss Karlsberg; `homburg` after a rebuild, `kirrberg` none).
 - Rekonstruktion 1789 (F19): only the one dataset `shared/karlsberg1789/` is looked up (no discovery of other `shared/<id>/`); no distance fade/LOD (≈ 340 k triangles always drawn while on); where today's LoD2 buildings stand inside the model both are drawn (no masking); the model is not hidden by the canopy; skirts reach 0.5 m below the 2025 DTM, so at high exaggeration they sink visibly deeper into ruin pits (by design). Browser rendering, frame time and the round trip with the viewer were not verified in this build step.
-- Mobile (F20): nothing tested on a real phone (see *Touch (F20)* / *Mein Standort*). A long-press marker leaves Markieren on, and it opens the form by a synthetic canvas tap because `MarkerManager.openForm` is private (a public `openDraftAt(E, N, h)` would fix both). The Markieren hint still mentions keys and clicks. On desktop the panel full-width rule no longer matches lil-gui's current class names (panels render 245 px; fixed only inside the Einfach layout). *Vollständig* on a phone is cramped. The HUD *Gesten* button is 60×28 px (< 44 px target). After *Mein Standort* the camera sits ≈ 200 m above the ground under it (150 m is relative to the target). The compass ignores magnetic declination (≈ 2–3°). The desktop canvas now has `touch-action: none`.
+- Mobile (F20): nothing tested on a real phone (see *Touch (F20)* / *Mein Standort*). A long-press marker leaves Markieren on, and it opens the form by a synthetic canvas tap because `MarkerManager.openForm` is private (a public `openDraftAt(E, N, h)` would fix both). The Markieren hint still mentions keys and clicks. The lil-gui panels (*Darstellung*, *Flug & Technik*) still render 245 px wide inside the 320 px drawer. After *Mein Standort* the camera sits ≈ 200 m above the ground under it (150 m is relative to the target). The compass ignores magnetic declination (≈ 2–3°). The desktop canvas now has `touch-action: none`.
+- Shell (V2.2): Labor is not blocked on phones but is cramped there (long drawer); the v1 minimap chrome (small header buttons, < 44 px) stays until V2.3; the default „aerial ground“ look is V2.5's; the tutorial and zone prompt/loading APIs have no caller yet (checked once via `window.sle.shell` in the browser); live flight feel of *Gehen* and real frame pacing were not checked (hidden tab, `step()`).
 - Buildings: bases are matched to the 1 m DTM only; where a coarser terrain level is drawn (far field) the ground may sit slightly off the bases (not measured). Buildings are not pickable. A few LoD2 buildings keep a gap > 0.5 m where the pipeline's 5 m skirt cap applies (2 Karlsberg / 20 overall).
 
 - Live local relief: where a same-level neighbour is not resident, the band within *Relief-Radius* of that edge uses the coarser level's heights (approximate) until the neighbour arrives.

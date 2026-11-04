@@ -1,13 +1,21 @@
 :root {
   --ui-bg: rgba(20, 24, 28, 0.88); /* ≥ 0.86 keeps --ui-dim text ≥ 4.5:1 over white terrain (tests/a11y.test.ts) */
+  --ui-bg-strong: rgba(20, 24, 28, 0.94); /* splash, drawers, bar */
   --ui-fg: #e8ecef;
   --ui-dim: #9aa6b0;
   --ui-accent: #ffd27a;
   --ui-font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --panel-width: 280px;
-  /* Height of #attribution (set by main.ts via ResizeObserver); bottom-anchored UI sits above it. */
-  --footer-h: 24px;
-  --above-footer: calc(var(--footer-h) + 6px);
+  /* v2 shell geometry (src/shell/shell.css) */
+  --gap: 10px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --bar-h: 64px;
+  --panel-width: 320px;
+  /* Bottom-anchored v1 overlays (toasts, tour box, mode hints) sit above the action bar. */
+  --footer-h: 0px;
+  --above-footer: calc(var(--bar-h) + 2 * var(--gap) + var(--safe-b));
 }
 
 * { box-sizing: border-box; }
@@ -20,47 +28,18 @@ html, body { overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-siz
 #viewport { position: absolute; inset: 0; }
 #viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; outline: none; }
 
-#hud {
-  position: absolute; top: 10px; left: 10px; padding: 8px 10px; border-radius: 6px;
-  background: var(--ui-bg); pointer-events: none; font-variant-numeric: tabular-nums; min-width: 230px;
-}
-#hud table { border-collapse: collapse; }
-#hud td { padding: 1px 0; }
-#hud td:first-child { color: var(--ui-dim); padding-right: 10px; }
-#hud .help { margin-top: 6px; color: var(--ui-dim); font-size: 11.5px; line-height: 1.45; }
-#hud .help kbd, #lock-hint kbd {
-  font: inherit; color: var(--ui-fg); background: rgba(255, 255, 255, 0.12); border-radius: 3px; padding: 0 4px;
-}
-#hud .help.collapsed { display: none; }
-
-#panel {
-  position: absolute; top: 10px; right: 10px; bottom: var(--above-footer); width: var(--panel-width);
-  overflow-y: auto; display: flex; flex-direction: column; gap: 8px; pointer-events: auto;
-}
-#panel:empty { display: none; }
-#panel .lil-gui.root { width: 100%; --width: 100%; }
-
-/* Minimap slot (filled by the Leaflet agent). */
-#minimap { position: absolute; left: 10px; bottom: var(--above-footer); width: 300px; height: 220px; border-radius: 6px; overflow: hidden; }
-#minimap:empty { display: none; }
-
-#attribution {
-  position: absolute; right: 0; bottom: 0; max-width: 100%; padding: 3px 8px;
-  background: rgba(20, 24, 28, 0.88); color: var(--ui-dim); font-size: 11px; border-top-left-radius: 6px;
-}
-#attribution a { color: var(--ui-fg); }
-
 #loading {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 50;
   padding: 12px 18px; border-radius: 8px; background: var(--ui-bg); font-size: 14px;
 }
 #loading.error { color: #ffb4a8; max-width: 520px; }
 #loading[hidden], #lock-hint[hidden] { display: none; }
 
 #lock-hint {
-  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6;
   padding: 4px 10px; border-radius: 4px; background: var(--ui-bg); pointer-events: none;
 }
+#lock-hint kbd { font: inherit; color: var(--ui-fg); background: rgba(255, 255, 255, 0.12); border-radius: 3px; padding: 0 4px; }
 
 #crosshair {
   position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none;
@@ -69,13 +48,3 @@ html, body { overscroll-behavior: none; -webkit-text-size-adjust: 100%; text-siz
     linear-gradient(var(--ui-fg), var(--ui-fg)) center / 100% 1px no-repeat;
   opacity: 0.6;
 }
-
-/* F9: non-blocking streaming indicator in the HUD */
-#hud .hud-stream { margin-top: 4px; font-size: 11.5px; color: var(--ui-accent); }
-#hud .hud-stream::before {
-  content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
-  border: 2px solid currentColor; border-right-color: transparent; vertical-align: -1px;
-  animation: hud-spin 0.9s linear infinite;
-}
-#hud .hud-stream[hidden] { display: none; }
-@keyframes hud-spin { to { transform: rotate(360deg); } }
