@@ -11,6 +11,7 @@ import {
 } from '../src/shell/attribution';
 import type { Clock } from '../src/shell/attribution';
 import { SPEED_STEPS, WALK_EYE, fmtSpeedMult, stepSpeed, walkY } from '../src/shell/flight';
+import { TAPE_PX_PER_DEG, aglFill, compass, normDeg, tapeOffset } from '../src/shell/hud';
 import { createFeatureRegistry } from '../src/shell/registry';
 import type { FeatureDef, HostHandle } from '../src/shell/registry';
 import { DEFAULT_TIER, TIER_KEY, loadTier, parseTier, saveTier, tierAllows, tierFromQuery } from '../src/shell/tiers';
@@ -404,5 +405,33 @@ describe('visibleShortcuts', () => {
     const extra: Shortcut[] = [{ group: SHORTCUTS[0].group, keys: ['F'], label: 'Relikt-Blick', codes: ['KeyF'], feature: 'lens' }];
     expect(visibleShortcuts((id) => id === 'lens', extra).at(-1)?.label).toBe('Relikt-Blick');
     expect(visibleShortcuts(() => false, extra).some((r) => r.label === 'Relikt-Blick')).toBe(false);
+  });
+});
+
+describe('game HUD helpers', () => {
+  it('normalises headings into [0, 360)', () => {
+    expect(normDeg(-10)).toBe(350);
+    expect(normDeg(725)).toBe(5);
+    expect(normDeg(Number.NaN)).toBe(0);
+  });
+  it('tape offset puts the heading under the centre, continuous within a turn', () => {
+    // strip starts at −360°: heading 0 sits 360° into the strip
+    expect(tapeOffset(0)).toBeCloseTo(-360 * TAPE_PX_PER_DEG);
+    expect(tapeOffset(90) - tapeOffset(0)).toBeCloseTo(-90 * TAPE_PX_PER_DEG);
+    expect(tapeOffset(360)).toBeCloseTo(tapeOffset(0));
+    expect(tapeOffset(-1)).toBeCloseTo(tapeOffset(359));
+  });
+  it('mini height bar is log-scaled and clamped', () => {
+    expect(aglFill(0)).toBe(0);
+    expect(aglFill(-5)).toBe(0);
+    expect(aglFill(999)).toBeCloseTo(1);
+    expect(aglFill(5000)).toBe(1);
+    expect(aglFill(30)).toBeGreaterThan(0.45);
+    expect(aglFill(30)).toBeLessThan(0.55);
+  });
+  it('compass labels', () => {
+    expect(compass(0)).toBe('N');
+    expect(compass(47)).toBe('NO');
+    expect(compass(-90)).toBe('W');
   });
 });

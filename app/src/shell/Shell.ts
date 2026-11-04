@@ -123,8 +123,11 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
   const speedGroup = el('div', { class: 'sle-speed', role: 'group', 'aria-label': 'Tempo', 'data-shell-anchor': 'speed' }, slower, speedVal, faster);
   const placesBtn = barBtn('places', ICONS.places, 'Orte', 'Bekannte Orte in der Nähe');
   const shareBtn = barBtn('share', ICONS.share, 'Teilen', 'Ansicht teilen (Link, QR-Code)');
-  const keysBtn = barBtn('keys', ICONS.keys, 'Steuerung', 'Steuerung: alle Tasten und Gesten (?)');
-  const settingsBtn = barBtn('settings', ICONS.settings, 'Einstellungen', 'Einstellungen und Stufe');
+  // System buttons: icon-only, top-right under the minimap (game-style), not in the action bar.
+  const sysBtn = (anchor: ShellAnchor, icon: string, label: string, title: string) =>
+    el('button', { type: 'button', class: 'sle-sys-btn', 'data-shell-anchor': anchor, title, 'aria-label': label, html: icon });
+  const keysBtn = sysBtn('keys', ICONS.keys, 'Steuerung', 'Steuerung: alle Tasten und Gesten (?)');
+  const settingsBtn = sysBtn('settings', ICONS.settings, 'Einstellungen', 'Einstellungen und Stufe');
   const toolsBtn = barBtn('tools', ICONS.tools, 'Werkzeuge', 'Werkzeuge der Stufen Entdecker und Labor');
   for (const [b, id] of [
     [placesBtn, 'places'],
@@ -136,12 +139,13 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
   shareBtn.setAttribute('aria-haspopup', 'dialog');
   keysBtn.setAttribute('aria-haspopup', 'dialog');
   settingsBtn.setAttribute('aria-haspopup', 'dialog');
-  const bar = el('nav', { class: 'sle-bar', 'aria-label': 'Steuerleiste' }, moveBtn, speedGroup, placesBtn, lensSlot, shareBtn, keysBtn, settingsBtn);
+  const bar = el('nav', { class: 'sle-bar', 'aria-label': 'Steuerleiste' }, moveBtn, speedGroup, placesBtn, lensSlot, shareBtn);
+  const sys = el('div', { class: 'sle-sys', role: 'group', 'aria-label': 'System' }, keysBtn, settingsBtn);
   const tierChip = el('span', { class: 'sle-tier-chip' });
 
   const bottom = el('div', { class: 'sle-bottom' }, toolsSlot, bar);
   const corner = el('div', { class: 'sle-corner' });
-  ui.append(hudEl, minimapSlot, featOverlay, drawers.places, drawers.tools, bottom, corner, overlaySlot, tutorialSlot);
+  ui.append(hudEl, minimapSlot, sys, featOverlay, drawers.places, drawers.tools, bottom, corner, overlaySlot, tutorialSlot);
   app.appendChild(ui);
   const toast = createToast(ui);
 
@@ -484,6 +488,7 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
 
   createHud(hudEl, {
     store,
+    mode: () => moveMode,
     extra: hudExtra,
     pending: () => {
       const lp = deps.loadProgress();
@@ -495,6 +500,13 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
   const syncHudH = () => ui.style.setProperty('--hud-h', `${Math.ceil(hudEl.getBoundingClientRect().height)}px`);
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(syncHudH).observe(hudEl);
   syncHudH();
+  // System buttons sit under the minimap dial; its height varies (phone dial, hidden map). Full-screen map keeps the last value.
+  const syncMapH = () => {
+    if (minimapSlot.classList.contains('gmm-full') || minimapSlot.classList.contains('size-full')) return;
+    ui.style.setProperty('--mm-h', `${Math.ceil(minimapSlot.getBoundingClientRect().height)}px`);
+  };
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(syncMapH).observe(minimapSlot);
+  syncMapH();
 
   // Restore the last open drawer on large screens (phones start with a free view).
   try {
