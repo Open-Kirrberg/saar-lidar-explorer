@@ -113,4 +113,6 @@ export interface ShellApi {
   markTutorialDone(): void;
   /** V2.9: mount a tutorial into `slots.tutorial`; the returned teardown runs on unmount. */
   mountTutorial(fn: (layer: HTMLElement, shell: ShellApi) => void | (() => void)): () => void;
+  /** V2.9: while set, *Steuerung* shows „Einführung starten“ calling `fn`. Returns an unset function. */
+  setTutorialStart(fn: () => void): () => void;
 }

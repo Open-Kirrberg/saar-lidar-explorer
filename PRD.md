@@ -73,7 +73,7 @@ Item-level backlog: [`.claude/skills/sle-roadmap/references/roadmap.md`](.claude
 
 ## ❓ Open questions
 
-Decisions with options → `Proposed` ADRs ([0026](docs/adr/0026-collapsed-attribution.md) „© Quellen“ = Q-33, [0027](docs/adr/0027-captured-zone-method.md) mesh vs splats = Q-36). Still open:
+Decisions with options → `Proposed` ADRs ([0027](docs/adr/0027-captured-zone-method.md) mesh vs splats = Q-36). Still open:
 
 | Q | Question | Blocks | Lean |
 |---|---|---|---|

@@ -248,7 +248,7 @@ describe('feature registry', () => {
 // ---- attribution (ADR 0026) -----------------------------------------------------------------
 
 const MANIFEST_ATTR =
-  '© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet; © GeoBasis-DE/LVermGeoRP (2022), dl-de/by-2-0, www.lvermgeo.rlp.de, Daten bearbeitet; © GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0 (DOP20)';
+  '© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet; © GeoBasis-DE/LVermGeoRP (2026), dl-de/by-2-0, www.lvermgeo.rlp.de, Daten bearbeitet; © GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0 (DOP20)';
 
 describe('attribution', () => {
   it('splits the manifest string', () => {
@@ -264,7 +264,8 @@ describe('attribution', () => {
     expect(sl.dataset?.url).toContain('lvgl.saarland.de');
     expect(sl.modified).toBe(true);
     expect(rlp.short).toBe('© GeoBasis-DE/LVermGeoRP');
-    expect(rlp.dataset?.url).toBe('https://geobasis-rlp.de/data/');
+    expect(rlp.dataset?.url).toBe('https://geobasis-rlp.de/data/dgm1/current/');
+    expect(dop.dataset?.url).toContain('freewms/truedop');
     expect(dop.id).not.toBe(sl.id);
     expect(dop.use).toMatch(/DOP20/);
     expect(dop.modified).toBe(false);
@@ -274,6 +275,19 @@ describe('attribution', () => {
     expect(other.short).toBe('© Stadt Homburg');
     expect(other.licence).not.toBeNull();
     expect(other.full).toBe('© Stadt Homburg, dl-de/by-2-0, Daten bearbeitet');
+    expect(other.dataset).toBeNull();
+  });
+
+  it('gives every known dataset its own URI; unknown entries may carry one (V2.9)', () => {
+    const rlp = (tag: string) => rowFromEntry(`© GeoBasis-DE/LVermGeoRP (2026), dl-de/by-2-0, www.lvermgeo.rlp.de, Daten bearbeitet (${tag})`);
+    expect(rlp('LoD2').dataset?.url).toContain('geb3dlo');
+    expect(rlp('ALKIS').dataset?.url).toContain('registry/wfs/519');
+    expect(rlp('DOP20').dataset?.url).toContain('rp_dop20');
+    expect(rowFromEntry('© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (LoD2)').dataset?.url).toContain('freiegeobasisdaten');
+    expect(rowFromEntry('© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (Historische Karten)').dataset?.url).toContain('wms&id=2597');
+    const withUrl = rowFromEntry('© Stadt Homburg, dl-de/by-2-0, https://www.homburg.de/opendata/gelaende.');
+    expect(withUrl.dataset).toEqual({ label: 'homburg.de/opendata/gelaende', url: 'https://www.homburg.de/opendata/gelaende' });
+    for (const r of sourceRows(MANIFEST_ATTR)) if (r.id !== 'software') expect(r.dataset?.url).toMatch(/^https:\/\//);
   });
 
   it('keeps manifest rows verbatim, adds app rows, dedupes by id', () => {

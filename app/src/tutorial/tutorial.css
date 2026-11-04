@@ -1,0 +1,48 @@
+/* V2.9 first-flight tutorial (ADR 0038): one non-modal card, top centre on desktop, under HUD + minimap on narrow screens. */
+.sle-tut-card {
+  position: absolute; left: 50%; transform: translateX(-50%); top: calc(var(--gap, 12px) + var(--safe-t, 0px));
+  width: min(380px, calc(100vw - 2 * var(--gap, 12px))); box-sizing: border-box; padding: 10px 12px 10px 14px;
+  border-radius: 14px; background: var(--ui-bg-strong); color: var(--ui-fg); font: 14px/1.45 var(--ui-font);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 210, 120, 0.35);
+  animation: sle-tut-in 0.25s ease-out;
+}
+.sle-tut-head { display: flex; align-items: flex-start; gap: 10px; }
+.sle-tut-icon { font-size: 26px; line-height: 1; padding-top: 4px; }
+.sle-tut-hgroup { flex: 1; min-width: 0; }
+.sle-tut-count { display: block; color: var(--ui-dim); font-size: 12px; }
+.sle-tut-title { margin: 0; font-size: 16px; color: var(--ui-accent); }
+.sle-tut-body { margin: 6px 0 8px; }
+.sle-tut-x {
+  flex: none; width: 44px; height: 44px; margin: -6px -8px 0 0; display: grid; place-items: center;
+  border: 0; border-radius: 22px; background: transparent; color: var(--ui-fg); cursor: pointer;
+}
+.sle-tut-x:hover { background: rgba(255, 255, 255, 0.1); }
+.sle-tut-x svg { width: 18px; height: 18px; }
+.sle-tut-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sle-tut-dots { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sle-tut-dots li { width: 8px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.22); }
+.sle-tut-dots li.on { background: var(--ui-accent); }
+.sle-tut-dots li.cur { background: var(--ui-fg); width: 18px; }
+.sle-tut-skip { min-height: 44px; padding: 6px 14px; }
+.sle-tut-card[data-step='done'] .sle-tut-skip { background: var(--ui-accent); color: #1b1300; font-weight: 600; }
+
+/* Highlighted shell control (anchor) of the current step. */
+.sle-tut-lit { outline: 3px solid var(--ui-accent) !important; outline-offset: 2px; animation: sle-tut-pulse 1.4s ease-in-out infinite; }
+
+@keyframes sle-tut-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes sle-tut-pulse { 50% { outline-color: rgba(255, 210, 120, 0.25); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sle-tut-card, .sle-tut-lit { animation: none; }
+}
+
+/* Narrow screens: HUD (left) and minimap (right) share the top row, so the card sits below them. */
+@media (max-width: 900px) {
+  /* below the minimap and the Steuerung / Einstellungen buttons under it (44 px + 6 px gap) */
+  .sle-tut-card { top: calc(var(--gap, 8px) + var(--safe-t, 0px) + var(--mm-h, 160px) + 58px); }
+}
+@media (max-width: 600px) {
+  .sle-tut-card { font-size: 13.5px; padding: 8px 10px 8px 12px; }
+  .sle-tut-icon { font-size: 22px; }
+  .sle-tut-card.sheet { top: calc(var(--gap, 8px) + var(--safe-t, 0px)); } /* Orte sheet open: over HUD + minimap */
+}

@@ -34,7 +34,13 @@ USER_AGENT = "saar-lidar-explorer-pipeline/0.1 (personal research; polite sequen
 UTM32_PROJ4 = "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
 
 ATTRIBUTION_SL = "© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet"
-ATTRIBUTION_RLP = "© GeoBasis-DE/LVermGeoRP (2022), dl-de/by-2-0, www.lvermgeo.rlp.de, Daten bearbeitet"
+# LVermGeoRP asks for the year of retrieval („Jahr des Datenbezugs“, ADR 0026): 2026, not the tile year.
+ATTRIBUTION_RLP = "© GeoBasis-DE/LVermGeoRP (2026), dl-de/by-2-0, www.lvermgeo.rlp.de, Daten bearbeitet"
+# Superseded attribution entries → their replacement. `merge_attribution` rewrites them in place, so old
+# manifests heal on any step's next write (or via `./run.sh <aoi> attribution`, which touches nothing else).
+LEGACY_ATTRIBUTION = {
+    "© GeoBasis-DE/LVermGeoRP (2022), dl-de/by-2-0, www.lvermgeo.rlp.de, Daten bearbeitet": ATTRIBUTION_RLP,
+}
 
 
 @dataclass(frozen=True)
@@ -135,12 +141,13 @@ def merge_attribution(existing: str | None, add: Iterable[str] = (), drop: Itera
     Order is stable: existing entries keep their position, new entries from `add` are appended; duplicates
     (after whitespace stripping) are removed. `drop` lets a step retract entries it owns but no longer
     uses (e.g. build.py drops the RLP string when no RLP pixel was filled); an entry in both `add` and
-    `drop` is kept. Entries must not contain ";"."""
+    `drop` is kept. Superseded entries (`LEGACY_ATTRIBUTION`) are replaced in place. Entries must not contain ";"."""
     add = [a.strip() for a in add]
     dropped = {d.strip() for d in drop} - set(add)  # an entry in both keeps its position
     out: list[str] = []
     for part in (existing or "").split(ATTRIBUTION_SEP.strip()):
         part = part.strip()
+        part = LEGACY_ATTRIBUTION.get(part, part)
         if part and part not in out and part not in dropped:
             out.append(part)
     for part in add:
@@ -241,6 +248,15 @@ def update_manifest(
     tmp.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n")
     os.replace(tmp, path)
     return manifest
+
+
+def refresh_attribution(aoi_key: str) -> str:
+    """Manifest-only fix: rewrite superseded attribution entries (`LEGACY_ATTRIBUTION`) of one AOI without
+    rebuilding or downloading anything. Returns the new attribution string."""
+    aoi_dir = APP_DATA / aoi_key
+    if not (aoi_dir / "manifest.json").exists():
+        sys.exit(f"no manifest for {aoi_key!r} in {aoi_dir}")
+    return update_manifest(aoi_dir, {})["attribution"]
 
 
 def swap_dir(staging: Path, out_dir: Path) -> None:

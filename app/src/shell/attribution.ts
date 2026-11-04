@@ -39,7 +39,28 @@ const LVGL_HIST: Link = {
   label: 'geoportal.saarland.de – Historische Karten (WMS 2597)',
   url: 'https://geoportal.saarland.de/mapbender/php/mod_showMetadata.php?languageCode=de&resource=wms&id=2597',
 };
+const LVGL_DOP: Link = {
+  label: 'geoportal.saarland.de – WMS SL DOP20 (TrueDOP)',
+  url: 'https://geoportal.saarland.de/freewms/truedop?SERVICE=WMS&REQUEST=GetCapabilities',
+};
 const RLP_DATA: Link = { label: 'geobasis-rlp.de/data', url: 'https://geobasis-rlp.de/data/' };
+/** dl-de/by-2-0 §2 Nr. 3: one landing page per RLP dataset (layer tag → URI), the folder or service the pipeline reads. */
+const RLP_DATASETS: Record<string, Link> = {
+  '': { label: 'geobasis-rlp.de/data – DGM1 / DOM1', url: 'https://geobasis-rlp.de/data/dgm1/current/' },
+  LoD2: { label: 'geobasis-rlp.de/data – LoD2-Gebäude', url: 'https://geobasis-rlp.de/data/geb3dlo/current/' },
+  ALKIS: { label: 'geoportal.rlp.de – ALKIS WFS 519', url: 'https://www.geoportal.rlp.de/registry/wfs/519?SERVICE=WFS&REQUEST=GetCapabilities' },
+  DOP20: { label: 'LVermGeo RLP – WMS DOP20', url: 'https://geo4.service24.rlp.de/wms/rp_dop20.fcgi?SERVICE=WMS&REQUEST=GetCapabilities' },
+};
+/** LVGL-SL layer tag → dataset URI (DGM/DOM and LoD2 come from the „Freie Geobasisdaten“ share). */
+const LVGL_DATASETS: Record<string, Link> = { ALKIS: LVGL_ALKIS, 'Historische Karten': LVGL_HIST, DOP20: LVGL_DOP };
+
+/** First plain `https://…` URL inside an entry (contract: unknown sources may carry their dataset URI). */
+export function entryUrl(entry: string): Link | null {
+  const m = /https:\/\/[^\s,;()]+/.exec(entry);
+  if (!m) return null;
+  const url = m[0].replace(/[.)]+$/, '');
+  return { label: url.replace(/^https:\/\/(www\.)?/, '').replace(/\/$/, ''), url };
+}
 
 /** Layer tag in a pipeline string („… (LoD2)“) → what it is used for. */
 const LAYER_USE: Record<string, string> = {
@@ -67,7 +88,7 @@ export function rowFromEntry(entry: string): SourceRow {
   const tag = layerTag(entry);
   if (/GeoBasis-DE\s*\/\s*LVGL-SL/i.test(entry)) {
     const short = /©\s*GeoBasis-DE\s*\/\s*LVGL-SL(\s*\(\d{4}\))?/i.exec(entry)?.[0].replace(/\s+/g, ' ') ?? '© GeoBasis-DE/LVGL-SL';
-    const dataset = tag === 'ALKIS' ? LVGL_ALKIS : tag === 'Historische Karten' ? LVGL_HIST : LVGL_SHOP;
+    const dataset = LVGL_DATASETS[tag] ?? LVGL_SHOP;
     return { id: `lvgl:${tag || 'dgm'}`, provider: LVGL_PROVIDER, short, full: entry, licence: DL_DE_BY_2, dataset, modified, use: LAYER_USE[tag] ?? tag };
   }
   if (/GeoBasis-DE\s*\/\s*LVermGeoRP/i.test(entry)) {
@@ -77,7 +98,7 @@ export function rowFromEntry(entry: string): SourceRow {
       short: '© GeoBasis-DE/LVermGeoRP',
       full: entry,
       licence: DL_DE_BY_2,
-      dataset: RLP_DATA,
+      dataset: RLP_DATASETS[tag] ?? RLP_DATA,
       modified,
       use: `${LAYER_USE[tag] ?? tag} – Rheinland-Pfalz`,
     };
@@ -100,7 +121,7 @@ export function rowFromEntry(entry: string): SourceRow {
     short: entry.split(',')[0].trim(),
     full: entry,
     licence: dl ? DL_DE_BY_2 : null,
-    dataset: null,
+    dataset: entryUrl(entry),
     modified,
     use: tag,
   };

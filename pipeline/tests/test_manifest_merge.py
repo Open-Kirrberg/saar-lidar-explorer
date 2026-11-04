@@ -119,3 +119,16 @@ def test_build_rerun_keeps_foreign_layers_and_level_layers(tmp_path):
 def test_without_own_layers_layers_are_replaced_whole():
     existing = {"layers": {"ortho": {"path": "o"}}}
     assert merge_manifest(existing, {"layers": {"vat": {"path": "v"}}})["layers"] == {"vat": {"path": "v"}}
+
+
+def test_legacy_rlp_year_is_replaced_in_place(tmp_path):
+    """ADR 0026: the RLP entry carries the retrieval year 2026; old manifests with (2022) heal on any write."""
+    from common import LEGACY_ATTRIBUTION
+    old = next(iter(LEGACY_ATTRIBUTION))
+    assert "(2022)" in old and "(2026)" in ATTRIBUTION_RLP
+    assert merge_attribution(f"{ATTRIBUTION_SL}; {old}; {OSM}") == f"{ATTRIBUTION_SL}; {ATTRIBUTION_RLP}; {OSM}"
+    # no duplicate when a step adds the new string while the old one is still there
+    assert merge_attribution(f"{old}; {OSM}", [ATTRIBUTION_RLP]) == f"{ATTRIBUTION_RLP}; {OSM}"
+    (tmp_path / "manifest.json").write_text(json.dumps({"aoi": "x", "keep": 1, "attribution": f"{ATTRIBUTION_SL}; {old}"}))
+    m = update_manifest(tmp_path, {})
+    assert m["attribution"] == f"{ATTRIBUTION_SL}; {ATTRIBUTION_RLP}" and m["keep"] == 1

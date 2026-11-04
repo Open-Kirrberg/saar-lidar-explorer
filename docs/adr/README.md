@@ -45,6 +45,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0035](0035-relikt-blick-lens-channel.md) | *Relikt-Blick* as a third terrain channel; the game look leaves the relief lab alone | Accepted | 2026-11-04 | |
 | [0036](0036-game-minimap.md) | Game minimap: round dial, heading-up by default, CSS rotation | Accepted | 2026-11-04 | v1 minimap header (folgen/klein/groß/Vollbild) |
 | [0037](0037-zone-runtime-host.md) | Zone runtime host: shared renderer, frame ownership, built-in Testraum | Accepted | 2026-11-04 | |
+| [0038](0038-first-flight-tutorial.md) | First-flight tutorial: five self-completing steps to the castle, v1 tour stays in Entdecker | Accepted | 2026-11-04 | v1 intro overlay (removed in V2.2) |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 
