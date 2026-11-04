@@ -4,6 +4,7 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-04 | V2.2 | 🎛️ Shell polish: *Steuerung* + *Einstellungen* as corner buttons under the minimap, lighter tempo chips, HUD with compass tape and icon row |
 | 2026-11-04 | V2.4 | 🌲 Real trees from the CHM: `sle-trees-v1` layer (326 010 trees, plot counts within ±6 %), instanced overworld trees with rank-prefix LOD + dither cross-fade, „Bäume“ switch (ADR 0030, 0034) |
 | 2026-11-04 | V2.6 | 🚪 Zone contract `sle-zone-v1`, castle moved to `zones/`, portals + loading screen + *Testraum*, pose restored on exit (ADR 0029, 0037) |
 | 2026-11-04 | V2.3 | 🧭 Game minimap: round player-centred dial, view cone, heading-up / north-up, full-screen map (ADR 0036) |

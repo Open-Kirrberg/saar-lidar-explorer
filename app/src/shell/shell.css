@@ -10,10 +10,37 @@
   max-width: min(340px, calc(100vw - 2 * var(--gap))); padding: 7px 12px; border-radius: 12px;
   background: var(--ui-bg); pointer-events: none; font-variant-numeric: tabular-nums;
 }
-.hud-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 14px; }
-.hud-k { color: var(--ui-dim); font-size: 12px; }
+.sle-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* compact game HUD: compass tape over one row (height · speed · heading) */
+.hud-game { display: flex; flex-direction: column; gap: 4px; min-width: var(--hud-w, 196px); }
+.hud-tape {
+  position: relative; height: 20px; overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+}
+.hud-tape::after { /* centre mark across the ticks */
+  content: ''; position: absolute; left: 50%; bottom: 0; width: 2px; height: 8px; margin-left: -1px; border-radius: 1px;
+  background: var(--ui-accent);
+}
+.hud-tape-strip {
+  position: absolute; left: 50%; top: 0; height: 100%; will-change: transform;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.45) 0 1px, transparent 1px 21px) left bottom / 100% 5px no-repeat; /* tick every 15° (1.4 px/°) */
+}
+.hud-tape-l {
+  position: absolute; top: 1px; transform: translateX(-50%); font-size: 10.5px; font-weight: 600; line-height: 1;
+  color: var(--ui-dim);
+}
+.hud-tape-l.card { font-size: 12.5px; color: var(--ui-fg); }
+.hud-tape-l.north { color: #ff7a52; }
+.hud-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; line-height: 1.2; white-space: nowrap; }
+.hud-cell { display: inline-flex; align-items: center; gap: 4px; }
+.hud-i { display: inline-flex; color: var(--ui-dim); }
+.hud-i svg { width: 15px; height: 15px; }
 .hud-v { font-weight: 600; }
-.hud-sep { color: var(--ui-dim); }
+.hud-dir { min-width: 3ch; text-align: right; color: var(--ui-accent); }
+.hud-bar { position: relative; width: 4px; height: 15px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
+.hud-bar-fill { position: absolute; left: 0; right: 0; bottom: 0; background: var(--ui-accent); }
+.hud-alt.walk .hud-bar { display: none; }
+.hud-alt.walk .hud-i { color: var(--ui-accent); }
 #hud .hud-stream { margin-top: 3px; font-size: 12px; color: var(--ui-accent); }
 #hud .hud-stream::before {
   content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
@@ -31,6 +58,19 @@
   background: var(--ui-accent); color: #1c1c1c;
 }
 .sle-tier-chip[hidden] { display: none; }
+
+/* ---- system buttons (top-right, under the minimap dial): Steuerung, Einstellungen ------------------------ */
+.sle-sys {
+  position: absolute; right: calc(var(--gap) + var(--safe-r)); top: calc(var(--gap) + var(--safe-t) + var(--mm-h, 0px) + 6px);
+  display: flex; gap: 6px; pointer-events: none;
+}
+.sle-sys-btn {
+  pointer-events: auto; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--ui-bg-strong); color: var(--ui-fg); cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.sle-sys-btn svg { width: 20px; height: 20px; }
+.sle-sys-btn:hover { background: #2c3238; }
+.sle-sys-btn:focus-visible { outline: 2px solid var(--ui-accent); outline-offset: 2px; }
 
 /* ---- minimap slot (top-right; V2.3 rebuilds the content) ---------------------------------------------- */
 #minimap {
@@ -62,9 +102,16 @@
 .sle-bar-btn svg { width: 22px; height: 22px; }
 .sle-bar-btn:hover { background: rgba(255, 255, 255, 0.1); }
 .sle-bar-btn.on, .sle-bar-btn[aria-pressed='true'] { background: var(--ui-accent); color: #1c1c1c; }
-.sle-speed { display: flex; align-items: center; padding: 0 2px; border-radius: 12px; background: rgba(255, 255, 255, 0.05); }
-.sle-bar-mini { min-width: 40px; }
-.sle-speed-val { min-width: 42px; text-align: center; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sle-speed { display: flex; align-items: center; gap: 2px; padding: 0 6px; }
+/* Tempo −/+: light 30 px chips, 44 px hit area via ::after (not tiny targets). */
+.sle-speed .sle-bar-mini {
+  position: relative; flex: none; width: 30px; height: 30px; min-width: 0; min-height: 0; padding: 0; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2); color: var(--ui-dim);
+}
+.sle-speed .sle-bar-mini::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; }
+.sle-speed .sle-bar-mini svg { width: 14px; height: 14px; }
+.sle-speed .sle-bar-mini:hover { color: var(--ui-fg); border-color: rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.08); }
+.sle-speed-val { min-width: 34px; text-align: center; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .sle-lens-slot { display: flex; }
 .sle-lens-slot:empty { display: none; }
 .sle-tools { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; pointer-events: auto; }
@@ -214,16 +261,20 @@
 /* ---- phone (≤ 600 px): icon bar across the bottom, drawers as sheets, full-screen dialogs ------------ */
 @media (max-width: 600px) {
   :root { --gap: 8px; --bar-h: 52px; }
-  #hud { padding: 5px 10px; max-width: calc(100vw - 3 * var(--gap) - 150px); }
-  .hud-line { font-size: 12.5px; gap: 1px 5px; }
+  #hud { padding: 5px 9px; max-width: calc(100vw - 3 * var(--gap) - 150px); }
+  .hud-game { --hud-w: 168px; gap: 3px; }
+  .hud-row { font-size: 12.5px; gap: 6px; }
+  .hud-i svg { width: 13px; height: 13px; }
+  .hud-bar { height: 13px; }
   #minimap, #minimap.sle-minimap.size-s, #minimap.sle-minimap.collapsed { width: 150px; }
   #minimap, #minimap.sle-minimap.size-s { height: 160px; }
   .sle-bottom { left: 0; right: 0; transform: none; bottom: 0; max-width: none; padding: 0 var(--gap) calc(var(--gap) + var(--safe-b)); }
   .sle-bar { width: 100%; justify-content: space-between; gap: 0; padding: 3px; border-radius: 14px; }
   .sle-bar-btn { min-width: 44px; min-height: 44px; padding: 4px; flex: 1 1 44px; }
   .sle-bar-label { display: none; } /* names stay in aria-label */
-  .sle-bar-mini { min-width: 36px; flex: 1 1 36px; }
-  .sle-speed-val { min-width: 30px; font-size: 11.5px; }
+  .sle-speed { flex: 1 1 auto; justify-content: center; padding: 0 4px; gap: 4px; }
+  .sle-speed .sle-bar-mini { width: 30px; height: 30px; flex: none; }
+  .sle-speed-val { min-width: 28px; font-size: 11.5px; }
   .sle-corner { bottom: calc(var(--above-footer) + 4px); right: var(--gap); }
   .sle-drawer-body { padding-bottom: 56px; } /* room for „© Quellen“, which floats above the sheet */
   .sle-splash { width: calc(100vw - 2 * var(--gap)); font-size: 12.5px; }

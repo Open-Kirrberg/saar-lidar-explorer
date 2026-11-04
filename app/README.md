@@ -241,14 +241,20 @@ tests/    terrarium, geo, grid/apron, HeightQuery/boxBlur, relief (colormaps, st
 ```text
 desktop                                        phone (≤ 600 px)
 ┌───────────────────────────────────────────┐  ┌──────────────────────┐
-│ HUD (über Grund · km/h · Kurs)      Karte │  │ HUD             Karte│
-│ ┌ Drawer ─┐                               │  │                      │
-│ │ Orte /  │                               │  │ ┌ Drawer (sheet) ──┐ │
-│ │ Werkz.  │      [Markieren · Messen]     │  │ │        © Quellen │ │
-│ └─────────┘ [Fliegen|−×1+|Orte|…|Einst.]  │  │ └──────────────────┘ │
-│                                 © Quellen │  │ [icon bar, aria-lbl] │
+│ ┌ HUD ──────────────────┐         ( map ) │  │ ┌ HUD ──────┐ (map)  │
+│ │ ··N···|···NO···O··    │         (dial ) │  │ │ tape      │        │
+│ │ ^ 150 m | 0 km/h  52° │       [?] [cog] │  │ │ ^ km/h 52°│[?][cog]│
+│ └───────────────────────┘                 │  │ └───────────┘        │
+│ ┌ Drawer ─┐                               │  │ ┌ Drawer (sheet) ──┐ │
+│ │ Orte /  │      [Markieren · Messen]     │  │ │        © Quellen │ │
+│ │ Werkz.  │ [Fliegen|(-)x1(+)|Orte|Teilen]│  │ └──────────────────┘ │
+│ └─────────┘                     © Quellen │  │ [icon bar, aria-lbl] │
 └───────────────────────────────────────────┘  └──────────────────────┘
 ```
+
+- **HUD:** compass tape (1.4 px/°, follows every frame) over one row: height over ground (icon + log mini bar), speed, heading. *Gehen* swaps the height for the walker. Labor's `hud-full` rows hang below.
+- **System buttons** *Steuerung* (`?`) and *Einstellungen*: 44 px icon buttons under the minimap dial (`--mm-h` from a `ResizeObserver`), not in the bar.
+- **Tempo − / +:** 30 px chips with a 44 px hit area (`::after`).
 
 **Tiers** (*Einstellungen → Stufe*, `localStorage sle.tier.v1`, default Standard; `?tier=labor` overrides for one visit and is dropped when the user picks a tier):
 
@@ -265,7 +271,7 @@ desktop                                        phone (≤ 600 px)
 | `relief-lab`, `flight-tech`, `hud-full` | 🔴 labor | | *Darstellung*, *Flug & Technik*, NN/Kurs/E/N/fps HUD rows |
 | `candidates`, `marker-tool`, `measure` | 🔴 labor | | F15 review, Markieren + F18 Meldung, F17 Messen |
 
-Standard shows: Fliegen/Gehen, Tempo − / +, Orte, Teilen (+ QR), Steuerung, Einstellungen, minimap, „© Quellen“ (+ the lens slot for V2.5).
+Standard shows: bar Fliegen/Gehen · Tempo − / + · Orte · Teilen (+ QR) (+ the lens slot for V2.5); corner buttons Steuerung, Einstellungen; minimap; „© Quellen“.
 
 **Rules.** A feature below the current tier is *unmounted* (its wrapper DOM removed, its teardown run), never hidden by CSS. v1 modules without a teardown (global keys) cause a reload on downgrade (toast „Stufe …: wird neu geladen …“; the hash keeps the view); upgrades mount live. `Gehen` keeps the eye `1.7 m` (display) over `terrain.collisionGround`, `×1` speed, pitch −5°; any flight key switches back to fly. The splash („Schauen, nicht graben“ + short source lines) collapses after 8 s or on ×; canvas interaction collapses it only after 5 s; „© Quellen“ (≥ 44 px, `z-index` above drawers and the full-screen map) opens *Quellen und Lizenzen* (manifest rows verbatim + dataset URIs + NOTICE.md link).
 

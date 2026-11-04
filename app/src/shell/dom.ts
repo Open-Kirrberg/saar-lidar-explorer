@@ -33,6 +33,8 @@ const svg = (body: string) =>
 export const ICONS = {
   fly: svg('<path d="M2 16l20-8-8 12-2-6z"/>'),
   walk: svg('<circle cx="13" cy="4" r="2"/><path d="M10 22l2-7 3 3v4M9 12l2-4 4 2 2 3M11 8l-2 7"/>'),
+  agl: svg('<path d="M12 16V4M8 8l4-4 4 4M3 20h18"/>'),
+  gauge: svg('<path d="M4 18a8 8 0 1116 0"/><path d="M12 18l4-5"/>'),
   minus: svg('<path d="M5 12h14"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
   places: svg('<path d="M12 22s7-7 7-12a7 7 0 10-14 0c0 5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>'),
