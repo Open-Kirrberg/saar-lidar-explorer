@@ -11,6 +11,7 @@
     "test": "vitest run",
     "export": "tsx scripts/export-glb.ts",
     "export:explorer": "tsx scripts/export-explorer.ts",
+    "export:zone": "tsx scripts/export-zone.ts",
     "plans": "tsx plans/src/main.ts",
     "textures": "bash scripts/fetch-textures.sh"
   },

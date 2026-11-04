@@ -350,3 +350,21 @@ http://localhost:5260/?src=explorer&E=382226.4&N=5466120.1&h=371.2&heading=80.5&
   - The Reithaus (323 m) and most of the Marstall are outside.
   - Karlslust is up to 1.7 km away.
   - The viewer covers all of them once entered.
+
+## 5. Zone package (`sle-zone-v1`)
+
+From V2.7 the castle is zone #1 of the explorer ([zone contract](../../../docs/zone-contract.md), [ADR 0029](../../../docs/adr/0029-zones-same-bundle-folder-layout.md)). The committed source is [`zone.json`](../zone.json); `pnpm run export:zone [-- --out <dataRoot>]` (`scripts/export-zone.ts`) writes the git-ignored package:
+
+| File (under `<dataRoot>zones/`) | What |
+|---|---|
+| `index.json` | `sle-zones-v1`, merged: the castle entry (bbox of footprint + portal) is replaced, other zones are kept |
+| `schloss-karlsberg/zone.json` | source + `budget` + `generated` |
+| `schloss-karlsberg/terrain/meta.json` | viewer terrain meta, **1789 only**, `encoding.dtm1789 = { dtype: "uint16", offset, scale: 0.01, nodata: 65535 }` |
+| `schloss-karlsberg/terrain/dtm1789.u16` | 1789 DTM, `h = offset + v · scale` (≤ 5 mm error, half the f32 size); `loadTerrain` decodes it |
+| `schloss-karlsberg/terrain/ground.u8` | 1789 ground classes |
+| `schloss-karlsberg/textures/<set>/{diff,nor_gl,arm}.jpg` | Poly Haven CC0 sets, 1024² / 1024² / 512² (pipeline Pillow, sips fallback) |
+
+- **Geometry from the catalogue** (`scripts/zone/castle.ts`, `footprint.ts`): footprint = raster outline of all placed buildings and 1789 terrain features, 20 m buffer, 125 m closing, corridors between remaining islands, ≤ 64 vertices, inside the terrain crop. Portal *Ehrenhof* on the palace axis ≥ 60 m west of the gate KB-B39, at the footprint edge, facing 260.5°; spawn 6 m inside the gate at TF-01 level + eye height, heading 80.5°.
+- **Drift:** if the catalogue changes, the export fails until `-- --update-source` rewrites footprint, portal, spawn and budget in `zone.json`; `viewer/tests/zone-package.test.ts` fails too. Review the diff before committing.
+- **Budget:** file bytes are measured. The module chunk (`--module-bytes`, default 1.5 MB gzip; measured entry + catalogue ≈ 0.5 MB) and triangles (`--triangles`, default 3.7 M) are declared. Triangles = the most drawn in view at the finest LOD, measured with `skb.inView()`: up to 3.63 M in the Rundflug (garden crowns), 0.9–1.9 M indoors. That is over the contract's 1.5 M, so `scripts/zone/package.ts` `TRIANGLES_WAIVER` lifts **only** that limit, up to 3.7 M ([ADR 0033](../../../docs/adr/0033-castle-module-zone.md)). Meanwhile the phone proxy (`app` `pnpm run perf:zone`) is the gate. Over a limit → the export fails.
+- **Shared trees:** with preset `trees: "shared"` the explorer hands `ctx.trees` (its AOI `trees` layer) to `mountZone`. `viewer/src/sharedTrees.ts` keeps a tree only outside the footprint and on 1789 forest, and gives it a species from the 1789 mix by its stable id [I]. Standalone (no explorer), none are drawn.

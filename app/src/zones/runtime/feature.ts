@@ -23,6 +23,7 @@ import { PortalMarker } from './marker';
 import { overworldPose, restoreRig, rigSnapshot } from './overworld';
 import type { RigSnapshot } from './overworld';
 import { ZONE_MODULES, zoneModuleNames } from './modules';
+import { overworldTreeSource } from './sharedTrees';
 import './zones.css';
 
 /** One portal for the minimap / tutorial. */
@@ -198,6 +199,8 @@ export function mountZones(h: FeatureHost): () => void {
         manifest: zone,
         tier: shell.tier(),
         footprintEN: zone.footprint.map(([E, N]) => [E, N] as [number, number]),
+        // V2.7: today's CHM trees around the footprint (the zone decides what it draws of them)
+        trees: zone.preset.trees === 'shared' ? overworldTreeSource(manifest, terrain.baseUrl) : undefined,
         release: () => container.remove(),
       };
     },
@@ -277,6 +280,9 @@ export function mountZones(h: FeatureHost): () => void {
     setPortals(portalInfos(zones));
   };
 
+  // a tier change while inside a zone reaches the zone (V2.7: the castle's HUD is tiered too)
+  const offTier = shell.onTier((t) => flow.handle()?.setTier?.(t));
+
   const offFrame = ctx.onFrame((dt) => {
     if (flow.state().phase !== 'overworld') return;
     for (const m of markers) m.update(dt, camera, terrain);
@@ -331,6 +337,7 @@ export function mountZones(h: FeatureHost): () => void {
     disposed = true;
     if (flow.state().phase !== 'overworld') flow.exit();
     window.removeEventListener('keydown', onKey, true);
+    offTier();
     offFrame();
     prompter.close();
     for (const m of markers) m.dispose();

@@ -22,6 +22,7 @@ pnpm run build                   # tsc --noEmit + vite build → dist/   (test +
 pnpm run plans [--only GR-01 --no-pdf]              # sheets → plans/out/, PNG previews → docs/plans-preview/ (headless Chrome via CHROME_BIN)
 pnpm run export                  # per-building glTF lod0/1/2 → model/out/
 pnpm run export:explorer         # light layer → ../../app/public/data/shared/karlsberg1789/ (needs viewer/public/terrain/)
+pnpm run export:zone [-- --update-source]   # zone package → ../../app/public/data/zones/ (zone.json source, docs/explorer-integration.md §5)
 pnpm run textures                # CC0 Poly Haven sets → viewer/public/textures/ (manifest viewer/textures.json)
 pnpm exec tsx scripts/catalogue-v2/build.ts         # regenerate model/catalogue.json (deterministic)
 pnpm exec tsx scripts/dev/ray.ts                    # diagnostics: raycasts through facade openings

@@ -139,7 +139,7 @@ export function burnInText(hour: number, attribution: string): { label: string; 
 }
 
 /**
- * The credit line of the live footer (ui.ts) and of the burned-in photo, as parts joined by " · " (the last one,
+ * The credit line of the live footer (hud.ts) and of the burned-in photo, as parts joined by " · " (the last one,
  * "Schauen, nicht graben", is bold in the footer). Wave-5 review: the photo's credit was shorter than the footer.
  */
 export function footerParts(attribution: string): string[] {

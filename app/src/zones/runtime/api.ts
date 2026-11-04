@@ -8,6 +8,7 @@
  */
 import type { WebGLRenderer } from 'three';
 import type { Pose, ZoneManifest } from '../contract';
+import type { ZoneTreeSource } from './sharedTrees';
 
 export type ZonePose = Pose;
 export type ZoneTier = 'standard' | 'entdecker' | 'labor';
@@ -26,6 +27,8 @@ export interface ZoneMountContext {
   quality?: ZoneQuality;
   /** Zone footprint (EPSG:25832 ring, CCW, no closing vertex). */
   footprintEN?: [number, number][];
+  /** Today's CHM trees of the overworld (preset `trees: "shared"` and an AOI `trees` layer); absent otherwise. */
+  trees?: ZoneTreeSource;
   /** Ask the host to leave (zone-own *Verlassen*); the host then calls `exit()` + `dispose()`. */
   onExit: () => void;
   /** Loading progress for the host's loading screen; `fraction` 0–1 of the zone's own work. */

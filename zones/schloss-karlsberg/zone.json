@@ -1,0 +1,151 @@
+{
+  "format": "sle-zone-v1",
+  "id": "schloss-karlsberg",
+  "kind": "reconstructed",
+  "name_de": "Schloss Karlsberg 1789",
+  "summary_de": "Zeitreise in den Sommer 1789: Herzog Karl II. August hat seine Residenz auf dem Karlsberg vollendet – Schloss, Gärten und die Karlslust, vier Jahre vor dem Brand. Alles hier ist eine begründete Hypothese aus alten Plänen, Ansichten und dem heutigen Gelände, kein Befund.",
+  "crs": "EPSG:25832",
+  "heightDatum": "DHHN2016",
+  "origin": {
+    "E0": 381000,
+    "N0": 5465000
+  },
+  "footprint": [
+    [382420, 5467070],
+    [382330, 5466840],
+    [382195, 5466865],
+    [382160, 5466850],
+    [382160, 5466465],
+    [382065, 5466310],
+    [382145, 5466220],
+    [382115, 5465950],
+    [381975, 5465905],
+    [381855, 5466110],
+    [381810, 5466130],
+    [381505, 5466130],
+    [381335, 5466300],
+    [381550, 5466410],
+    [381530, 5466520],
+    [381500, 5466560],
+    [381470, 5466570],
+    [381450, 5466550],
+    [381460, 5466430],
+    [381240, 5466350],
+    [381250, 5466300],
+    [381480, 5466100],
+    [381475, 5465845],
+    [381505, 5465770],
+    [381545, 5465775],
+    [381630, 5465865],
+    [381830, 5465820],
+    [381960, 5465830],
+    [382125, 5465915],
+    [382215, 5465720],
+    [382255, 5465700],
+    [382370, 5465725],
+    [382550, 5465475],
+    [382515, 5465350],
+    [382525, 5465305],
+    [382780, 5465275],
+    [382775, 5465030],
+    [382590, 5464780],
+    [382600, 5464745],
+    [382710, 5464575],
+    [383150, 5464630],
+    [383180, 5464650],
+    [383135, 5464790],
+    [383040, 5464965],
+    [382815, 5465015],
+    [382830, 5465300],
+    [382810, 5465340],
+    [382560, 5465535],
+    [382475, 5465845],
+    [382620, 5465895],
+    [382735, 5466005],
+    [382745, 5466115],
+    [382885, 5466215],
+    [383295, 5466260],
+    [383295, 5466305],
+    [382795, 5466250],
+    [382645, 5466465],
+    [382460, 5466450],
+    [382305, 5466580],
+    [382295, 5466750],
+    [382400, 5466870],
+    [382555, 5466850],
+    [382620, 5467020],
+    [382605, 5467070]
+  ],
+  "portals": [
+    {
+      "id": "ehrenhof",
+      "label_de": "Schloss betreten",
+      "E": 382132.1,
+      "N": 5466104.3,
+      "h": null,
+      "radius_m": 250,
+      "facing_deg": 260.5,
+      "spawn": "ehrenhof"
+    }
+  ],
+  "spawns": {
+    "ehrenhof": {
+      "E": 382198.4,
+      "N": 5466115.4,
+      "h": 346.45,
+      "heading_deg": 80.5,
+      "pitch_deg": 2,
+      "mode": "gehen"
+    }
+  },
+  "exit": {
+    "rule": "restore"
+  },
+  "runtime": {
+    "kind": "module",
+    "module": "schloss-karlsberg"
+  },
+  "assets": [],
+  "preset": {
+    "look": "kino",
+    "sky": "shared",
+    "trees": "shared",
+    "timeOfDay": {
+      "date": "1789-07-15",
+      "time": "17:30"
+    }
+  },
+  "attribution": [
+    "Rekonstruktion Schloss Karlsberg 1789 (Hypothese), eigenes Werk",
+    "Grundrisse teils nach Lageplan 2006, schloss-carlsberg.de (CC BY-SA 2.0 DE)",
+    "Gelände: © GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (1789-Gelände = Hypothese)",
+    "Texturen: Poly Haven (CC0)",
+    "Sterne: HYG 4.4, CC BY-SA 4.0"
+  ],
+  "evidence": {
+    "kind": "hypothesis",
+    "confidence": "med",
+    "perPart": "_CONF",
+    "sources_de": [
+      "Katalog v2 und Recherche research/01–11",
+      "Lageplan 2006, schloss-carlsberg.de (CC BY-SA 2.0 DE)",
+      "„Pleine vue du Carlsberg“ 1791 mit Legende (gemeinfrei)",
+      "Le Clerc 1790, „Vue du Château de Carlsberg“ (gemeinfrei)",
+      "Ruinenkarte 1805 (gemeinfrei)",
+      "J. C. von Mannlich, Lebenserinnerungen (Ausgabe 1910)",
+      "J. Schwan, Burgen und Schlösser 53 (2012)",
+      "Petri-Plan der Gärten nach R. Schneider, schloss-carlsberg.de",
+      "DGM1 LVGL-SL 2025: Geländespuren (research/03)",
+      "HMS/Matzerath 2022: nur Maße, keine Bilder (©)"
+    ],
+    "disclaimer_de": "Hypothetische Rekonstruktion, kein Befund. Schauen, nicht graben."
+  },
+  "capture": null,
+  "budget": {
+    "downloadBytes": 18712578,
+    "totalBytes": 18712578,
+    "triangles": 3700000,
+    "textureBytesGpu": 100663288
+  },
+  "generator": "zones/schloss-karlsberg export-zone"
+}

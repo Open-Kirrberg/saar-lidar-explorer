@@ -15,7 +15,8 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": { "@model/*": ["../zones/schloss-karlsberg/model/src/*"] }
   },
   "include": ["src", "scripts", "tests", "vite.config.ts"]
 }

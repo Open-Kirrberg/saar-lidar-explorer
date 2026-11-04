@@ -4,6 +4,8 @@ One line per shipped item, newest first. Numbers and details go in the commit me
 
 | Date | Item | What |
 |---|---|---|
+| 2026-11-04 | KB-I104 | 🏰 Zone #1 of the explorer: `zone.json` + `export:zone` package, `mountZone` on the shared renderer, Rundflug entry, today's CHM trees outside the footprint ([ADR 0033](../../docs/adr/0033-castle-module-zone.md)) |
+| 2026-11-04 | KB-I101 | 🎚️ UI by tiers: 1789 only, 8 „Gehe zu“ highlights, Gewissheit, one quality setting, Kino default; Vollmondnacht removed, festivals frozen |
 | 2026-11-04 | docs | 📚 README 1 524 → ≈ 70 lines, this changelog, backlog trimmed to open items; long forms frozen in `docs/history/` |
 | 2026-11-03 | cleanup | 🧹 Final cleanup after wave 11; improvement rounds paused |
 | 2026-11-02 | wave 11 | 🕯️ Garden-front relief, room hierarchy, carved heads; candle-lit rooms at night; HYG star table; field trees in context |

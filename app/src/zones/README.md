@@ -30,6 +30,9 @@ s = zoneSession(s, { type: 'exit' });                           // unmount, cam.
 | `feature.ts` | Standard feature `zone-portals`: loads zones, markers + labels, prompt (E), loading screen, *Verlassen* chrome, `zonePortals()` |
 | `builtin.ts` · `testRoom.ts` · `collide.ts` | 🧪 built-in *Testraum* (dev, `?aoi=fixture`, `?testraum`): procedural hut, walk collision |
 | `zones.css` | Loading info, zone chrome; hides the overworld shell while `#app.sle-zone-active` |
+| `sharedTrees.ts` | `overworldTreeSource(manifest, baseUrl)` → `ctx.trees.treesIn(bboxEN)`: today's CHM trees (AOI `trees` layer, chunk by chunk, failed chunks skipped) for zones with preset `trees: "shared"` (V2.7) |
+
+**🏰 Castle (V2.7, [ADR 0033](../../../docs/adr/0033-castle-module-zone.md)):** `modules.ts` maps `schloss-karlsberg` to `zones/schloss-karlsberg/viewer/src/zone/entry.ts`. Vite and tsconfig alias `@model` to the castle's `model/src`, dedupe `three` and allow `zones/` in `server.fs.allow`; `three-mesh-bvh` (castle colliders) is an app dependency. The castle has `hostChrome: false` (own HUD, M = Verlassen). `feature.ts` forwards the shell tier (`setTier`) and passes no `quality` (the castle picks `auto`). The castle's hooks are at `sle.zones.flow.handle().hooks` (`goto`, `step`, `inView`, …).
 
 ```text
  E / „Betreten“ ─▶ freeze overworld · save pose ─▶ loading (import() 0–10 %, mountZone 10–100 %) ─▶ zone owns frames
@@ -37,4 +40,6 @@ s = zoneSession(s, { type: 'exit' });                           // unmount, cam.
                       └──── restore pose exactly ◀────┴───────────────────────────────────────────────┘
 ```
 
-Tests: `tests/zones.test.ts` (fixture zone `tests/fixtures/zones/fixture/zone.json`, inside the `fixture` AOI: enter → zone → exit restores the pose). `tests/zoneRuntime.test.ts`: flow round trip, cancel / error paths, prompt hysteresis, rig restore, Testraum walls.
+**Perf:** `pnpm run perf:zone` (`scripts/perf-zone.mjs`, headless, needs a running preview with zone data; `--profile` adds a CPU profile of the goto) runs the phone proxy and desktop through enter → Rundflug → spawn → „Gehe zu“ Festsaal → walk → exit. JSON + shots go to `docs/shots/`.
+
+Tests: `tests/zones.test.ts` (fixture zone `tests/fixtures/zones/fixture/zone.json`, inside the `fixture` AOI: enter → zone → exit restores the pose). `tests/zoneRuntime.test.ts`: flow round trip, cancel / error paths, prompt hysteresis, rig restore, Testraum walls. `tests/zones-castle.test.ts`: the committed castle `zone.json` against the strict validator (triangle waiver only). `tests/zones-shared-trees.test.ts`: the tree source.
