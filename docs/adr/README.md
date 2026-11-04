@@ -37,6 +37,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0024](0024-rebuild-shell-keep-core.md) | Rebuild the shell, keep the core | Accepted | 2026-11-04 | |
 | [0026](0026-collapsed-attribution.md) | Collapsed attribution behind „© Quellen“ | Proposed | 2026-11-04 | (would: footer rule of 0013) |
 | [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh or Gaussian splats | Proposed | 2026-11-04 | |
+| [0029](0029-zones-same-bundle-folder-layout.md) | Zones run in the explorer bundle; zone sources in `zones/<id>/` | Accepted | 2026-11-04 | (ends: castle as separate app + URL handover) |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 

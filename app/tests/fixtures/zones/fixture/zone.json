@@ -1,0 +1,41 @@
+{
+  "format": "sle-zone-v1",
+  "id": "fixture",
+  "kind": "reconstructed",
+  "name_de": "Testhütte",
+  "summary_de": "Synthetische Testzone im Fixture-Gebiet (keine echten Daten).",
+  "crs": "EPSG:25832",
+  "heightDatum": "DHHN2016",
+  "origin": { "E0": 382000, "N0": 5466000 },
+  "footprint": [[382580, 5466580], [382620, 5466580], [382620, 5466620], [382580, 5466620], [382580, 5466580]],
+  "portals": [
+    { "id": "tuer", "label_de": "Hütte betreten", "E": 382600, "N": 5466570, "h": null,
+      "radius_m": 60, "facing_deg": 180, "spawn": "eingang" }
+  ],
+  "spawns": {
+    "eingang": { "E": 382600, "N": 5466585, "h": 301.7, "heading_deg": 0, "pitch_deg": 0, "mode": "gehen" }
+  },
+  "exit": { "rule": "restore" },
+  "runtime": { "kind": "gltf" },
+  "assets": [
+    { "id": "huette", "role": "scene", "bboxLocal": [[585, 290, -615], [615, 310, -585]],
+      "lods": [
+        { "path": "huette/lod0.glb", "until_m": 40, "bytes": 120000, "triangles": 2000 },
+        { "path": "huette/lod1.glb", "until_m": null, "bytes": 20000, "triangles": 200 }
+      ] },
+    { "id": "kollision", "role": "collider", "lods": [{ "path": "huette/collider.glb", "until_m": null, "bytes": 4000, "triangles": 12 }] }
+  ],
+  "preset": { "look": "dokumentation", "sky": "none", "trees": "none", "timeOfDay": { "date": "1789-07-15", "time": "12:00" } },
+  "attribution": ["Testzone, eigenes Werk (synthetisch)"],
+  "evidence": {
+    "kind": "hypothesis",
+    "confidence": "low",
+    "perPart": "extras",
+    "sources_de": ["keine (Testdaten)"],
+    "disclaimer_de": "Testzone, kein Befund. Schauen, nicht graben."
+  },
+  "capture": null,
+  "budget": { "downloadBytes": 24000, "totalBytes": 144000, "triangles": 2012, "textureBytesGpu": 0 },
+  "generated": "2026-11-04T00:00:00Z",
+  "generator": "hand-written fixture"
+}
