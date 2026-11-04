@@ -10,7 +10,7 @@ Sub-project of the Saar LiDAR Explorer. It is a researched, georeferenced recons
 |---|---|
 | ✅ Done | Research 01–11, catalogue v2, generator (exteriors, 7 interiors, 1789 site and gardens), viewer, plan sheets, explorer light layer + camera handover, improvement waves 0–11 |
 | ⏸️ Paused | Improvement rounds. Open items: [docs/improvement-backlog.md](docs/improvement-backlog.md) |
-| 🚧 Next (explorer v2) | Becomes **zone #1** behind a portal ([ADR 0015](../../docs/adr/0015-overworld-zones-portals.md), [0016](../../docs/adr/0016-zone-kinds-zone-contract.md)); UI trimmed to the tiers of [ADR 0019](../../docs/adr/0019-feature-tiers.md) / [0020](../../docs/adr/0020-remove-move-out-freeze.md) (1789 only, no 2025 switch, no Vollmondnacht, festivals frozen) |
+| ✅ Explorer v2 | **Zone #1** behind the Ehrenhof portal ([ADR 0033](../../docs/adr/0033-castle-module-zone.md)): Rundflug entry, 1789 only, tiered HUD, one quality setting, today's CHM trees outside the footprint; festivals, plan sheets and glTF export frozen ([ADR 0020](../../docs/adr/0020-remove-move-out-freeze.md)) |
 
 History: [CHANGELOG.md](CHANGELOG.md) · frozen long-form README and backlog: [docs/history/](docs/history/).
 
@@ -32,12 +32,14 @@ All commands (plans, glTF export, explorer light layer, textures, terrain prep, 
 | `Q` / `E` (PageDown / PageUp) | Down / up in Fliegen |
 | `Space` | Jump in Gehen |
 | `F` · `G` | Fliegen · Gehen |
-| `M` | Zurück zur Karte (explorer at the same pose) |
+| `M` | Zurück zur Karte (explorer at the same pose); in the explorer zone: Verlassen |
 | `P` | Foto (2× / 3× still with attribution and „Rekonstruktion – Hypothese“) |
 
-Panel: **▶ Rundflug** (≈ 70 s, Kino look), *Gehe zu* places and rooms, time of day, *Kino* / *Dokumentation* look, quality, confidence colours.
+Panel by tier (`?tier=standard|entdecker|labor`, default `labor`; [ADR 0019](../../docs/adr/0019-feature-tiers.md)): **Standard** *Gehe zu* (8 highlights), **▶ Rundflug** (≈ 70 s), Fliegen / Gehen; **Entdecker** + Foto, time of day, *Gewissheit*; **Labor** + all places and rooms, *Kino* / *Dokumentation*, photo options, stats. Kino is the default look; `?quality=auto|hoch|mittel|niedrig|mobil` (default `hoch`), `?intro=rundflug`. Phones (≤ 600 px) get a folding panel and ▲/▼ hold-to-move.
 
-**Test hooks:** `window.skb` with `goto`, `pose`, `step`, `set`, `look`, `quality`, `gpuBench`, `handover`, `backUrl`, `tour*`, `photo` and more (`Object.keys(window.skb)` lists them all). Automated tabs are often hidden, so drive frames with `skb.step(n)`. Explorer handover: `?src=explorer&E=…&N=…&h=…&heading=…&pitch=…&mode=fliegen|gehen&back=…` ([docs/explorer-integration.md](docs/explorer-integration.md)).
+**Zone runtime:** the explorer mounts the same viewer via `viewer/src/zone/entry.ts` `mountZone` ([architecture.md §6](docs/architecture.md#6-how-the-explorer-will-load-the-result), [ADR 0029](../../docs/adr/0029-zones-same-bundle-folder-layout.md)).
+
+**Test hooks:** `window.skb` with `goto`, `pose`, `step`, `set`, `look`, `quality`, `gpuBench`, `inView` (triangles drawn in the frustum, the zone budget's measure), `handover`, `backUrl`, `tour*`, `photo` and more; in the explorer the same hooks sit at `sle.zones.flow.handle().hooks` (`Object.keys(window.skb)` lists them all). Automated tabs are often hidden, so drive frames with `skb.step(n)`. Explorer handover: `?src=explorer&E=…&N=…&h=…&heading=…&pitch=…&mode=fliegen|gehen&back=…` ([docs/explorer-integration.md](docs/explorer-integration.md)).
 
 ## ⚖️ Principles
 

@@ -51,7 +51,7 @@ relative path. Vite `server.fs.allow` covers the whole sub-project. Use explicit
 | `model/src/context.ts`, `model/src/api.ts`, `model/src/index.ts` | core | BuildContext, material names, function types |
 | `model/tests/**` | core (+ anyone adding tests for core code) | vitest |
 | `scripts/**` | core; `export-glb.ts` and `export-explorer.ts` by **exterior** | |
-| `model/src/exterior/**`, `model/src/site/**`, `viewer/**` | **exterior + viewer** package | `viewer/src/main.ts` wires the viewer |
+| `model/src/exterior/**`, `model/src/site/**`, `viewer/**` | **exterior + viewer** package | `viewer/src/castle.ts` wires the viewer (zone runtime); `viewer/src/zone/entry.ts` `mountZone` for the explorer, `viewer/src/main.ts` the standalone page |
 | `model/src/interior/**` | **interiors** package | `index.ts`: `buildInterior` |
 | `plans/**` | **plans** package | `plans/src/main.ts`: CLI over `generatePlans` |
 | `viewer/public/textures/` | git-ignored, filled by `scripts/fetch-textures.sh` | manifest: `viewer/textures.json` (committed) |
@@ -250,7 +250,7 @@ Room polygons are in building-local `[s, t]`, so they survive footprint edits th
 every consumer uses; `inScene(items, year)` filters a list; `epochIssues(epoch)` is the `validate.ts` check (integer
 years, `from ≤ to`). `BuildOptions.year` (default 1789) is the scene year of a `BuildContext`. In the 1789 catalogue
 KB-B13 (Dec 1785 fair rotunda) and KL-B49 (1785 Hymen temple stage set) carry `epoch {from: 1785, to: 1785}`
-[D T1/T5/T6]. This is not the viewer's `state.epoch` ('1789' | '2025'), which only switches the terrain.
+[D T1/T5/T6]. The viewer has no terrain epoch switch any more (V2.7, ADR 0020: 1789 only).
 
 ### 4.2 Frames (`frame.ts`)
 ```ts
@@ -564,6 +564,26 @@ KB-I19/I20 `COLOR_0` = material colour × the builder's `aShade` (albedo variati
 0.6, `shadeColour`); the format is unchanged (≈ 5.6 MB, 388 k triangles). Camera
 handover runs in both directions through URL parameters (`viewer/src/handover.ts`). Both are specified in
 `docs/explorer-integration.md`.
+
+**Zone runtime (V2.7, [ADR 0029](../../../docs/adr/0029-zones-same-bundle-folder-layout.md)).** The explorer lazy-imports
+`viewer/src/zone/entry.ts` and calls `mountZone(ctx: ZoneMountContext): Promise<ZoneHandle>` (types in
+`viewer/src/zone/api.ts`, no imports from `app/`). `ctx`: `container` (the HUD and an own canvas go here; class-scoped
+`skb-` CSS, one injected `<style>`), `renderer?` (shared; absent = the zone makes its own), `baseUrl` (zone package
+with `terrain/`, `textures/`), `tier?` (`standard` | `entdecker` | `labor`, ADR 0019), `quality?` (`auto` | `hoch` |
+`mittel` | `niedrig` | `mobil` → `quality.ts` `castleQuality`), `trees?` + `footprintEN?` (shared CHM trees, used only
+outside the footprint and on 1789 forest: `sharedTrees.ts` `selectSharedTrees`, `Forest.setShared`), `onExit?` (M and
+„Verlassen“; absent = standalone „Zurück zur Karte“), `onProgress?`, `signal?`. `ZoneHandle`: `enter(spawn: ZonePose,
+{intro?})` (gehen → walk, dropped to the floor below; fliegen → the exact pose, lifted ≥ 1.5 m above the 1789
+ground), `exit(): ZonePose`, `frame(dt)` (host rAF; held while test hooks drive), `step(n?, dt?)`, `resize(w, h)`,
+`setTier`, `setQuality`, `highlights()` (`highlights.ts`, 8 entries), `goto(id)`, `hooks` (= `window.skb`),
+`dispose()`. `ZonePose` = `{E, N, h, heading_deg, pitch_deg, mode: 'gehen' | 'fliegen'}`, converted by
+`zone/pose.ts` through the handover helpers. A shared renderer's pixel ratio, size, shadow map (enabled, type,
+autoUpdate), tone mapping, exposure, output colour space, autoClear, clear colour / alpha, render target and
+`info.autoReset` are saved on `enter` and restored on `exit`; while not entered every listener is inert and the
+renderer is untouched. ADR 0020 removals: no epoch switch, no full-moon night (the sky date is 15 Jul 1789),
+shadows and clouds follow the quality preset (`QUALITY[p].shadows` / `.clouds`), haze, interiors and the adaptive
+scale are always on; Festbeleuchtung and „fest“ are frozen (code and `skb.set('festival' | 'fest', true)` kept, no
+control). The HUD is `hud.ts` (tiers, phone layout ≤ 600 px, ▲/▼ hold-to-move on coarse pointers, Kino default).
 
 ## 7. Coding rules and quality gates
 - **Pure logic is in `model/src/layout`, `frame.ts`, `spec.ts`, `validate.ts` and `catalogue.ts`.** It has no

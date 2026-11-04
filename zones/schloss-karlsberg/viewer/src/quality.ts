@@ -8,6 +8,9 @@
  *   (or below the device ratio on a non-retina one), so 1:1 screenshots stay deterministic.
  */
 
+import type { CloudMode } from './clouds.ts';
+import type { ZoneQuality } from './zone/api.ts';
+
 export type QualityPreset = 'hoch' | 'mittel' | 'mobil';
 
 /**
@@ -29,13 +32,18 @@ export interface QualitySettings {
   label_de: string;
   dprCap: number;
   shadowMapSize: number;
+  /** V2.7 (ADR 0020): the sun's shadow maps (near + far); no separate toggle any more */
+  shadows: boolean;
+  /** V2.7 (ADR 0020): fair-weather cumulus (clouds.ts CloudMode); haze, interiors and the adaptive scale are always on */
+  clouds: CloudMode;
   post: PostSettings;
 }
 
 export const QUALITY: Record<QualityPreset, QualitySettings> = {
-  hoch: { label_de: 'Hoch', dprCap: 1.5, shadowMapSize: 4096, post: { msaa: 4, ao: true, aoSamples: 12, bloom: true, ssr: true, smaa: false } },
-  mittel: { label_de: 'Mittel', dprCap: 1.25, shadowMapSize: 4096, post: { msaa: 4, ao: true, aoSamples: 8, bloom: true, ssr: true, smaa: false } },
-  mobil: { label_de: 'Mobil', dprCap: 1.0, shadowMapSize: 2048, post: { msaa: 4, ao: false, aoSamples: 0, bloom: false, ssr: false, smaa: false } },
+  hoch: { label_de: 'Hoch', dprCap: 1.5, shadowMapSize: 4096, shadows: true, clouds: 'air', post: { msaa: 4, ao: true, aoSamples: 12, bloom: true, ssr: true, smaa: false } },
+  mittel: { label_de: 'Mittel', dprCap: 1.25, shadowMapSize: 4096, shadows: true, clouds: 'air', post: { msaa: 4, ao: true, aoSamples: 8, bloom: true, ssr: true, smaa: false } },
+  // the cached shadow map costs only its lookups per frame; the cumulus raymarch is dropped on phones [I]
+  mobil: { label_de: 'Mobil', dprCap: 1.0, shadowMapSize: 2048, shadows: true, clouds: 'off', post: { msaa: 4, ao: false, aoSamples: 0, bloom: false, ssr: false, smaa: false } },
 };
 
 /** DPR cap for stills (photo mode, capture). */
@@ -43,6 +51,28 @@ export const PHOTO_DPR = 2;
 
 export function isPreset(x: unknown): x is QualityPreset {
   return x === 'hoch' || x === 'mittel' || x === 'mobil';
+}
+
+/**
+ * The explorer's quality level → castle preset (V2.7): `auto` = Mobil on a coarse pointer (phone, tablet), else
+ * Mittel; `niedrig` = Mobil (the castle has no lower preset). `env.dpr` is reserved for a later retina rule.
+ */
+export function castleQuality(q: ZoneQuality, env: { coarsePointer: boolean; dpr: number }): QualityPreset {
+  switch (q) {
+    case 'hoch':
+      return 'hoch';
+    case 'mittel':
+      return 'mittel';
+    case 'niedrig':
+    case 'mobil':
+      return 'mobil';
+    default:
+      return env.coarsePointer ? 'mobil' : 'mittel';
+  }
+}
+
+export function isZoneQuality(x: unknown): x is ZoneQuality {
+  return x === 'auto' || x === 'hoch' || x === 'mittel' || x === 'niedrig' || x === 'mobil';
 }
 
 /** Effective device pixel ratio: min(device, cap × adaptive scale), but never below min(device, 1). */

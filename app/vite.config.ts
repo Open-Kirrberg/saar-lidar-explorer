@@ -14,8 +14,10 @@ const PUBLIC_DATA_DIR = join(PUBLIC_DIR, 'data');
 const SHARED_DATA_DIR = join(PUBLIC_DATA_DIR, 'shared');
 /** Leftover F21 3D-print exports (moved to the sle-print repo; STL/3MF/PNG, GBs) — never part of dist. */
 const PRINT_DATA_DIR = join(PUBLIC_DATA_DIR, 'print');
+/** Generated zone packages (`pnpm run export:zone`, zone contract; the castle alone ≈ 19 MB). */
+const ZONES_DATA_DIR = join(PUBLIC_DATA_DIR, 'zones');
 /** Data dirs under public/data that stay out of dist besides the AOI datasets. */
-const NON_DIST_DATA_DIRS = new Set([SHARED_DATA_DIR, PRINT_DATA_DIR]);
+const NON_DIST_DATA_DIRS = new Set([SHARED_DATA_DIR, PRINT_DATA_DIR, ZONES_DATA_DIR]);
 
 /**
  * The single data directory served at `<base>/data/` by `pnpm dev`, `pnpm preview` and
@@ -133,15 +135,15 @@ function publicWithoutAoiData(): Plugin {
       if (!existsSync(PUBLIC_DIR)) return;
       cpSync(PUBLIC_DIR, outDir, {
         recursive: true,
-        // AOI datasets, the shared datasets (F19, data/shared/) and the 3D-print exports
-        // (data/print/) stay in the data dir.
+        // AOI datasets, the shared datasets (F19, data/shared/), the zone packages (data/zones/)
+        // and the 3D-print exports (data/print/) stay in the data dir.
         // The public build ships no data at all (it lives in the data repositories).
         filter: (src) =>
           !(PUBLIC_BUILD && normalize(src) === PUBLIC_DATA_DIR) &&
           !(normalize(src).startsWith(PUBLIC_DATA_DIR + sep) && (NON_DIST_DATA_DIRS.has(normalize(src)) || isAoiDir(src))),
       });
       const skipped = existsSync(PUBLIC_DATA_DIR)
-        ? readdirSync(PUBLIC_DATA_DIR).filter((d) => isAoiDir(join(PUBLIC_DATA_DIR, d)))
+        ? readdirSync(PUBLIC_DATA_DIR).filter((d) => isAoiDir(join(PUBLIC_DATA_DIR, d)) || NON_DIST_DATA_DIRS.has(join(PUBLIC_DATA_DIR, d)))
         : [];
       if (skipped.length) console.log(`[sle] not copied to dist (served from the data dir or VITE_DATA_URL): ${skipped.join(', ')}`);
     },
@@ -201,9 +203,22 @@ function lanHttpsNotice(): Plugin {
   };
 }
 
+/**
+ * V2.7 module zones (ADR 0029, 0033): `src/zones/runtime/modules.ts` lazy-imports the castle runtime from
+ * `../zones/schloss-karlsberg/`. Its `@model` alias, one copy of three / three-mesh-bvh (the app's,
+ * so the shared WebGLRenderer and the castle's scene agree) and dev-server access to the folder.
+ */
+const REPO_ROOT = resolve(import.meta.dirname, '..');
+const CASTLE_DIR = join(REPO_ROOT, 'zones', 'schloss-karlsberg');
+
 export default defineConfig({
   // Relative base so the build works from any sub-path; the public build uses its absolute path.
   base: PUBLIC_BUILD ? PUBLIC_BASE : './',
+  resolve: {
+    alias: { '@model': join(CASTLE_DIR, 'model', 'src') },
+    dedupe: ['three', 'three-mesh-bvh'],
+  },
+  server: { fs: { allow: [REPO_ROOT] } },
   worker: { format: 'es', plugins: () => [bundleGuard()] },
   build: { target: 'es2022', chunkSizeWarningLimit: 1500, copyPublicDir: false },
   plugins: [bundleGuard(), publicWithoutAoiData(), devDataDir(), ...(LAN_HTTPS ? [basicSsl({ name: 'sle-lan' }), lanHttpsNotice()] : [])],

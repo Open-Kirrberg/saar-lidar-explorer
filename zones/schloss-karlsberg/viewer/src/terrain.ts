@@ -26,10 +26,23 @@ export interface TerrainMeta {
     /** KB-I96: cells where the tree planners' base ground differs from ground.u8 (landcover.ts plannerBaseGround) */
     plannerBase?: { skip: string[]; runs: [number, number, number, number][] };
   };
-  /** ground = summer 1789 (land cover, KB-I09); ground2025 = today's canopy (absent in pre-KB-I09 terrain) */
-  files: { dtm2025: string; dtm1789: string; ground: string; ground2025?: string };
+  /**
+   * ground = summer 1789 (land cover, KB-I09); ground2025 = today's canopy (absent in pre-KB-I09 terrain).
+   * The zone package (scripts/export-zone.ts) ships 1789 only: no dtm2025 / ground2025.
+   */
+  files: { dtm2025?: string; dtm1789: string; ground: string; ground2025?: string };
+  /** Absent = float32 little-endian heights. The zone package quantises dtm1789 (h = offset + v · scale). */
+  encoding?: { dtm1789?: HeightEncoding };
   attribution: string;
   h_range: [number, number];
+}
+
+/** uint16 heights: h = offset + v · scale; v = nodata → NaN. */
+export interface HeightEncoding {
+  dtype: 'uint16';
+  offset: number;
+  scale: number;
+  nodata: number;
 }
 
 export type TerrainEpoch = '1789' | '2025';
@@ -84,16 +97,40 @@ export class TerrainData {
   }
 }
 
-export async function loadTerrain(base = './terrain/'): Promise<TerrainData> {
-  const meta = (await (await fetch(`${base}meta.json`)).json()) as TerrainMeta;
-  const [a, b, c, d] = await Promise.all([
-    fetch(`${base}${meta.files.dtm1789}`).then((r) => r.arrayBuffer()),
-    fetch(`${base}${meta.files.dtm2025}`).then((r) => r.arrayBuffer()),
-    fetch(`${base}${meta.files.ground}`).then((r) => r.arrayBuffer()),
-    meta.files.ground2025 ? fetch(`${base}${meta.files.ground2025}`).then((r) => r.arrayBuffer()) : Promise.resolve(null),
-  ]);
-  const g1789 = new Uint8Array(c);
-  return new TerrainData(meta, new Float32Array(a), new Float32Array(b), g1789, d ? new Uint8Array(d) : g1789);
+/** Height grid from its file bytes: float32 (no encoding) or uint16 per `enc`; checks the cell count. */
+export function decodeHeights(buf: ArrayBuffer, cells: number, enc?: HeightEncoding): Float32Array {
+  if (!enc) {
+    if (buf.byteLength !== cells * 4) throw new Error(`terrain: float32 grid has ${buf.byteLength} B, expected ${cells * 4}`);
+    return new Float32Array(buf);
+  }
+  if (enc.dtype !== 'uint16' || !Number.isFinite(enc.offset) || !(enc.scale > 0)) throw new Error(`terrain: unsupported height encoding ${JSON.stringify(enc)}`);
+  if (buf.byteLength !== cells * 2) throw new Error(`terrain: uint16 grid has ${buf.byteLength} B, expected ${cells * 2}`);
+  const v = new Uint16Array(buf);
+  const h = new Float32Array(cells);
+  for (let i = 0; i < cells; i++) h[i] = v[i] === enc.nodata ? NaN : enc.offset + v[i] * enc.scale;
+  return h;
+}
+
+/**
+ * Terrain of the viewer (viewer/public/terrain/) or of the zone package (<zone>/terrain/). Loads 1789 only unless
+ * `with2025` (the 2025 grids then stand in for themselves, else h2025 / ground2025 = the 1789 arrays).
+ */
+export async function loadTerrain(base = './terrain/', opts: { signal?: AbortSignal; with2025?: boolean } = {}): Promise<TerrainData> {
+  const get = async (file: string): Promise<Response> => {
+    const r = await fetch(`${base}${file}`, { signal: opts.signal });
+    if (!r.ok) throw new Error(`terrain: ${base}${file} → HTTP ${r.status}`);
+    return r;
+  };
+  const meta = (await (await get('meta.json')).json()) as TerrainMeta;
+  const f = meta.files;
+  const want2025 = opts.with2025 === true;
+  if (want2025 && !f.dtm2025) throw new Error(`terrain: ${base}meta.json has no dtm2025 (zone package = 1789 only)`);
+  const buf = (file: string | undefined): Promise<ArrayBuffer | null> => (file ? get(file).then((r) => r.arrayBuffer()) : Promise.resolve(null));
+  const [a, b, c, d] = await Promise.all([buf(f.dtm1789), buf(want2025 ? f.dtm2025 : undefined), buf(f.ground), buf(want2025 ? f.ground2025 : undefined)]);
+  const cells = meta.grid.cols * meta.grid.rows;
+  const h1789 = decodeHeights(a!, cells, meta.encoding?.dtm1789);
+  const g1789 = new Uint8Array(c!);
+  return new TerrainData(meta, h1789, b ? decodeHeights(b, cells) : h1789, g1789, d ? new Uint8Array(d) : g1789);
 }
 
 /**

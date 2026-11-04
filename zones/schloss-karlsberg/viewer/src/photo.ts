@@ -31,6 +31,8 @@ export interface PhotoHost {
   setStill(on: boolean): void;
   hour(): number;
   attribution: string;
+  /** View size in CSS pixels (V2.7: the zone's resize(), not the window). */
+  viewSize(): [number, number];
 }
 
 export interface PhotoResult {
@@ -152,9 +154,10 @@ export async function takePhoto(host: PhotoHost, opts: PhotoOptions, onProgress?
   try {
     host.prepare();
     const focus = opts.dof ? Math.max(1, host.focus()) : Infinity;
-    const size = photoSize(innerWidth, innerHeight, opts.scale, maxSide);
+    const [vw, vh] = host.viewSize();
+    const size = photoSize(vw, vh, opts.scale, maxSide);
     renderer.setPixelRatio(size.scale);
-    renderer.setSize(innerWidth, innerHeight, false);
+    renderer.setSize(vw, vh, false);
     const bw = renderer.domElement.width;
     const bh = renderer.domElement.height;
     // wave-7 review: far focus (wide shots) keeps the foreground sharp (photoMath.ts PHOTO_DOF)

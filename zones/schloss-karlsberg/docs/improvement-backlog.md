@@ -12,10 +12,10 @@ The explorer v2 drives these items. Order and acceptance: explorer backlog **V2.
 
 | Id | Item | Status | Why |
 |---|---|---|---|
-| KB-I101 | Trim the viewer UI to the tiers: 1789 only (drop the 2025 terrain switch), drop *Vollmondnacht* and the shadow / haze / cloud / resolution / interior toggles (into quality), „Gehe zu“ ≈ 8 highlights, Kino default | `[ ]` | [ADR 0019](../../../docs/adr/0019-feature-tiers.md), [0020](../../../docs/adr/0020-remove-move-out-freeze.md) |
-| KB-I102 | Trees without popping: stable id per tree, LOD by cross-fade (no reseeding between mid / close / hero tiers), lower wind sway; CHM trees outside the modelled area | `[ ]` | [ADR 0017](../../../docs/adr/0017-real-trees-from-chm.md) |
-| KB-I103 | Reference-phone budget: 30 fps on a 2021 mid-range phone (today tuned for a retina Mac) | `[ ]` | [ADR 0014](../../../docs/adr/0014-audience-scope-devices.md) |
-| KB-I104 | Package the castle per the zone contract (portal, spawn, loading screen) | ⏳ zone contract (V2.6) | [ADR 0016](../../../docs/adr/0016-zone-kinds-zone-contract.md) |
+| KB-I102 | Trees without popping: stable id per tree, LOD by cross-fade (no reseeding between mid / close / hero tiers), lower wind sway | `[~]` CHM trees outside the footprint done (V2.7) | [ADR 0017](../../../docs/adr/0017-real-trees-from-chm.md) |
+| KB-I103 | Phone budget: phone proxy 30 fps everywhere. V2.7 run: Rundflug 58 fps, spawn 60, Festsaal walk 27–56 | `[~]` | [ADR 0028](../../../docs/adr/0028-phone-proxy-headroom.md) |
+| KB-I105 | Garden-crown impostors (far crowns as cards or billboards) to bring the triangles in view from 3.63 M to ≤ 1.5 M, then drop `TRIANGLES_WAIVER` | `[ ]` | [ADR 0033](../../../docs/adr/0033-castle-module-zone.md) |
+| KB-I106 | First-visit hitch: on the phone proxy, „Gehe zu“ into a room stalls 0.2–4.8 s (CPU profile: shader program compiles, synchronous LOD2 / interior builds). Precompile with `renderer.compileAsync` during loading, spread LOD2 builds over frames | `[ ]` | [ADR 0028](../../../docs/adr/0028-phone-proxy-headroom.md) |
 
 ## 📋 Open from waves 0–11
 

@@ -18,12 +18,13 @@
  *   far  = crown-only small clump clusters (1 draw call), solitary trunks, no shadow casting.
  */
 import * as THREE from 'three';
-import { hashString, mulberry32 } from '@model/layout/geom.ts';
+import { hashString, mulberry32, pointInPolygon } from '@model/layout/geom.ts';
 import { unitCrown, unitDome } from '@model/site/trees.ts';
 import { EDGE_BAND, edgeWeight, forestCrownForm, isForestStandSpecies } from './crownForm.ts';
 import { DEFAULT_FOREST_MIX, FOREST_SPECIES, GROUND_CLASS, forestPlan, hayCockPlan, openTreePlan, plannerBaseGround, tileKey, type ForestSpecies, type ForestTree } from './landcover.ts';
 import { HINTERLAND_SPECIES, hinterlandPlan, type HinterlandKind, type HinterlandPlan, type LandcoverParcel } from './hinterland.ts';
 import type { TerrainData } from './terrain.ts';
+import { type LocalSharedTree, type Ring, sharedScale, sharedSpecies } from './sharedTrees.ts';
 import { CARD_ORDER, FOREST_CARD_CAP, FOREST_CARD_FAR, FOREST_FRINGE, fringeMaterial, leafCardGeometry } from './leafCards.ts';
 
 /** Tile edge (m): 256-512 m per skb-schlossgarten performance.md; 320 m keeps ~35 forest tiles in the crop. */
@@ -227,6 +228,20 @@ export class Forest {
     this.rebuild();
   }
 
+  /**
+   * V2.7 zone mode: the explorer's shared CHM trees outside the modelled area (sharedTrees.ts selectSharedTrees). The
+   * castle's own canopy / standard trees outside the rings become ghosts (they keep their tile stream, so every other
+   * tree keeps its looks) and the shared trees are added with their own streams (`own`). null = the own forest only.
+   */
+  private shared: { trees: readonly LocalSharedTree[]; rings: readonly Ring[] } | null = null;
+  setShared(trees: readonly LocalSharedTree[] | null, modelledRings: readonly Ring[] = []): void {
+    if (!trees && !this.shared) return;
+    this.shared = trees ? { trees, rings: modelledRings } : null;
+    this.rebuild();
+  }
+  /** Shared trees drawn (diagnostics: `skb.forest.sharedCount`). */
+  sharedCount = 0;
+
   /** The last tree plan in grid metres, ghosts included (diagnostics: `skb.forest.plan`). */
   plan: Planned[] = [];
 
@@ -275,6 +290,14 @@ export class Forest {
     const plan: Planned[] = forestPlan(gg, { mix: DEFAULT_FOREST_MIX, seed: 1789 });
     // forest-edge trees: direction toward the open land (their crowns lean out, crownForm.ts)
     for (const p of plan) if ((p.role === 'canopy' || p.role === 'standard') && p.edge < EDGE_BAND) p.out = outward(gg, p.gx, p.gy, p.edge);
+    const shared = this.shared;
+    if (shared) {
+      const rings = shared.rings.filter((r) => r.length >= 3) as [number, number][][];
+      for (let i = 0; i < plan.length; i++) {
+        const p = plan[i];
+        if ((p.role === 'canopy' || p.role === 'standard') && !rings.some((r) => pointInPolygon([ox + p.gx, oz + p.gy], r))) plan[i] = { ...p, ghost: true };
+      }
+    }
     if (t.epoch === '1789') {
       // KB-I96 (wave-11 review fix): the open-land planners take their seeded order from the base ground (without the
       // land cover painted over it since, e.g. the wave-11 Gewann fill); a tree whose cell changed is kept as a `ghost`
@@ -311,6 +334,16 @@ export class Forest {
         plan.push(...ghostIfRepainted(h.trees));
         this.hinterland = h.summary;
       }
+    }
+    this.sharedCount = 0;
+    if (shared) {
+      for (const st of shared.trees) {
+        const species = sharedSpecies(st.id);
+        const gx = st.x - ox;
+        const gy = st.z - oz;
+        plan.push({ gx, gy, x: gx, z: gy, species, scale: sharedScale(species, st.h), role: 'canopy', edge: EDGE_BAND * 4, own: true });
+      }
+      this.sharedCount = shared.trees.length;
     }
     this.plan = plan;
     const buckets = new Map<string, Planned[]>();

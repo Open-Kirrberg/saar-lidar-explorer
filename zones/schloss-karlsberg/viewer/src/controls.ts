@@ -35,46 +35,118 @@ export class Controls {
   private tmpBox = new THREE.Box3();
   private seg = new THREE.Line3();
 
+  /**
+   * V2.7 zone runtime: input is read only while enabled (the zone is entered); every listener is removed by dispose().
+   * Disabling clears held keys and the touch drive and releases the pointer lock.
+   */
+  private on = false;
+  get enabled(): boolean {
+    return this.on;
+  }
+  set enabled(v: boolean) {
+    if (v === this.on) return;
+    this.on = v;
+    this.keys.clear();
+    this.touchFwd = 0;
+    this.drag = false;
+    this.touches.clear();
+    if (v) {
+      this.prevTouchAction = this.dom.style.touchAction;
+      this.dom.style.touchAction = 'none';
+    } else {
+      this.dom.style.touchAction = this.prevTouchAction;
+      if (document.pointerLockElement === this.dom) document.exitPointerLock();
+    }
+  }
+  /** Hold-to-move buttons on coarse pointers (hud.ts): +1 forward, −1 back. */
+  touchFwd = 0;
+  private drag = false;
+  private touches = new Map<number, { x: number; y: number }>();
+  private prevTouchAction = '';
+  private removers: (() => void)[] = [];
+
   constructor(
     public camera: THREE.PerspectiveCamera,
     public dom: HTMLElement,
   ) {
-    addEventListener('keydown', (e) => {
+    const listen = <K extends keyof HTMLElementEventMap>(t: Window | HTMLElement, type: K, fn: (e: HTMLElementEventMap[K]) => void, opts?: AddEventListenerOptions) => {
+      const h = (e: Event) => {
+        if (this.on) fn(e as HTMLElementEventMap[K]);
+      };
+      t.addEventListener(type, h, opts);
+      this.removers.push(() => t.removeEventListener(type, h, opts));
+    };
+    listen(window, 'keydown', (e) => {
       if (isTyping()) return;
       this.keys.add(e.code);
       if (e.code === 'KeyG') this.setMode('walk');
       if (e.code === 'KeyF') this.setMode('fly');
     });
-    addEventListener('keyup', (e) => this.keys.delete(e.code));
-    addEventListener('blur', () => this.keys.clear());
-    dom.addEventListener('dblclick', () => {
+    listen(window, 'keyup', (e) => this.keys.delete(e.code));
+    listen(window, 'blur', () => this.keys.clear());
+    listen(dom, 'dblclick', () => {
       if (document.pointerLockElement !== dom) dom.requestPointerLock?.();
     });
-    addEventListener('mousemove', (e) => {
+    listen(window, 'mousemove', (e) => {
       if (document.pointerLockElement !== dom) return;
       this.yaw -= e.movementX * 0.0022;
       this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch - e.movementY * 0.0022));
     });
-    // drag-look without pointer lock (right mouse)
-    let drag = false;
-    dom.addEventListener('mousedown', (e) => {
-      if (e.button === 2 || e.button === 0) drag = true;
+    // drag-look without pointer lock (left or right mouse)
+    listen(dom, 'mousedown', (e) => {
+      if (e.button === 2 || e.button === 0) this.drag = true;
     });
-    addEventListener('mouseup', () => (drag = false));
-    dom.addEventListener('contextmenu', (e) => e.preventDefault());
-    dom.addEventListener('mousemove', (e) => {
-      if (!drag || document.pointerLockElement === dom) return;
+    listen(window, 'mouseup', () => (this.drag = false));
+    listen(dom, 'contextmenu', (e) => e.preventDefault());
+    listen(dom, 'mousemove', (e) => {
+      if (!this.drag || document.pointerLockElement === dom) return;
       this.yaw -= e.movementX * 0.004;
       this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch - e.movementY * 0.004));
     });
-    dom.addEventListener('wheel', (e) => {
-      if (this.mode !== 'fly') return;
-      const dir = new THREE.Vector3();
-      this.camera.getWorldDirection(dir);
-      const agl = this.agl();
-      this.camera.position.addScaledVector(dir, -Math.sign(e.deltaY) * Math.max(2, agl * 0.15));
-      e.preventDefault();
-    }, { passive: false });
+    // V2.7 phone: one-finger drag looks around (pointer events; mouse keeps the handlers above)
+    listen(dom, 'pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    });
+    listen(dom, 'pointermove', (e) => {
+      if (e.pointerType !== 'touch') return;
+      const t = this.touches.get(e.pointerId);
+      if (!t || this.touches.size !== 1) return;
+      const dx = e.clientX - t.x;
+      const dy = e.clientY - t.y;
+      t.x = e.clientX;
+      t.y = e.clientY;
+      this.yaw += dx * 0.005; // drag the view: the scene follows the finger
+      this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch + dy * 0.005));
+    });
+    const lift = (e: PointerEvent) => {
+      if (e.pointerType === 'touch') this.touches.delete(e.pointerId);
+    };
+    listen(dom, 'pointerup', lift);
+    listen(dom, 'pointercancel', lift);
+    listen(
+      dom,
+      'wheel',
+      (e) => {
+        if (this.mode !== 'fly') return;
+        const dir = new THREE.Vector3();
+        this.camera.getWorldDirection(dir);
+        const agl = this.agl();
+        this.camera.position.addScaledVector(dir, -Math.sign(e.deltaY) * Math.max(2, agl * 0.15));
+        e.preventDefault();
+      },
+      { passive: false },
+    );
+  }
+
+  /** Remove every listener (zone dispose). */
+  dispose(): void {
+    this.enabled = false;
+    for (const r of this.removers) r();
+    this.removers = [];
+    this.bvh = null;
+    this.bvhMesh?.geometry.dispose();
+    this.bvhMesh = null;
   }
 
   setMode(m: Mode): void {
@@ -160,7 +232,7 @@ export class Controls {
   update(dt: number): void {
     dt = Math.min(dt, 0.1);
     const k = this.keys;
-    const fwd = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
+    const fwd = Math.max(-1, Math.min(1, (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) + this.touchFwd));
     const right = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
     const up = (k.has('KeyE') || k.has('PageUp') ? 1 : 0) - (k.has('KeyQ') || k.has('PageDown') ? 1 : 0);
     const fast = k.has('ShiftLeft') || k.has('ShiftRight');

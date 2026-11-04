@@ -48,7 +48,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Skill:** `sle-pipeline`, `sle-renderer`
 
 ## V2.7 — Castle as zone #1 🏰
-- [ ] **Approach:** castle viewer behind the portal (1789 only), Kino look default, Rundflug as entry, „Gehe zu“ ≈ 8 highlights, *Gewissheit* control; shared sky + trees.
+- [x] **Approach:** castle viewer behind the portal (1789 only), Kino look default, Rundflug as entry, „Gehe zu“ ≈ 8 highlights, *Gewissheit* control; shared sky + trees.
 - **Acceptance:** U1 end-to-end on the phone.
 - **Skill:** castle skills in `zones/schloss-karlsberg/.claude/skills/`
 
@@ -58,7 +58,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Acceptance:** U3 works; one command from footage to zone; time per zone recorded.
 
 ## V2.9 — Tutorial + attribution ✨
-- [~] **Approach:** first-flight tutorial (replaces intro + tour); resolve [0026](../../../../docs/adr/0026-collapsed-attribution.md) „© Quellen“ (Q-33) before release.
+- [x] **Approach:** first-flight tutorial (replaces intro + tour); resolve [0026](../../../../docs/adr/0026-collapsed-attribution.md) „© Quellen“ (Q-33) before release.
 - **Acceptance:** a new user reaches the castle without help (hallway test with 2 people).
 
 ## V2.10 — Release v2 🚀
@@ -78,4 +78,6 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - V2.4b: far LOD costs ≈ 100 draw calls on desktop (merge far tiles if a device struggles); dither grain visible on crowns mid-fade; relief is bare beyond tree range (3 km Hoch, 1050 m Mobil); castle does not yet use `decodeTrees`; no trunk collision. Proxy runs were loaded by a sibling's `pgtool` job, so absolute ms are inflated.
 - V2.5: the aerial ground (`ortho`, 1000 px per chunk) fills the terrain texture budget (≈ 200 MB phone, 600 MB desktop vs 78–213 MB with relief) → distant terrain coarsens sooner; candidate for the perf pass. Phone bar has 7–8 items (34–45 px). A lab overlay parked in Standard is off after a reload.
 - V2.9: walkthrough passes only the fallback end state („Du bist am Schloss Karlsberg“) until the castle portal exists (V2.7) → rerun `pnpm run first-run` after the V2.7 merge, then tick. Not checked: `prefers-reduced-motion`; on phones the *Orte* sheet stays open after picking the castle — does the „Betreten“ prompt show above it? Q-33 closed by ADR 0026.
+- V2.7: phone proxy Festsaal walk 27–56 fps; first visit to a place stalls ≤ 4.8 s (shader compiles + room geometry at once, castle KB-I106); cold enter ≈ 27 s on 4G; Rundflug ≤ 3.63 M triangles (ADR 0033 waiver 3.7 M vs contract 1.5 M; far crown stand-ins KB-I105). The castle package is generated: `cd zones/schloss-karlsberg && pnpm run export:zone` (without it the portal is absent).
+- V2.9 walkthrough after V2.7: `pnpm run first-run` PASS into the castle — 390 px touch 4 actions, desktop 5 actions.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).
