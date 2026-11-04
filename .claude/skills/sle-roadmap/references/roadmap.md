@@ -21,7 +21,7 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Skill:** `sle-renderer`, `sle-pipeline`
 
 ## V2.2 — New shell + tiers 🧹
-- [ ] **Why:** "zero structure"; new users should see ≈ 8 controls.
+- [x] **Why:** "zero structure"; new users should see ≈ 8 controls.
 - **Approach:** new `app/src/shell/` per [0019](../../../../docs/adr/0019-feature-tiers.md) + [0024](../../../../docs/adr/0024-rebuild-shell-keep-core.md): HUD, tier setting (Standard / Entdecker / Labor), keybind button → roomy dialog, disclaimer banner, settings. Desktop and phone layouts from one component set. Existing features plug into their tier; nothing is hidden by CSS only.
 - **Acceptance:** Standard shows only the 🟢 column; Labor reaches every v1 analysis tool; a11y kept (focus rings, labels, contrast); screenshots desktop + 390 px.
 - **Skill:** `sle-renderer`
@@ -72,4 +72,5 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - V2.1: *Vollmondnacht*, shadow/cloud/resolution toggles never existed in the explorer (castle-only); only *Dunst* was removed.
 - Castle vitest: heavy builds time out at 5 s under parallel load → `testTimeout: 30_000`.
 - V2.0 proxy throttles CPU only; phone GPU fill rate is not modelled → keep pixel ratio caps conservative. Worktree data symlinks show as untracked (`/data/` patterns don't match symlinks) — never `git add -A` in sibling worktrees.
+- V2.2: downgrading a tier reloads the page when a v1 module has no teardown (hash keeps the view); Labor is cramped on phones; „aerial ground“ default comes with V2.5.
 - Automated Chrome tabs are often "hidden" → rAF paused; use `window.sle.step()` (it fires `sle:step`; any new rAF-driven overlay must listen to it).

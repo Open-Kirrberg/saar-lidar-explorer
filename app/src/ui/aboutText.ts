@@ -54,6 +54,11 @@ export const LINK_ONLY_HOSTS: readonly string[] = [
   'www.w3.org',
   'github.com',
   'docs.github.com',
+  // „Quellen und Lizenzen“ dialog (ADR 0026): licence and dataset links
+  'creativecommons.org',
+  'de.wikipedia.org',
+  'geobasis-rlp.de',
+  'www.shop.lvgl.saarland.de',
 ];
 
 /** Hosts of the deployment itself (site + data repositories on GitHub Pages) and local dev. */

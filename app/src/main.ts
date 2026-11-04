@@ -4,7 +4,6 @@ import { DroneController } from './controls/DroneController';
 import type { FlyToOptions } from './controls/DroneController';
 import { TouchController } from './controls/TouchController';
 import type { NavigationMode } from './controls/TouchController';
-import { bindLongPressContext } from './controls/touchContext';
 import { DecodePool } from './data/DecodePool';
 import { loadManifest } from './data/manifest';
 import type { Manifest } from './data/manifest';
@@ -18,14 +17,10 @@ import type { StreamStats } from './terrain/Terrain';
 import { resolveStartAoi } from './ui/startAoi';
 import { bindDisplayState } from './ui/displayState';
 import { createRefinedFlyTo } from './ui/flyTo';
-import { createGui } from './ui/gui';
-import { initFeatures } from './ui/features';
-import { createHud } from './ui/hud';
-import { createSettingsRuntime, initPolish } from './ui/polish';
-import { createReliefPanel } from './ui/reliefPanel';
 import { browserStorage, loadSettings, saveSettings, settingsStatePatch } from './ui/settings';
-import { progressPending, terrainPending } from './ui/streaming';
 import type { LoadProgressLike } from './ui/streaming';
+import { createSettingsRuntime, createShell } from './shell/Shell';
+import type { ShellApi } from './shell/types';
 import './ui/style.css';
 
 /** Everything other modules (minimap, markers, POIs) need. Also exposed as `window.sle`. */
@@ -52,6 +47,13 @@ export interface AppContext {
   touch: TouchController;
   /** F20: 'touch' = map gestures for fingers (default), 'drone' = fingers drag-look like the mouse. */
   setNavigationMode(mode: NavigationMode): void;
+  /**
+   * v2 shell (ADR 0032): tiers, feature registry, slots (minimap, lens, overlay, tutorial),
+   * dialogs, prompt / loading screen. See app/README.md „Shell“.
+   */
+  shell: ShellApi;
+  /** Run `cb(dt)` every frame right after the controller update (before render). Returns an unsubscribe. */
+  onFrame(cb: (dt: number) => void): () => void;
 }
 
 declare global {
@@ -90,6 +92,8 @@ async function main(): Promise<void> {
 
   const pool = new DecodePool();
   const terrain = new Terrain(manifest, baseUrl, pool);
+  terrain.imageAnisotropy = renderer.capabilities.getMaxAnisotropy();
+  terrain.renderer = renderer; // GPU apron patches for image layers (seam fix), all tiers
   scene.add(terrain);
 
   const store = createStore({ layer: terrain.defaultDisplay() });
@@ -158,32 +162,9 @@ async function main(): Promise<void> {
     ['E', 'N', 'h', 'heading', 'pitch'],
   );
 
-  // ---- UI -----------------------------------------------------------------------------------
-  const attribution = $('#attribution');
-  attribution.textContent =
-    `${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''} · ${manifest.attribution}`;
-  // The footer wraps to 2–3 lines on normal desktops (long dl-de/ODbL credits): publish its height
-  // so the toolbar, minimap and panel sit above it instead of covering it (--footer-h in CSS).
-  const syncFooterH = () =>
-    document.documentElement.style.setProperty('--footer-h', `${Math.ceil(attribution.getBoundingClientRect().height)}px`);
-  new ResizeObserver(syncFooterH).observe(attribution);
-  syncFooterH();
-
-  const debug = { showFps: false };
-  let fps = 0;
   // F9: loading never blocks once the first terrain is drawable; the rest shows in the HUD.
   let loadProgress: LoadProgressLike | null = null;
   let loadDone = false;
-  createHud($('#hud'), store, {
-    speedMultiplier: () => controller.speedMultiplier,
-    fps: () => fps,
-    showFps: () => debug.showFps,
-    pending: () => Math.max(progressPending(loadProgress, loadDone), terrainPending(terrain) ?? 0),
-    helpVisible: settings.get().hudHelp,
-    onHelpToggle: (v) => settings.patch({ hudHelp: v }),
-  });
-  createGui({ container: $('#panel'), store, terrain, controller, renderer, debug, onFlightChange: (p) => settings.patch(p) });
-  const relief = createReliefPanel({ container: $('#panel'), hud: $('#hud'), store, terrain, renderer, camera });
 
   const lockHint = $('#lock-hint');
   const crosshair = document.createElement('div');
@@ -211,7 +192,13 @@ async function main(): Promise<void> {
   // F20: touch gestures drive the same controller pose (exaggeration-aware picks via pickAt).
   const touch = new TouchController(controller, renderer.domElement, (x, y) => pickAt(x, y)?.point ?? null, terrain);
 
+  const frameHooks = new Set<(dt: number) => void>();
   const ctx: AppContext = {
+    shell: null as unknown as ShellApi, // set right below, before any feature mounts
+    onFrame(cb) {
+      frameHooks.add(cb);
+      return () => frameHooks.delete(cb);
+    },
     manifest,
     store,
     terrain,
@@ -230,17 +217,19 @@ async function main(): Promise<void> {
     },
   };
   window.sle = ctx;
-  const features = initFeatures(ctx); // minimap, POIs, Fundmarker, disclaimer (src/map, src/pois, src/markers)
-  bindLongPressContext(touch, { markers: features.markers, measure: () => window.sleMeasure }); // F20 long-press
-  // 🧊 F20 "Mein Standort" is frozen (ADR 0020): initLocate() is not called, getLocate() stays null.
-  // Final polish: settings card, quality presets, share, introduction, tour, a11y helpers.
-  initPolish(ctx, { settings, kv, labels: features.labels, applyPreset: (id) => relief.applyPresetById(id), resize, minimap: features.minimap, relief }); // F20: + simple (mobile) layout
+  // v2 shell: HUD, action bar, drawers, dialogs, „© Quellen“ and the tier-gated feature registry
+  // (minimap, places, markers, OSM paths, buildings … see src/shell/builtins.ts).
+  ctx.shell = createShell(ctx, {
+    settings,
+    kv,
+    resize,
+    loadProgress: () => ({ progress: loadProgress, done: loadDone }),
+    areaNote: `Gebiet: ${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''}`,
+  });
 
   // ---- frame loop -----------------------------------------------------------------------------
   const timer = new Timer();
   timer.connect(document);
-  let fpsFrames = 0;
-  let fpsT0 = performance.now();
   const r1 = (v: number) => Math.round(v * 10) / 10;
 
   const syncStore = () => {
@@ -264,6 +253,7 @@ async function main(): Promise<void> {
   function frame(dt: number): void {
     touch.update(dt); // F20: touch inertia / double-tap zoom (before terrain following)
     controller.update(dt);
+    for (const h of frameHooks) h(dt);
     sky.position.copy(camera.position);
     terrain.update(camera);
     renderer.render(scene, camera);
@@ -273,13 +263,6 @@ async function main(): Promise<void> {
   renderer.setAnimationLoop((t) => {
     timer.update(t);
     frame(timer.getDelta());
-    fpsFrames++;
-    const now = performance.now();
-    if (now - fpsT0 > 500) {
-      fps = (fpsFrames * 1000) / (now - fpsT0);
-      fpsFrames = 0;
-      fpsT0 = now;
-    }
   });
 
   // ---- load terrain ---------------------------------------------------------------------------

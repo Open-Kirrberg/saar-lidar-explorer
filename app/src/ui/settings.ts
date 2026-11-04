@@ -66,6 +66,9 @@ export const PREF_KEYS: readonly string[] = [
   'sle.pointcloud.v1',
   'sle.pois.v1',
   'sle.candidates.prefs.v1',
+  'sle.tier.v1', // v2 shell: feature tier (Standard / Entdecker / Labor)
+  'sle.shell.v1', // v2 shell: last open drawer
+  'sle.tutorial.v1', // v2 shell: first-flight tutorial done (V2.9) → shown again after a reset
 ];
 
 /** Keys (or key prefixes) with private user data that a settings reset must never delete. */
