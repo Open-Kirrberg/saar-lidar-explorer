@@ -39,7 +39,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0030](0030-conifer-fill-trees.md) | Conifer fill trees: estimated, flagged | Accepted | 2026-11-04 | |
 | [0034](0034-tree-lod-rank-prefix-dither.md) | Tree LOD: rank prefixes, dithered cross-fade, cones far | Accepted | 2026-11-04 | |
 | [0026](0026-collapsed-attribution.md) | Collapsed attribution behind „© Quellen“ | Accepted | 2026-11-04 | 0013 (footer rule) |
-| [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh or Gaussian splats | Proposed | 2026-11-04 | |
+| [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh first, splats later | Accepted | 2026-11-04 | |
 | [0029](0029-zones-same-bundle-folder-layout.md) | Zones run in the explorer bundle; zone sources in `zones/<id>/` | Accepted | 2026-11-04 | (ends: castle as separate app + URL handover) |
 | [0032](0032-shell-layout-tier-registry.md) | Shell layout and tier-gated feature registry | Accepted | 2026-11-04 | v1 Einfach layout, intro overlay |
 | [0035](0035-relikt-blick-lens-channel.md) | *Relikt-Blick* as a third terrain channel; the game look leaves the relief lab alone | Accepted | 2026-11-04 | |
@@ -47,6 +47,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0037](0037-zone-runtime-host.md) | Zone runtime host: shared renderer, frame ownership, built-in Testraum | Accepted | 2026-11-04 | |
 | [0038](0038-first-flight-tutorial.md) | First-flight tutorial: five self-completing steps to the castle, v1 tour stays in Entdecker | Accepted | 2026-11-04 | v1 intro overlay (removed in V2.2) |
 | [0033](0033-castle-module-zone.md) | Castle as module zone #1: own HUD, shared trees, triangle waiver | Accepted | 2026-11-04 | castle URL handover from the explorer, 1789/2025 switch |
+| [0039](0039-capture-tool-beside-video2world.md) | Shared capture tool in `tools/capture/`; castle `video2world/` stays as HMS evidence | Accepted | 2026-11-04 | 0029 (video2world line) |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 

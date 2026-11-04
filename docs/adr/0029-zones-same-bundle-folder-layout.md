@@ -1,6 +1,6 @@
 # 0029 · 🧩 Zones run in the explorer bundle; zone sources live in `zones/<id>/`
 
-- **Status:** Accepted · 2026-11-04
+- **Status:** Accepted · 2026-11-04 · `video2world/` line superseded by [0039](0039-capture-tool-beside-video2world.md)
 - **Origin:** V2.6 · follows [0015](0015-overworld-zones-portals.md), [0016](0016-zone-kinds-zone-contract.md)
 
 ## Context
