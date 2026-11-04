@@ -214,8 +214,9 @@ export type SourceKind = 'live-hillshade' | 'live-slope' | 'live-lrm' | 'layer' 
  * Shader source ids (`uBaseSrc` / `uOvlSrc`). Keep in sync with terrain.frag.glsl.
  * ImageA/ImageB: an `rgb` image layer (F13/F14) bound to slot A/B — a colour, not a value (no
  * stretch/colormap, never part of the auto-contrast value pass).
+ * LayerC/ImageC: the Relikt-Blick lens channel (V2.5, `uLensSrc`), slot C, mixed over base + overlay.
  */
-export const ShaderSource = { Off: -1, Hillshade: 0, Slope: 1, LocalRelief: 2, LayerA: 3, LayerB: 4, ImageA: 5, ImageB: 6 } as const;
+export const ShaderSource = { Off: -1, Hillshade: 0, Slope: 1, LocalRelief: 2, LayerA: 3, LayerB: 4, ImageA: 5, ImageB: 6, LayerC: 7, ImageC: 8 } as const;
 
 export const LIVE_SOURCES: Record<string, { kind: SourceKind; label: string; unit?: string }> = {
   'live-hillshade': { kind: 'live-hillshade', label: 'Schummerung (live)' },

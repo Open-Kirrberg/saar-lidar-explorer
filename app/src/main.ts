@@ -20,6 +20,7 @@ import { createRefinedFlyTo } from './ui/flyTo';
 import { browserStorage, loadSettings, saveSettings, settingsStatePatch } from './ui/settings';
 import type { LoadProgressLike } from './ui/streaming';
 import { createSettingsRuntime, createShell } from './shell/Shell';
+import { registerLens } from './lens';
 import type { ShellApi } from './shell/types';
 import './ui/style.css';
 
@@ -226,6 +227,7 @@ async function main(): Promise<void> {
     loadProgress: () => ({ progress: loadProgress, done: loadDone }),
     areaNote: `Gebiet: ${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''}`,
   });
+  registerLens(ctx); // V2.5: game look + Relikt-Blick lens (src/lens, ADR 0035)
 
   // ---- frame loop -----------------------------------------------------------------------------
   const timer = new Timer();

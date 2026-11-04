@@ -48,7 +48,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
     hud: true,
   },
   { group: 'Flug', keys: ['Gamepad'], label: 'Sticks fliegen/umsehen · LT/RT sinken/steigen · LB/RB Tempo', codes: [] },
-  // ---- Ansicht (reliefPanel) ----
+  // ---- Ansicht (lens, reliefPanel) ----
+  { group: 'Ansicht', keys: ['F'], label: 'Relikt-Blick ein/aus (Bäume weg, Relief, mögliche Relikte)', short: 'Relikt-Blick', codes: ['KeyF'], hud: true, feature: 'lens' },
   { group: 'Ansicht', keys: ['1–9', '0'], label: 'Reliefdarstellung wählen', short: 'Relief', codes: [...digits('Digit'), ...digits('Numpad')], hud: true, feature: 'relief-lab' },
   { group: 'Ansicht', keys: ['Umschalt + 1–6'], label: 'Kombination (Relikte suchen, Gräben, Mauern …)', short: 'Kombination', codes: [], hud: true, feature: 'relief-lab' },
   { group: 'Ansicht', keys: ['B'], label: 'Überlagerung ein/aus', short: 'Überlagerung', codes: ['KeyB'], hud: true, feature: 'relief-lab' },

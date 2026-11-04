@@ -52,6 +52,7 @@ URL parameters:
 | `Shift` + `1`–`N` | Relief combination preset (4 relief presets, plus *Luftbild × Relief* / *Karte 1840 ↔ Relief* when the AOI has those images) |
 | `B` | Overlay on/off (last overlay layer, default Lokales Relief) |
 | `V` | Forest: aus → transparent → voll |
+| `F` | *Relikt-Blick* lens on/off: trees fade, relief over the aerial ground, possible relicts glow (all tiers; see *Spiel-Look & Relikt-Blick*) |
 | `K` | Automatic contrast (percentile stretch) |
 | `O` | Wege (OSM) in 3D on/off (only if the manifest has `vectors.osm`) |
 | `G` | Gebäude (LoD2) in 3D on/off (only if the manifest has `models.buildings`; default on) |
@@ -114,7 +115,7 @@ src/
     budget.ts             pure (F9): per-chunk GPU bytes, LRU eviction plan, adaptive refinement threshold
     latestBuild.ts        pure: one-build-at-a-time runner (pre-F9 AOI-wide low-pass; no longer used by Terrain)
     skirts.ts             pure: per-chunk edge deviation between LODs, exaggeration-scaled skirt depth
-    TerrainChunk.ts       R32F height texture (502², incl. apron), layer textures (2 slots), mesh, CanopyPart
+    TerrainChunk.ts       R32F height texture (502², incl. apron), layer textures (3 slots: base, overlay, lens), mesh, CanopyPart
     TerrainMaterial.ts    shared/per-chunk uniforms, terrain + canopy materials
     relief.ts             pure: modes + shortcuts, image modes, colormaps, stretch/gamma, percentile stretch, blend modes,
                           presets (+ image presets), image ↔ relief slider mapping
@@ -122,7 +123,7 @@ src/
     imageApron.ts         `rgb` image textures with a 1-texel apron (OffscreenCanvas compose, GPU strip patches)
     imageSides.ts         pure: chunk sides / apron UV for image layers
     heightSample.glsl     shared GLSL: 12-texel bilinear height + gradient, hillshade, fog
-    terrain.vert/.frag    GLSL3: vertex displacement; per-pixel normals; base + overlay channel, blend, value pass
+    terrain.vert/.frag    GLSL3: vertex displacement; per-pixel normals; base + overlay channel, blend, lens channel + glow rings, value pass
     canopy.frag.glsl      DSM surface coloured by CHM (DSM − DTM), sun-lit, discards < Mindesthöhe and over buildings (R0.7 `bldg`)
     gridGeometry.ts       shared LOD grids (1/2/4/10 m) with skirts, in height-pixel space
     HeightQuery.ts        CPU bilinear heights (with apron), mosaic, ray marcher; LevelHeights over all levels
@@ -168,6 +169,11 @@ src/
        streaming.ts (pure: pending count for "Lade Details …", fly-to refinement rule),
        displayState.ts (store ⇄ Terrain bridge for overlay/opacity/forest), reliefPanel.ts + relief.css ("Darstellung"), gui.ts (lil-gui "Flug & Technik"; LOD/Debug folder in dev only), style.css (base vars), features.css + polish.css (card/toast/a11y styles), Labels3D.ts, disclaimer.ts, about.ts, panelSection.ts,
        mobileMode.ts (pure: auto Mobil quality, touch gestures list), quality.ts, settings.ts, shortcuts.ts, contextLoss.ts (WebGL context loss → reload)
+  lens/ V2.5 game look + Relikt-Blick (see *Spiel-Look & Relikt-Blick*): lensState.ts (pure: 0.5 s progress, staggered blend curve),
+       variants.ts (pure: relief / LRM / slope + Zeitreise 1840 / 1935), glow.ts (pure: glow pool, look-ahead centre, nearest ≤ 24, pack, pick),
+       merken.ts (pure: hypothesis card text, candidate → private marker + note), targets.ts (pure: `setLensFade` registry),
+       layout.ts (pure: card clear of the splash corner), look.ts (aerial ground in Standard/Entdecker, Labor restores),
+       Lens.ts (toggle, key F, card, chips, frame loop), index.ts, lens.css
   shell/ V2.2 game shell (see *Shell*): Shell.ts (layout, bar, drawers, dialogs wiring, walk mode, extension APIs), registry.ts (pure tier-gated
        feature registry), tiers.ts (pure), attribution.ts (pure: source rows, splash timer), flight.ts (pure: walk height, speed steps), builtins.ts
        (the v1 features as registry entries), host.ts (per-feature wrappers), hud.ts, sources.ts („© Quellen“), dialog.ts, dialogs.ts, dom.ts, types.ts, shell.css
@@ -257,8 +263,10 @@ desktop                                        phone (≤ 600 px)
 | `reconstruction`, `tour` | 🟡 entdecker | | *Werkzeuge* cards (Rekonstruktion 1789, Tour) |
 | `relief-lab`, `flight-tech`, `hud-full` | 🔴 labor | | *Darstellung*, *Flug & Technik*, NN/Kurs/E/N/fps HUD rows |
 | `candidates`, `marker-tool`, `measure` | 🔴 labor | | F15 review, Markieren + F18 Meldung, F17 Messen |
+| `look`, `lens` | 🟢 standard | | V2.5 aerial-photo ground; *Relikt-Blick* toggle in `slots.lens` (key F) |
+| `lens-variants` | 🟡 entdecker | | V2.5 lens chips in the tool row (only if the AOI has > 1 variant) |
 
-Standard shows: Fliegen/Gehen, Tempo − / +, Orte, Teilen (+ QR), Steuerung, Einstellungen, minimap, „© Quellen“ (+ the lens slot for V2.5).
+Standard shows: Fliegen/Gehen, Tempo − / +, Orte, *Relikt-Blick*, Teilen (+ QR), Steuerung, Einstellungen, minimap, „© Quellen“.
 
 **Rules.** A feature below the current tier is *unmounted* (its wrapper DOM removed, its teardown run), never hidden by CSS. v1 modules without a teardown (global keys) cause a reload on downgrade (toast „Stufe …: wird neu geladen …“; the hash keeps the view); upgrades mount live. `Gehen` keeps the eye `1.7 m` (display) over `terrain.collisionGround`, `×1` speed, pitch −5°; any flight key switches back to fly. The splash („Schauen, nicht graben“ + short source lines) collapses after 8 s or on ×; canvas interaction collapses it only after 5 s; „© Quellen“ (≥ 44 px, `z-index` above drawers and the full-screen map) opens *Quellen und Lizenzen* (manifest rows verbatim + dataset URIs + NOTICE.md link).
 
@@ -280,9 +288,40 @@ ctx.onFrame((dt) => …): () => void   // runs after controller.update, before r
 ```
 
 - Minimap (V2.3): `registerFeature({ id: 'minimap', replaces: 'minimap', tier: 'standard', … })` and render into `h.shell.slots.minimap`; set `h.services.minimap` if markers should sync.
-- Lens (V2.5): a Standard feature that appends its toggle to `shell.slots.lens` (it then shows in the bar); variants as an Entdecker feature with a `settings` section.
+- Lens (V2.5): a Standard feature that appends its toggle to `shell.slots.lens` (it then shows in the bar; `slots.lens` is shared, so the feature removes its button on teardown); variants as an Entdecker feature with chips in `h.tools`.
 - Keys: pass `shortcuts` rows (with `feature: id`) so the *Steuerung* dialog lists them while mounted; bind keys yourself with `isTyping()` and `modalOpen()` guards.
 - Tests: `tests/shell.test.ts` (tiers, registry incl. async/stale mounts and reload-needed, attribution rows + splash timer, walk/speed, keybind rows).
+
+## Spiel-Look & Relikt-Blick (V2.5) 🔍
+
+[ADR 0018](../docs/adr/0018-game-look-relikt-blick-lens.md) (look) · [ADR 0035](../docs/adr/0035-relikt-blick-lens-channel.md) (lens channel, glow, *Merken*). Code in `src/lens/`.
+
+| Part | Standard / Entdecker | Labor |
+|---|---|---|
+| Ground | aerial photo `ortho` (`look`; AOIs without it keep the old default); a lab overlay is parked | relief lab exactly as before (`store.layer` / overlay restored) |
+| *Relikt-Blick* (`lens`, key `F`, button in the bar) | trees fade → relief blends in → candidates glow | same toggle, over whatever the lab shows |
+| Variants (`lens-variants`, Entdecker+) | chips in the tool row while the lens is on: *Relief*, *Senken & Wälle*, *Hangkanten*, *Zeitreise* 1840 / 1935 | same |
+
+```text
+progress p: 0 ──────────── 0.5 s ────────────▶ 1   (backwards when off; 0.15 s with reduced motion)
+trees fade   ███████████████████░░░░░░░░░░░░   p 0 … 0.6
+relief mix         ░░░░████████████████████░░░   p 0.15 … 0.85  (× variant strength, 0.88–0.92)
+glow                         ░░░░░████████████   p 0.5 … 1
+```
+
+- **Channel:** slot C of the terrain shader (`Terrain.setLens({ key, colormap?, stretch?, shade?, tint? })`, `uLensMix`). It never touches base/overlay, the store, the URL hash or saved settings. Slot C streams like the overlay but does not hold back finer chunks (`isComplete` ignores it).
+- **Glow:** up to 24 rings (`uGlow[]` = world x, z, radius, strength), drawn in the terrain fragment shader (no extra draw calls), pulsing, radius ≥ 8 px at any distance. Cost control: a bounding circle of all rings (`uGlowBound`, `glowBound()`) lets most fragments skip the loop, and each ring is tested by squared distance before any `sqrt`/`exp` (pixel-identical to the plain loop at 2880 × 1800). Pool = F15 candidates of the public classes, score ≥ 0.5, linear ones along a known path dropped, not *verworfen* in the local review. Selection = nearest to the point the camera looks at (≤ 350 m ahead), re-selected every 0.25 s once the camera moved 8 m / turned 4° (or after 2 s). Candidates are loaded on the first lens-on (reuses `window.sleCandidates` when F15 is mounted).
+- **Card + *Merken*:** tap/click a ring (5 px mouse / 12 px touch tolerance) → card with the hypothesis title („Mögliche Grube?“), *eine Hypothese, kein Fund*, up to 3 measures + score, a private note field and *Schauen, nicht graben*. *Merken* writes a marker into `sle.markers.v1` (title „Mögliche … (Relikt-Blick)“, category from the class, note = tag + hypothesis + user note + caution line, parcel from the local lookup). Tapping again edits the note. Markers from F15 *bestätigen* count as already saved. No route, no own location. The card lifts itself above the start splash / „© Quellen“ corner while they would overlap (`layout.ts`; on phones the splash otherwise hid *Merken* in its first 8 s).
+- **Lens targets** (trees, zone props): anything that should vanish implements one method. `window.sleTrees` (V2.4b) is picked up without registering, and the DSM canopy is wired internally.
+
+```ts
+const off = window.sleLens?.registerLensTarget({ setLensFade(f) { mesh.material.opacity = 1 - f; mesh.visible = f < 1; } });
+// f: 0 = normal … 1 = gone; called on change only, current value applied on register; off() resets to 0
+window.sleLens?.onChange(() => …); window.sleLens?.setOn(true); window.sleLens?.setVariant('hist_1840');
+```
+
+- **API** (`window.sleLens`): `isOn`, `setOn`, `toggle`, `progress`, `mix`, `variant`, `setVariant`, `variants`, `registerLensTarget`, `glowing()` (ids), `open(id)`, `onChange`. The lens is off after a reload; the chosen variant persists (`sle.lens.v1`).
+- **Tests:** `tests/lens.test.ts` (state machine, blend curve, variants + tier fallback, glow pool/centre/selection/packing/picking + bounding circle, card text + layout, Merken → marker → reload round trip, dedupe, lens targets, look).
 
 ## Relief lab (Darstellung)
 
@@ -480,7 +519,7 @@ pnpm run perf                                  # phone proxy + desktop; JSON + s
 pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 ```
 
-**Method** (`scripts/perf-proxy.mjs`, puppeteer-core with the system Chrome, headed so rAF runs and WebGL uses the real GPU; not part of the bundle):
+**Method** (`scripts/perf-proxy.mjs`, puppeteer-core with the system Chrome, headless by default since b1023b4 (`--headed` for the V2.0 method: headed so rAF runs and WebGL uses the real GPU — compare like with like); not part of the bundle):
 
 | Step | What |
 |---|---|
@@ -515,6 +554,22 @@ pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 - `--uncapped` (vsync off) exists but gave inconsistent rAF numbers; don't use it for baselines.
 - Console: 404s for absent AOIs (`homburg`, `kirrberg`) and `print/` (F21) probes — expected, no other errors.
 
+**V2.5 game look + lens** (2026-11-04, `?aoi=overall`, same host, **headless** Chrome since b1023b4 (ANGLE Metal, real GPU), `pnpm run perf -- --lens both`, one run, no other perf run in parallel):
+
+| Profile | View | step ms lens off → on | rAF fps off / on | terrain GPU MB off / on | calls off / on |
+|---|---|---|---|---|---|
+| 📱 phone | Kirrberg church | 4.3 → 4.2 | 60 / 59 | 198 / 196 | 28 / 28 |
+| 📱 phone | Forest, Karlsberg plateau | 3.5 → 4.0 | 60 / 60 | 198 / 199 | 25 / 22 |
+| 📱 phone | Schloss Karlsberg | 2.6 → 2.8 | 60 / 60 | 199 / 199 | 11 / 11 |
+| 🖥️ desktop | Kirrberg church | 4.4 → 5.0 | 60 / 60 | 558 / 579 | 75 / 75 |
+| 🖥️ desktop | Forest, Karlsberg plateau | 3.9 → 4.5 | 60 / 60 | 599 / 599 | 55 / 55 |
+| 🖥️ desktop | Schloss Karlsberg | 3.1 → 6.0 | 60 / 60 | 596 / 598 | 39 / 39 |
+
+- 60 fps = the headless rAF cap everywhere; `step ms` stays far below the 33 ms budget. Not a phone number: the proxy's GPU is the M4 Max.
+- **The aerial ground fills the terrain texture budget.** `ortho` has 1000 px per 500 m chunk (RGBA8 + mips ≈ 5.4 MB vs. 0.25 MB for a u8 relief layer), so terrain GPU sits at the budget (≈ 200 MB phone, 600 MB desktop) instead of 78–213 MB with the relief look. The budget logic coarsens the far terrain earlier. This is the visible price of [ADR 0018](../docs/adr/0018-game-look-relikt-blick-lens.md).
+- The lens itself adds ≤ 3 ms (desktop, 24 rings near the castle at 2880 × 1800). Most of that is the ring loop, which was tightened (see *Spiel-Look & Relikt-Blick*).
+- Runs that overlapped another session's perf script were 2–5× slower and were discarded. Compare only runs without parallel GPU load.
+
 ## Known gaps
 
 - Messen (F17): no editing of finished measurements (delete + redraw); no measurement import; the rubber band is a straight (not draped) preview; the area is horizontal only (no 3D surface area). Exports are not written by the Export button in automated checks (GeoJSON content was checked via `measurementsToGeoJSON`).
@@ -523,7 +578,8 @@ pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 - Punktwolke (F16): no eye-dome lighting; point bytes (10 B GPU + 10 B CPU per resident point) are not counted in the terrain's GPU estimate/LRU; *Gelände ausblenden* also pauses auto contrast while on; colour modes Höhe/ü. Grund/Intensität, the point-size slider and frame pacing while tiles stream in flight were not checked. Areas exist only where the pipeline wrote them (`overall`: all three, `karlsberg`: Schloss Karlsberg; `homburg` after a rebuild, `kirrberg` none).
 - Rekonstruktion 1789 (F19): only the one dataset `shared/karlsberg1789/` is looked up (no discovery of other `shared/<id>/`); no distance fade/LOD (≈ 340 k triangles always drawn while on); where today's LoD2 buildings stand inside the model both are drawn (no masking); the model is not hidden by the canopy; skirts reach 0.5 m below the 2025 DTM, so at high exaggeration they sink visibly deeper into ruin pits (by design). Browser rendering, frame time and the round trip with the viewer were not verified in this build step.
 - Mobile (F20): nothing tested on a real phone (see *Touch (F20)* / *Mein Standort*). A long-press marker leaves Markieren on, and it opens the form by a synthetic canvas tap because `MarkerManager.openForm` is private (a public `openDraftAt(E, N, h)` would fix both). The Markieren hint still mentions keys and clicks. The lil-gui panels (*Darstellung*, *Flug & Technik*) still render 245 px wide inside the 320 px drawer. After *Mein Standort* the camera sits ≈ 200 m above the ground under it (150 m is relative to the target). The compass ignores magnetic declination (≈ 2–3°). The desktop canvas now has `touch-action: none`.
-- Shell (V2.2): Labor is not blocked on phones but is cramped there (long drawer); the v1 minimap chrome (small header buttons, < 44 px) stays until V2.3; the default „aerial ground“ look is V2.5's; the tutorial and zone prompt/loading APIs have no caller yet (checked once via `window.sle.shell` in the browser); live flight feel of *Gehen* and real frame pacing were not checked (hidden tab, `step()`).
+- Shell (V2.2): Labor is not blocked on phones but is cramped there (long drawer); the v1 minimap chrome (small header buttons, < 44 px) stays until V2.3; the tutorial and zone prompt/loading APIs have no caller yet (checked once via `window.sle.shell` in the browser); live flight feel of *Gehen* and real frame pacing were not checked (hidden tab, `step()`).
+- Lens (V2.5): tree fading is wired via lens targets, but the V2.4b trees are not in this build (only the DSM canopy fades, which is off by default). A lab overlay parked in Standard is off after a reload. With the lens, the phone bar has 7–8 items (34–45 px wide at 360–390 px; a *Mehr* menu is for the reference-phone pass). The glow is a terrain-shader loop (≤ 24 rings), so its cost on a real phone GPU is unknown (proxy only). Live flight feel with the lens on was not checked.
 - Buildings: bases are matched to the 1 m DTM only; where a coarser terrain level is drawn (far field) the ground may sit slightly off the bases (not measured). Buildings are not pickable. A few LoD2 buildings keep a gap > 0.5 m where the pipeline's 5 m skirt cap applies (2 Karlsberg / 20 overall).
 
 - Live local relief: where a same-level neighbour is not resident, the band within *Relief-Radius* of that edge uses the coarser level's heights (approximate) until the neighbour arrives.
