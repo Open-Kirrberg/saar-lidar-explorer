@@ -35,6 +35,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0022](0022-local-first-no-accounts.md) | Local-first, no accounts | Accepted | 2026-11-04 | |
 | [0023](0023-multiplayer-trystero-v4.md) | Multiplayer via Trystero in v4 | Accepted | 2026-11-04 | |
 | [0024](0024-rebuild-shell-keep-core.md) | Rebuild the shell, keep the core | Accepted | 2026-11-04 | |
+| [0030](0030-conifer-fill-trees.md) | Conifer fill trees: estimated, flagged | Accepted | 2026-11-04 | |
 | [0026](0026-collapsed-attribution.md) | Collapsed attribution behind „© Quellen“ | Proposed | 2026-11-04 | (would: footer rule of 0013) |
 | [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh or Gaussian splats | Proposed | 2026-11-04 | |
 | **📚 Meta** | | | | |

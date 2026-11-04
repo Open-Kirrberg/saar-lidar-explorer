@@ -2,7 +2,7 @@
 
 The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (git-ignored). The app (`app/`) loads them via `fetch('data/<aoi>/manifest.json')`. Both sides must follow this file; change it only together with a `CHANGELOG.md` line (and an ADR if the change is a decision, e.g. a new layer kind).
 
-**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`.
+**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid.
 
 ## Coordinate frames
 
@@ -635,6 +635,64 @@ Paths are written with the level number substituted (`levels/2/dtm/{i}_{j}.png`)
 | geometry | shared per LOD spacing, not per chunk | ≈ 0 |
 
 Typical chunk (DTM + 2 resident layers) ≈ **1.5 MB**, with canopy ≈ 2.5 MB, worst case (all 9 level-0 layers + DSM + low-pass) ≈ 5.3 MB. No mipmaps (data textures use Nearest/Linear without mips). The JS heap keeps a ~1 MB Float32 copy of each height texture (HeightQuery, skirts). Overall AOI, everything resident: level 0 ≈ 290 MB (≈ 480 MB with canopy), levels 1–4 (65 chunks) ≈ 100 MB — far below the 1.5 GB acceptance bound. The app still enforces an explicit budget so larger AOIs stay bounded: 600 MiB soft (hard cap 1400 MiB), LRU eviction, coarsest level pinned (`app/src/terrain/budget.ts`); measured peak on an overall flight 382.6 MB.
+
+## 🌳 Trees (`trees`, optional, V2.4)
+
+One record per tree crown from the canopy height model (CHM = DOM1 − DGM1), [ADR 0017](adr/0017-real-trees-from-chm.md); conifer fill trees per [ADR 0030](adr/0030-conifer-fill-trees.md). Written by `pipeline/trees.py` (method, parameters and the plot check: [pipeline/README.md "Trees"](../pipeline/README.md#-trees-v24)). `trees` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid.
+
+```ts
+trees = {
+  format: 'sle-trees-v1',                 // anything else → the whole key is ignored
+  path: 'trees/{i}_{j}.bin',              // relative to the AOI dir; level-0 chunk (i, j) as in "Grid & chunks"
+  crs: 'EPSG:25832',                      // informative
+  chunks: Array<[i, j, count]>,           // only chunks that HAVE a file (count ≥ 1)
+  count: number,                          // Σ count
+  counts: { unknown, conifer, broadleaf }, // trees per base type (fill trees included)
+  fill: number,                           // trees with the FILL flag (estimated position)
+  fillFlag: 128,                          // bit of `type` that marks fill trees
+  bounds: [Emin, Nmin, Emax, Nmax],       // EPSG:25832, integer metres, cell extent of all trees
+  heightRange: { min, max },              // tree height h (m)
+  crownRadiusRange: { min, max },         // crown radius r (m)
+  types: { unknown: 'Baum', conifer: 'Nadelbaum', broadleaf: 'Laubbaum' }, // label_de per base type (informative)
+  method: 'chm-lmf-watershed', version: 1, generated: ISO-8601, params: {...}, inputs: {...}, // informative
+  label_de: 'Bäume (aus Kronenhöhenmodell)'
+}
+```
+
+**Binary chunk `.bin` (little-endian).** File size is exactly `16 + 10 · count` bytes.
+
+| Offset | Type | Field |
+|---|---|---|
+| 0 | 4 × u8 | magic `SLET` (ASCII `53 4C 45 54`) |
+| 4 | u16 | version = 1 |
+| 6 | u16 | reserved = 0 (ignored) |
+| 8 | u32 | `count` trees |
+| 12 | f32 | `gBase` (m, DHHN2016) = lowest ground height of the chunk's trees, floored to 0.01 m |
+
+then `count` records of **10 bytes** at offset `16 + 10·k`:
+
+| Offset | Type | Field | Decode |
+|---|---|---|---|
+| 0 | u16 | `x` dm east of the chunk's west edge, 0…5000 | `E = E0 + i·500 + x / 10` |
+| 2 | u16 | `y` dm **north** of the chunk's **south** edge, 0…5000 | `N = N0 + height − (j+1)·500 + y / 10` |
+| 4 | u16 | `g` cm above `gBase` | ground `g_true = gBase + g / 100` (DGM1 value of the top cell) |
+| 6 | u16 | `h` cm | tree height above ground (m) = `h / 100` |
+| 8 | u8 | `r` dm, 1…255 | crown radius (m) = `r / 10` |
+| 9 | u8 | `type` | low 7 bits: 0 = unknown, 1 = conifer, 2 = broadleaf (other codes → unknown); bit 7 (`& 0x80`) = **fill** tree |
+
+- **Precision.** Tops are 1 m DGM cells, stored at the **cell centre** (`x, y` ≡ 5 mod 10), so positions are exact to the grid (±0.5 m true position). Heights 1 cm, radius 1 dm. `y` runs north (like `pointclouds` tiles), unlike chunk `j`.
+- **Ground is stored** (`g`) so the renderer can place trunks without sampling the DTM; at a cell centre it equals the app's bilinear `heightAt`. World frame as everywhere: `x = E − E0`, `z = −(N − N0)`, trunk base `y = hRef + (g_true − hRef) · exag`; whether the tree itself scales with `exag` is a renderer choice.
+- **Stable id** (not stored, derived): `id = ((Ec mod 65536) << 16) | (Nc mod 65536)` as u32, with `Ec = E − 0.5`, `Nc = N − 0.5` the integer lower-left corner of the top cell. Unique within any 65 km square, independent of the AOI and chunking, identical across reruns with the same inputs and params.
+- **Order = LOD.** Records are sorted ascending by `fmix32(id)` (MurmurHash3 finalizer: `h ^= h>>>16; h = Math.imul(h, 0x85EBCA6B); h ^= h>>>13; h = Math.imul(h, 0xC2B2AE35); h ^= h>>>16; h >>>= 0`). Any prefix of `n` records is a pseudo-random, spatially uniform subsample; a tree's rank never changes between LOD levels, so `drawRange` LOD needs no reseeding.
+- **Type** (heuristic): mean `(R+G+B)/3` of the summer DOP20 (1 m) over the crown segment: `< 62` → conifer, `> 74` → broadleaf, else or without DOP → unknown. ⚠️ Weak: shaded broadleaf crowns read as conifer, sunlit conifers as unknown; larch (deciduous conifer) is "broadleaf"-bright. Good enough for the tree model, not a species map.
+- **Fill trees** (`type & 0x80`): the leaf-off 1 m DOM merges conifer tops ≈ 5 m apart into one blob; oversized conifer crowns are split into crowns of the expected size ([ADR 0030](adr/0030-conifer-fill-trees.md)). Their position is an **estimate** (cluster centre), height and radius come from the CHM. Never use them as evidence for a single tree.
+- Heights outside `3 … 45 m` are dropped (pylons, chimneys, cranes). Building cells (LoD2 `bldg` mask, dilated 1 m) are excluded.
+
+**Size.** ≈ 10 B per tree; Karlsberg (9 km²) ≈ 89 k trees ≈ 0.9 MB, overall (48 km²) ≈ 326 k trees ≈ 3.1 MB.
+
+**Manifest + attribution.** The trees step owns the whole `trees` key (replaced on each run via `update_manifest`, all other keys kept) and adds `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0 (DOP20)` when the DOP was used for the type (the DGM/DOM attribution is already present from `build`).
+
+**App tolerance.** Missing `trees`, a non-object or `format` ≠ `sle-trees-v1` → absent (logged, not fatal). `path` must contain `{i}` and `{j}`. `chunks` entries that are not three integers with `0 ≤ i < nx`, `0 ≤ j < ny`, `count ≥ 1` are skipped. A chunk whose bytes fail the header check (magic, version 1, size `16 + 10·count`) or 404s is skipped; the other chunks still show. Unknown `type` base codes read as unknown; unknown manifest fields are ignored.
 
 ## Other files
 

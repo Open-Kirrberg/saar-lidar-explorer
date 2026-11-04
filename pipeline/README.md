@@ -19,7 +19,7 @@ There are two dependency workarounds, both in `pyproject.toml`:
 ## Run
 
 ```bash
-./run.sh karlsberg                 # fetch → build → xyz → osm → cadastre → buildings → ortho → historic → pois → detect → pointcloud → tests
+./run.sh karlsberg                 # fetch → build → xyz → osm → cadastre → buildings → ortho → historic → pois → detect → pointcloud → trees → tests
                                    # (pointcloud downloads ≈ 45 MB LAZ per km² tile: Karlsberg 4 tiles ≈ 180 MB, overall 8 ≈ 350 MB)
 ./run.sh karlsberg build xyz       # selected steps only
 uv run python fetch.py homburg     # single steps; AOIs are defined in aois.toml
@@ -39,7 +39,8 @@ uv run pytest -q                   # contract tests for every built AOI
 | `pois.py` | Converts the research/03 Part B table + research/01 §5 focus points into `app/public/data/pois.geojson` (dedupe < 80 m) | < 1 s |
 | `detect.py <aoi> [--min-score 0.3] [--mask-min-score 0.4] [--no-mask]` | F15: rule-based relict candidates (pit, mound, linear, rect, platform) from the work DTM + CHM/bldg/mask + `vectors/osm.geojson` → `candidates/candidates.geojson` (+ `candidates/mask/{i}_{j}.png`), manifest `candidates`, report `data/work/<aoi>/detect.json`. **Private/local data** (see "Relict detection" below). Needs `build` (and ideally `buildings`, `osm`, `pois`) first. | Karlsberg ≈ 5 s, overall ≈ 24 s |
 | `pointcloud.py <aoi> [--no-fetch]` | F16: classified ALS 2025 points for the focus areas in `[[defaults.pointclouds]]` → `pointclouds/<area>/{tx}_{ty}.bin` (`sle-pts-v1`), manifest `pointclouds`, report `data/work/<aoi>/pointcloud.json`. See "Point clouds" below. | first run downloads the LAZ (see below); cached: Karlsberg ≈ 2 s, overall ≈ 4 s |
-| `pytest` | Terrarium round trip ≤ 5 mm, apron = neighbour edge, edge clamp, u8 decode, manifest keys, chunk counts/sizes, georeference, POI schema, manifest merge (unknown keys, attribution, shared sections), OSM classify/clip/densify, cadastre paging/labels, generated `vectors/*` vs contract (AOIs from `aois.toml` only), overview levels (block means, NW anchor, edge clamp, v2 manifest), baked heights vs `rasterio` `sample()`, buildings (non-convex polygons with holes, tilted planes, local frame, mask vs point-in-polygon at cell centres, glb round trip, CityGML parsing, wall skirts, generated data), ortho/historic (chunk bboxes, RLP fill, alignment < 1 m, levels), rebuild keeps foreign layer keys, detection (synthetic pit/mound/ditch/rectangle/kiln platform found with the right class + metrics, flat noise and smooth undulation yield nothing, rim/ring ditch/uprooted-tree rules, building/road exclusion, output + mask contract, generated candidates), point clouds (`sle-pts-v1` header layout, round trip ≤ 1 cm, permutation, half-open tile clipping, limits, area config, previous-entry fallback, staged tile write that keeps the old output when there are no points, generated data), parcel polygons (whole/2D/deduped/area, label point ↔ polygon), coarse detection pass (scarped platform + moat, straight terrace edge, no coarse candidates on rounded hills, fine ids unchanged, exact chance baseline) | 199 tests (2026-11-01, v1.0.1: + build keeps `relief/bldg`, staged swap, in-AOI box mean) |
+| `trees.py <aoi> [--workers 4]` | V2.4: one record per tree crown from the CHM (DOM1 − DGM1): local maxima with a height-adaptive window, marker watershed for crowns, LoD2 building mask, type from the DOP colour, conifer fill (ADR 0030) → `trees/{i}_{j}.bin` (`sle-trees-v1`), manifest `trees`, report `data/work/<aoi>/trees.json`. Needs `build`; `buildings` and `ortho` optional (read from a covering AOI if the AOI has none). See "Trees" below. | Karlsberg ≈ 5 s, overall ≈ 10–30 s |
+| `pytest` | Terrarium round trip ≤ 5 mm, apron = neighbour edge, edge clamp, u8 decode, manifest keys, chunk counts/sizes, georeference, POI schema, manifest merge (unknown keys, attribution, shared sections), OSM classify/clip/densify, cadastre paging/labels, generated `vectors/*` vs contract (AOIs from `aois.toml` only), overview levels (block means, NW anchor, edge clamp, v2 manifest), baked heights vs `rasterio` `sample()`, buildings (non-convex polygons with holes, tilted planes, local frame, mask vs point-in-polygon at cell centres, glb round trip, CityGML parsing, wall skirts, generated data), ortho/historic (chunk bboxes, RLP fill, alignment < 1 m, levels), rebuild keeps foreign layer keys, detection (synthetic pit/mound/ditch/rectangle/kiln platform found with the right class + metrics, flat noise and smooth undulation yield nothing, rim/ring ditch/uprooted-tree rules, building/road exclusion, output + mask contract, generated candidates), point clouds (`sle-pts-v1` header layout, round trip ≤ 1 cm, permutation, half-open tile clipping, limits, area config, previous-entry fallback, staged tile write that keeps the old output when there are no points, generated data), parcel polygons (whole/2D/deduped/area, label point ↔ polygon), coarse detection pass (scarped platform + moat, straight terrace edge, no coarse candidates on rounded hills, fine ids unchanged, exact chance baseline), trees (`sle-trees-v1` layout + round trip, fmix32 order, peak → exact cell-centre E/N with no flip, chunk south edge, plateau tie-break, min/max height + building filter, byte-identical reruns for 1 vs 4 workers, conifer fill, generated data) | 279 tests (2026-11-04, V2.4a: + 16 trees) |
 
 ## Manifest ownership (read–modify–write)
 
@@ -51,7 +52,7 @@ update_manifest(APP_DATA / aoi.key, {"vectors": {"osm": entry}}, merge=["vectors
                 attribution=["© OpenStreetMap-Mitwirkende, ODbL"])
 ```
 
-- Keys in the patch replace the old value in place, so key order is kept. New keys are appended. Unknown keys (`vectors`, `models`, `candidates`, …) are left alone. `remove=[…]` deletes keys the step owns but no longer produces.
+- Keys in the patch replace the old value in place, so key order is kept. New keys are appended. Unknown keys (`vectors`, `models`, `candidates`, `trees`, …) are left alone. `remove=[…]` deletes keys the step owns but no longer produces.
 - `attribution` stays the contract's `"; "`-joined string. Pass entries as `attribution=[…]`; passing an `"attribution"` key in the patch raises an error. Entries are deduplicated and keep their order: existing entries stay where they are and new ones are appended. `drop_attribution=[…]` takes back entries the step owns but no longer uses. An entry listed in both is kept. Entries must not contain `;`.
 - Shared sections such as `vectors` hold entries from several steps (osm, cadastre, …). Name them in `merge=[…]` so your sub-key is shallow-merged into the existing dict instead of replacing the whole section.
 - Ownership: `build.py` owns `version` … `layers`, `levels`, `sources` and `build` (`version` and `levels` are written together), plus the SL/RLP attribution entries. It removes `xyz` only when `xyz/` is gone. `xyz.py` owns `xyz` (except `xyz.hist_*`, written by `historic.py`). The file is written atomically (temp file + `os.replace`).
@@ -69,13 +70,13 @@ data/work/<aoi>/*.tif            float32 AOI rasters (dtm, dsm, chm, mask, all r
 data/work/<aoi>/build.json       parameters, percentiles, RLP offset, fill stats, timings
 data/work/<aoi>/vat_buffered.jpg buffered VAT for checking seams in the buffer ring
 app/public/data/<aoi>/           dtm/ dsm/ relief/<layer>/ (incl. bldg/) levels/ xyz/<layer>/ (incl. hist_*) vectors/
-                                 models/buildings/ ortho/ (+ levels/{k}/) hist_<year>/ (+ levels/{k}/) manifest.json
+                                 models/buildings/ ortho/ (+ levels/{k}/) hist_<year>/ (+ levels/{k}/) trees/ manifest.json
 app/public/data/pois.geojson
 app/public/data/print/            F21 3D print tiles: series.json + <series>/ <id>.3mf/.png (.stl with --stl), keys/, index.json, layout.png (print3d.py)
 data/raw/lod2/{sl,rlp}/          LoD2 CityGML tiles, gzip (≈ 52 MB for overall)
 data/raw/ortho/<aoi>/{sl,rlp}/   DOP20 WMS responses per chunk (≈ 500 MB for karlsberg + overall)
 data/raw/historic/<aoi>/         historic-map WMS blocks + meta.json (≈ 105 MB)
-data/work/<aoi>/{buildings,ortho,historic}.json  step reports (counts, sizes, ground vs DTM, timings)
+data/work/<aoi>/{buildings,ortho,historic,trees}.json  step reports (counts, sizes, ground vs DTM, timings)
 data/work/<aoi>/{bldg,ortho_1m,hist_*}.tif        work rasters (mask, 1 m RGB mosaics)
 docs/previews/<aoi>_{vat,slrm,chm}.jpg + {bldg,ortho,hist_1840,hist_1935}.jpg
 ```
@@ -214,6 +215,49 @@ uv run python print3d.py --series kirrberg-11050 --set kirrberg        # single 
 - **Datum option (not implemented — user's call).** Raising the main datum 180 → 214 m NHN (lowest tile point 13.04 mm → 5.65 mm = base 4 + 1.65 mm) removes 7.39 mm × 217.4² mm = 349 cm³ per tile: measured −70 g (E376_N5462, stock 238 → 168) / −71 g (E382_N5460, 457 → 386) with the stock process, but only **−20 g / −13 g** on top of the recommended lightning settings (175 → 155, 243 → 230; ≈ −5…−12 %, ≈ 13 × 15 g ≈ 0.2 kg for the main series), because lightning already leaves that volume hollow (what is left is the side walls). Cost: 7.4 mm lower plinth (min 5.65 mm), anything below 214 m clamped flat (Blies valley ~ 200–210 m, Saar ~ 190 m — future "other parts" lose their valleys), a new series key and no joins with any tile already printed at datum 180. Detail sets already use floor(min) − 5 m; cutting the margin to ≈ 3 m (+2 m datum, −1.3 mm) saves ≈ 3 g per tile with lightning (252 → 249). Not worth it on top of the slicer settings.
 - **Generated (2026-11-02, second run, cached DGM, M-series Mac; the 1:8500 / 1:2125 outputs, 391 MB, deleted):** ≈ 13–22 s per tile (simplify 11–20 s). `saarpfalz-9200`: 13 tiles (explorer 12 + `E376_N5462`), max z 20–49 mm, solid 0.9–2.1 kg, typical 271–487 g per tile (all 13 ≈ 4.9 kg; slicer ≈ 4.55 kg), 60 MB. `detail-2300`: Karlsberg (E382_N5465.5 + E382_N5466, datum 274 m) max z 64.1 / 58.1 mm, typical 594 / 601 g; Merburg 2 × 2 (datum 238 m) max z 28–56 mm, typical 288–390 g; 25 MB. All 23 neighbour seams in the 3MF files: identical 1001 edge vertices, |Δ| = 0.
 - Tests: `tests/test_print3d.py` (buildings: global grid index across neighbours, opening disk size, opening drops parts < k cells / keeps ≥ k / anti-extensive / idempotent, z-buffer heights on flat + gable roofs incl. closed edges, overlaps and order independence, walls dropped, a hall cut identically on both sides of a shared edge + min-feature filter + terrain formula + roof below terrain, LoD2 attribution derived from tiles, CityGML parse + overhang; ids/grid, weights + half-pixel, mean of 2 × 2 cells, missing data, bit-identical neighbour edges for 2 m / 0.5 m / odd grids, z formula + clamp + per-set datum, datum resolution (fresh / frozen / nested / conflicts / `--datum`), stock P1S rule (GUI centring + exclusion hull test, CLI-measured cases, 1:8500 rejected), top-surface simplification (error bound with an independent interpolator, edge vertices kept, budget, flat/zero-tolerance cases, determinism, watertight simplified tiles with recesses/text), watertight + exact volume with recesses/text/flat patches, mirrored text, bowtie clearance + key, recesses facing each other for asymmetric positions, position checks, keys count incl. datum split, filament formula, slicer recommendation (config + checks, German note, `recommended` estimate, `filament_g` refreshed on every index write, `slicer` block), STL/3MF round trip + plate placement, `sle-250` preset (load line extent stock vs. patched, exclusion strip), installed Bambu stock profile when present, layout blocks, index schema/merge/set datums, series catalog, generated indexes + files + 3MF build transform, every generated 3MF: footprint clear of the exclusion area at the GUI and build positions, < 1 M triangles, `maxError_mm` within the bound, plain 3MF without `Metadata/`).
+
+## 🌳 Trees (V2.4)
+
+`trees.py` turns the CHM into one record per crown (contract "Trees", `sle-trees-v1`; [ADR 0017](../docs/adr/0017-real-trees-from-chm.md), [ADR 0030](../docs/adr/0030-conifer-fill-trees.md)).
+
+| # | Step | Parameters (`trees.Params`) |
+|---|---|---|
+| 1 | CHM = DSM − DTM (work rasters, 1 m), NaN → 0, clip 0…60 m; LoD2 `bldg` dilated 1 m → 0; Gaussian | `sigma` 0.8 m |
+| 2 | Tops = cells ≥ `min_height` that beat every cell within `r(h) = clip(r0 + k·h, r_min, r_max)`; ties → lower flat index | 3 m · 1.2 + 0.03·h, 1…2.5 m |
+| 3 | Crowns = marker watershed on −CHM per chunk + 24 m apron, cut below `max(2 m, crown_frac · h_top)`; `r = √(area/π)` | `crown_frac` 0.45, `r_cap` 12 m |
+| 4 | `h` = raw CHM 3 × 3 max at the top; `g` = DGM of the top cell | drop `h` outside 3…45 m |
+| 5 | Type = mean DOP (R+G+B)/3 over the crown: `< dark` conifer, `> light` broadleaf, else unknown | 62 / 74 |
+| 6 | Conifer fill: crown area A → `round(A / (π·rc²))` crowns by k-means (CHM-weighted, seeds: top + farthest point); extra trees at their centroid cell, flagged `0x80` | `rc = clip(1.0 + 0.05·h, 1.5, 3.5)` |
+| 7 | One tree per cell (overlapping windows), bin by the tree cell's chunk, sort by `fmix32(id)` | — |
+
+Output is byte-identical across reruns and worker counts (tested). Report `data/work/<aoi>/trees.json`.
+
+### 📊 Runs (2026-11-04, M-series Mac)
+
+| AOI | Trees | per ha | conifer / broadleaf / unknown | fill | Chunks | Size | Time |
+|---|---|---|---|---|---|---|---|
+| karlsberg (9 km²) | 89 258 | 99 | 12 415 / 65 377 / 11 466 | 8 818 | 36 | 0.87 MB | 3–7 s |
+| overall (48 km²) | 326 010 | 68 | 27 131 / 272 447 / 26 432 | 19 235 | 192 | 3.1 MB | 10–31 s (cold read) |
+
+Karlsberg percentiles: `h` p5/p50/p95 = 9.4 / 28.7 / 37.5 m, `r` 1.9 / 4.3 / 7.8 m.
+
+### 🎯 H7 count check (3 plots, ±15 %)
+
+**Method.** TrueDOP20 at 0.2 m (3 WMS requests, plot ± 20 m, git-ignored `data/raw/ortho/plots/`). Every crown marked by hand on a 5 m grid **before** the detector ran on the plot. Saplings under the canopy were not counted; uncertain marks counted as trees. Detector run on the plot ± 60 m of the `overall` rasters; trees counted when their cell lies in the plot. Matching: greedy, ≤ 3 m. Overlays: `docs/shots/v24/final_P*.png` (git-ignored).
+
+| Plot | SW corner (EPSG:25832) | Size | Stand | Hand | Detected | Error | Matched ≤ 3 m (P / R) |
+|---|---|---|---|---|---|---|---|
+| P1 | 383310, 5465610 | 50 × 50 m | dense spruce, 30 m | 88 | 90 (54 fill) | **+2 %** | 0.69 / 0.70 |
+| P2 | 382430, 5465530 | 70 × 70 m | mixed broadleaf, 34 m | 51 | 48 | **−6 %** | 0.29 / 0.27 |
+| P3 | 381760, 5460390 | 70 × 70 m | open orchard, 6 m | 33 | 34 | **+3 %** | 0.74 / 0.76 |
+
+**Tuning path** (P1 / P2 / P3 error): first defaults `r(h)` up to 4 m → −75 / −31 / +3 %; narrower window (≤ 2.5 m) → −59 / −6 / +3 %; smaller `sigma` only moves noise (P2 +25 %); fill with `rc(30 m)` = 2.8 m → −18 %, 2.5 m → +2 %.
+
+⚠️ **Limits.**
+- ALS 2025 is **leaf-off** (Feb), the 1 m DOM is smooth: dense conifer tops ≈ 5 m apart merge. Fill trees fix the **count**, their positions are estimates. A 0.5 m LAZ max-z CHM (4 pts/m²) was too speckled to separate tops.
+- Broadleaf counts are right, positions are not (P2 matches 27 %): leaf-off tops ≠ summer crown centres.
+- Type is brightness only: shaded broadleaf → conifer, sunlit conifer → unknown, larch → broadleaf. P1 still has 6 "unknown" crowns that are never filled.
+- Calibrated on one plot per stand type. `rc(h)` matches ≈ 500 stems/ha for mature spruce, but young dense conifer stands will be under-counted.
 
 ## Larger AOIs
 
