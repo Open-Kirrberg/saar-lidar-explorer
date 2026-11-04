@@ -2,7 +2,7 @@
 // Performance baseline on the low-end phone proxy (ADR 0028) and on desktop.
 //
 //   pnpm run build && pnpm exec vite preview --port 5241 --strictPort &   # serves dist + public/data
-//   pnpm run perf -- [--url http://127.0.0.1:5241/?aoi=overall] [--profiles phone,desktop] [--headless]
+//   pnpm run perf -- [--url http://127.0.0.1:5241/?aoi=overall] [--profiles phone,desktop] [--headed]
 //
 // Drives the system Chrome (puppeteer-core, no browser download) in a *headed* window by default, so
 // the page is visible, rAF runs and WebGL uses the real GPU. Per profile: cold load (cache disabled)
@@ -23,7 +23,7 @@ const opt = (name, def) => {
 };
 const URL_ = opt('url', 'http://127.0.0.1:5241/?aoi=overall');
 const PROFILE_IDS = opt('profiles', 'phone,desktop').split(',');
-const HEADLESS = args.includes('--headless');
+const HEADLESS = !args.includes('--headed'); // headless by default: never pop up Chrome windows on the user's desktop
 const CHROME = opt('chrome', process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
 const UNCAPPED = args.includes('--uncapped'); // no vsync: rAF fps = headroom above the display rate
 const SAMPLE_MS = Number(opt('sample-ms', 5000));
