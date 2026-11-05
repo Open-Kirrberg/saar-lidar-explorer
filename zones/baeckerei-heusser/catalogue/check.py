@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Check the Bäckerei Heusser object catalogue (`bh-catalogue-v1`, see README.md). Stdlib only.
+"""Check the Bäckerei Heusser object catalogue (`bh-catalogue-v1`) and its product slots (`bh-slots-v1`, see
+README.md). Stdlib only.
 
-    python3 -I zones/baeckerei-heusser/catalogue/check.py [objects.json]
+    python3 -I zones/baeckerei-heusser/catalogue/check.py [objects.json [slots.json]]
 
-Exit 1 with one line per problem. `check(doc)` is the tested pure function (test_check.py).
+Exit 1 with one line per problem. `check(doc)` and `check_slots(doc, known_ids)` are the tested pure functions
+(test_check.py). slots.json is checked when it exists next to objects.json (or is named).
 """
 from __future__ import annotations
 
@@ -22,6 +24,9 @@ REQUIRED = ("id", "type", "area", "name_de", "source", "sigma_m", "status", "cli
 # privacy: refs name sources, never private files or paths (CLAUDE.md rule 7)
 PRIVATE_REF = re.compile(r"(^[/~])|(\.(jpe?g|png|heic|webp|mp4|mov)\b)|(/Users/)|(privat/)", re.I)
 PRICE_KEY = re.compile(r"(price|preis)", re.I)
+SLOTS_FORMAT = "bh-slots-v1"
+SLOT_CATEGORIES = ("brot", "broetchen", "laugengebaeck", "suesses", "kuchen", "glas", "dose", "flasche", "tuete")
+SLOT_ID = re.compile(r"^(?P<fixture>[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*)/platz-(?P<k>\d{2})$")
 
 
 def _num(v) -> bool:
@@ -130,6 +135,61 @@ def check(doc: dict) -> list[str]:
     return errs
 
 
+def check_slots(doc: dict, known_ids: set[str] | None = None) -> list[str]:
+    """Product slots (`bh-slots-v1`): ids `<fixture id>/platz-NN`, the fixture a catalogue id, pose in the zone frame,
+    usable size, capacity hint, allowed categories; never prices."""
+    errs: list[str] = []
+    if not isinstance(doc, dict) or doc.get("format") != SLOTS_FORMAT:
+        return [f"slots: format must be {SLOTS_FORMAT!r}"]
+    if list(doc.get("categories") or []) != list(SLOT_CATEGORIES):
+        errs.append(f"slots: categories must be {list(SLOT_CATEGORIES)}")
+    slots = doc.get("slots")
+    if not isinstance(slots, list) or not slots:
+        return errs + ["slots: slots must be a non-empty list"]
+    seen: set[str] = set()
+    for s in slots:
+        if not isinstance(s, dict):
+            errs.append("slots: slot is not a dict")
+            continue
+        sid = s.get("id", "?")
+        e = lambda msg: errs.append(f"slot {sid}: {msg}")  # noqa: E731
+        m = SLOT_ID.match(sid) if isinstance(sid, str) else None
+        if not m:
+            e("id must be '<fixture id>/platz-NN'")
+        elif m["fixture"] != s.get("fixture"):
+            e("id must start with its fixture id")
+        if sid in seen:
+            e("duplicate id")
+        seen.add(sid)
+        fx = s.get("fixture")
+        if known_ids is not None and fx not in known_ids:
+            e(f"fixture {fx!r} is not a catalogue id")
+        pose = s.get("pose")
+        if not (isinstance(pose, dict) and all(_num(pose.get(k)) for k in ("x", "y", "z", "heading_deg"))):
+            e("pose needs numbers x, y, z (zone frame) and heading_deg")
+        elif not 0 <= pose["heading_deg"] < 360:
+            e("pose.heading_deg must be in 0..360")
+        t = s.get("tilt_deg", 0)
+        if not _num(t) or not -60 <= t <= 60:
+            e("tilt_deg must be a number in -60..60")
+        size = s.get("size")
+        if not (isinstance(size, dict) and all(_num(size.get(k)) and 0 < size[k] <= 5 for k in ("w", "d", "h"))):
+            e("size must be {w, d, h} in 0..5 m")
+        cap = s.get("capacity")
+        if not (isinstance(cap, int) and not isinstance(cap, bool) and 1 <= cap <= 500):
+            e("capacity must be an integer 1..500 (pieces, a hint)")
+        hint = s.get("capacity_de", "")
+        if not isinstance(hint, str) or len(hint) > 120:
+            e("capacity_de must be a string <= 120 chars")
+        cats = s.get("categories")
+        if not (isinstance(cats, list) and cats and len(set(cats)) == len(cats) and all(c in SLOT_CATEGORIES for c in cats)):
+            e(f"categories must be a non-empty list from {list(SLOT_CATEGORIES)}")
+    for path, k in _keys(doc):
+        if PRICE_KEY.search(k):
+            errs.append(f"slots: {path}: no prices in the slots")
+    return errs
+
+
 def main(argv: list[str]) -> int:
     path = Path(argv[0]) if argv else Path(__file__).resolve().parent / "objects.json"
     doc = json.loads(path.read_text(encoding="utf-8"))
@@ -138,7 +198,16 @@ def main(argv: list[str]) -> int:
         print("  ✗", msg)
     n = len(doc.get("objects", []))
     print(f"{path.name}: {n} objects, {'OK' if not errs else f'{len(errs)} problem(s)'}")
-    return 1 if errs else 0
+    spath = Path(argv[1]) if len(argv) > 1 else path.parent / "slots.json"
+    serrs: list[str] = []
+    if spath.is_file():
+        sdoc = json.loads(spath.read_text(encoding="utf-8"))
+        known = {o.get("id") for o in doc.get("objects", []) if isinstance(o, dict)}
+        serrs = check_slots(sdoc, known)
+        for msg in serrs:
+            print("  ✗", msg)
+        print(f"{spath.name}: {len(sdoc.get('slots') or [])} slots, {'OK' if not serrs else f'{len(serrs)} problem(s)'}")
+    return 1 if errs or serrs else 0
 
 
 if __name__ == "__main__":

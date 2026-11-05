@@ -4,6 +4,8 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-05 | twin | 🥐 Bäckerei Heusser round 4a: 103 products from the bakery's own list (price, unit, short text) + 33 stylised parametric product shapes at true size, gallery (`zones/baeckerei-heusser/products/`) |
+| 2026-11-05 | twin | 🥖 Bäckerei Heusser round 3: video inventory, stylised counter / bread wall / shelves / café corner, 110 product slots, facade details with the shop's lettering (owners' OK, ADR 0044) |
 | 2026-11-05 | twin | 🧹 Bäckerei Heusser: video scan no longer served (`serve_reference = false`), no debris over the twin even with `?referenz` |
 | 2026-11-05 | twin | 🥖 Bäckerei Heusser round 2: *Raumplan* v0 (public, redacted; private facts only in the private folder), built stylised shell + street context from the plan, walker on an exact nav floor, capture as hidden `reference` asset (ADR 0043) |
 | 2026-11-05 | twin | 🥖 Bäckerei Heusser becomes a built digital twin: `zones/baeckerei-heusser/` (catalogue + schema + check, style rules, plan/variants stubs, 4 `bh-*` skills), zone id `bakery` → `baeckerei-heusser`, private passage end cropped from the capture (ADR 0042) |

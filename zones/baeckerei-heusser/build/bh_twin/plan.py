@@ -89,6 +89,12 @@ class Fixture:
     source: str
     sigma: float
     raw: dict = field(default_factory=dict)
+    z: float = 0.0       # pose.z (base above ±0.00, scaled): wall-mounted and stacked fixtures
+
+    @property
+    def centred(self) -> bool:
+        """Tables and round objects: the pose is the centre (plan `fixture_frame`)."""
+        return self.raw.get("form") in ("rund", "quadratisch", "kugel")
 
     @property
     def ux(self) -> np.ndarray:
@@ -108,7 +114,7 @@ class Fixture:
 
     @property
     def centre(self) -> np.ndarray:
-        return self.local(self.l / 2, self.d / 2) if self.raw.get("form") != "rund" else self.xy
+        return self.xy if self.centred else self.local(self.l / 2, self.d / 2)
 
 
 @dataclass
@@ -179,7 +185,7 @@ def load_plan(path: Path, f: float) -> Plan:
         sz = x["size"]
         fx[x["id"]] = Fixture(x["id"], x["type"], x["name_de"], S(x["pose"]["xy"]), float(x["pose"]["rot_deg"]),
                               f * sz["l"], f * sz["d"], None if sz.get("h") is None else f * sz["h"],
-                              x.get("source", "mesh"), float(x.get("sigma_m") or 0.5), x)
+                              x.get("source", "mesh"), float(x.get("sigma_m") or 0.5), x, f * float(x["pose"].get("z") or 0.0))
     st = dict(rv["stairs"][0])
     st["x_range"] = [float(S((x, 0))[0]) for x in st["x_range"]]
     st["tread_v"] = f * st["tread"]["v"]

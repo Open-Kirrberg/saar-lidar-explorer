@@ -1,0 +1,7 @@
+# ADR 0044: Bäckerei Heusser — owners' consent to prices, lettering and history
+
+- **Status:** accepted, 2026-11-05
+- **Context:** ADR 0042 kept prices, the shop's lettering and the history out of the twin until the owners agreed. Round 3 built the lettering (gable mural „Bäckerei Heinrich Heusser seit 1933“, keystone „H.H. 1933“, sign name) behind a build flag that was off by default, and round 4 brings 103 products with prices from the bakery's own product list.
+- **Decision:** The owners agreed on 2026-11-05 (passed on by the user) to show **prices**, the **shop's lettering** and the **bakery's history since 1933, including the historic photos in the shop**. The catalogue records it in `consent` (`prices`, `lettering`, `history`, `date`). The generator builds the lettering by default (`--no-lettering` leaves it out). Product data (names, prices, short texts) is imported from the bakery's own list; allergens are **not** imported until the owners confirm the list is complete.
+- **Not covered:** present-day people, anything beyond the privacy line in the passage (house entrance, mailboxes, courtyard, flat; this keeps the pickup cabinet unbuilt, its place is beyond the line), third-party photos (social media, Street View) as textures or in the repo.
+- **Consequences:** `check.py` accepts price fields; info cards may show the price; `bh-datenschutz` checklist updated. The private source list keeps the dated note of the consent.

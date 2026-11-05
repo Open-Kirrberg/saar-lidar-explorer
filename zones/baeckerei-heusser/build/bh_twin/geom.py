@@ -244,3 +244,236 @@ def cylinder_local(r: float, z0: float, z1: float, n: int = 16, r1: float | None
 def arc_points(c, r: float, a0: float, a1: float, n: int) -> np.ndarray:
     a = np.linspace(a0, a1, n + 1)
     return np.column_stack([c[0] + r * np.cos(a), c[1] + r * np.sin(a)])
+
+
+# ----------------------------------------------------------------------------------------------- bevels (style.md)
+# Fixtures get a 10–20 mm bevel or round-over, buildings 5–10 mm, products 3–8 mm. All helpers return (verts (n,3),
+# outward triangles (k,3)) in a local frame (x, y, z up); `Node.add_mesh` flat-shades them per facet, so a 2-step
+# round-over reads as two soft highlights along every edge (the comic/mobile-game look) at a few extra triangles.
+
+BEVEL_FIXTURE = 0.012
+BEVEL_BUILDING = 0.006
+BEVEL_PRODUCT = 0.005
+
+
+def rounded_box_local(l: float, d: float, h: float, r: float, segs: int = 2) -> tuple[np.ndarray, np.ndarray]:
+    """Box [0,l]×[0,d]×[0,h] with every edge and corner rounded over by radius `r` (`segs` facets per quarter; 1 =
+    chamfer). Convex: the hull of the 8 corner octants (≈ 44 triangles at segs=1, ≈ 108 at segs=2)."""
+    r = max(0.0, min(r, l / 2.01, d / 2.01, h / 2.01))
+    if r <= 1e-6:
+        return convex_solid(chamfer_box_local(l, d, h, 0.0))
+    pts = []
+    angs = [0.5 * math.pi * k / segs for k in range(segs + 1)]
+    for cx, sx in ((r, -1.0), (l - r, 1.0)):
+        for cy, sy in ((r, -1.0), (d - r, 1.0)):
+            for cz, sz in ((r, -1.0), (h - r, 1.0)):
+                for th in angs:          # polar angle from the z axis
+                    for ph in (angs if th > 0 else [0.0]):
+                        u = (math.sin(th) * math.cos(ph), math.sin(th) * math.sin(ph), math.cos(th))
+                        pts.append((cx + sx * r * u[0], cy + sy * r * u[1], cz + sz * r * u[2]))
+    return convex_solid(np.unique(np.round(np.array(pts, np.float64), 9), axis=0))
+
+
+def _ring_ccw(poly: Polygon) -> np.ndarray:
+    return np.asarray(orient(poly, 1.0).exterior.coords)[:-1]
+
+
+def offset_ring(ring: np.ndarray, dist: float) -> np.ndarray:
+    """Mitred offset of a CCW ring keeping the vertex correspondence (dist < 0 = inwards). Valid for offsets small
+    against the edges (bevels); the mitre is clamped at 3·|dist| on sharp corners."""
+    p = np.asarray(ring, np.float64)
+    e_in = p - np.roll(p, 1, 0)
+    e_out = np.roll(p, -1, 0) - p
+    n_in = np.column_stack([e_in[:, 1], -e_in[:, 0]]) / np.maximum(np.linalg.norm(e_in, axis=1), 1e-12)[:, None]
+    n_out = np.column_stack([e_out[:, 1], -e_out[:, 0]]) / np.maximum(np.linalg.norm(e_out, axis=1), 1e-12)[:, None]
+    m = n_in + n_out
+    ml = np.linalg.norm(m, axis=1)
+    m = np.where(ml[:, None] > 1e-9, m / np.maximum(ml, 1e-12)[:, None], n_out)
+    cos = np.clip(np.einsum("ij,ij->i", m, n_out), 1 / 3, 1.0)
+    return p + m * (dist / cos)[:, None]   # outward normal (right of a CCW edge) times dist
+
+
+def bevel_prism(poly: Polygon, z0: float, z1: float, r: float, top: bool = True, bottom: bool = False,
+                r_bottom: float | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """Vertical prism of a 2-D polygon (exterior only) with chamfered top (and bottom) edges: rings inset by `r` at
+    the caps, full size between. Counter bases, ledges, boards, panels with curved outlines."""
+    ring = _ring_ccw(poly)
+    rb = r if r_bottom is None else r_bottom
+    rt = min(r, (z1 - z0) / 2.01)
+    rb = min(rb, (z1 - z0) / 2.01) if bottom else 0.0
+    rings = []
+    if bottom and rb > 0:
+        rings.append((offset_ring(ring, -rb), z0))
+        rings.append((ring, z0 + rb))
+    else:
+        rings.append((ring, z0))
+    if top and rt > 0:
+        rings.append((ring, z1 - rt))
+        rings.append((offset_ring(ring, -rt), z1))
+    else:
+        rings.append((ring, z1))
+    n = len(ring)
+    verts, tris = [], []
+    for k, (rg, z) in enumerate(rings):
+        verts.append(np.column_stack([rg, np.full(n, z)]))
+    V = np.concatenate(verts)
+    for k in range(len(rings) - 1):
+        a0, b0 = k * n, (k + 1) * n
+        for i in range(n):
+            j = (i + 1) % n
+            tris += [[a0 + i, a0 + j, b0 + j], [a0 + i, b0 + j, b0 + i]]
+    T = [np.array(tris, np.int64)]
+    caps = []
+    if top:
+        caps.append((len(rings) - 1, 1.0))
+    if bottom:
+        caps.append((0, -1.0))
+    for k, s in caps:
+        rg = rings[k][0]
+        t = np.asarray(mapbox_earcut.triangulate_float64(rg, np.array([n], np.uint32)), np.int64).reshape(-1, 3)
+        v3 = V[k * n:(k + 1) * n]
+        T.append(wind(v3, t, np.array([0, 0, s])) + k * n)
+    return V, np.concatenate(T)
+
+
+def sweep_x(profile_yz: np.ndarray, x0: float, x1: float, segs: int = 1, caps: bool = True) -> tuple[np.ndarray, np.ndarray]:
+    """Closed 2-D profile (local y, z; counter-clockwise seen from +x) swept along x from x0 to x1, in `segs` pieces
+    (extra vertices carry the baked light gradients of long parts). Rails, rods, ledges, bands."""
+    pr = np.asarray(profile_yz, np.float64)
+    if _area2(pr) < 0:
+        pr = pr[::-1]
+    m = len(pr)
+    xs = np.linspace(x0, x1, segs + 1)
+    V = np.concatenate([np.column_stack([np.full(m, x), pr]) for x in xs])
+    tris = []
+    for s in range(segs):
+        a0, b0 = s * m, (s + 1) * m
+        for i in range(m):
+            j = (i + 1) % m
+            # profile CCW seen from +x: (b_j - a_i) × (b_i - a_i) = e × x = outward
+            tris += [[a0 + i, b0 + j, b0 + i], [a0 + i, a0 + j, b0 + j]]
+    T = [np.array(tris, np.int64)]
+    if caps:
+        t = np.asarray(mapbox_earcut.triangulate_float64(pr, np.array([m], np.uint32)), np.int64).reshape(-1, 3)
+        T.append(wind(V[:m], t, np.array([-1.0, 0, 0])))
+        T.append(wind(V[segs * m:], t, np.array([1.0, 0, 0])) + segs * m)
+    return V, np.concatenate(T)
+
+
+def _area2(p: np.ndarray) -> float:
+    x, y = p[:, 0], p[:, 1]
+    return float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+
+def rounded_rect_profile(w: float, h: float, r: float, segs: int = 2, y0: float = 0.0, z0: float = 0.0) -> np.ndarray:
+    """CCW profile of a w×h rectangle (from y0, z0) with rounded corners (radius r, `segs` facets per quarter)."""
+    r = max(0.0, min(r, w / 2.01, h / 2.01))
+    pts = []
+    for cy, cz, a0 in ((y0 + w - r, z0 + r, -90), (y0 + w - r, z0 + h - r, 0), (y0 + r, z0 + h - r, 90), (y0 + r, z0 + r, 180)):
+        for k in range(segs + 1):
+            a = math.radians(a0 + 90 * k / segs)
+            pts.append((cy + r * math.cos(a), cz + r * math.sin(a)))
+    return np.array(_dedupe(pts))
+
+
+def _dedupe(pts) -> list:
+    out = []
+    for p in pts:
+        if not out or math.dist(out[-1], p) > 1e-9:
+            out.append(p)
+    if len(out) > 1 and math.dist(out[0], out[-1]) < 1e-9:
+        out.pop()
+    return out
+
+
+def circle_profile(r: float, n: int = 8, cy: float = 0.0, cz: float = 0.0) -> np.ndarray:
+    a = np.linspace(0, 2 * math.pi, n, endpoint=False) + math.pi / n
+    return np.column_stack([cy + r * np.cos(a), cz + r * np.sin(a)])
+
+
+def rod(p0, p1, r: float, n: int = 6, caps: bool = True) -> tuple[np.ndarray, np.ndarray]:
+    """n-gon cylinder between two 3-D points (legs, rods, brackets, cords)."""
+    p0, p1 = np.asarray(p0, np.float64), np.asarray(p1, np.float64)
+    ax = p1 - p0
+    L = float(np.linalg.norm(ax))
+    if L < 1e-9:
+        return np.zeros((0, 3)), np.zeros((0, 3), np.int64)
+    ax /= L
+    a = np.array([1.0, 0, 0]) if abs(ax[0]) < 0.9 else np.array([0, 1.0, 0])
+    u = np.cross(ax, a)
+    u /= np.linalg.norm(u)
+    w = np.cross(ax, u)
+    v, t = sweep_x(circle_profile(r, n), 0.0, L, 1, caps)
+    out = p0 + v[:, :1] * ax + v[:, 1:2] * u + v[:, 2:3] * w
+    return out, t
+
+
+def lathe(profile_rz, segs: int = 16, cap_bottom: bool = False, cap_top: bool = False, a0: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
+    """Surface of revolution about z: profile (r, z) ordered so that the outside is on its right going from the
+    first to the last point (bottom → top for an outer wall). Lamp shades, pots, stools, domes, table feet."""
+    pr = np.asarray(profile_rz, np.float64)
+    m = len(pr)
+    ang = a0 + np.linspace(0, 2 * math.pi, segs, endpoint=False)
+    V = np.concatenate([np.column_stack([pr[:, 0] * math.cos(a), pr[:, 0] * math.sin(a), pr[:, 1]]) for a in ang])
+    tris = []
+    for j in range(segs):
+        jn = (j + 1) % segs
+        for i in range(m - 1):
+            a, b, c, d = j * m + i, jn * m + i, jn * m + i + 1, j * m + i + 1
+            tris += [[a, b, c], [a, c, d]]
+    T = [np.array(tris, np.int64)]
+    extra = []
+    for cap, i, s in ((cap_bottom, 0, -1.0), (cap_top, m - 1, 1.0)):
+        if cap and pr[i, 0] > 1e-9:
+            k = len(V) + len(extra)
+            extra.append([0.0, 0.0, pr[i, 1]])
+            ring = [j * m + i for j in range(segs)]
+            for j in range(segs):
+                tri = [k, ring[j], ring[(j + 1) % segs]] if s > 0 else [k, ring[(j + 1) % segs], ring[j]]
+                T.append(np.array([tri], np.int64))
+    if extra:
+        V = np.vstack([V, np.array(extra)])
+    T = np.concatenate(T)
+    # degenerate quads at r = 0 (poles) drop out in Node.add_mesh (zero-area facets)
+    return V, T
+
+
+def grid_split(poly, gu: float, gv: float, origin=(0.0, 0.0)) -> list[Polygon]:
+    """Partition `poly` along a gu × gv grid without grout (same material): extra vertices for baked light / AO."""
+    out = []
+    for p in polys(poly):
+        x0, y0, x1, y1 = p.bounds
+        i0, i1 = math.floor((x0 - origin[0]) / gu), math.ceil((x1 - origin[0]) / gu)
+        j0, j1 = math.floor((y0 - origin[1]) / gv), math.ceil((y1 - origin[1]) / gv)
+        for i in range(i0, i1):
+            for j in range(j0, j1):
+                cx0, cy0 = origin[0] + i * gu, origin[1] + j * gv
+                part = p.intersection(rect(cx0, cy0, cx0 + gu, cy0 + gv))
+                if not part.is_empty and part.area > 1e-6:
+                    out += polys(part)
+    return out
+
+
+def planks(poly, width: float, lengths: tuple[float, ...], joint: float, origin=(0.0, 0.0)) -> tuple[list[Polygon], list[Polygon]]:
+    """Long panels (along x) of `width` (along y) with staggered end joints: the plank lengths cycle through
+    `lengths`, offset per row (deterministic). Returns (planks, joints) like `tiles`."""
+    out_p, out_j = [], []
+    h = joint / 2
+    for p in polys(poly):
+        x0, y0, x1, y1 = p.bounds
+        j0, j1 = math.floor((y0 - origin[1]) / width), math.ceil((y1 - origin[1]) / width)
+        for j in range(j0, j1):
+            cy0 = origin[1] + j * width
+            Lc = lengths[j % len(lengths)]
+            xs = origin[0] - ((j * 0.37 * Lc) % Lc)
+            while xs > x0:
+                xs -= Lc
+            while xs < x1:
+                cell = rect(xs, cy0, xs + Lc, cy0 + width)
+                part = p.intersection(cell)
+                if not part.is_empty and part.area > 1e-6:
+                    pl = part.intersection(rect(xs + h, cy0 + h, xs + Lc - h, cy0 + width - h))
+                    out_p += polys(pl)
+                    out_j += polys(part.difference(pl))
+                xs += Lc
+    return out_p, out_j

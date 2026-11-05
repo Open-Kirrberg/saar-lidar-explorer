@@ -1,6 +1,7 @@
-"""Verkaufsraum shell: tiled floor, tiled walls (real thickness through the window reveals), panel ceiling with the
-bulkhead over the shop windows, wood soffit with red edge over the counter, glazed side wall, glass front with the
-open double door, the rear corridor with its closed door. All from the Raumplan (frame B, scaled by plan.f).
+"""Verkaufsraum shell: tiled floor, tall white marble-look wall panels (window wall: white render), cream plank
+ceiling with the bulkhead over the shop windows, red ceiling trim under a white cove, wood soffit with red edge over
+the counter, glazed side wall, glass front with the automatic sliding door (standing open), the rear corridor with
+its closed door. All from the Raumplan (frame B, scaled by plan.f); look from the walkthrough video (round 3).
 """
 from __future__ import annotations
 
@@ -9,13 +10,20 @@ import shapely
 from shapely.geometry import Point, Polygon
 
 from . import geom
-from .plan import (BACKDOOR_HEAD, DOOR_HEAD, DOOR_LEAF, GLASS_WALL, Plan)
+from .plan import (BACKDOOR_HEAD, DOOR_HEAD, GLASS_WALL, Plan)
 from .scene import Scene, smooth
 
 FLOOR_TILE = 0.30
-WALL_TILE = (0.30, 0.60)
-PANEL = 0.625
+WALL_PANEL = 0.75          # tall marble-look wall panels ≈ 0.6–0.9 wide, room high (video)
+PLANK_W = 0.28             # ceiling planks ≈ 0.25–0.30 wide, staggered joints (video)
+PLANK_L = (2.4, 1.8, 3.0)
+AO_GRID = 0.45             # extra vertices on big faces so the vertex AO / baked light has resolution
+COVE = 0.14                # white cove (sloped frieze) at the wall top ...
+TRIM_H = 0.04              # ... with the red trim line under it
+BEAM_H = 0.10              # soffit beam over the counter: wood underside, red edges (video)
 FRAME = 0.05  # glazing bar width
+SLIDE_LEAF = 0.60          # automatic sliding door: 4 equal fields in the 2.48 glass front (2 fixed side panes, 2 leaves,
+                           # video); clear opening 2 × 0.60 (the plan leaves the clear width open: O4 note)
 
 
 def room_polygons(p: Plan) -> tuple[Polygon, Polygon, Polygon]:
@@ -56,13 +64,17 @@ def build(sc: Scene, p: Plan) -> None:
         z = v2[:, 1]
         return (0.84 + 0.16 * smooth(0.0, 0.45, z)) * (1 - 0.05 * smooth(ceil - 0.25, ceil, z))
 
-    # ---- floor
+    # concave room corners (vertical edges) for the vertex AO
+    sc.ao.corner([p.room[k] for k in ("A", "D", "E", "I", "K")], 0.14, 0.45)
+
+    # ---- floor (warm cream tiles, grid parallel to the facade)
     n = sc.node("verkaufsraum/boden", "int", source=src, sigma=sig)
     t, g = geom.tiles(floor, FLOOR_TILE, FLOOR_TILE, 0.008, origin=tuple(p.room["A"]))
-    sc.hface(n, "fliese", _multi(t), 0.0, True, floor_ao)
-    sc.hface(n, "fliese-fuge", _multi(g), 0.0, True, floor_ao)
+    sc.hface(n, "boden-fliese", _multi(t), 0.0, True, floor_ao)
+    sc.hface(n, "boden-fuge", _multi(g), 0.0, True, floor_ao)
 
-    # ---- tiled walls (openings: shop windows in W1, the closed back door at the corridor end)
+    # ---- walls: tall marble-look panels (openings: the closed back door at the corridor end); the window wall W1
+    # (piers, reveals, lintel) is white render
     n = sc.node("verkaufsraum/wandfliesen", "int", source=src, sigma=sig)
     o1, o2 = p.openings["O1"], p.openings["O2"]
     for wid, a, b in wall_loop(p):
@@ -72,33 +84,45 @@ def build(sc: Scene, p: Plan) -> None:
             for o in (o1, o2):
                 s0, s1 = sorted([float(o["from"][0] - a[0]), float(o["to"][0] - a[0])])
                 shape = shape.difference(geom.rect(s0, o["sill"], s1, o["head"]))
+            sc.vface(n, "putz-weiss", a, b, geom.grid_split(shape, AO_GRID, AO_GRID), True, wall_ao)
+            continue
         if wid == "K-T":
             shape = shape.difference(geom.rect(FRAME, 0, L - FRAME, p.H(BACKDOOR_HEAD)))
-        tl, gr = geom.tiles(shape, WALL_TILE[0], WALL_TILE[1], 0.006)
-        sc.vface(n, "fliese", a, b, _multi(tl), True, wall_ao)
+        tl, gr = geom.tiles(shape, WALL_PANEL, ceil + 0.01, 0.004)
+        parts = [q for pl in _multi(tl) for q in geom.grid_split(pl, WALL_PANEL, AO_GRID)]
+        sc.vface(n, "fliese", a, b, parts, True, wall_ao)
         sc.vface(n, "fliese-fuge", a, b, _multi(gr), True, wall_ao)
 
-    # ---- ceiling: panels, bulkhead over the shop windows, wood soffit with red edge over the counter
+    # ---- ceiling: cream planks, bulkhead over the shop windows, wood soffit with red edge over the counter
     S = soffit_polygon(p, R)
     A, B = p.room["A"], p.room["B"]
-    bulk = geom.rect(A[0], A[1], B[0], p.bulkhead_y).difference(S)
+    bulk = geom.rect(A[0], A[1], B[0], p.bulkhead_y)
     n = sc.node("verkaufsraum/rasterdecke", "int", source=src, sigma=p.sigma["ceiling"])
-    panel_area = floor.difference(S).difference(bulk)
-    t, g = geom.tiles(panel_area, PANEL, PANEL, 0.02, origin=tuple(A))
+    panel_area = floor.difference(bulk)
+    t, g = geom.planks(panel_area, PLANK_W, PLANK_L, 0.006, origin=tuple(A))
     sc.hface(n, "decke", _multi(t), ceil, False)
     sc.hface(n, "decke-raster", _multi(g), ceil, False)
-    sc.hface(n, "decke", bulk, p.bulkhead_h, False)
+    sc.hface(n, "decke", geom.grid_split(bulk, AO_GRID * 2, AO_GRID), p.bulkhead_h, False)
     for seg in _free_edges(bulk, R):
         a, b = seg
         # the bulkhead's room-side face looks away from the window (+y)
         sc.vrect(n, "decke", a, b, p.bulkhead_h, ceil, left=_left_points_out(a, b, bulk))
     n = sc.node("verkaufsraum/deckenblende", "int", source="photo", sigma=p.fixtures["F10"].sigma)
     zs = p.H(p.fixtures["F10"].raw["underside"]["v"])
+    zt = zs + BEAM_H
+    # hanging beam: wood underside, red edges, white cover on top, thin white hangers to the ceiling
     sc.hface(n, "holz", S, zs, False)
     for a, b in _free_edges(S, R):
-        sc.vrect(n, "heusser-rot", a, b, zs, ceil, left=_left_points_out(a, b, S))
+        sc.vrect(n, "heusser-rot", a, b, zs, zt, left=_left_points_out(a, b, S))
+    sc.prism(n, "regal-weiss", S.buffer(0.015, join_style="mitre"), zt, zt + 0.02, top=True, bottom=True)
+    f10 = p.fixtures["F10"]
+    for t in (0.08, 0.5, 0.92):
+        c = f10.xy + t * f10.l * f10.ux + 0.5 * f10.d * f10.uy
+        sc.cylinder(n, "regal-weiss", c, 0.008, zt + 0.02, ceil, 6)
 
-    # ---- glazed side wall (W2) and glass front with the double door (W3)
+    _ceiling_trim(sc, p, bulk)
+
+    # ---- glazed side wall (W2) and glass front with the sliding door (W3)
     _glass_side_wall(sc, p)
     _glass_front(sc, p)
     _back_door(sc, p)
@@ -147,23 +171,26 @@ def _glass_side_wall(sc: Scene, p: Plan) -> None:
 def door_geometry(p: Plan) -> dict:
     C, D = p.room["C"], p.room["D"]
     dm = (C[0] + D[0]) / 2
-    leaf = p.f * DOOR_LEAF
+    leaf = p.f * SLIDE_LEAF
     return {"y": C[1], "x0": C[0], "x1": D[0], "xl": dm - leaf, "xr": dm + leaf, "leaf": leaf, "head": p.H(DOOR_HEAD)}
 
 
-LEAF_T = 0.045   # door leaf thickness (stiles)
+LEAF_T = 0.03    # sliding leaf thickness
 
 
-def door_leaf_obstacles(p: Plan, margin: float = 0.18) -> list:
-    """Footprints (frame B) of the two open door leaves, buffered by the walker's body radius: the walker collides
-    with nav.glb only, so the leaves must be cut out of the walkable floor."""
+def _parked_leaves(p: Plan) -> list:
+    """Footprints (frame B) of the two sliding leaves, standing open: slid sideways behind the fixed side panes,
+    on the shop side of the glass front (video: automatic sliding door, no hinged leaves)."""
     g = door_geometry(p)
-    y1, leaf = g["y"], g["leaf"] - 0.02
-    out = []
-    for xh, sgn in ((g["xl"], 1), (g["xr"], -1)):
-        xa = xh if sgn > 0 else xh - LEAF_T
-        out.append(geom.rect(xa, y1 + 0.01, xa + LEAF_T, y1 + 0.01 + leaf).buffer(margin, join_style="mitre"))
-    return out
+    y = g["y"] + 0.015
+    leaf = g["leaf"] + 0.02
+    return [geom.rect(g["xl"] - leaf + 0.03, y, g["xl"] + 0.03, y + LEAF_T),
+            geom.rect(g["xr"] - 0.03, y, g["xr"] + leaf - 0.03, y + LEAF_T)]
+
+
+def door_leaf_obstacles(p: Plan, margin: float = 0.05) -> list:
+    """The parked sliding leaves, buffered a little: the walker collides with nav.glb only."""
+    return [q.buffer(margin, join_style="mitre") for q in _parked_leaves(p)]
 
 
 def _glass_front(sc: Scene, p: Plan) -> None:
@@ -175,24 +202,59 @@ def _glass_front(sc: Scene, p: Plan) -> None:
     head = g["head"]
     for xc in (g["x0"], g["xl"] - FRAME, g["xr"], g["x1"] - FRAME):
         sc.box(n, "lack-schwarz", (xc, y0), 0, FRAME, GLASS_WALL, ceil, 0.0, 0.004)
-    # side panes (with a bottom rail), transom over the door, top rail
+    # fixed side panes (with a bottom rail), transom over the door, top rail
     for xa, xb in ((g["x0"] + FRAME, g["xl"] - FRAME), (g["xr"] + FRAME, g["x1"] - FRAME)):
         sc.box(n, "lack-schwarz", (xa, y0), 0, xb - xa, GLASS_WALL, 0.10, 0.0, 0.004)
         sc.vrect(n, "glas", (xa, (y0 + y1) / 2), (xb, (y0 + y1) / 2), 0.10, ceil - 0.05, left=False)
     sc.box(n, "lack-schwarz", (g["xl"] - FRAME, y0), 0, g["xr"] - g["xl"] + 2 * FRAME, GLASS_WALL, 0.06, head, 0.004)
     sc.vrect(n, "glas", (g["xl"], (y0 + y1) / 2), (g["xr"], (y0 + y1) / 2), head + 0.06, ceil - 0.05, left=False)
     sc.box(n, "lack-schwarz", (g["x0"], y0), 0, g["x1"] - g["x0"], GLASS_WALL, 0.05, ceil - 0.05, 0.004)
-    # two glass leaves, standing open into the shop (hinges on the door posts)
-    leaf, t = g["leaf"] - 0.02, LEAF_T
-    for xh, sgn in ((g["xl"], 1), (g["xr"], -1)):
-        xa = xh if sgn > 0 else xh - t
-        sc.box(n, "lack-schwarz", (xa, y1 + 0.01), 0, t, 0.06, head - 0.02, 0.01, 0.004)          # hinge stile
-        sc.box(n, "lack-schwarz", (xa, y1 + leaf - 0.06), 0, t, 0.06, head - 0.02, 0.01, 0.004)   # lock stile
-        sc.box(n, "lack-schwarz", (xa, y1 + 0.01), 0, t, leaf, 0.12, 0.01, 0.004)                  # kick rail
-        sc.box(n, "lack-schwarz", (xa, y1 + 0.01), 0, t, leaf, 0.06, head - 0.07, 0.004)           # top rail
-        xm = xa + t / 2
-        sc.vrect(n, "glas", (xm, y1 + 0.07), (xm, y1 + leaf - 0.06), 0.13, head - 0.07, left=sgn < 0)
-        sc.box(n, "messing", (xa - 0.02 if sgn > 0 else xa + t, y1 + leaf - 0.10), 0, 0.02, 0.03, 0.35, 0.95, 0.005)  # handle
+    # two sliding leaves (frameless glass, alu rails top and bottom), parked open behind the side panes
+    for q in _parked_leaves(p):
+        x0, ya, x1, yb = q.bounds
+        sc.box(n, "chrom", (x0, ya), 0, x1 - x0, yb - ya, 0.08, 0.005, 0.004)                     # bottom rail
+        sc.box(n, "chrom", (x0, ya), 0, x1 - x0, yb - ya, 0.10, head - 0.11, 0.004)               # top rail
+        for xe in (x0, x1 - 0.02):
+            sc.box(n, "chrom", (xe, ya), 0, 0.02, yb - ya, head - 0.20, 0.085, 0.003)             # edge profiles
+        ym = (ya + yb) / 2
+        sc.vrect(n, "glas", (x0 + 0.02, ym), (x1 - 0.02, ym), 0.085, head - 0.11, left=True)
+    # door operator over the opening (alu box) with the motion sensor
+    xa, xb = _parked_leaves(p)[0].bounds[0] - 0.05, _parked_leaves(p)[1].bounds[2] + 0.05
+    sc.box(n, "chrom", (xa, y1 + 0.005), 0, xb - xa, 0.14, ceil - head - 0.02, head, 0.006)
+    sc.box(n, "lack-schwarz", ((g["xl"] + g["xr"]) / 2 - 0.08, y1 + 0.14), 0, 0.16, 0.012, 0.05, head + 0.02, 0.004)
+
+
+def _ceiling_trim(sc: Scene, p: Plan, bulk) -> None:
+    """Red trim line under a white cove where the walls meet the ceiling (W4–W8; the window wall has the bulkhead)."""
+    n = sc.node("verkaufsraum/zierleiste", "int", source="photo", sigma=0.1)
+    ceil = p.ceiling
+    yb = p.bulkhead_y
+    for wid, a, b in wall_loop(p):
+        if wid.startswith("K-") or wid == "W1":
+            continue
+        a, b = np.asarray(a, np.float64), np.asarray(b, np.float64)
+        # clip the part over the bulkhead (y < bulkhead_y: the wall top is lower there)
+        if a[1] < yb or b[1] < yb:
+            if abs(b[1] - a[1]) < 1e-9:
+                continue
+            t = (yb - a[1]) / (b[1] - a[1])
+            m = a + t * (b - a)
+            a, b = (m, b) if a[1] < yb else (a, m)
+        L = float(np.linalg.norm(b - a))
+        if L < 0.05:
+            continue
+        d = (b - a) / L
+        nl = np.array([-d[1], d[0]])                                  # into the room (room on the left)
+        pts = np.array([[*a, ceil - COVE], [*b, ceil - COVE], [*(b + COVE * nl), ceil], [*(a + COVE * nl), ceil]])
+        sc.quad(n, "regal-weiss", pts, np.array([nl[0], nl[1], -1.0]) / np.sqrt(2))
+        e = 0.006
+        a2, b2 = a + e * nl, b + e * nl
+        sc.vrect(n, "thekenrot", a2, b2, ceil - COVE - TRIM_H, ceil - COVE, left=True)
+        sc.hface(n, "thekenrot", _strip(a, b, nl, e), ceil - COVE - TRIM_H, False)             # underside
+
+
+def _strip(a, b, nl, e) -> Polygon:
+    return Polygon([a, b, b + e * nl, a + e * nl])
 
 
 def _back_door(sc: Scene, p: Plan) -> None:

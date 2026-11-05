@@ -210,3 +210,49 @@ def test_scale_factor_moves_interior_not_survey(built, tmp_path):
             assert np.allclose(want, np.r_[agg(b[:, :2], 0), agg(b[:, 2])], atol=2e-3), node
     for survey in ("fassade/dach",):
         assert np.array_equal(np.sort(_pts(built["twin"], [survey]), 0), np.sort(_pts(g, [survey]), 0)), survey
+
+
+def test_product_slots(built):
+    """Slots come from the same fixture parameters as the geometry, pass the catalogue check, and the committed
+    catalogue/slots.json is the current build's (run.sh --update-catalogue)."""
+    sys.path.insert(0, str(B.ZONE / "catalogue"))
+    from check import check_slots
+    doc = json.loads((built["out"] / "slots.json").read_text(encoding="utf-8"))
+    cat = B.catalogue_ids(json.loads(B.CATALOGUE.read_text(encoding="utf-8")))
+    assert check_slots(doc, set(cat)) == []
+    count: dict[str, int] = {}
+    for s in doc["slots"]:
+        count[s["fixture"]] = count.get(s["fixture"], 0) + 1
+    want = {"theke/vitrine/ebene-1": 6, "theke/vitrine/ebene-2": 6, "theke/vitrine/ebene-3": 8, "theke/brezelstaender": 10,
+            "brotregal/ebene-1": 14, "brotregal/ebene-2": 15, "brotregal/ebene-3": 14, "gitterregal": 5, "dosenregal": 13,
+            "getraenkekuehlschrank": 5, "wuerfelregal": 8}
+    want.update({f"brotregal/koerbe/korb-{k}": 1 for k in range(1, 7)})
+    assert count == want
+    # every slot lies inside its fixture's catalogue footprint (zone frame, generous: σ of the parts)
+    F = built["plan"].frame
+    for s in doc["slots"]:
+        b = F.zone_to_b(np.array([[s["pose"]["x"], s["pose"]["y"], s["pose"]["z"]]]))[0]
+        assert 0.0 <= b[2] <= 2.0, s["id"]
+    assert not any(n.startswith("verkaufsraum/slot-marker") for n in built["twin"]), "debug slot markers in a normal build"
+    committed = B.SLOTS
+    if committed.is_file():
+        assert committed.read_text(encoding="utf-8") == (built["out"] / "slots.json").read_text(encoding="utf-8"), \
+            "catalogue/slots.json is stale: run build/run.sh --update-catalogue"
+
+
+def test_facade_round_3b(built):
+    """Facade details are built; the shop lettering is on by default (owners' OK, ADR 0044); nothing of the pickup cabinet (its place is
+    in the private part of the passage)."""
+    names = set(built["twin"])
+    for must in ("fassade/glasbausteine", "fassade/fenstergewaende", "fassade/schlussstein-1", "fassade/schlussstein-2",
+                 "fassade/wandmalerei", "fassade/obergeschoss-fenster", "fassade/fenster-rollladen", "fassade/fallrohr",
+                 "fassade/ausleger-schild", "fassade/handlauf", "fassade/dach/schiefer"):
+        assert must in names, must
+    assert [n for n in names if n.endswith("/schrift")], "lettering is on by default (ADR 0044)"
+    assert built["report"]["lettering"] is True
+    assert not [n for n in names if n.startswith("fassade/abholschrank")]
+    # the SSW end is a gable now: the end wall reaches the ridge
+    p = built["plan"]
+    b = p.frame.zone_to_b(_pts(built["twin"], ["fassade/aussenwand"]))
+    end = b[b[:, 0] < 0.1]
+    assert end[:, 2].max() > p.raw["site"]["building"]["eaves"]["v"] + 3.0

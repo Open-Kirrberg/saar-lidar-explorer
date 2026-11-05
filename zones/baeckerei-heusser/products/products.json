@@ -1,0 +1,2946 @@
+{
+ "schema": "bh-products-v1",
+ "source": "hq-products",
+ "count": 103,
+ "categories": [
+  "brot",
+  "baguette",
+  "broetchen",
+  "snacks",
+  "teilchen",
+  "kuchen",
+  "torten"
+ ],
+ "name_fix": [
+  {
+   "id": "schwabenkornt-500g",
+   "from": "Schwabenkornt 500g",
+   "to": "Schwabenkorn 500g",
+   "why": "Tippfehler (vgl. Schwabenkorn 1000g)"
+  },
+  {
+   "id": "taschen-schleifen",
+   "from": "Taschen Schleifen",
+   "to": "Taschen & Schleifen",
+   "why": "eigener Text: Taschen & Schleifen"
+  },
+  {
+   "id": "sckokobroetchen",
+   "from": "Sckokobrötchen",
+   "to": "Schokobrötchen",
+   "why": "Tippfehler (eigener Text: Schokobrötchen)"
+  },
+  {
+   "id": "pain-chocolate",
+   "from": "Pain Chocolate",
+   "to": "Pain au Chocolat",
+   "why": "eigener Text nennt es Pain au Chocolat"
+  },
+  {
+   "id": "kranzkuchen-gefuellt-nuss-schoko-quark-oder-pudding",
+   "from": "Kranzkuchen gefüllt (Nuss, Schoko, Quark oder Pudding",
+   "to": "Kranzkuchen gefüllt (Nuss, Schoko, Quark oder Pudding)",
+   "why": "fehlende Klammer ergänzt"
+  },
+  {
+   "id": "kranzkuchen-gefuellt-nuss-schoko-quark-oder-pudding-1-4-stueck",
+   "from": "Kranzkuchen gefüllt (Nuss, Schoko, Quark oder Pudding (1/4 Stück)",
+   "to": "Kranzkuchen gefüllt (Nuss, Schoko, Quark oder Pudding) (1/4 Stück)",
+   "why": "fehlende Klammer ergänzt"
+  }
+ ],
+ "products": [
+  {
+   "id": "kornbrot-500g",
+   "numeric_id": 1,
+   "name_de": "Kornbrot 500g",
+   "name_src": "Kornbrot 500g",
+   "category": "brot",
+   "price_eur": 2.5,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Kernig & saftig — unser Kornbrot mit vollem Getreidegeschmack.",
+   "info_de": "Unser Kornbrot 500g wird aus ausgewählten Getreidekörnern nach traditionellem Rezept gebacken. Die knusprige Kruste und die saftige, aromatische Krume machen es zum perfekten Begleiter für jede Mahlzeit. Täglich frisch aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-oval",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "koerner"
+   },
+   "size_m": [
+    0.22,
+    0.14,
+    0.085
+   ],
+   "sigma_m": 0.018,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "1-kornbrot-500g"
+  },
+  {
+   "id": "kornbrot-1000g",
+   "numeric_id": 2,
+   "name_de": "Kornbrot 1000g",
+   "name_src": "Kornbrot 1000g",
+   "category": "brot",
+   "price_eur": 4.4,
+   "sale_unit": "Laib",
+   "weight_g": 1000,
+   "short_de": "Kernig & saftig — unser Kornbrot, für den großen Hunger.",
+   "info_de": "Unser Kornbrot 1000g — dasselbe bewährte Rezept, nur für mehr Genuss. Voller Körner, voller Aroma, täglich frisch gebacken. Ideal für die ganze Familie.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-oval",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "koerner"
+   },
+   "size_m": [
+    0.277,
+    0.176,
+    0.107
+   ],
+   "sigma_m": 0.022,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "2-kornbrot-1000g"
+  },
+  {
+   "id": "mischbrot-500g",
+   "numeric_id": 3,
+   "name_de": "Mischbrot 500g",
+   "name_src": "Mischbrot 500g",
+   "category": "brot",
+   "price_eur": 2.5,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Kräftig & mild zugleich — das klassische Mischbrot.",
+   "info_de": "Unser Mischbrot 500g vereint Roggen und Weizen zu einem harmonischen Geschmack. Eine leichte Säure vom Sauerteig, eine saftige Krume — genau so, wie Brot sein soll.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-oval",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "schraeg",
+    "flour": true
+   },
+   "size_m": [
+    0.22,
+    0.14,
+    0.085
+   ],
+   "sigma_m": 0.018,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "3-mischbrot-500g"
+  },
+  {
+   "id": "mischbrot-1000g",
+   "numeric_id": 4,
+   "name_de": "Mischbrot 1000g",
+   "name_src": "Mischbrot 1000g",
+   "category": "brot",
+   "price_eur": 4.4,
+   "sale_unit": "Laib",
+   "weight_g": 1000,
+   "short_de": "Kräftig & mild zugleich — das klassische Mischbrot in groß.",
+   "info_de": "Unser Mischbrot 1000g: die große Variante unseres Klassikers für alle, die auf gutes Brot nicht verzichten möchten. Täglich frisch gebacken, hält es mehrere Tage.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-oval",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "schraeg",
+    "flour": true
+   },
+   "size_m": [
+    0.277,
+    0.176,
+    0.107
+   ],
+   "sigma_m": 0.022,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "4-mischbrot-1000g"
+  },
+  {
+   "id": "holzluken-500g",
+   "numeric_id": 5,
+   "name_de": "Holzluken 500g",
+   "name_src": "Holzluken 500g",
+   "category": "brot",
+   "price_eur": 2.9,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Rustikal & herzhaft — das Holzluken-Brot aus der Steinbackform.",
+   "info_de": "Das Holzluken 500g bekommt seinen unverwechselbaren Charakter durch die besondere Backform. Die dunkle, rösche Kruste umhüllt eine saftige, würzige Krume — ein echter Genuss.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "cuts": "riss",
+    "flour": true
+   },
+   "size_m": [
+    0.18,
+    0.18,
+    0.085
+   ],
+   "sigma_m": 0.014,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "5-holzluken-500g"
+  },
+  {
+   "id": "holzluken-750g",
+   "numeric_id": 6,
+   "name_de": "Holzluken 750g",
+   "name_src": "Holzluken 750g",
+   "category": "brot",
+   "price_eur": 4.0,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Rustikal & herzhaft — das Holzluken-Brot für die ganze Woche.",
+   "info_de": "Das Holzluken 750g: mehr vom Guten. Großartig zu Käse, Wurst oder einfach mit Butter. Täglich frisch aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "cuts": "riss",
+    "flour": true
+   },
+   "size_m": [
+    0.206,
+    0.206,
+    0.097
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "6-holzluken-750g"
+  },
+  {
+   "id": "bergsteiger-500g",
+   "numeric_id": 7,
+   "name_de": "Bergsteiger 500g",
+   "name_src": "Bergsteiger 500g",
+   "category": "brot",
+   "price_eur": 2.9,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Kräftig & vollwertig — Brot für aktive Menschen.",
+   "info_de": "Der Bergsteiger 500g ist unser Brot für alle, die Power brauchen. Vollkorn, Körner und Sauerteig sorgen für anhaltende Energie und vollen Geschmack.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "topping": "koerner"
+   },
+   "size_m": [
+    0.18,
+    0.18,
+    0.085
+   ],
+   "sigma_m": 0.014,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "7-bergsteiger-500g"
+  },
+  {
+   "id": "bergsteiger-750g",
+   "numeric_id": 8,
+   "name_de": "Bergsteiger 750g",
+   "name_src": "Bergsteiger 750g",
+   "category": "brot",
+   "price_eur": 4.0,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Kräftig & vollwertig — der Bergsteiger in der großen Version.",
+   "info_de": "Der Bergsteiger 750g: für alle, die viel vorhaben. Vollwertig, sättigend und unglaublich aromatisch. Einfach gut.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "topping": "koerner"
+   },
+   "size_m": [
+    0.206,
+    0.206,
+    0.097
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "8-bergsteiger-750g"
+  },
+  {
+   "id": "sommerkorn-500g",
+   "numeric_id": 9,
+   "name_de": "Sommerkorn 500g",
+   "name_src": "Sommerkorn 500g",
+   "category": "brot",
+   "price_eur": 2.9,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Leicht & aromatisch — unser Sommerkorn für warme Tage.",
+   "info_de": "Das Sommerkorn 500g ist unser leichteres Brot mit feinen Körnern und einem milden Aroma. Perfekt für den Sommer, aber das ganze Jahr beliebt.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "sesam"
+   },
+   "size_m": [
+    0.18,
+    0.18,
+    0.085
+   ],
+   "sigma_m": 0.014,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "9-sommerkorn-500g"
+  },
+  {
+   "id": "sommerkorn-750g",
+   "numeric_id": 10,
+   "name_de": "Sommerkorn 750g",
+   "name_src": "Sommerkorn 750g",
+   "category": "brot",
+   "price_eur": 4.0,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Leicht & aromatisch — das Sommerkorn in groß.",
+   "info_de": "Das Sommerkorn 750g: mehr Genuss für die ganze Familie. Mild, körnig und täglich frisch gebacken.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "sesam"
+   },
+   "size_m": [
+    0.206,
+    0.206,
+    0.097
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "10-sommerkorn-750g"
+  },
+  {
+   "id": "biker-500g",
+   "numeric_id": 11,
+   "name_de": "Biker 500g",
+   "name_src": "Biker 500g",
+   "category": "brot",
+   "price_eur": 2.9,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Kernig & herzhaft — das Biker-Brot für echte Genießer.",
+   "info_de": "Unser Biker 500g ist ein kräftiges Vollkornbrot mit Biss. Saftig, aromatisch und voller Körner — perfekt für alle, die wissen, was gutes Brot ausmacht.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "cuts": "kreuz"
+   },
+   "size_m": [
+    0.18,
+    0.18,
+    0.085
+   ],
+   "sigma_m": 0.014,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "11-biker-500g"
+  },
+  {
+   "id": "biker-750g",
+   "numeric_id": 12,
+   "name_de": "Biker 750g",
+   "name_src": "Biker 750g",
+   "category": "brot",
+   "price_eur": 4.0,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Kernig & herzhaft — das Biker-Brot in der großen Version.",
+   "info_de": "Das Biker 750g: unser kerniges Vollkornbrot für mehr Genuss. Täglich frisch, hält es mehrere Tage und wird dabei nur besser.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "cuts": "kreuz"
+   },
+   "size_m": [
+    0.206,
+    0.206,
+    0.097
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "12-biker-750g"
+  },
+  {
+   "id": "kerbricher-500g",
+   "numeric_id": 13,
+   "name_de": "Kerbricher 500g",
+   "name_src": "Kerbricher 500g",
+   "category": "brot",
+   "price_eur": 2.9,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Würzig & saftig — das Kerbricher Brot aus unserer Region.",
+   "info_de": "Der Kerbricher 500g ist ein regionales Brot mit Charakter. Kräftig gewürzt, saftig in der Krume — ein Stück Heimat auf dem Teller.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "gitter",
+    "flour": true
+   },
+   "size_m": [
+    0.18,
+    0.18,
+    0.085
+   ],
+   "sigma_m": 0.014,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "13-kerbricher-500g"
+  },
+  {
+   "id": "kerbricher-750g",
+   "numeric_id": 14,
+   "name_de": "Kerbricher 750g",
+   "name_src": "Kerbricher 750g",
+   "category": "brot",
+   "price_eur": 4.0,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Würzig & saftig — der Kerbricher in groß.",
+   "info_de": "Der Kerbricher 750g: mehr von unserem regionalen Klassiker. Täglich frisch gebacken und voller Geschmack.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "gitter",
+    "flour": true
+   },
+   "size_m": [
+    0.206,
+    0.206,
+    0.097
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "14-kerbricher-750g"
+  },
+  {
+   "id": "haferflocken-500g",
+   "numeric_id": 15,
+   "name_de": "Haferflocken 500g",
+   "name_src": "Haferflocken 500g",
+   "category": "brot",
+   "price_eur": 3.2,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Zart & gesund — unser Haferflocken-Brot für den bewussten Genuss.",
+   "info_de": "Das Haferflocken 500g ist sanft in der Krume, reich an Ballaststoffen und herrlich aromatisch. Die Haferflocken geben ihm eine besondere Textur und einen milden, nussigen Geschmack.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenbrot",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "hafer"
+   },
+   "size_m": [
+    0.2,
+    0.1,
+    0.09
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "15-haferflocken-500g"
+  },
+  {
+   "id": "haferflocken-750g",
+   "numeric_id": 16,
+   "name_de": "Haferflocken 750g",
+   "name_src": "Haferflocken 750g",
+   "category": "brot",
+   "price_eur": 4.4,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Zart & gesund — das Haferflocken-Brot in der großen Version.",
+   "info_de": "Das Haferflocken 750g: mehr vom gesunden Genuss. Täglich frisch und ideal für alle, die bewusst essen möchten.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenbrot",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "hafer"
+   },
+   "size_m": [
+    0.229,
+    0.114,
+    0.103
+   ],
+   "sigma_m": 0.018,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "16-haferflocken-750g"
+  },
+  {
+   "id": "voll-gut-500g",
+   "numeric_id": 17,
+   "name_de": "Voll-Gut 500g",
+   "name_src": "Voll-Gut 500g",
+   "category": "brot",
+   "price_eur": 3.2,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Vollwertig & aromatisch — unser Voll-Gut für volle Energie.",
+   "info_de": "Das Voll-Gut 500g steckt voller guter Dinge: Vollkornmehl, Körner und Sauerteig sorgen für einen tiefen, runden Geschmack und langanhaltende Energie.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenbrot",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "topping": "koerner"
+   },
+   "size_m": [
+    0.2,
+    0.1,
+    0.09
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "17-voll-gut-500g"
+  },
+  {
+   "id": "voll-gut-750g",
+   "numeric_id": 18,
+   "name_de": "Voll-Gut 750g",
+   "name_src": "Voll-Gut 750g",
+   "category": "brot",
+   "price_eur": 4.4,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Vollwertig & aromatisch — das Voll-Gut in groß.",
+   "info_de": "Das Voll-Gut 750g: die große Portion für alle, die auf Vollwertiges setzen. Täglich frisch und voller natürlicher Güte.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenbrot",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "topping": "koerner"
+   },
+   "size_m": [
+    0.229,
+    0.114,
+    0.103
+   ],
+   "sigma_m": 0.018,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "18-voll-gut-750g"
+  },
+  {
+   "id": "schwabenkornt-500g",
+   "numeric_id": 19,
+   "name_de": "Schwabenkorn 500g",
+   "name_src": "Schwabenkornt 500g",
+   "category": "brot",
+   "price_eur": 3.5,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Schwäbisch & herzhaft — das Schwabenkorn aus unserer Backstube.",
+   "info_de": "Das Schwabenkorn 500g ist ein kräftiges Schwarzbrot mit schwäbischer Tradition. Roggenmehl und Sauerteig geben ihm einen würzigen, leicht säuerlichen Charakter.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenbrot",
+   "shape_params": {
+    "crust": "schwarzbrot",
+    "flour": true
+   },
+   "size_m": [
+    0.2,
+    0.1,
+    0.09
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "19-schwabenkornt-500g"
+  },
+  {
+   "id": "schwabenkorn-1000g",
+   "numeric_id": 20,
+   "name_de": "Schwabenkorn 1000g",
+   "name_src": "Schwabenkorn 1000g",
+   "category": "brot",
+   "price_eur": 6.0,
+   "sale_unit": "Laib",
+   "weight_g": 1000,
+   "short_de": "Schwäbisch & herzhaft — das Schwabenkorn im ganzen Laib.",
+   "info_de": "Das Schwabenkorn 1000g: der ganze Laib für Freunde des kräftigen Brotes. Täglich frisch und lange haltbar.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenbrot",
+   "shape_params": {
+    "crust": "schwarzbrot",
+    "flour": true
+   },
+   "size_m": [
+    0.252,
+    0.126,
+    0.113
+   ],
+   "sigma_m": 0.02,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "20-schwabenkorn-1000g"
+  },
+  {
+   "id": "feel-happy-500g",
+   "numeric_id": 21,
+   "name_de": "Feel Happy 500g",
+   "name_src": "Feel Happy 500g",
+   "category": "brot",
+   "price_eur": 4.2,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Voller Lebensfreude — unser Feel Happy Brot.",
+   "info_de": "Das Feel Happy 500g ist unser besonderes Brot — mit ausgewählten Zutaten für ein gutes Gefühl. Mild, saftig und voller positiver Energie. Einfach gut.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenbrot",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "saaten"
+   },
+   "size_m": [
+    0.2,
+    0.1,
+    0.09
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "21-feel-happy-500g"
+  },
+  {
+   "id": "hildegard-von-bingen-500g",
+   "numeric_id": 22,
+   "name_de": "Hildegard von Bingen 500g",
+   "name_src": "Hildegard von Bingen 500g",
+   "category": "brot",
+   "price_eur": 3.5,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Traditionsreich & aromatisch — nach dem Rezept der heiligen Hildegard.",
+   "info_de": "Das Hildegard von Bingen 500g basiert auf alten Rezepten und besonderen Zutaten wie Dinkel und Gewürzen. Ein Brot mit Geschichte und vollem, rundem Geschmack.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-oval",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "laengs",
+    "flour": true
+   },
+   "size_m": [
+    0.22,
+    0.14,
+    0.085
+   ],
+   "sigma_m": 0.018,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "22-hildegard-von-bingen-500g"
+  },
+  {
+   "id": "hildegard-von-bingen-750g",
+   "numeric_id": 23,
+   "name_de": "Hildegard von Bingen 750g",
+   "name_src": "Hildegard von Bingen 750g",
+   "category": "brot",
+   "price_eur": 4.6,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Traditionsreich & aromatisch — der große Hildegard von Bingen.",
+   "info_de": "Das Hildegard von Bingen 750g: mehr vom heilsamen Traditionsrezept. Täglich frisch, nachhaltig sättigend und wunderbar im Geschmack.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-oval",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "laengs",
+    "flour": true
+   },
+   "size_m": [
+    0.252,
+    0.16,
+    0.097
+   ],
+   "sigma_m": 0.02,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "23-hildegard-von-bingen-750g"
+  },
+  {
+   "id": "koenig-ludwig-500g",
+   "numeric_id": 24,
+   "name_de": "König Ludwig 500g",
+   "name_src": "König Ludwig 500g",
+   "category": "brot",
+   "price_eur": 3.5,
+   "sale_unit": "Laib",
+   "weight_g": 500,
+   "short_de": "Edel & vollwertig — das König Ludwig Brot aus unserer Backstube.",
+   "info_de": "Der König Ludwig 500g ist ein edles Roggenmischbrot mit würzigem Charakter. Saftig, aromatisch und mit einer rösche Kruste — majestätischer Genuss.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "raute",
+    "flour": true
+   },
+   "size_m": [
+    0.18,
+    0.18,
+    0.085
+   ],
+   "sigma_m": 0.014,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "24-koenig-ludwig-500g"
+  },
+  {
+   "id": "koenig-ludwig-750g",
+   "numeric_id": 25,
+   "name_de": "König Ludwig 750g",
+   "name_src": "König Ludwig 750g",
+   "category": "brot",
+   "price_eur": 4.6,
+   "sale_unit": "Laib",
+   "weight_g": 750,
+   "short_de": "Edel & vollwertig — der König Ludwig in groß.",
+   "info_de": "Der König Ludwig 750g: der große Genuss für alle Kenner. Täglich frisch und voller königlichem Aroma.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laib-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "raute",
+    "flour": true
+   },
+   "size_m": [
+    0.206,
+    0.206,
+    0.097
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "weight",
+   "source": "hq-products",
+   "source_file": "25-koenig-ludwig-750g"
+  },
+  {
+   "id": "kasten-weissbrot",
+   "numeric_id": 26,
+   "name_de": "Kasten Weißbrot",
+   "name_src": "Kasten Weißbrot",
+   "category": "baguette",
+   "price_eur": 3.4,
+   "sale_unit": "Laib",
+   "weight_g": null,
+   "short_de": "Weich & zart — unser Kasten-Weißbrot für jeden Tag.",
+   "info_de": "Das Kasten-Weißbrot ist fluffig, saftig und vielseitig. Perfekt für Toasts, Sandwiches oder einfach mit Butter — ein täglicher Begleiter aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenbrot",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "laengs",
+    "dome": true
+   },
+   "size_m": [
+    0.26,
+    0.11,
+    0.12
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "26-kasten-weissbrot"
+  },
+  {
+   "id": "baguette-klein",
+   "numeric_id": 27,
+   "name_de": "Baguette klein",
+   "name_src": "Baguette klein",
+   "category": "baguette",
+   "price_eur": 2.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Knusprig & luftig — die kleine Baguette für Zwischendurch.",
+   "info_de": "Unser kleines Baguette ist außen rösch, innen fluffig und täglich frisch gebacken. Perfekt zur Suppe, zum Käse oder einfach so.",
+   "available": true,
+   "seasonal": false,
+   "shape": "baguette",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "cuts": 4
+   },
+   "size_m": [
+    0.36,
+    0.065,
+    0.05
+   ],
+   "sigma_m": 0.029,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "27-baguette-klein"
+  },
+  {
+   "id": "baguette-gross",
+   "numeric_id": 28,
+   "name_de": "Baguette groß",
+   "name_src": "Baguette groß",
+   "category": "baguette",
+   "price_eur": 3.4,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Knusprig & luftig — das große Baguette für den großen Hunger.",
+   "info_de": "Unser großes Baguette: außen rösch, innen weich — ein französischer Klassiker aus unserer Backstube. Täglich frisch, herrlich aromatisch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "baguette",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "cuts": 6
+   },
+   "size_m": [
+    0.58,
+    0.07,
+    0.055
+   ],
+   "sigma_m": 0.046,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "28-baguette-gross"
+  },
+  {
+   "id": "roggenflit-klein",
+   "numeric_id": 29,
+   "name_de": "Roggenflit klein",
+   "name_src": "Roggenflit klein",
+   "category": "baguette",
+   "price_eur": 2.6,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Würzig & knusprig — der kleine Roggenflit aus unserer Backstube.",
+   "info_de": "Der Roggenflit klein ist unser rustikales Roggenbaguette mit kräftigem Charakter. Knusprige Kruste, saftige Krume — perfekt zu Käse und Wurst.",
+   "available": true,
+   "seasonal": false,
+   "shape": "baguette",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": 3,
+    "flour": true
+   },
+   "size_m": [
+    0.3,
+    0.075,
+    0.06
+   ],
+   "sigma_m": 0.024,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "29-roggenflit-klein"
+  },
+  {
+   "id": "roggenflit-gross",
+   "numeric_id": 30,
+   "name_de": "Roggenflit groß",
+   "name_src": "Roggenflit groß",
+   "category": "baguette",
+   "price_eur": 4.6,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Würzig & knusprig — der große Roggenflit für echte Liebhaber.",
+   "info_de": "Der Roggenflit groß: mehr vom würzigen Roggenbaguette. Täglich frisch und ideal für alle, die es etwas herzhafter mögen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "baguette",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": 5,
+    "flour": true
+   },
+   "size_m": [
+    0.46,
+    0.09,
+    0.07
+   ],
+   "sigma_m": 0.037,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "30-roggenflit-gross"
+  },
+  {
+   "id": "doppelweck",
+   "numeric_id": 31,
+   "name_de": "Doppelweck",
+   "name_src": "Doppelweck",
+   "category": "broetchen",
+   "price_eur": 0.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Doppelt gut — unser Doppelweck, knusprig und frisch.",
+   "info_de": "Der Doppelweck ist ein Brötchen-Klassiker: zwei zusammengewachsene Hälften mit röschem Boden und lockerer Krume. Ideal zum Frühstück oder als Snack.",
+   "available": true,
+   "seasonal": false,
+   "shape": "doppelweck",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "lobes": 2
+   },
+   "size_m": [
+    0.15,
+    0.08,
+    0.06
+   ],
+   "sigma_m": 0.012,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "31-doppelweck"
+  },
+  {
+   "id": "samstagsweck",
+   "numeric_id": 32,
+   "name_de": "Samstagsweck",
+   "name_src": "Samstagsweck",
+   "category": "broetchen",
+   "price_eur": 0.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Besonders am Samstag — unser Samstagsweck frisch aus dem Ofen.",
+   "info_de": "Der Samstagsweck ist unser Wochenend-Highlight: besonders knusprig, besonders aromatisch. Am Samstag frisch gebacken — der perfekte Start ins Wochenende.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-schlitz",
+   "shape_params": {
+    "crust": "kruste",
+    "flour": true
+   },
+   "size_m": [
+    0.12,
+    0.08,
+    0.06
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "32-samstagsweck"
+  },
+  {
+   "id": "sternweck",
+   "numeric_id": 33,
+   "name_de": "Sternweck",
+   "name_src": "Sternweck",
+   "category": "broetchen",
+   "price_eur": 0.6,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Zart & goldbraun — unser Sternweck für besondere Momente.",
+   "info_de": "Der Sternweck glänzt mit seiner besonderen Form und der zarten, goldbraunen Kruste. Locker und fluffig — ein echter Hingucker auf dem Frühstückstisch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-stern",
+   "shape_params": {
+    "crust": "kruste-hell"
+   },
+   "size_m": [
+    0.1,
+    0.1,
+    0.06
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "33-sternweck"
+  },
+  {
+   "id": "flitweck",
+   "numeric_id": 34,
+   "name_de": "Flitweck",
+   "name_src": "Flitweck",
+   "category": "broetchen",
+   "price_eur": 0.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Leicht & luftig — der Flitweck aus unserer Backstube.",
+   "info_de": "Der Flitweck ist unser besonders luftiges Brötchen — mit feiner Kruste und weichem Inneren. Täglich frisch gebacken und ein Genuss pur.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-schlitz",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "pointed": true
+   },
+   "size_m": [
+    0.17,
+    0.065,
+    0.05
+   ],
+   "sigma_m": 0.014,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "34-flitweck"
+  },
+  {
+   "id": "elsaesser",
+   "numeric_id": 35,
+   "name_de": "Elsässer",
+   "name_src": "Elsässer",
+   "category": "broetchen",
+   "price_eur": 0.6,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Klassisch elsässisch — unser Elsässer Brötchen mit Tradition.",
+   "info_de": "Der Elsässer bringt elsässische Backkunst in unsere Backstube: zarte Kruste, feines Aroma und eine besondere Form. Täglich frisch gebacken.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-schlitz",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "flour": true
+   },
+   "size_m": [
+    0.12,
+    0.075,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "35-elsaesser"
+  },
+  {
+   "id": "knusperweck",
+   "numeric_id": 36,
+   "name_de": "Knusperweck",
+   "name_src": "Knusperweck",
+   "category": "broetchen",
+   "price_eur": 0.6,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Rösch & knusprig — der Knusperweck für Knusperliebhaber.",
+   "info_de": "Der Knusperweck ist genau das, was der Name verspricht: besonders knusprig, besonders rösch. Täglich frisch und ein Muss für alle Brötchen-Liebhaber.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-schlitz",
+   "shape_params": {
+    "crust": "kruste"
+   },
+   "size_m": [
+    0.12,
+    0.075,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "36-knusperweck"
+  },
+  {
+   "id": "roggenweck",
+   "numeric_id": 37,
+   "name_de": "Roggenweck",
+   "name_src": "Roggenweck",
+   "category": "broetchen",
+   "price_eur": 0.7,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Kräftig & aromatisch — der Roggenweck für Roggen-Fans.",
+   "info_de": "Unser Roggenweck hat den vollen Roggengeschmack, den man sich wünscht. Leicht säuerlich, saftig und mit einer kräftigen Kruste — ein echter Genuss.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste-dunkel",
+    "cuts": "riss",
+    "flour": true
+   },
+   "size_m": [
+    0.1,
+    0.1,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "37-roggenweck"
+  },
+  {
+   "id": "koernerweck",
+   "numeric_id": 38,
+   "name_de": "Körnerweck",
+   "name_src": "Körnerweck",
+   "category": "broetchen",
+   "price_eur": 0.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Vollwertig & knusprig — der Körnerweck mit Biss.",
+   "info_de": "Der Körnerweck steckt voller Körner — Sonnenblumenkerne, Kürbiskerne und mehr geben ihm einen herrlich nussigen Geschmack und extra Biss.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "koerner"
+   },
+   "size_m": [
+    0.1,
+    0.1,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "38-koernerweck"
+  },
+  {
+   "id": "mohn-broetchen",
+   "numeric_id": 39,
+   "name_de": "Mohn-Brötchen",
+   "name_src": "Mohn-Brötchen",
+   "category": "broetchen",
+   "price_eur": 0.7,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Zart & aromatisch — das Mohn-Brötchen mit blauem Hauch.",
+   "info_de": "Unser Mohn-Brötchen besticht durch seinen zarten Mohngeschmack und die schöne blaue Haube. Täglich frisch und ein echter Hingucker auf dem Tisch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "topping": "mohn"
+   },
+   "size_m": [
+    0.1,
+    0.1,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "39-mohn-broetchen"
+  },
+  {
+   "id": "sesam-broetchen",
+   "numeric_id": 40,
+   "name_de": "Sesam-Brötchen",
+   "name_src": "Sesam-Brötchen",
+   "category": "broetchen",
+   "price_eur": 0.7,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Nussig & knusprig — das Sesam-Brötchen mit Charakter.",
+   "info_de": "Das Sesam-Brötchen trägt seinen nussigen Sesam-Mantel mit Stolz. Außen rösch, innen weich — ein Brötchen mit Charakter.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "topping": "sesam"
+   },
+   "size_m": [
+    0.1,
+    0.1,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "40-sesam-broetchen"
+  },
+  {
+   "id": "kuemmel-broetchen",
+   "numeric_id": 41,
+   "name_de": "Kümmel-Brötchen",
+   "name_src": "Kümmel-Brötchen",
+   "category": "broetchen",
+   "price_eur": 0.7,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Würzig & aromatisch — das Kümmel-Brötchen für Würze-Liebhaber.",
+   "info_de": "Unser Kümmel-Brötchen ist für alle, die es etwas würziger mögen. Der feine Kümmelgeschmack passt perfekt zu Käse, Wurst oder einfach mit Butter.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "kuemmel"
+   },
+   "size_m": [
+    0.1,
+    0.1,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "41-kuemmel-broetchen"
+  },
+  {
+   "id": "dinkel-broetchen",
+   "numeric_id": 42,
+   "name_de": "Dinkel-Brötchen",
+   "name_src": "Dinkel-Brötchen",
+   "category": "broetchen",
+   "price_eur": 0.85,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Nussig & vollwertig — das Dinkel-Brötchen aus echtem Dinkel.",
+   "info_de": "Das Dinkel-Brötchen überzeugt mit feinem Nussaroma und vollwertigen Zutaten. Leicht und bekömmlich — für alle, die etwas Besonderes suchen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste",
+    "cuts": "schraeg",
+    "oval": true
+   },
+   "size_m": [
+    0.115,
+    0.08,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "42-dinkel-broetchen"
+  },
+  {
+   "id": "mohn-hoernchen",
+   "numeric_id": 43,
+   "name_de": "Mohn-Hörnchen",
+   "name_src": "Mohn-Hörnchen",
+   "category": "broetchen",
+   "price_eur": 1.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Süß & luftig — das Mohn-Hörnchen als kleiner Genuss.",
+   "info_de": "Unser Mohn-Hörnchen vereint zarten Mohn mit luftigem Teig zu einem kleinen Genuss. Perfekt zum Kaffee oder als süßer Snack für Zwischendurch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "hoernchen",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "topping": "mohn"
+   },
+   "size_m": [
+    0.14,
+    0.08,
+    0.045
+   ],
+   "sigma_m": 0.011,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "43-mohn-hoernchen"
+  },
+  {
+   "id": "sesam-hoernchen",
+   "numeric_id": 44,
+   "name_de": "Sesam-Hörnchen",
+   "name_src": "Sesam-Hörnchen",
+   "category": "broetchen",
+   "price_eur": 1.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Nussig & luftig — das Sesam-Hörnchen als kleiner Genuss.",
+   "info_de": "Das Sesam-Hörnchen ist unser nussiges Croissant mit Sesamkruste. Außen knusprig, innen zart — ein herrlicher kleiner Genuss.",
+   "available": true,
+   "seasonal": false,
+   "shape": "hoernchen",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "topping": "sesam"
+   },
+   "size_m": [
+    0.14,
+    0.08,
+    0.045
+   ],
+   "sigma_m": 0.011,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "44-sesam-hoernchen"
+  },
+  {
+   "id": "kaese-broetchen",
+   "numeric_id": 45,
+   "name_de": "Käse-Brötchen",
+   "name_src": "Käse-Brötchen",
+   "category": "broetchen",
+   "price_eur": 1.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Herzhaft & käsig — das Käse-Brötchen für Käse-Liebhaber.",
+   "info_de": "Unser Käse-Brötchen ist mit echtem Käse überbacken und duftet herrlich aus dem Ofen. Herzhaft, würzig und täglich frisch — perfekt als Snack oder zum Mittagessen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "topping": "kaese"
+   },
+   "size_m": [
+    0.1,
+    0.1,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "45-kaese-broetchen"
+  },
+  {
+   "id": "brezel",
+   "numeric_id": 46,
+   "name_de": "Brezel",
+   "name_src": "Brezel",
+   "category": "snacks",
+   "price_eur": 1.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Goldbraun & salzig — die Brezel, wie sie sein soll.",
+   "info_de": "Unsere Brezel ist klassisch: goldbraun gelaugt, mit grobem Salz bestreut und außen rösch, innen weich. Täglich frisch gebacken — ein schwäbisches Original.",
+   "available": true,
+   "seasonal": false,
+   "shape": "brezel",
+   "shape_params": {},
+   "size_m": [
+    0.17,
+    0.13,
+    0.045
+   ],
+   "sigma_m": 0.014,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "46-brezel"
+  },
+  {
+   "id": "laugenstange",
+   "numeric_id": 47,
+   "name_de": "Laugenstange",
+   "name_src": "Laugenstange",
+   "category": "snacks",
+   "price_eur": 1.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Herzhaft & laugig — die Laugenstange für Laugenliebhaber.",
+   "info_de": "Unsere Laugenstange ist das längere Pendant zur Brezel: goldbraun gelaugt, herzhaft salzig und unglaublich aromatisch. Perfekt als Snack oder zum Belegen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laugenstange",
+   "shape_params": {
+    "crust": "lauge",
+    "salt": true
+   },
+   "size_m": [
+    0.22,
+    0.045,
+    0.04
+   ],
+   "sigma_m": 0.018,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "47-laugenstange"
+  },
+  {
+   "id": "laugenbroetchen",
+   "numeric_id": 48,
+   "name_de": "Laugenbrötchen",
+   "name_src": "Laugenbrötchen",
+   "category": "snacks",
+   "price_eur": 1.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Rund & laugig — das Laugenbrötchen als herzhafter Snack.",
+   "info_de": "Das Laugenbrötchen ist außen dunkel und glänzend, innen weich und aromatisch. Mit grobem Salz und der typischen Lauge — ein klassischer Snack.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "lauge",
+    "cuts": "kreuz",
+    "salt": true
+   },
+   "size_m": [
+    0.09,
+    0.09,
+    0.05
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "48-laugenbroetchen"
+  },
+  {
+   "id": "laugenecke",
+   "numeric_id": 49,
+   "name_de": "Laugenecke",
+   "name_src": "Laugenecke",
+   "category": "snacks",
+   "price_eur": 1.89,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Knusprig & eckig — die Laugenecke als besonderer Snack.",
+   "info_de": "Unsere Laugenecke ist eine besondere Form des Laugengebäcks: eckig, knusprig und mit röschem Boden. Perfekt zum Belegen oder einfach so.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laugenecke",
+   "shape_params": {},
+   "size_m": [
+    0.11,
+    0.1,
+    0.05
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "49-laugenecke"
+  },
+  {
+   "id": "laugencroquette",
+   "numeric_id": 50,
+   "name_de": "Laugencroquette",
+   "name_src": "Laugencroquette",
+   "category": "snacks",
+   "price_eur": 1.89,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Rund & luftig — die Laugencroquette als Snack-Highlight.",
+   "info_de": "Die Laugencroquette ist unser rundes Laugengebäck — außen goldbraun, innen luftig weich. Ein besonderer Snack, täglich frisch gebacken.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "lauge",
+    "cuts": "quer",
+    "oval": true,
+    "salt": true
+   },
+   "size_m": [
+    0.12,
+    0.075,
+    0.05
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "50-laugencroquette"
+  },
+  {
+   "id": "keimkraft-hoernchen",
+   "numeric_id": 51,
+   "name_de": "Keimkraft-Hörnchen",
+   "name_src": "Keimkraft-Hörnchen",
+   "category": "snacks",
+   "price_eur": 1.89,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Lebendig & gesund — das Keimkraft-Hörnchen voller Kraft.",
+   "info_de": "Das Keimkraft-Hörnchen steckt voller gekeimter Körner, die ihm einen besonderen, nussigen Geschmack geben. Vollwertig, lecker und täglich frisch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "hoernchen",
+   "shape_params": {
+    "crust": "kruste",
+    "topping": "koerner"
+   },
+   "size_m": [
+    0.14,
+    0.08,
+    0.045
+   ],
+   "sigma_m": 0.011,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "51-keimkraft-hoernchen"
+  },
+  {
+   "id": "kaesestange",
+   "numeric_id": 52,
+   "name_de": "Käsestange",
+   "name_src": "Käsestange",
+   "category": "snacks",
+   "price_eur": 2.69,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Würzig & käsig — die Käsestange zum Snacken.",
+   "info_de": "Unsere Käsestange ist mit würzigem Käse überbacken und knusprig im Biss. Perfekt als Snack, zum Aperitif oder für die Brotzeit.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laugenstange",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "topping": "kaese"
+   },
+   "size_m": [
+    0.24,
+    0.06,
+    0.045
+   ],
+   "sigma_m": 0.019,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "52-kaesestange"
+  },
+  {
+   "id": "kaesestange-mit-schinken",
+   "numeric_id": 53,
+   "name_de": "Käsestange mit Schinken",
+   "name_src": "Käsestange mit Schinken",
+   "category": "snacks",
+   "price_eur": 2.69,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Herzhaft & doppelt lecker — die Käsestange mit Schinken.",
+   "info_de": "Unsere Käsestange mit Schinken kombiniert würzigen Käse mit herzhaftem Schinken auf knusprigem Gebäck. Täglich frisch und unwiderstehlich gut.",
+   "available": true,
+   "seasonal": false,
+   "shape": "laugenstange",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "ham": true,
+    "topping": "kaese"
+   },
+   "size_m": [
+    0.24,
+    0.06,
+    0.045
+   ],
+   "sigma_m": 0.019,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "53-kaesestange-mit-schinken"
+  },
+  {
+   "id": "gefuellte-schnecken-schoko-pudding-rosinen-nuss-oder-mohn",
+   "numeric_id": 54,
+   "name_de": "Gefüllte Schnecken (Schoko, Pudding, Rosinen, Nuss oder Mohn)",
+   "name_src": "Gefüllte Schnecken (Schoko, Pudding, Rosinen, Nuss oder Mohn)",
+   "category": "teilchen",
+   "price_eur": 2.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Süß & gefüllt — unsere Schnecken in fünf köstlichen Varianten.",
+   "info_de": "Unsere gefüllten Schnecken kommen in Schoko, Pudding, Rosinen, Nuss oder Mohn — für jeden Geschmack das Richtige. Luftig, süß und täglich frisch aus dem Ofen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "schnecke",
+   "shape_params": {
+    "fillings": [
+     "schoko",
+     "pudding",
+     "rosinen",
+     "nuss",
+     "mohn"
+    ]
+   },
+   "size_m": [
+    0.11,
+    0.11,
+    0.035
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "54-gefuellte-schnecken-schoko-pudding-rosinen-nuss-oder-mohn"
+  },
+  {
+   "id": "plunder-hoernchen",
+   "numeric_id": 55,
+   "name_de": "Plunder-Hörnchen",
+   "name_src": "Plunder-Hörnchen",
+   "category": "teilchen",
+   "price_eur": 2.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Blättrig & leicht — das Plunder-Hörnchen als süßer Genuss.",
+   "info_de": "Unser Plunder-Hörnchen ist aus feinem Plunderteig gerollt und herrlich knusprig. Zart, leicht und unwiderstehlich — perfekt zum Kaffee.",
+   "available": true,
+   "seasonal": false,
+   "shape": "hoernchen",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "glaze": "zuckerguss"
+   },
+   "size_m": [
+    0.15,
+    0.09,
+    0.045
+   ],
+   "sigma_m": 0.012,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "55-plunder-hoernchen"
+  },
+  {
+   "id": "taschen-schleifen",
+   "numeric_id": 56,
+   "name_de": "Taschen & Schleifen",
+   "name_src": "Taschen Schleifen",
+   "category": "teilchen",
+   "price_eur": 2.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Süß & verspielt — Taschen und Schleifen aus feinem Teig.",
+   "info_de": "Unsere Taschen & Schleifen sind kleine Kunstwerke aus feinem Plunderteig — süß, luftig und täglich frisch. Ein Genuss für Augen und Gaumen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "tasche",
+   "shape_params": {
+    "filling": "pudding",
+    "form": "umschlag"
+   },
+   "size_m": [
+    0.11,
+    0.11,
+    0.035
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "56-taschen-schleifen"
+  },
+  {
+   "id": "kirsch-plotzer",
+   "numeric_id": 57,
+   "name_de": "Kirsch-Plotzer",
+   "name_src": "Kirsch-Plotzer",
+   "category": "teilchen",
+   "price_eur": 2.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Saftig & fruchtig — der Kirsch-Plotzer mit echten Kirschen.",
+   "info_de": "Der Kirsch-Plotzer ist ein saftiges Teilchen mit echten Kirschen im Teig oder als Füllung. Fruchtig, süß und unwiderstehlich — ein Stück Sommer das ganze Jahr.",
+   "available": true,
+   "seasonal": false,
+   "shape": "blechkuchen-stueck",
+   "shape_params": {
+    "topping": "kirsch"
+   },
+   "size_m": [
+    0.1,
+    0.09,
+    0.045
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "57-kirsch-plotzer"
+  },
+  {
+   "id": "puddingstueckchen",
+   "numeric_id": 58,
+   "name_de": "Puddingstückchen",
+   "name_src": "Puddingstückchen",
+   "category": "teilchen",
+   "price_eur": 2.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Cremig & süß — das Puddingstückchen mit Vanille.",
+   "info_de": "Unser Puddingstückchen ist mit cremigem Vanillepudding gefüllt und aus luftigem Hefeteig. Süß, weich und täglich frisch — ein Klassiker für alle Süßen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "tasche",
+   "shape_params": {
+    "filling": "pudding",
+    "form": "quadrat"
+   },
+   "size_m": [
+    0.11,
+    0.11,
+    0.035
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "58-puddingstueckchen"
+  },
+  {
+   "id": "butterkuchen",
+   "numeric_id": 59,
+   "name_de": "Butterkuchen",
+   "name_src": "Butterkuchen",
+   "category": "teilchen",
+   "price_eur": 2.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Buttrig & süß — der Butterkuchen wie er sein soll.",
+   "info_de": "Unser Butterkuchen ist ein süßes Teilchen mit reichlich Butter und Zucker — knusprig karamellisiert oben, weich und zart innen. Einfach perfekt.",
+   "available": true,
+   "seasonal": false,
+   "shape": "blechkuchen-stueck",
+   "shape_params": {
+    "topping": "butter"
+   },
+   "size_m": [
+    0.1,
+    0.08,
+    0.03
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "59-butterkuchen"
+  },
+  {
+   "id": "streusel",
+   "numeric_id": 60,
+   "name_de": "Streusel",
+   "name_src": "Streusel",
+   "category": "teilchen",
+   "price_eur": 1.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Knusprig & süß — der Streusel als kleines Glück.",
+   "info_de": "Unsere Streusel sind das Beste aus Hefeteig und knusprigen Streuseln: süß, buttrig und täglich frisch. Ein kleines Glück aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "blechkuchen-stueck",
+   "shape_params": {
+    "topping": "streusel"
+   },
+   "size_m": [
+    0.1,
+    0.09,
+    0.04
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "60-streusel"
+  },
+  {
+   "id": "schoko-vanille-hoernchen",
+   "numeric_id": 61,
+   "name_de": "Schoko-Vanille-Hörnchen",
+   "name_src": "Schoko-Vanille-Hörnchen",
+   "category": "teilchen",
+   "price_eur": 1.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Schokoladig & vanillig — das Schoko-Vanille-Hörnchen.",
+   "info_de": "Unser Schoko-Vanille-Hörnchen vereint zwei Klassiker in einem: schokoladige und vanillige Füllung in einem luftigen Hörnchen. Täglich frisch und doppelt lecker.",
+   "available": true,
+   "seasonal": false,
+   "shape": "hoernchen",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "glaze": "schoko"
+   },
+   "size_m": [
+    0.15,
+    0.09,
+    0.045
+   ],
+   "sigma_m": 0.012,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "61-schoko-vanille-hoernchen"
+  },
+  {
+   "id": "quarktasche",
+   "numeric_id": 62,
+   "name_de": "Quarktasche",
+   "name_src": "Quarktasche",
+   "category": "teilchen",
+   "price_eur": 1.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Frisch & cremig — die Quarktasche mit feinem Quark.",
+   "info_de": "Unsere Quarktasche ist mit cremigem, leicht gesüßtem Quark gefüllt — frisch, zart und unglaublich lecker. Täglich frisch aus der Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "tasche",
+   "shape_params": {
+    "filling": "quark",
+    "form": "dreieck"
+   },
+   "size_m": [
+    0.11,
+    0.11,
+    0.035
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "62-quarktasche"
+  },
+  {
+   "id": "einback",
+   "numeric_id": 63,
+   "name_de": "Einback",
+   "name_src": "Einback",
+   "category": "teilchen",
+   "price_eur": 1.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Zart & süß — der Einback als klassischer Genuss.",
+   "info_de": "Unser Einback ist ein süßes, leicht gebräuntes Hefebrot — zart, duftend und perfekt zum Dippen oder einfach so. Ein Klassiker aus Großmutters Küche.",
+   "available": true,
+   "seasonal": false,
+   "shape": "doppelweck",
+   "shape_params": {
+    "crust": "kruste",
+    "lobes": 3
+   },
+   "size_m": [
+    0.13,
+    0.065,
+    0.055
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "63-einback"
+  },
+  {
+   "id": "sckokobroetchen",
+   "numeric_id": 64,
+   "name_de": "Schokobrötchen",
+   "name_src": "Sckokobrötchen",
+   "category": "teilchen",
+   "price_eur": 1.5,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Schokoladig & weich — das Schokobrötchen für kleine Genießer.",
+   "info_de": "Unser Schokobrötchen ist mit echter Schokolade gefüllt oder verfeinert — weich, süß und täglich frisch. Für große und kleine Schokoladen-Fans.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "topping": "schoko"
+   },
+   "size_m": [
+    0.09,
+    0.09,
+    0.05
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "64-sckokobroetchen"
+  },
+  {
+   "id": "rosinenbroetchen",
+   "numeric_id": 65,
+   "name_de": "Rosinenbrötchen",
+   "name_src": "Rosinenbrötchen",
+   "category": "teilchen",
+   "price_eur": 1.5,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Süß & fruchtig — das Rosinenbrötchen mit ganzen Rosinen.",
+   "info_de": "Unser Rosinenbrötchen steckt voller saftiger Rosinen und duftet herrlich aus dem Ofen. Süß, weich und täglich frisch — ein Klassiker für die ganze Familie.",
+   "available": true,
+   "seasonal": false,
+   "shape": "broetchen-rund",
+   "shape_params": {
+    "crust": "kruste-hell",
+    "topping": "rosinen"
+   },
+   "size_m": [
+    0.09,
+    0.09,
+    0.05
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "65-rosinenbroetchen"
+  },
+  {
+   "id": "croissant",
+   "numeric_id": 66,
+   "name_de": "Croissant",
+   "name_src": "Croissant",
+   "category": "teilchen",
+   "price_eur": 1.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Butterig & blättrig — das Croissant wie in Paris.",
+   "info_de": "Unser Croissant wird aus mehrfach gefaltetem Butterteig gebacken — außen goldbraun und blättrig, innen zart und butterig. Täglich frisch und unwiderstehlich gut.",
+   "available": true,
+   "seasonal": false,
+   "shape": "croissant",
+   "shape_params": {},
+   "size_m": [
+    0.16,
+    0.1,
+    0.05
+   ],
+   "sigma_m": 0.013,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "66-croissant"
+  },
+  {
+   "id": "pain-chocolate",
+   "numeric_id": 67,
+   "name_de": "Pain au Chocolat",
+   "name_src": "Pain Chocolate",
+   "category": "teilchen",
+   "price_eur": 1.5,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Schokoladig & blättrig — Pain au Chocolat aus echtem Butterteig.",
+   "info_de": "Unser Pain au Chocolat vereint knuspriges Croissant-Gebäck mit echter Schokolade. Ein französischer Klassiker, täglich frisch aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "pain-au-chocolat",
+   "shape_params": {},
+   "size_m": [
+    0.11,
+    0.07,
+    0.04
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "67-pain-chocolate"
+  },
+  {
+   "id": "muffin",
+   "numeric_id": 68,
+   "name_de": "Muffin",
+   "name_src": "Muffin",
+   "category": "teilchen",
+   "price_eur": 1.6,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Saftig & fluffig — unser Muffin in verschiedenen Sorten.",
+   "info_de": "Unsere Muffins sind saftig, fluffig und täglich frisch gebacken. In verschiedenen Sorten erhältlich — für jeden Geschmack das Richtige.",
+   "available": true,
+   "seasonal": false,
+   "shape": "muffin",
+   "shape_params": {
+    "topping": "schoko"
+   },
+   "size_m": [
+    0.08,
+    0.08,
+    0.075
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "68-muffin"
+  },
+  {
+   "id": "granatsplitter",
+   "numeric_id": 69,
+   "name_de": "Granatsplitter",
+   "name_src": "Granatsplitter",
+   "category": "teilchen",
+   "price_eur": 2.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Explosiv & schokoladig — der Granatsplitter als Highlight.",
+   "info_de": "Der Granatsplitter ist unser schokoladiger Überraschungsgenuss: außen dunkel und knusprig, innen eine Explosion aus Schokolade und Sahne. Ein echtes Highlight.",
+   "available": true,
+   "seasonal": false,
+   "shape": "granatsplitter",
+   "shape_params": {},
+   "size_m": [
+    0.065,
+    0.065,
+    0.06
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "69-granatsplitter"
+  },
+  {
+   "id": "rahmkuchen",
+   "numeric_id": 70,
+   "name_de": "Rahmkuchen",
+   "name_src": "Rahmkuchen",
+   "category": "kuchen",
+   "price_eur": 18.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Cremig & frisch — der Rahmkuchen als ganzer Genuss.",
+   "info_de": "Unser Rahmkuchen ist mit cremiger Rahmmasse belegt und auf einem zarten Boden gebacken. Frisch, leicht süß und täglich frisch — perfekt für besondere Anlässe.",
+   "available": true,
+   "seasonal": false,
+   "shape": "rundkuchen",
+   "shape_params": {
+    "topping": "rahm"
+   },
+   "size_m": [
+    0.28,
+    0.28,
+    0.05
+   ],
+   "sigma_m": 0.022,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "70-rahmkuchen"
+  },
+  {
+   "id": "rahmkuchen-1-stueck",
+   "numeric_id": 71,
+   "name_de": "Rahmkuchen (1 Stück)",
+   "name_src": "Rahmkuchen (1 Stück)",
+   "category": "kuchen",
+   "price_eur": 1.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Cremig & frisch — das Rahmkuchen-Stück zum Mitnehmen.",
+   "info_de": "Ein Stück vom großen Rahmkuchen — cremig, frisch und zum Mitnehmen. Täglich frisch aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kuchen-stueck",
+   "shape_params": {
+    "pieces": 10,
+    "topping": "rahm"
+   },
+   "size_m": [
+    0.087,
+    0.14,
+    0.05
+   ],
+   "sigma_m": 0.011,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "71-rahmkuchen-1-stueck",
+   "piece_of": "rahmkuchen"
+  },
+  {
+   "id": "kaesekuchen",
+   "numeric_id": 72,
+   "name_de": "Käsekuchen",
+   "name_src": "Käsekuchen",
+   "category": "kuchen",
+   "price_eur": 18.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Cremig & mild — der Käsekuchen nach Hausrezept.",
+   "info_de": "Unser Käsekuchen wird nach bewährtem Hausrezept gebacken: cremige Käsemasse auf zartem Mürbteigboden — mild, süß und täglich frisch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "rundkuchen",
+   "shape_params": {
+    "topping": "kaese"
+   },
+   "size_m": [
+    0.26,
+    0.26,
+    0.06
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "72-kaesekuchen"
+  },
+  {
+   "id": "kaesekuchen-1-stueck",
+   "numeric_id": 73,
+   "name_de": "Käsekuchen (1 Stück)",
+   "name_src": "Käsekuchen (1 Stück)",
+   "category": "kuchen",
+   "price_eur": 1.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Cremig & mild — das Käsekuchen-Stück für Zwischendurch.",
+   "info_de": "Ein Stück vom großen Käsekuchen — cremig, mild und zum Mitnehmen. Täglich frisch aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kuchen-stueck",
+   "shape_params": {
+    "pieces": 10,
+    "topping": "kaese"
+   },
+   "size_m": [
+    0.08,
+    0.13,
+    0.06
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "73-kaesekuchen-1-stueck",
+   "piece_of": "kaesekuchen"
+  },
+  {
+   "id": "apfelkuchen",
+   "numeric_id": 74,
+   "name_de": "Apfelkuchen",
+   "name_src": "Apfelkuchen",
+   "category": "kuchen",
+   "price_eur": 18.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Fruchtig & saftig — der Apfelkuchen mit echten Äpfeln.",
+   "info_de": "Unser Apfelkuchen ist mit frischen, saftigen Äpfeln belegt und auf einem zarten Teig gebacken. Fruchtig, leicht süß und täglich frisch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "rundkuchen",
+   "shape_params": {
+    "topping": "apfel"
+   },
+   "size_m": [
+    0.28,
+    0.28,
+    0.05
+   ],
+   "sigma_m": 0.022,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "74-apfelkuchen"
+  },
+  {
+   "id": "apfelkuchen-1-stueck",
+   "numeric_id": 75,
+   "name_de": "Apfelkuchen (1 Stück)",
+   "name_src": "Apfelkuchen (1 Stück)",
+   "category": "kuchen",
+   "price_eur": 1.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Fruchtig & saftig — das Apfelkuchen-Stück zum Mitnehmen.",
+   "info_de": "Ein Stück vom großen Apfelkuchen — fruchtig, saftig und täglich frisch. Das perfekte Stück für Zwischendurch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kuchen-stueck",
+   "shape_params": {
+    "pieces": 10,
+    "topping": "apfel"
+   },
+   "size_m": [
+    0.087,
+    0.14,
+    0.05
+   ],
+   "sigma_m": 0.011,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "75-apfelkuchen-1-stueck",
+   "piece_of": "apfelkuchen"
+  },
+  {
+   "id": "kirschkuchen",
+   "numeric_id": 76,
+   "name_de": "Kirschkuchen",
+   "name_src": "Kirschkuchen",
+   "category": "kuchen",
+   "price_eur": 18.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Fruchtig & süß-sauer — der Kirschkuchen mit echten Kirschen.",
+   "info_de": "Unser Kirschkuchen glänzt mit echten Kirschen auf zartem Teig. Fruchtig, leicht säuerlich und täglich frisch gebacken — ein Klassiker aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "rundkuchen",
+   "shape_params": {
+    "topping": "kirsch"
+   },
+   "size_m": [
+    0.28,
+    0.28,
+    0.05
+   ],
+   "sigma_m": 0.022,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "76-kirschkuchen"
+  },
+  {
+   "id": "kirschkuchen-1-stueck",
+   "numeric_id": 77,
+   "name_de": "Kirschkuchen (1 Stück)",
+   "name_src": "Kirschkuchen (1 Stück)",
+   "category": "kuchen",
+   "price_eur": 1.8,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Fruchtig & süß-sauer — das Kirschkuchen-Stück zum Mitnehmen.",
+   "info_de": "Ein Stück vom großen Kirschkuchen — fruchtig, saftig und täglich frisch. Einfach unwiderstehlich.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kuchen-stueck",
+   "shape_params": {
+    "pieces": 10,
+    "topping": "kirsch"
+   },
+   "size_m": [
+    0.087,
+    0.14,
+    0.05
+   ],
+   "sigma_m": 0.011,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "77-kirschkuchen-1-stueck",
+   "piece_of": "kirschkuchen"
+  },
+  {
+   "id": "blechkuchen",
+   "numeric_id": 78,
+   "name_de": "Blechkuchen",
+   "name_src": "Blechkuchen",
+   "category": "kuchen",
+   "price_eur": 45.0,
+   "sale_unit": "Blech",
+   "weight_g": null,
+   "short_de": "Vielfältig & festlich — der Blechkuchen für besondere Anlässe.",
+   "info_de": "Unser Blechkuchen ist der perfekte Kuchen für Feste, Feiern und Familienfeste. Täglich frisch gebacken und in verschiedenen Sorten erhältlich — gerne auch auf Vorbestellung.",
+   "available": true,
+   "seasonal": false,
+   "shape": "blechkuchen",
+   "shape_params": {
+    "toppings": [
+     "streusel",
+     "apfel",
+     "kirsch",
+     "butter"
+    ]
+   },
+   "size_m": [
+    0.6,
+    0.4,
+    0.05
+   ],
+   "sigma_m": 0.048,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "78-blechkuchen"
+  },
+  {
+   "id": "blechkuchen-1-stueck",
+   "numeric_id": 79,
+   "name_de": "Blechkuchen (1 Stück)",
+   "name_src": "Blechkuchen (1 Stück)",
+   "category": "kuchen",
+   "price_eur": 2.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Vielfältig & festlich — das Blechkuchen-Stück zum Probieren.",
+   "info_de": "Ein Stück vom großen Blechkuchen — täglich frisch und herrlich vielfältig. Das perfekte Stück für Neugierige.",
+   "available": true,
+   "seasonal": false,
+   "shape": "blechkuchen-stueck",
+   "shape_params": {
+    "toppings": [
+     "streusel",
+     "apfel",
+     "kirsch",
+     "butter"
+    ]
+   },
+   "size_m": [
+    0.12,
+    0.1,
+    0.045
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "79-blechkuchen-1-stueck",
+   "piece_of": "blechkuchen"
+  },
+  {
+   "id": "marmorkuchen",
+   "numeric_id": 80,
+   "name_de": "Marmorkuchen",
+   "name_src": "Marmorkuchen",
+   "category": "kuchen",
+   "price_eur": 18.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Saftig & schokoladig — der Marmorkuchen nach Hausrezept.",
+   "info_de": "Unser Marmorkuchen ist der Klassiker schlechthin: hell und dunkel marmoriert, saftig, zart und täglich frisch. Ein Stück Heimat aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenkuchen",
+   "shape_params": {
+    "kind": "marmor"
+   },
+   "size_m": [
+    0.3,
+    0.11,
+    0.09
+   ],
+   "sigma_m": 0.024,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "80-marmorkuchen"
+  },
+  {
+   "id": "marmorkuchen-1-stueck",
+   "numeric_id": 81,
+   "name_de": "Marmorkuchen (1 Stück)",
+   "name_src": "Marmorkuchen (1 Stück)",
+   "category": "kuchen",
+   "price_eur": 1.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Saftig & schokoladig — das Marmorkuchen-Stück zum Mitnehmen.",
+   "info_de": "Ein Stück vom großen Marmorkuchen — saftig, schokoladig und täglich frisch. Der Klassiker zum Mitnehmen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenkuchen-scheibe",
+   "shape_params": {
+    "kind": "marmor"
+   },
+   "size_m": [
+    0.11,
+    0.09,
+    0.02
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "81-marmorkuchen-1-stueck",
+   "piece_of": "marmorkuchen"
+  },
+  {
+   "id": "zitronenkuchen",
+   "numeric_id": 82,
+   "name_de": "Zitronenkuchen",
+   "name_src": "Zitronenkuchen",
+   "category": "kuchen",
+   "price_eur": 18.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Frisch & zitronig — der Zitronenkuchen mit echtem Zitronengeschmack.",
+   "info_de": "Unser Zitronenkuchen ist frisch, fruchtig und wunderbar zitronig. Auf zartem Teig mit echtem Zitronenaroma — eine erfrischende Abwechslung.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenkuchen",
+   "shape_params": {
+    "kind": "zitrone"
+   },
+   "size_m": [
+    0.3,
+    0.11,
+    0.09
+   ],
+   "sigma_m": 0.024,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "82-zitronenkuchen"
+  },
+  {
+   "id": "zitronenkuchen-1-stueck",
+   "numeric_id": 83,
+   "name_de": "Zitronenkuchen (1 Stück)",
+   "name_src": "Zitronenkuchen (1 Stück)",
+   "category": "kuchen",
+   "price_eur": 1.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Frisch & zitronig — das Zitronenkuchen-Stück zum Mitnehmen.",
+   "info_de": "Ein Stück vom großen Zitronenkuchen — frisch, zitronig und täglich frisch. Das perfekte erfrischende Stück.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenkuchen-scheibe",
+   "shape_params": {
+    "kind": "zitrone"
+   },
+   "size_m": [
+    0.11,
+    0.09,
+    0.02
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "83-zitronenkuchen-1-stueck",
+   "piece_of": "zitronenkuchen"
+  },
+  {
+   "id": "nusskuchen",
+   "numeric_id": 84,
+   "name_de": "Nusskuchen",
+   "name_src": "Nusskuchen",
+   "category": "kuchen",
+   "price_eur": 18.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Nussig & saftig — der Nusskuchen nach altem Rezept.",
+   "info_de": "Unser Nusskuchen steckt voller gemahlener Nüsse — saftig, aromatisch und unwiderstehlich nussig. Nach bewährtem Hausrezept und täglich frisch gebacken.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenkuchen",
+   "shape_params": {
+    "kind": "nuss"
+   },
+   "size_m": [
+    0.3,
+    0.11,
+    0.09
+   ],
+   "sigma_m": 0.024,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "84-nusskuchen"
+  },
+  {
+   "id": "nusskuchen-1-stueck",
+   "numeric_id": 85,
+   "name_de": "Nusskuchen (1 Stück)",
+   "name_src": "Nusskuchen (1 Stück)",
+   "category": "kuchen",
+   "price_eur": 1.2,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Nussig & saftig — das Nusskuchen-Stück zum Mitnehmen.",
+   "info_de": "Ein Stück vom großen Nusskuchen — nussig, saftig und täglich frisch. Ein Muss für alle Nuss-Liebhaber.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kastenkuchen-scheibe",
+   "shape_params": {
+    "kind": "nuss"
+   },
+   "size_m": [
+    0.11,
+    0.09,
+    0.02
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "85-nusskuchen-1-stueck",
+   "piece_of": "nusskuchen"
+  },
+  {
+   "id": "kranzkuchen-ungefuellt",
+   "numeric_id": 86,
+   "name_de": "Kranzkuchen ungefüllt",
+   "name_src": "Kranzkuchen ungefüllt",
+   "category": "kuchen",
+   "price_eur": 18.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Luftig & festlich — der ungefüllte Kranzkuchen für besondere Momente.",
+   "info_de": "Unser Kranzkuchen in der ungefüllten Variante ist luftig, saftig und wunderbar aromatisch. Perfekt für Feste oder einfach so — für besondere Momente.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kranzkuchen",
+   "shape_params": {
+    "filled": false
+   },
+   "size_m": [
+    0.26,
+    0.26,
+    0.07
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "86-kranzkuchen-ungefuellt"
+  },
+  {
+   "id": "kranzkuchen-ungefuellt-1-4-stueck",
+   "numeric_id": 87,
+   "name_de": "Kranzkuchen ungefüllt (1/4 Stück)",
+   "name_src": "Kranzkuchen ungefüllt (1/4 Stück)",
+   "category": "kuchen",
+   "price_eur": 4.5,
+   "sale_unit": "1/4",
+   "weight_g": null,
+   "short_de": "Luftig & festlich — das Kranzkuchen-Viertel zum Teilen.",
+   "info_de": "Ein Viertel vom großen Kranzkuchen — luftig, saftig und zum Teilen. Täglich frisch aus unserer Backstube.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kranzkuchen-viertel",
+   "shape_params": {
+    "filled": false
+   },
+   "size_m": [
+    0.19,
+    0.1,
+    0.07
+   ],
+   "sigma_m": 0.015,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "87-kranzkuchen-ungefuellt-1-4-stueck",
+   "piece_of": "kranzkuchen-ungefuellt"
+  },
+  {
+   "id": "kranzkuchen-gefuellt-nuss-schoko-quark-oder-pudding",
+   "numeric_id": 88,
+   "name_de": "Kranzkuchen gefüllt (Nuss, Schoko, Quark oder Pudding)",
+   "name_src": "Kranzkuchen gefüllt (Nuss, Schoko, Quark oder Pudding",
+   "category": "kuchen",
+   "price_eur": 20.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Luftig & gefüllt — der Kranzkuchen mit deiner Lieblingsfüllung.",
+   "info_de": "Unser Kranzkuchen kommt in vier leckeren Füllungen: Nuss, Schoko, Quark oder Pudding. Für jeden Geschmack die perfekte Wahl — luftig, süß und täglich frisch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kranzkuchen",
+   "shape_params": {
+    "filled": true,
+    "fillings": [
+     "nuss",
+     "schoko",
+     "quark",
+     "pudding"
+    ]
+   },
+   "size_m": [
+    0.26,
+    0.26,
+    0.07
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "88-kranzkuchen-gefuellt-nuss-schoko-quark-oder-pudding"
+  },
+  {
+   "id": "kranzkuchen-gefuellt-nuss-schoko-quark-oder-pudding-1-4-stueck",
+   "numeric_id": 89,
+   "name_de": "Kranzkuchen gefüllt (Nuss, Schoko, Quark oder Pudding) (1/4 Stück)",
+   "name_src": "Kranzkuchen gefüllt (Nuss, Schoko, Quark oder Pudding (1/4 Stück)",
+   "category": "kuchen",
+   "price_eur": 5.0,
+   "sale_unit": "1/4",
+   "weight_g": null,
+   "short_de": "Luftig & gefüllt — das Kranzkuchen-Viertel mit Lieblingsfüllung.",
+   "info_de": "Ein Viertel vom gefüllten Kranzkuchen — mit Nuss, Schoko, Quark oder Pudding. Täglich frisch und für jeden Geschmack das Richtige.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kranzkuchen-viertel",
+   "shape_params": {
+    "filled": true,
+    "fillings": [
+     "nuss",
+     "schoko",
+     "quark",
+     "pudding"
+    ]
+   },
+   "size_m": [
+    0.19,
+    0.1,
+    0.07
+   ],
+   "sigma_m": 0.015,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "89-kranzkuchen-gefuellt-nuss-schoko-quark-oder-pudding-1-4-stueck",
+   "piece_of": "kranzkuchen-gefuellt-nuss-schoko-quark-oder-pudding"
+  },
+  {
+   "id": "streuselkuchen-gross",
+   "numeric_id": 90,
+   "name_de": "Streuselkuchen groß",
+   "name_src": "Streuselkuchen groß",
+   "category": "kuchen",
+   "price_eur": 12.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Knusprig & süß — der große Streuselkuchen für die Familie.",
+   "info_de": "Unser großer Streuselkuchen ist fluffiger Hefeteig mit knusprigen Streuseln — süß, buttrig und täglich frisch. Der perfekte Kuchen für die ganze Familie.",
+   "available": true,
+   "seasonal": false,
+   "shape": "rundkuchen",
+   "shape_params": {
+    "topping": "streusel"
+   },
+   "size_m": [
+    0.28,
+    0.28,
+    0.045
+   ],
+   "sigma_m": 0.022,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "90-streuselkuchen-gross"
+  },
+  {
+   "id": "streuselkuchen-gross-1-4-stueck",
+   "numeric_id": 91,
+   "name_de": "Streuselkuchen groß (1/4 Stück)",
+   "name_src": "Streuselkuchen groß (1/4 Stück)",
+   "category": "kuchen",
+   "price_eur": 3.0,
+   "sale_unit": "1/4",
+   "weight_g": null,
+   "short_de": "Knusprig & süß — das Streuselkuchen-Viertel zum Mitnehmen.",
+   "info_de": "Ein Viertel vom großen Streuselkuchen — knusprig, süß und täglich frisch. Das perfekte Stück für Streusel-Liebhaber.",
+   "available": true,
+   "seasonal": false,
+   "shape": "kuchen-stueck",
+   "shape_params": {
+    "pieces": 4,
+    "topping": "streusel"
+   },
+   "size_m": [
+    0.2,
+    0.14,
+    0.045
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "91-streuselkuchen-gross-1-4-stueck",
+   "piece_of": "streuselkuchen-gross"
+  },
+  {
+   "id": "streuselkuchen-klein",
+   "numeric_id": 92,
+   "name_de": "Streuselkuchen klein",
+   "name_src": "Streuselkuchen klein",
+   "category": "kuchen",
+   "price_eur": 7.0,
+   "sale_unit": "ganzer Kuchen",
+   "weight_g": null,
+   "short_de": "Knusprig & süß — der kleine Streuselkuchen für Genießer.",
+   "info_de": "Unser kleiner Streuselkuchen ist ein eigenes kleines Kunstwerk: fluffiger Teig, reichlich Streusel und täglich frisch gebacken. Klein aber fein.",
+   "available": true,
+   "seasonal": false,
+   "shape": "rundkuchen",
+   "shape_params": {
+    "topping": "streusel"
+   },
+   "size_m": [
+    0.2,
+    0.2,
+    0.04
+   ],
+   "sigma_m": 0.016,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "92-streuselkuchen-klein"
+  },
+  {
+   "id": "zopf-ungefuellt",
+   "numeric_id": 93,
+   "name_de": "Zopf ungefüllt",
+   "name_src": "Zopf ungefüllt",
+   "category": "kuchen",
+   "price_eur": 7.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Zart & duftend — der ungefüllte Zopf aus feinem Hefeteig.",
+   "info_de": "Unser Zopf ist aus feinem Hefeteig geflochten — zart, duftend und leicht süß. Täglich frisch und ein Genuss zu jeder Tageszeit.",
+   "available": true,
+   "seasonal": false,
+   "shape": "zopf",
+   "shape_params": {
+    "filled": false
+   },
+   "size_m": [
+    0.32,
+    0.12,
+    0.08
+   ],
+   "sigma_m": 0.026,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "93-zopf-ungefuellt"
+  },
+  {
+   "id": "zopf-gefuellt-nuss-schoko-quark-oder-pudding",
+   "numeric_id": 94,
+   "name_de": "Zopf gefüllt (Nuss, Schoko, Quark oder Pudding)",
+   "name_src": "Zopf gefüllt (Nuss, Schoko, Quark oder Pudding)",
+   "category": "kuchen",
+   "price_eur": 10.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Zart & gefüllt — der Zopf mit deiner Lieblingsfüllung.",
+   "info_de": "Unser gefüllter Zopf kommt mit Nuss, Schoko, Quark oder Pudding — und ist damit gleich vier Mal so gut. Luftig, süß und täglich frisch aus dem Ofen.",
+   "available": true,
+   "seasonal": false,
+   "shape": "zopf",
+   "shape_params": {
+    "filled": true,
+    "fillings": [
+     "nuss",
+     "schoko",
+     "quark",
+     "pudding"
+    ]
+   },
+   "size_m": [
+    0.34,
+    0.13,
+    0.08
+   ],
+   "sigma_m": 0.027,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "94-zopf-gefuellt-nuss-schoko-quark-oder-pudding"
+  },
+  {
+   "id": "rosinenbrot",
+   "numeric_id": 95,
+   "name_de": "Rosinenbrot",
+   "name_src": "Rosinenbrot",
+   "category": "kuchen",
+   "price_eur": 9.0,
+   "sale_unit": "Laib",
+   "weight_g": null,
+   "short_de": "Süß & saftig — das Rosinenbrot als klassischer Genuss.",
+   "info_de": "Unser Rosinenbrot ist ein zartes Hefebrot mit vielen saftigen Rosinen. Leicht süß, weich und täglich frisch — ein Klassiker für Frühstück und Kaffeepause.",
+   "available": true,
+   "seasonal": false,
+   "shape": "rosinenbrot",
+   "shape_params": {},
+   "size_m": [
+    0.25,
+    0.11,
+    0.1
+   ],
+   "sigma_m": 0.02,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "95-rosinenbrot"
+  },
+  {
+   "id": "obstboden",
+   "numeric_id": 96,
+   "name_de": "Obstboden",
+   "name_src": "Obstboden",
+   "category": "torten",
+   "price_eur": 5.5,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Frisch & fruchtig — der Obstboden für deine Lieblingstorte.",
+   "info_de": "Unser Obstboden ist die perfekte Basis für Obsttorten aller Art. Zart, leicht und täglich frisch — bereit für deine Lieblingsfüchte.",
+   "available": true,
+   "seasonal": false,
+   "shape": "tortenboden",
+   "shape_params": {
+    "kind": "obstboden"
+   },
+   "size_m": [
+    0.26,
+    0.26,
+    0.025
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "96-obstboden"
+  },
+  {
+   "id": "tortenboden",
+   "numeric_id": 97,
+   "name_de": "Tortenboden",
+   "name_src": "Tortenboden",
+   "category": "torten",
+   "price_eur": 5.5,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Zart & vielseitig — der Tortenboden für kreative Momente.",
+   "info_de": "Unser Tortenboden ist zart, gleichmäßig und perfekt für jede Torte. Täglich frisch und die ideale Grundlage für deine kreative Tortenkunst.",
+   "available": true,
+   "seasonal": false,
+   "shape": "tortenboden",
+   "shape_params": {
+    "kind": "biskuit"
+   },
+   "size_m": [
+    0.26,
+    0.26,
+    0.04
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "97-tortenboden"
+  },
+  {
+   "id": "sahnerollen",
+   "numeric_id": 98,
+   "name_de": "Sahnerollen",
+   "name_src": "Sahnerollen",
+   "category": "torten",
+   "price_eur": 20.0,
+   "sale_unit": null,
+   "weight_g": null,
+   "short_de": "Cremig & luftig — die Sahnerollen als elegante Köstlichkeit.",
+   "info_de": "Unsere Sahnerollen sind mit frischer Sahne gefüllte Waffelrollen — luftig, cremig und täglich frisch. Eine elegante Köstlichkeit für besondere Momente.",
+   "available": true,
+   "seasonal": false,
+   "shape": "sahnerollen",
+   "shape_params": {},
+   "size_m": [
+    0.12,
+    0.103,
+    0.064
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "98-sahnerollen"
+  },
+  {
+   "id": "sahnerollen-1-stueck",
+   "numeric_id": 99,
+   "name_de": "Sahnerollen (1 Stück)",
+   "name_src": "Sahnerollen (1 Stück)",
+   "category": "torten",
+   "price_eur": 2.0,
+   "sale_unit": "Stück",
+   "weight_g": null,
+   "short_de": "Cremig & luftig — die einzelne Sahnenrolle zum Genießen.",
+   "info_de": "Eine einzelne Sahnenrolle — cremig, luftig und täglich frisch. Der perfekte kleine Genuss für Zwischendurch.",
+   "available": true,
+   "seasonal": false,
+   "shape": "sahnerolle",
+   "shape_params": {},
+   "size_m": [
+    0.12,
+    0.034,
+    0.034
+   ],
+   "sigma_m": 0.01,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "99-sahnerollen-1-stueck",
+   "piece_of": "sahnerollen"
+  },
+  {
+   "id": "schwarzwaelder-kirsch-torte",
+   "numeric_id": 100,
+   "name_de": "Schwarzwälder-Kirsch-Torte",
+   "name_src": "Schwarzwälder-Kirsch-Torte",
+   "category": "torten",
+   "price_eur": 45.0,
+   "sale_unit": "ganze Torte",
+   "weight_g": null,
+   "short_de": "Klassisch & schokoladig — die Schwarzwälder Kirsch Torte nach Tradition.",
+   "info_de": "Unsere Schwarzwälder Kirsch Torte ist ein Klassiker der deutschen Konditorei: Schokolade, Kirschen und Sahne auf mehreren Böden. Täglich frisch und nach bewährtem Rezept.",
+   "available": true,
+   "seasonal": false,
+   "shape": "torte",
+   "shape_params": {
+    "kind": "schwarzwaelder"
+   },
+   "size_m": [
+    0.26,
+    0.26,
+    0.1
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "100-schwarzwaelder-kirsch-torte"
+  },
+  {
+   "id": "sahne-torte",
+   "numeric_id": 101,
+   "name_de": "Sahne-Torte",
+   "name_src": "Sahne-Torte",
+   "category": "torten",
+   "price_eur": 36.0,
+   "sale_unit": "ganze Torte",
+   "weight_g": null,
+   "short_de": "Cremig & luftig — die Sahne-Torte für besondere Anlässe.",
+   "info_de": "Unsere Sahne-Torte ist das Herzstück jeder Feier: cremige Sahne auf zarten Böden, festlich und täglich frisch. Gerne auch auf Vorbestellung.",
+   "available": true,
+   "seasonal": false,
+   "shape": "torte",
+   "shape_params": {
+    "kind": "sahne"
+   },
+   "size_m": [
+    0.26,
+    0.26,
+    0.09
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "101-sahne-torte"
+  },
+  {
+   "id": "buttercreme-torte",
+   "numeric_id": 102,
+   "name_de": "Buttercreme-Torte",
+   "name_src": "Buttercreme-Torte",
+   "category": "torten",
+   "price_eur": 45.0,
+   "sale_unit": "ganze Torte",
+   "weight_g": null,
+   "short_de": "Cremig & festlich — die Buttercreme-Torte für Feste.",
+   "info_de": "Unsere Buttercreme-Torte ist reich, cremig und wunderbar festlich. Mit feiner Buttercrème auf zarten Böden — täglich frisch und ein Highlight jeder Feier.",
+   "available": true,
+   "seasonal": false,
+   "shape": "torte",
+   "shape_params": {
+    "kind": "buttercreme"
+   },
+   "size_m": [
+    0.26,
+    0.26,
+    0.09
+   ],
+   "sigma_m": 0.021,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "102-buttercreme-torte"
+  },
+  {
+   "id": "buttercreme-rolle",
+   "numeric_id": 103,
+   "name_de": "Buttercreme-Rolle",
+   "name_src": "Buttercreme-Rolle",
+   "category": "torten",
+   "price_eur": 28.0,
+   "sale_unit": "ganze Rolle",
+   "weight_g": null,
+   "short_de": "Cremig & elegant — die Buttercreme-Rolle als besonderer Genuss.",
+   "info_de": "Unsere Buttercreme-Rolle ist ein elegantes Gebäck mit cremiger Buttercrème auf zartem Bisquitboden. Täglich frisch und ein absolutes Highlight.",
+   "available": true,
+   "seasonal": false,
+   "shape": "rolle",
+   "shape_params": {
+    "cream": "buttercreme"
+   },
+   "size_m": [
+    0.3,
+    0.1,
+    0.09
+   ],
+   "sigma_m": 0.024,
+   "size_basis": "type",
+   "source": "hq-products",
+   "source_file": "103-buttercreme-rolle"
+  }
+ ]
+}

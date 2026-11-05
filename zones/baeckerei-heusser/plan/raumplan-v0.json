@@ -1303,7 +1303,435 @@
     },
     "note_de": "laut Nutzer vom Kreisel sichtbar (Google Maps); nicht im Video, kein Bild vorhanden – Lage am Südgiebel nur vermutet"
    }
-  ]
+  ],
+  "facade": {
+   "note_de": "Fassade und Außenansicht (Runde 3b) aus Standbildern des Handvideos und Street-View-Ansichten (nur Referenz). Lagen aus Fotos σ ≈ 0,3–0,6 m; nicht mit dem Maßstabsfaktor skaliert (an der LoD2-Fassade verankert).",
+   "putz": {
+    "note_de": "rosa-beiger Rauputz (Video, auf Weiß normiert)"
+   },
+   "sockel": {
+    "top": {
+     "v": 0.05,
+     "sigma_m": 0.05,
+     "source": "mesh+video",
+     "ref": "FFB"
+    },
+    "cap_h": {
+     "v": 0.08,
+     "sigma_m": 0.02,
+     "source": "video"
+    },
+    "cap_proj": {
+     "v": 0.06,
+     "sigma_m": 0.02,
+     "source": "video"
+    },
+    "rows": [
+     0.15,
+     0.19,
+     0.13,
+     0.17
+    ],
+    "note_de": "Sandstein-Riemchen, rote und helle im Wechsel, mit Abdeckplatte (= Fensterbank der Schaufenster)"
+   },
+   "glasbausteine": {
+    "from": [
+     2.7,
+     0.0
+    ],
+    "to": [
+     6.3,
+     0.0
+    ],
+    "width": {
+     "v": 3.6,
+     "sigma_m": 0.6,
+     "source": "photo"
+    },
+    "sill": {
+     "v": 0.13,
+     "sigma_m": 0.1,
+     "source": "video"
+    },
+    "head": {
+     "v": 3.3,
+     "sigma_m": 0.4,
+     "source": "photo"
+    },
+    "raster": 0.25,
+    "recess": {
+     "v": 0.06,
+     "sigma_m": 0.03,
+     "source": "video"
+    },
+    "note_de": "Glasbausteine im Flechtverband, blassgrün; die Eckseite im Rücksprung ist nicht dargestellt"
+   },
+   "fenster_rollladen": {
+    "from": [
+     8.3,
+     0.0
+    ],
+    "to": [
+     11.4,
+     0.0
+    ],
+    "width": {
+     "v": 3.1,
+     "sigma_m": 0.6,
+     "source": "photo"
+    },
+    "sill": {
+     "v": 1.15,
+     "sigma_m": 0.3,
+     "source": "photo"
+    },
+    "head": {
+     "v": 2.95,
+     "sigma_m": 0.3,
+     "source": "photo"
+    },
+    "recess": {
+     "v": 0.14,
+     "sigma_m": 0.05,
+     "source": "video"
+    },
+    "note_de": "Rollladen geschlossen, nichts dahinter"
+   },
+   "lisene": {
+    "x": {
+     "v": 15.22,
+     "sigma_m": 0.15,
+     "source": "mesh+video"
+    },
+    "width": {
+     "v": 0.42,
+     "sigma_m": 0.08,
+     "source": "video"
+    },
+    "course": {
+     "v": 0.3,
+     "sigma_m": 0.05,
+     "source": "video"
+    },
+    "note_de": "Sandstein-Lisene vom Sockel bis zur Traufe"
+   },
+   "eckquader": {
+    "corner": [
+     0.0,
+     0.0
+    ],
+    "long": {
+     "v": 0.46,
+     "sigma_m": 0.08,
+     "source": "photo"
+    },
+    "short": {
+     "v": 0.28,
+     "sigma_m": 0.08,
+     "source": "photo"
+    },
+    "course": {
+     "v": 0.32,
+     "sigma_m": 0.05,
+     "source": "photo"
+    },
+    "note_de": "rote Eckquader an der SSW-Ecke (Straße/Giebel), lang und kurz im Wechsel"
+   },
+   "fallrohre": [
+    {
+     "x": {
+      "v": 0.32,
+      "sigma_m": 0.3,
+      "source": "photo"
+     },
+     "note_de": "an der SSW-Ecke"
+    },
+    {
+     "x": {
+      "v": 15.62,
+      "sigma_m": 0.15,
+      "source": "mesh+video"
+     },
+     "note_de": "neben der Lisene, Sockelknie"
+    }
+   ],
+   "dachrinne": {
+    "note_de": "halbrunde Rinne an der Traufe der Straßenseite (Traufe = LoD2)"
+   },
+   "gewaende": {
+    "band": {
+     "v": 0.27,
+     "sigma_m": 0.05,
+     "source": "photo"
+    },
+    "course": {
+     "v": 0.29,
+     "sigma_m": 0.05,
+     "source": "photo"
+    },
+    "head_h": {
+     "v": 0.34,
+     "sigma_m": 0.05,
+     "source": "photo"
+    },
+    "proj": {
+     "v": 0.04,
+     "sigma_m": 0.01,
+     "source": "video"
+    },
+    "note_de": "Sandstein-Gewände: Eckquader abwechselnd lang/kurz, Sturz aus Quadern mit Schlussstein"
+   },
+   "schlusssteine": [
+    {
+     "id": "schlussstein-1",
+     "opening": "O1",
+     "w": {
+      "v": 0.42,
+      "sigma_m": 0.06,
+      "source": "photo"
+     },
+     "h": {
+      "v": 0.44,
+      "sigma_m": 0.06,
+      "source": "photo"
+     },
+     "motiv": "brezel",
+     "note_de": "Brezel im Kreis als Relief"
+    },
+    {
+     "id": "schlussstein-2",
+     "opening": "O2",
+     "w": {
+      "v": 0.42,
+      "sigma_m": 0.06,
+      "source": "photo"
+     },
+     "h": {
+      "v": 0.44,
+      "sigma_m": 0.06,
+      "source": "photo"
+     },
+     "motiv": "glatt",
+     "note_de": "trägt eine Inschrift; nur mit Build-Flag `--lettering` (Standard aus: glatter Stein)"
+    }
+   ],
+   "kellergitter": [
+    {
+     "x": {
+      "v": 16.25,
+      "sigma_m": 0.15,
+      "source": "mesh+video"
+     }
+    },
+    {
+     "x": {
+      "v": 17.95,
+      "sigma_m": 0.15,
+      "source": "mesh+video"
+     }
+    },
+    {
+     "x": {
+      "v": 20.05,
+      "sigma_m": 0.15,
+      "source": "mesh+video"
+     }
+    }
+   ],
+   "kellergitter_z": {
+    "v": -0.45,
+    "sigma_m": 0.1,
+    "source": "mesh"
+   },
+   "kellergitter_size": {
+    "w": 0.45,
+    "h": 0.25
+   },
+   "ausleger_schild": {
+    "x": {
+     "v": 21.53,
+     "sigma_m": 0.2,
+     "source": "video"
+    },
+    "z0": {
+     "v": 2.4,
+     "sigma_m": 0.2,
+     "source": "video"
+    },
+    "w": {
+     "v": 0.45,
+     "sigma_m": 0.05,
+     "source": "video"
+    },
+    "h": {
+     "v": 0.7,
+     "sigma_m": 0.05,
+     "source": "video"
+    },
+    "d": 0.12,
+    "arm": {
+     "v": 0.62,
+     "sigma_m": 0.1,
+     "source": "video"
+    },
+    "note_de": "neutrale Grafik (Ofenbogen und Brot); Name nur mit Build-Flag `--lettering`"
+   },
+   "obergeschoss_fenster": [
+    {
+     "x": {
+      "v": 16.6,
+      "sigma_m": 0.5,
+      "source": "photo"
+     }
+    },
+    {
+     "x": {
+      "v": 19.5,
+      "sigma_m": 0.5,
+      "source": "photo"
+     }
+    },
+    {
+     "x": {
+      "v": 21.3,
+      "sigma_m": 0.5,
+      "source": "photo"
+     }
+    },
+    {
+     "x": {
+      "v": 23.3,
+      "sigma_m": 0.5,
+      "source": "photo"
+     }
+    }
+   ],
+   "obergeschoss_fenster_size": {
+    "w": {
+     "v": 0.95,
+     "sigma_m": 0.2,
+     "source": "photo"
+    },
+    "sill": {
+     "v": 3.3,
+     "sigma_m": 0.4,
+     "source": "photo"
+    },
+    "head": {
+     "v": 4.95,
+     "sigma_m": 0.4,
+     "source": "photo"
+    }
+   },
+   "giebel": {
+    "wall": "L6/L7",
+    "form": "giebel",
+    "source": "photo",
+    "sigma_m": 0.3,
+    "note_de": "Street View zeigt einen Giebel mit Wandbild; das LoD2-Modell hat dort einen Walm"
+   },
+   "giebel_fenster": [
+    {
+     "y": {
+      "v": 2.35,
+      "sigma_m": 0.5,
+      "source": "photo"
+     },
+     "w": {
+      "v": 0.85,
+      "sigma_m": 0.2,
+      "source": "photo"
+     },
+     "sill": {
+      "v": 2.3,
+      "sigma_m": 0.4,
+      "source": "photo"
+     },
+     "head": {
+      "v": 3.45,
+      "sigma_m": 0.4,
+      "source": "photo"
+     }
+    },
+    {
+     "y": {
+      "v": 4.0,
+      "sigma_m": 0.5,
+      "source": "photo"
+     },
+     "w": {
+      "v": 0.75,
+      "sigma_m": 0.2,
+      "source": "photo"
+     },
+     "sill": {
+      "v": 4.75,
+      "sigma_m": 0.4,
+      "source": "photo"
+     },
+     "head": {
+      "v": 6.1,
+      "sigma_m": 0.4,
+      "source": "photo"
+     }
+    }
+   ],
+   "wandmalerei": {
+    "y": {
+     "v": 2.3,
+     "sigma_m": 0.5,
+     "source": "photo"
+    },
+    "w": {
+     "v": 1.85,
+     "sigma_m": 0.4,
+     "source": "photo"
+    },
+    "z0": {
+     "v": 3.9,
+     "sigma_m": 0.4,
+     "source": "photo"
+    },
+    "z1": {
+     "v": 6.55,
+     "sigma_m": 0.4,
+     "source": "photo"
+    },
+    "note_de": "Wandbild Ofenbogen mit Brot und Brotschiebern; Schriftzug nur mit Build-Flag `--lettering`"
+   },
+   "vorbau": {
+    "sturz": "flach",
+    "source": "video",
+    "sigma_m": 0.2,
+    "note_de": "gerader Sturz, Untersicht = Vorbaudecke; Eckpfeiler mit Sandsteinquadern rot/hell"
+   },
+   "handlauf": {
+    "h": {
+     "v": 0.9,
+     "sigma_m": 0.1,
+     "source": "video"
+    },
+    "y0": {
+     "v": 0.1,
+     "sigma_m": 0.1,
+     "source": "video"
+    },
+    "y1": {
+     "v": 1.05,
+     "sigma_m": 0.15,
+     "source": "video"
+    },
+    "note_de": "verzinkter Handlauf an der linken Vorbauwand, eingerolltes Ende"
+   },
+   "dach_schiefer": {
+    "x_to": {
+     "v": 15.22,
+     "sigma_m": 0.15,
+     "source": "mesh+video"
+    },
+    "note_de": "vordere Dachfläche links der Lisene mit Schiefer in Rautendeckung (Street View)"
+   }
+  }
  },
  "levels": [
   {
@@ -1761,20 +2189,57 @@
         {
          "id": "sockel",
          "h": {
-          "v": 0.65,
-          "sigma_m": 0.1,
-          "source": "mesh"
+          "v": 0.62,
+          "sigma_m": 0.05,
+          "source": "video"
          },
-         "note_de": "dunkelroter Sockel, Granitablage kundenseitig"
+         "note_de": "weißer Sockel (Marmoroptik); im Video nicht dunkelrot"
+        },
+        {
+         "id": "granitablage",
+         "h": {
+          "v": 0.65,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "overhang": {
+          "v": 0.2,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "note_de": "rosa-grauer Granit, kundenseitig vorstehend"
+        },
+        {
+         "id": "zierband",
+         "h": {
+          "v": 0.8,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "note_de": "rotes Band zwischen Granitablage und Vitrinenglas"
         },
         {
          "id": "vitrine",
          "h": {
           "v": 1.27,
-          "sigma_m": 0.2,
-          "source": "mesh"
+          "sigma_m": 0.05,
+          "source": "video"
          },
-         "note_de": "Glasaufsatz, 2 Ebenen (Foto); im Mesh kaum vorhanden"
+         "note_de": "2 Module, Auslageboden, Glasboden, Glasabdeckung"
+        },
+        {
+         "id": "arbeitsplatte",
+         "h": {
+          "v": 0.9,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "depth": {
+          "v": 0.43,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "note_de": "Arbeitsseite: Granit, darunter offene Fächer"
         }
        ],
        "front": "kundenseite = +y_lokal gedreht (Seite zur Ladenfront)",
@@ -1791,16 +2256,51 @@
        },
        "slots": [
         {
-         "id": "vitrine-oben",
-         "z": 1.05,
-         "l": 3.950000000000002,
-         "d": 0.5
+         "id": "ebene-1",
+         "z": 0.8,
+         "d": 0.62,
+         "setback": 0.04,
+         "sigma_m": 0.1,
+         "source": "video",
+         "note_de": "Auslageboden (gekühlt)"
         },
         {
-         "id": "vitrine-unten",
-         "z": 0.75,
-         "l": 3.950000000000002,
-         "d": 0.6
+         "id": "ebene-2",
+         "z": 1.05,
+         "d": 0.4,
+         "setback": 0.12,
+         "sigma_m": 0.1,
+         "source": "video",
+         "note_de": "Glasboden"
+        },
+        {
+         "id": "ebene-3",
+         "z": 1.27,
+         "d": 0.55,
+         "setback": 0.0,
+         "sigma_m": 0.1,
+         "source": "video",
+         "note_de": "Glasabdeckung"
+        }
+       ],
+       "modules": [
+        {
+         "id": "links",
+         "share": {
+          "v": 0.63,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "front": "schraeg"
+        },
+        {
+         "id": "rechts",
+         "share": {
+          "v": 0.37,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "front": "senkrecht"
         }
        ]
       },
@@ -1817,83 +2317,123 @@
         "rot_deg": 45.0
        },
        "size": {
-        "l": 4.25,
+        "l": 3.6,
         "d": 0.44,
         "h": 2.0
        },
-       "source": "mesh+photo",
+       "source": "mesh+video",
        "sigma_m": 0.87,
        "status": "geschaetzt",
        "length": {
-        "v": 4.25,
-        "sigma_m": 0.55,
-        "source": "mesh"
+        "v": 3.6,
+        "sigma_m": 0.4,
+        "source": "video",
+        "note": "6 Körbe à 0,58 + Wangen; Plan v0 (Mesh) 4,25 ± 0,55 → Messliste F"
        },
        "slots": [
         {
-         "id": "ebene-0",
-         "z": 0.55,
-         "l": 4.25,
+         "id": "unterboden",
+         "z": 0.15,
          "d": 0.4,
-         "neigung_deg": 25,
-         "note_de": "Körbe mit Brötchen"
+         "neigung_deg": 0,
+         "sigma_m": 0.1,
+         "source": "video",
+         "note_de": "Vorrat, keine Verkaufsware"
+        },
+        {
+         "id": "koerbe",
+         "z": 0.8,
+         "d": 0.4,
+         "neigung_deg": 10,
+         "sigma_m": 0.1,
+         "source": "video",
+         "note_de": "6 Körbe mit rosa Tüchern"
         },
         {
          "id": "ebene-1",
-         "z": 0.95,
-         "l": 4.25,
+         "z": 1.2,
          "d": 0.4,
          "neigung_deg": 25,
-         "note_de": "Boden 1"
+         "stangen": 7,
+         "sigma_m": 0.1,
+         "source": "video",
+         "note_de": "Stangenboden mit Preisschiene"
         },
         {
          "id": "ebene-2",
-         "z": 1.25,
-         "l": 4.25,
+         "z": 1.5,
          "d": 0.4,
          "neigung_deg": 25,
-         "note_de": "Boden 2"
+         "stangen": 7,
+         "sigma_m": 0.1,
+         "source": "video",
+         "note_de": "Stangenboden mit Preisschiene"
         },
         {
          "id": "ebene-3",
-         "z": 1.55,
-         "l": 4.25,
-         "d": 0.4,
+         "z": 1.8,
+         "d": 0.5,
          "neigung_deg": 25,
-         "note_de": "Boden 3"
-        },
-        {
-         "id": "ebene-4",
-         "z": 1.85,
-         "l": 4.25,
-         "d": 0.4,
-         "neigung_deg": 25,
-         "note_de": "Boden 4"
+         "stangen": 11,
+         "sigma_m": 0.1,
+         "source": "video",
+         "note_de": "oben, rote Vorderkante"
         }
        ],
-       "note_de": "Wandseitig, gegenüber der Theke; Preisschilder auf Schienen (Foto)"
+       "note_de": "Wandseitig, gegenüber der Theke; 3 Felder à ≈ 1,2 m, Vorderkante der Böden = z",
+       "bays": 3,
+       "koerbe": {
+        "n": 6,
+        "w": {
+         "v": 0.55,
+         "sigma_m": 0.05,
+         "source": "video"
+        },
+        "d": {
+         "v": 0.38,
+         "sigma_m": 0.05,
+         "source": "video"
+        },
+        "h": {
+         "v": 0.2,
+         "sigma_m": 0.03,
+         "source": "video"
+        },
+        "pitch": {
+         "v": 0.58,
+         "sigma_m": 0.05,
+         "source": "video"
+        }
+       }
       },
       {
        "id": "F3",
        "type": "regal",
-       "name_de": "Gitterregal (Brottüten)",
+       "name_de": "Gitterregal (Chrom)",
        "pose": {
         "xy": [
          17.22,
-         0.8
+         0.64
         ],
         "z": 0.0,
         "rot_deg": 90.0
        },
        "size": {
-        "l": 0.65,
+        "l": 0.9,
         "d": 0.45,
         "h": 1.8
        },
-       "source": "photo",
-       "sigma_m": 0.5,
+       "source": "video",
+       "sigma_m": 0.4,
        "status": "geschaetzt",
-       "note_de": "laut Foto links, vor dem Durchgang Backstube; Lage geschätzt"
+       "note_de": "Chrom, 5 Drahtböden; SW-Ecke am Schaufenster 1 (Video)",
+       "boeden": [
+        0.15,
+        0.55,
+        0.95,
+        1.35,
+        1.75
+       ]
       },
       {
        "id": "F4",
@@ -1901,8 +2441,8 @@
        "name_de": "Zeitungs-Werbetafel",
        "pose": {
         "xy": [
-         21.461,
-         3.359
+         21.602,
+         3.218
         ],
         "z": 0.0,
         "rot_deg": 45.0
@@ -1930,58 +2470,158 @@
         "rot_deg": 0.0
        },
        "size": {
-        "l": 0.6,
-        "d": 0.6,
-        "h": 0.75
+        "l": 0.7,
+        "d": 0.7,
+        "h": 0.76
        },
        "source": "mesh+video",
        "sigma_m": 0.5,
        "status": "geschaetzt",
-       "form": "rund"
+       "form": "rund",
+       "stuehle": [
+        {
+         "id": "stuhl-1",
+         "xy": [
+          20.33,
+          1.28
+         ],
+         "rot_deg": 90.0,
+         "size": {
+          "l": 0.42,
+          "d": 0.45,
+          "h": 0.85
+         },
+         "sitz": 0.46,
+         "sigma_m": 0.4,
+         "source": "video"
+        },
+        {
+         "id": "stuhl-2",
+         "xy": [
+          21.52,
+          1.42
+         ],
+         "rot_deg": 270.0,
+         "size": {
+          "l": 0.42,
+          "d": 0.45,
+          "h": 0.85
+         },
+         "sitz": 0.46,
+         "sigma_m": 0.4,
+         "source": "video"
+        }
+       ]
       },
       {
        "id": "F6",
        "type": "tisch",
-       "name_de": "Bistrotisch (Café)",
+       "name_de": "Bistrotisch (Café, quadratisch)",
        "pose": {
         "xy": [
          23.0,
-         2.75
+         2.95
         ],
         "z": 0.0,
         "rot_deg": 0.0
        },
        "size": {
-        "l": 0.6,
-        "d": 0.6,
-        "h": 0.75
+        "l": 0.7,
+        "d": 0.7,
+        "h": 0.76
        },
        "source": "mesh+video",
        "sigma_m": 0.5,
        "status": "geschaetzt",
-       "form": "rund"
+       "form": "quadratisch",
+       "stuehle": [
+        {
+         "id": "stuhl-1",
+         "xy": [
+          22.38,
+          2.95
+         ],
+         "rot_deg": 90.0,
+         "size": {
+          "l": 0.42,
+          "d": 0.45,
+          "h": 0.85
+         },
+         "sitz": 0.46,
+         "sigma_m": 0.4,
+         "source": "video"
+        },
+        {
+         "id": "stuhl-2",
+         "xy": [
+          23.7,
+          2.95
+         ],
+         "rot_deg": 270.0,
+         "size": {
+          "l": 0.42,
+          "d": 0.45,
+          "h": 0.85
+         },
+         "sitz": 0.46,
+         "sigma_m": 0.4,
+         "source": "video"
+        }
+       ]
       },
       {
        "id": "F7",
        "type": "regal",
-       "name_de": "Warenregal / Kühlschrank",
+       "name_de": "Regal mit Gläsern und Dosen",
        "pose": {
         "xy": [
          22.25,
-         3.71
+         3.76
         ],
         "z": 0.0,
-        "rot_deg": 0.0
+        "rot_deg": -0.0
        },
        "size": {
-        "l": 1.99,
-        "d": 0.4,
-        "h": 1.9
+        "l": 1.37,
+        "d": 0.35,
+        "h": 1.55
        },
        "source": "mesh+video",
        "sigma_m": 0.4,
        "status": "geschaetzt",
-       "note_de": "an der Café-Rückwand (Video)"
+       "note_de": "an der Café-Rückwand (W5), dunkles Holz, Stahl, Gitterseiten",
+       "einheiten": [
+        {
+         "id": "links",
+         "l": {
+          "v": 0.82,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "boeden": [
+          0.15,
+          0.5,
+          0.85,
+          1.2,
+          1.55
+         ]
+        },
+        {
+         "id": "rechts",
+         "l": {
+          "v": 0.55,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "h": {
+          "v": 1.45,
+          "sigma_m": 0.05,
+          "source": "video"
+         },
+         "spalten": 2,
+         "faecher": 4
+        }
+       ]
       },
       {
        "id": "F8",
@@ -1989,21 +2629,27 @@
        "name_de": "Pendelleuchte",
        "pose": {
         "xy": [
-         19.198,
-         2.298
+         19.28,
+         2.38
         ],
         "z": 0.0,
         "rot_deg": 0.0
        },
        "size": {
-        "l": 0.25,
-        "d": 0.25,
-        "h": null
+        "l": 0.18,
+        "d": 0.18,
+        "h": 0.18
        },
-       "source": "photo",
-       "sigma_m": 0.6,
+       "source": "video",
+       "sigma_m": 0.4,
        "status": "geschaetzt",
-       "z_mount": "Decke"
+       "z_mount": "Decke",
+       "form": "kugel",
+       "pendel": {
+        "v": 0.25,
+        "sigma_m": 0.1,
+        "source": "video"
+       }
       },
       {
        "id": "F9",
@@ -2011,41 +2657,47 @@
        "name_de": "Pendelleuchte",
        "pose": {
         "xy": [
-         20.259,
-         3.359
+         20.057,
+         3.158
         ],
         "z": 0.0,
         "rot_deg": 0.0
        },
        "size": {
-        "l": 0.25,
-        "d": 0.25,
-        "h": null
+        "l": 0.18,
+        "d": 0.18,
+        "h": 0.18
        },
-       "source": "photo",
-       "sigma_m": 0.6,
+       "source": "video",
+       "sigma_m": 0.4,
        "status": "geschaetzt",
-       "z_mount": "Decke"
+       "z_mount": "Decke",
+       "form": "kugel",
+       "pendel": {
+        "v": 0.25,
+        "sigma_m": 0.1,
+        "source": "video"
+       }
       },
       {
        "id": "F10",
        "type": "decke",
-       "name_de": "Abhängung Holz mit roter Kante (über Theke)",
+       "name_de": "Holzblende über der Theke (rote Kanten, weiße Abdeckung)",
        "pose": {
         "xy": [
-         18.738,
-         0.919
+         18.293,
+         1.011
         ],
         "z": 0.0,
         "rot_deg": 45.0
        },
        "size": {
-        "l": 4.5,
-        "d": 2.48,
-        "h": null
+        "l": 4.45,
+        "d": 0.55,
+        "h": 0.12
        },
-       "source": "photo+mesh",
-       "sigma_m": 0.6,
+       "source": "video",
+       "sigma_m": 0.3,
        "status": "geschaetzt",
        "underside": {
         "v": 2.0,
@@ -2053,7 +2705,658 @@
         "source": "mesh",
         "ref": "FFB",
         "note": "Abhängung 1,9-2,1 im Mesh, unsicher"
+       },
+       "note_de": "abgehängter Balken, Pendel hängen daran; Breite aus dem Video geschätzt"
+      },
+      {
+       "id": "F11",
+       "type": "leuchte",
+       "name_de": "Pendelleuchte",
+       "pose": {
+        "xy": [
+         18.502,
+         1.602
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.18,
+        "d": 0.18,
+        "h": 0.18
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "z_mount": "Decke",
+       "form": "kugel",
+       "pendel": {
+        "v": 0.25,
+        "sigma_m": 0.1,
+        "source": "video"
        }
+      },
+      {
+       "id": "F12",
+       "type": "leuchte",
+       "name_de": "Pendelleuchte",
+       "pose": {
+        "xy": [
+         20.835,
+         3.935
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.18,
+        "d": 0.18,
+        "h": 0.18
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "z_mount": "Decke",
+       "form": "kugel",
+       "pendel": {
+        "v": 0.25,
+        "sigma_m": 0.1,
+        "source": "video"
+       }
+      },
+      {
+       "id": "F13",
+       "type": "kuehlschrank",
+       "name_de": "Getränkekühlschrank",
+       "pose": {
+        "xy": [
+         23.62,
+         3.51
+        ],
+        "z": 0.0,
+        "rot_deg": -0.0
+       },
+       "size": {
+        "l": 0.6,
+        "d": 0.6,
+        "h": 1.9
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "faecher": 5,
+       "note_de": "rechts vom Dosenregal (Video)"
+      },
+      {
+       "id": "F14",
+       "type": "regal",
+       "name_de": "Würfelregal",
+       "pose": {
+        "xy": [
+         19.99,
+         5.678
+        ],
+        "z": 0.0,
+        "rot_deg": -45.0
+       },
+       "size": {
+        "l": 0.77,
+        "d": 0.39,
+        "h": 1.67
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "sockel": {
+        "v": 0.2,
+        "sigma_m": 0.05,
+        "source": "video"
+       },
+       "faecher": {
+        "spalten": 2,
+        "reihen": 4
+       },
+       "note_de": "Nische neben dem Durchgang O6; im Mesh ist sie nicht erfasst (Lage geschätzt, ragt ≈ 0,2 vor O6)"
+      },
+      {
+       "id": "F15",
+       "type": "regal",
+       "name_de": "Wandboards",
+       "pose": {
+        "xy": [
+         19.927,
+         5.12
+        ],
+        "z": 0.0,
+        "rot_deg": 45.0
+       },
+       "size": {
+        "l": 0.43,
+        "d": 0.35,
+        "h": 1.65
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "boeden": [
+        0.75,
+        0.95,
+        1.65
+       ]
+      },
+      {
+       "id": "F16",
+       "type": "geraet",
+       "name_de": "Kaffeevollautomat",
+       "pose": {
+        "xy": [
+         20.128,
+         4.996
+        ],
+        "z": 0.97,
+        "rot_deg": 45.0
+       },
+       "size": {
+        "l": 0.32,
+        "d": 0.58,
+        "h": 0.6
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "steht_auf": "F15 (mittleres Board)"
+      },
+      {
+       "id": "F17",
+       "type": "geraet",
+       "name_de": "Brotschneidemaschine",
+       "pose": {
+        "xy": [
+         17.875,
+         1.65
+        ],
+        "z": 0.0,
+        "rot_deg": 90.0
+       },
+       "size": {
+        "l": 0.6,
+        "d": 0.65,
+        "h": 1.3
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "note_de": "auf Rollen, Arbeitsseite zum Gang"
+      },
+      {
+       "id": "F18",
+       "type": "tisch",
+       "name_de": "Holztisch (Arbeitstisch)",
+       "pose": {
+        "xy": [
+         18.05,
+         1.16
+        ],
+        "z": 0.0,
+        "rot_deg": 180.0
+       },
+       "size": {
+        "l": 0.8,
+        "d": 0.5,
+        "h": 0.78
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt"
+      },
+      {
+       "id": "F19",
+       "type": "geraet",
+       "name_de": "Wärmevitrine",
+       "pose": {
+        "xy": [
+         17.951,
+         0.892
+        ],
+        "z": 0.78,
+        "rot_deg": 135.0
+       },
+       "size": {
+        "l": 0.45,
+        "d": 0.4,
+        "h": 0.55
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "steht_auf": "F18"
+      },
+      {
+       "id": "F20",
+       "type": "hocker",
+       "name_de": "Rollhocker",
+       "pose": {
+        "xy": [
+         17.72,
+         1.42
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.4,
+        "d": 0.4,
+        "h": 0.6
+       },
+       "source": "video",
+       "sigma_m": 0.6,
+       "status": "geschaetzt",
+       "form": "rund"
+      },
+      {
+       "id": "F21",
+       "type": "staender",
+       "name_de": "Prospektständer",
+       "pose": {
+        "xy": [
+         23.94,
+         3.4
+        ],
+        "z": 0.0,
+        "rot_deg": -90.0
+       },
+       "size": {
+        "l": 0.35,
+        "d": 0.3,
+        "h": 1.25
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "faecher": 4
+      },
+      {
+       "id": "F22",
+       "type": "wandbild",
+       "name_de": "Wandbild Kaffee",
+       "pose": {
+        "xy": [
+         24.21,
+         3.27
+        ],
+        "z": 1.0,
+        "rot_deg": -90.0
+       },
+       "size": {
+        "l": 1.0,
+        "d": 0.03,
+        "h": 0.75
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "note_de": "eigene einfache Grafik (Tasse + Bohnen)"
+      },
+      {
+       "id": "F23",
+       "type": "staender",
+       "name_de": "Schirmständer",
+       "pose": {
+        "xy": [
+         24.08,
+         2.5
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.22,
+        "d": 0.22,
+        "h": 0.5
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "form": "rund"
+      },
+      {
+       "id": "F24",
+       "type": "pflanze",
+       "name_de": "Zimmerpflanze",
+       "pose": {
+        "xy": [
+         23.95,
+         1.85
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.5,
+        "d": 0.5,
+        "h": 1.4
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "form": "rund",
+       "topf": {
+        "v": 0.4,
+        "sigma_m": 0.05,
+        "source": "video"
+       }
+      },
+      {
+       "id": "F25",
+       "type": "bild",
+       "name_de": "Bleiglasbild",
+       "pose": {
+        "xy": [
+         24.22,
+         1.55
+        ],
+        "z": 1.3,
+        "rot_deg": -180.0
+       },
+       "size": {
+        "l": 0.35,
+        "d": 0.01,
+        "h": 0.5
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "note_de": "hängt vor der rechten Seitenscheibe; nur Farbfelder"
+      },
+      {
+       "id": "F26",
+       "type": "bilder",
+       "name_de": "Alte Bilder (Rahmen)",
+       "pose": {
+        "xy": [
+         21.587,
+         4.605
+        ],
+        "z": 0.95,
+        "rot_deg": -45.0
+       },
+       "size": {
+        "l": 0.7,
+        "d": 0.02,
+        "h": 0.95
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "rahmen": [
+        {
+         "id": "rahmen-1",
+         "x": 0.02,
+         "z": 1.5,
+         "w": 0.3,
+         "h": 0.38
+        },
+        {
+         "id": "rahmen-2",
+         "x": 0.37,
+         "z": 1.43,
+         "w": 0.3,
+         "h": 0.45
+        },
+        {
+         "id": "rahmen-3",
+         "x": 0.075,
+         "z": 0.95,
+         "w": 0.55,
+         "h": 0.4
+        }
+       ],
+       "note_de": "nur Rahmen mit neutraler Sepiafläche (keine Gesichter)"
+      },
+      {
+       "id": "F27",
+       "type": "uhr",
+       "name_de": "Wanduhr",
+       "pose": {
+        "xy": [
+         21.732,
+         4.432
+        ],
+        "z": 1.93,
+        "rot_deg": -45.0
+       },
+       "size": {
+        "l": 0.25,
+        "d": 0.04,
+        "h": 0.18
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt"
+      },
+      {
+       "id": "F28",
+       "type": "matte",
+       "name_de": "Fußmatte (Eingang)",
+       "pose": {
+        "xy": [
+         22.25,
+         1.56
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 1.5,
+        "d": 0.6,
+        "h": 0.01
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt"
+      },
+      {
+       "id": "F29",
+       "type": "matte",
+       "name_de": "Läufer vor der Theke",
+       "pose": {
+        "xy": [
+         20.061,
+         0.87
+        ],
+        "z": 0.0,
+        "rot_deg": 45.0
+       },
+       "size": {
+        "l": 3.0,
+        "d": 0.8,
+        "h": 0.01
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt"
+      },
+      {
+       "id": "F30",
+       "type": "halter",
+       "name_de": "Tütenhalter",
+       "pose": {
+        "xy": [
+         19.842,
+         5.247
+        ],
+        "z": 1.72,
+        "rot_deg": 45.0
+       },
+       "size": {
+        "l": 0.35,
+        "d": 0.2,
+        "h": 0.25
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt"
+      },
+      {
+       "id": "F31",
+       "type": "strahler",
+       "name_de": "Strahlerschiene",
+       "pose": {
+        "xy": [
+         16.95,
+         0.8
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 1.5,
+        "d": 0.06,
+        "h": 0.15
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "z_mount": "Sturz",
+       "spots": 2
+      },
+      {
+       "id": "F32",
+       "type": "strahler",
+       "name_de": "Strahlerschiene",
+       "pose": {
+        "xy": [
+         19.27,
+         0.8
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 1.8,
+        "d": 0.06,
+        "h": 0.15
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "z_mount": "Sturz",
+       "spots": 3
+      },
+      {
+       "id": "F33",
+       "type": "strahler",
+       "name_de": "Strahlerschiene",
+       "pose": {
+        "xy": [
+         23.03,
+         2.07
+        ],
+        "z": 0.0,
+        "rot_deg": 90.0
+       },
+       "size": {
+        "l": 1.8,
+        "d": 0.06,
+        "h": 0.15
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "z_mount": "Decke",
+       "spots": 3
+      },
+      {
+       "id": "F34",
+       "type": "einbauleuchten",
+       "name_de": "Einbauleuchten",
+       "pose": {
+        "xy": [
+         22.6,
+         2.1
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.08,
+        "d": 0.08,
+        "h": 0.01
+       },
+       "source": "video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "z_mount": "Decke",
+       "punkte": [
+        [
+         22.6,
+         2.1
+        ],
+        [
+         23.6,
+         2.1
+        ],
+        [
+         22.6,
+         3.3
+        ],
+        [
+         23.6,
+         3.3
+        ],
+        [
+         20.2,
+         1.7
+        ],
+        [
+         21.0,
+         2.4
+        ]
+       ]
+      },
+      {
+       "id": "F35",
+       "type": "deko",
+       "name_de": "Schaufensterbank mit Deko (Schaufenster 2)",
+       "pose": {
+        "xy": [
+         21.15,
+         0.92
+        ],
+        "z": 0.0,
+        "rot_deg": 180.0
+       },
+       "size": {
+        "l": 1.95,
+        "d": 0.3,
+        "h": 0.4
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "note_de": "Filz, Kürbisse, Sonnenblumen; Girlande am Sturz"
+      },
+      {
+       "id": "F36",
+       "type": "deko",
+       "name_de": "Schaufenster-Deko (Schaufenster 1)",
+       "pose": {
+        "xy": [
+         18.5,
+         0.9
+        ],
+        "z": 0.0,
+        "rot_deg": 180.0
+       },
+       "size": {
+        "l": 0.42,
+        "d": 0.28,
+        "h": 0.3
+       },
+       "source": "video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "note_de": "zwischen Arbeitstisch und Pfeiler; Girlande am Sturz"
       }
      ],
      "zones": [
@@ -2164,7 +3467,7 @@
    "patches": []
   }
  ],
- "fixture_frame": "Fixture-Ursprung = vordere Ecke am Anfang der Länge (Zugangsseite: Kunde bzw. Gang), x entlang l, y von der Vorderkante in die Tiefe d, z nach oben ab pose.z; rot_deg = Winkel von x_fixture gegen x_B (gegen den Uhrzeigersinn). Runde Tische: Ursprung = Mitte.",
+ "fixture_frame": "Fixture-Ursprung = vordere Ecke am Anfang der Länge (Zugangsseite: Kunde bzw. Gang), x entlang l, y von der Vorderkante in die Tiefe d, z nach oben ab pose.z; rot_deg = Winkel von x_fixture gegen x_B (gegen den Uhrzeigersinn). Tische und runde Objekte (form): Ursprung = Mitte.",
  "catalogue_placements": [
   {
    "example": true,

@@ -1,6 +1,8 @@
 """Exterior: the bakery's LoD2 envelope (walls with the shop windows, the porch arch and the side opening to the
 passage cut out, sandstone plinth, roof), window reveals + glazing, the porch (arch soffit, reveals, ceiling,
-corner pillar faces, 5 granite steps), the covered passage up to the shop door, the neighbours as LoD2 blocks.
+corner pillar faces, 5 granite steps), the covered passage up to the shop door, the neighbours as LoD2 blocks. Round 3b: the facade details from the plan's
+`site.facade` block (facade.py): slip plinth, glass blocks, window surrounds and keystones, gable (instead of the LoD2
+hip) with the mural, slate front roof, windows, gutter, downpipes, sign, handrail; flat porch lintel (video).
 """
 from __future__ import annotations
 
@@ -14,6 +16,7 @@ from shapely.geometry import Point, Polygon
 
 from . import geom
 from .context import newell, stable_pick
+from .facade import Facade, gable_roof_regions, make_gable, slate_roof
 from .plan import ARCH_SPRING, GLASS_WALL, PASSAGE_HEAD, PORCH_REVEAL, Plan
 from .scene import Scene
 
@@ -32,8 +35,20 @@ class Cutter:
     top: Callable[[np.ndarray], np.ndarray] | float
 
 
+def porch_flat(p: Plan) -> bool:
+    """Round 3b: the video shows a straight porch lintel (soffit = porch ceiling), not the v0 arch."""
+    return ((p.raw["site"].get("facade") or {}).get("vorbau") or {}).get("sturz") == "flach"
+
+
+def porch_spring(p: Plan) -> float:
+    return p.ceiling if porch_flat(p) else p.H(ARCH_SPRING)
+
+
 def arch_top(p: Plan) -> Callable[[np.ndarray], np.ndarray]:
-    """Segmental arch over the porch opening O3: springing ARCH_SPRING at both jambs, crown = O3 head."""
+    """Segmental arch over the porch opening O3: springing ARCH_SPRING at both jambs, crown = O3 head; flat at the porch
+    ceiling when the plan says so."""
+    if porch_flat(p):
+        return lambda xy: np.full(np.asarray(xy).shape[:-1], p.ceiling)
     o3 = p.openings["O3"]
     x0, x1 = float(o3["from"][0]), float(o3["to"][0])
     crown, spring = o3["head"], p.H(ARCH_SPRING)
@@ -64,6 +79,9 @@ def bakery_cutters(p: Plan) -> list[Cutter]:
     cs.append(Cutter(pf["x0"], pf["x1"], -0.3, 0.3, -5.0, arch_top(p)))
     xo = p.north_outer_x(1.0)
     cs.append(Cutter(xo - 0.4, xo + 0.4, pf["y5a"], pf["y5b"], -5.0, pf["head5"]))
+    if p.raw["site"].get("facade"):
+        for x0, x1, y0, y1, z0, z1, _ in Facade(p, p.raw["site"]["facade"]).openings():
+            cs.append(Cutter(x0, x1, y0, y1, z0, z1))
     return cs
 
 
@@ -84,7 +102,9 @@ def _line_box(p0, d, c: Cutter) -> tuple[float, float] | None:
 
 
 def lod2_wall(sc: Scene, node: geom.Node, ring_b: np.ndarray, footprint: Polygon, cutters: list[Cutter],
-              sink_to: float | None, plinth: float | None, mat: str) -> None:
+              sink_to: float | None, plinth: float | None, mat: str, plinth_draw: Callable | None = None) -> None:
+    """One LoD2 wall ring, openings cut out, sunk to `sink_to`; below `plinth` drawn as `sockel` or by
+    `plinth_draw(node, p0, p1, shape, outward_xy)` (the street wall's slip plinth)."""
     ring_b = np.asarray(ring_b, np.float64)
     nrm = newell(ring_b)
     if abs(nrm[2]) > 0.25 or np.linalg.norm(nrm[:2]) < 1e-6:     # not vertical: draw as is
@@ -118,7 +138,10 @@ def lod2_wall(sc: Scene, node: geom.Node, ring_b: np.ndarray, footprint: Polygon
     if plinth is not None:
         lo = shape.intersection(geom.rect(-1e4, -1e4, 1e4, plinth))
         hi = shape.difference(geom.rect(-1e4, -1e4, 1e4, plinth))
-        sc.vface(node, "sockel", p0, p1, lo, True)
+        if plinth_draw is not None and plinth_draw(node, p0, p1, lo, nh):
+            pass
+        else:
+            sc.vface(node, "sockel", p0, p1, lo, True)
         sc.vface(node, mat, p0, p1, hi, True)
     else:
         sc.vface(node, mat, p0, p1, shape, True)
@@ -138,19 +161,65 @@ def to_b(p: Plan, ring_enh) -> np.ndarray:
     return np.column_stack([xy, r[:, 2] - p.frame.z0])
 
 
-def build_bakery(sc: Scene, p: Plan, bld: dict) -> None:
+def build_bakery(sc: Scene, p: Plan, bld: dict, lettering: bool = False) -> None:
+    """The bakery's envelope + facade. `lettering` (on in the build, ADR 0044) adds the shop's own lettering."""
     fp = Polygon(p.footprint)
     sink = (bld["ground_z"] - p.frame.z0 - WALL_SINK) if bld["ground_z"] is not None else None
     cut = bakery_cutters(p)
+    fac_doc = p.raw["site"].get("facade")
+    fac = Facade(p, fac_doc, lettering) if fac_doc else None
+    walls_b = [to_b(p, r) for r in bld["walls"]]
+    roofs_b = [to_b(p, r) for r in bld["roofs"]]
+    gable = None
+    if fac_doc and (fac_doc.get("giebel") or {}).get("form") == "giebel":
+        made = make_gable(walls_b, roofs_b)
+        if made:
+            walls_b, roofs_b, gable = made
+
+    def street_plinth(node, p0, p1, lo, nh):
+        street = nh[1] < -0.99 and abs(float(np.mean([p0[1], p1[1]]))) < 0.05      # L5 (and the L4 stub)
+        gable_end = nh[0] < -0.99 and float(np.mean([p0[0], p1[0]])) < 0.2         # L6/L7 (SSW gable)
+        if fac is None or not (street or gable_end):
+            return False
+        fac.plinth(sc, node, p0, p1, lo)
+        return True
+
     walls = sc.node("fassade/aussenwand", "ext", source="plan", sigma=0.1)
-    for ring in bld["walls"]:
-        lod2_wall(sc, walls, to_b(p, ring), fp, cut, sink, PLINTH_TOP, "fassade")
+    for ring in walls_b:
+        lod2_wall(sc, walls, ring, fp, cut, sink, PLINTH_TOP, "fassade", street_plinth)
     roofs = sc.node("fassade/dach", "ext", source="plan", sigma=0.3)
-    for ring in bld["roofs"]:
-        roof(sc, roofs, to_b(p, ring))
+    x_slate = float(fac_doc["dach_schiefer"]["x_to"]["v"]) if fac_doc and fac_doc.get("dach_schiefer") else None
+    slate_parts = []
+    for ring in roofs_b:
+        nrm = newell(ring)
+        nrm = nrm if nrm[2] >= 0 else -nrm
+        if x_slate is not None and gable is not None and nrm[1] < -0.5 and abs(nrm[0]) < 0.3 and ring[:, 0].min() < x_slate:
+            slate_parts.append(Polygon(ring[:, :2]).intersection(geom.rect(-50, -50, x_slate, 50)))
+            rest = _clip_x_min(ring, x_slate)
+            if len(rest):
+                roof(sc, roofs, rest)
+            continue
+        roof(sc, roofs, ring)
+    if gable is not None:
+        front, back = gable_roof_regions(fp, gable)
+        for poly, plane in ((back, gable.back),):
+            for q in geom.polys(poly):
+                ring = np.asarray(q.exterior.coords)[:-1]
+                roof(sc, roofs, np.column_stack([ring, plane[0] + plane[1] * ring[:, 0] + plane[2] * ring[:, 1]]))
+        slate_parts.append(front)
+        if x_slate is not None:
+            sl = sc.node("fassade/dach/schiefer", "ext", "fassade/dach", source="photo", sigma=0.3)
+            slate_roof(sc, sl, union_all(slate_parts).buffer(0), gable.front)
     _windows(sc, p)
     _porch(sc, p)
     _steps(sc, p)
+    if fac is not None:
+        fac.build(sc, gable, porch_frame(p))
+
+
+def _clip_x_min(ring: np.ndarray, x_min: float) -> np.ndarray:
+    from .facade import _clip_x
+    return _clip_x(np.asarray(ring, np.float64), x_min)
 
 
 def _windows(sc: Scene, p: Plan) -> None:
@@ -170,9 +239,10 @@ def _windows(sc: Scene, p: Plan) -> None:
         f = 0.05
         for (bx, by, bl, bd, bh, bz) in ((x0, yg - 0.03, f, 0.06, z1 - z0, z0), (x1 - f, yg - 0.03, f, 0.06, z1 - z0, z0),
                                          (x0, yg - 0.03, x1 - x0, 0.06, f, z0), (x0, yg - 0.03, x1 - x0, 0.06, f, z1 - f)):
-            sc.box(n, "lack-schwarz", (bx, by), 0, bl, bd, bh, bz, 0.004)
+            sc.box(n, "regal-weiss", (bx, by), 0, bl, bd, bh, bz, 0.004)        # white frames (Street View, video)
         sc.vrect(n, "glas", (x0 + f, yg), (x1 - f, yg), z0 + f, z1 - f, left=False)
-        sc.box(n, "granit", (x0 - 0.04, -0.06), 0, x1 - x0 + 0.08, 0.06 + yg - 0.03, 0.06, z0 - 0.05, 0.008)
+        if not p.raw["site"].get("facade"):                     # round 3b: the plinth cap is the sill
+            sc.box(n, "granit", (x0 - 0.04, -0.06), 0, x1 - x0 + 0.08, 0.06 + yg - 0.03, 0.06, z0 - 0.05, 0.008)
 
 
 def _porch(sc: Scene, p: Plan) -> None:
@@ -198,12 +268,13 @@ def _porch(sc: Scene, p: Plan) -> None:
     sc.hface(n, "fassade", Polygon([(x1, pf["y5a"]), (xo(pf["y5a"]), pf["y5a"]), (xo(pf["y5b"]), pf["y5b"]), (x1, pf["y5b"])]), h5, False)
     sc.vrect(n, "fassade", (x1, pf["y5a"]), (x1, pf["y5b"]), h5, ceil, left=True)
     # left: pier reveal (y 0..B.y) and the plinth under the glazed side wall
+    spring = porch_spring(p)
     sc.vface(n, "fassade", (x0, yb), (x0, 0.0),
-             Polygon([(0, bot), (yb, bot), (yb, p.H(ARCH_SPRING)), (yb - R, p.H(ARCH_SPRING)), (yb - R, ceil), (0, ceil)]), True)
+             Polygon([(0, bot), (yb, bot), (yb, spring), (yb - R, spring), (yb - R, ceil), (0, ceil)]), True)
     sc.vrect(n, "sockel", (x0, C[1]), (x0, yb), bot, 0.0, left=True)
     # right: corner pillar (inner face, back face towards the side opening)
     sc.vface(n, "fassade", (x1, 0.0), (x1, pf["y5a"]),
-             Polygon([(0, bot), (pf["y5a"], bot), (pf["y5a"], ceil), (R, ceil), (R, p.H(ARCH_SPRING)), (0, p.H(ARCH_SPRING))]), True)
+             Polygon([(0, bot), (pf["y5a"], bot), (pf["y5a"], ceil), (R, ceil), (R, spring), (0, spring)]), True)
     sc.vrect(n, "fassade", (x1, pf["y5a"]), (xo(pf["y5a"]), pf["y5a"]), bot, h5, left=True)
     # back: north-wall section beside the glass front (faces the porch / the side opening)
     sc.vface(n, "fassade", (xo(C[1]), C[1]), (D[0], C[1]),

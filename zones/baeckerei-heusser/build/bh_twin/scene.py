@@ -12,7 +12,7 @@ from shapely.geometry import Polygon
 
 from . import geom
 from .plan import FrameB
-from .shade import Rig
+from .shade import AO, Rig
 
 
 def smooth(e0: float, e1: float, x) -> np.ndarray:
@@ -29,6 +29,10 @@ class Scene:
         self.F = frame
         self.rigs = rigs
         self.nodes: dict[str, geom.Node] = {}
+        self.ao = AO()                 # interior vertex AO, baked once by `bake_ao` after the shop is built
+        self.slots: list[dict] = []    # product slots (catalogue/slots.json), filled by the fixture builders
+        self.slot_geo: list = []       # (frame-B corner points of each slot's standing surface) for --debug-slots
+        self.styled: set[str] = set()  # catalogue ids built as styled models this round (status `built`)
 
     # ---- registry ----
     def node(self, name: str, rig: str, cid: str | None = None, source: str = "plan", sigma: float = 0.1) -> geom.Node:
@@ -108,6 +112,17 @@ class Scene:
         v = v.copy()
         v[:, :2] += np.asarray(c_xy, np.float64)
         n.add_mesh(mat, self.F.zone(v), t)
+
+    def bake_ao(self, rig: str = "int") -> None:
+        """Multiply the baked light of every node lit by `rig` with the registered AO (frame-B occluders)."""
+        r = self.rigs[rig]
+        for node in self.nodes.values():
+            if node.shade is not r:
+                continue
+            for pr in node.prims.values():
+                for k, pos in enumerate(pr.pos):
+                    a = self.ao(self.F.zone_to_b(pos))
+                    pr.col[k] = np.clip(pr.col[k] * a[:, None], 0.0, 1.0)
 
     def stats(self) -> dict[str, int]:
         return {k: v.triangles for k, v in self.nodes.items()}

@@ -11,6 +11,8 @@ import rasterio
 from shapely.geometry import Point, shape
 
 from model import *
+import fixtures_r3  # noqa: E402
+import exterior_r3  # noqa: E402
 
 PF = private_facts().get("plan", {})   # beyond the shop's passage door: private folder only (bh-datenschutz)
 
@@ -188,6 +190,7 @@ fixtures = [
             {"l": 18.4 - 13.9, "d": 12.6 - M["back_wall_c"], "h": None}, "photo+mesh", 0.6,
             underside=val(2.00, 0.25, "mesh", ref="FFB", note="Abhängung 1,9-2,1 im Mesh, unsicher")),
 ]
+fixtures = fixtures_r3.apply(fixtures, ROOM)   # round 3: video corrections + new fixtures (one source of truth)
 
 ext_fixtures = PF.get("site_fixtures", [])
 
@@ -266,6 +269,7 @@ doc = {
                     "clear_width": val(M["passage_far_u"] - M["north_outer_mesh_u"], sig_len(2.87, 0.05, 0.05), "mesh"),
                     "floor": val(M["passage_h"], 0.08, "mesh+dgm1"), "note_de": PF.get("passage", {}).get("note_de", "hinterer Teil nicht erfasst")},
         "fixtures": ext_fixtures + [wandmalerei],
+        "facade": exterior_r3.facade(),   # round 3b: facade + exterior values (one source of truth)
     },
     "levels": [{
         "id": "EG", "name_de": "Erdgeschoss", "z": 0.0,
@@ -287,7 +291,9 @@ doc = {
         ],
     }],
     "variants": [{"id": "bestand-2026", "name_de": "Bestand Nov. 2026", "base": None, "patches": []}],
-    "fixture_frame": "Fixture-Ursprung = vordere Ecke am Anfang der Länge (Zugangsseite: Kunde bzw. Gang), x entlang l, y von der Vorderkante in die Tiefe d, z nach oben ab pose.z; rot_deg = Winkel von x_fixture gegen x_B (gegen den Uhrzeigersinn). Runde Tische: Ursprung = Mitte.",
+    "fixture_frame": ("Fixture-Ursprung = vordere Ecke am Anfang der Länge (Zugangsseite: Kunde bzw. Gang), x entlang l, "
+                      "y von der Vorderkante in die Tiefe d, z nach oben ab pose.z; rot_deg = Winkel von x_fixture gegen x_B "
+                      "(gegen den Uhrzeigersinn). Tische und runde Objekte (form): Ursprung = Mitte."),
     "catalogue_placements": [
         {"example": True, "item": "katalog:holzofen-bauernlandbrot", "fixture": "F2", "slot": "ebene-3", "s": 0.40, "count": 6,
          "note": "s = Lage entlang des Fixtures (0..1 von dessen Ursprung); Höhe/Neigung kommt vom Slot"}
