@@ -11,7 +11,10 @@ basket, and its `product` reference names an id from this file.
 | `products.json` | Generated, committed. 103 products, sorted by `numeric_id` |
 | `shapes.py` | Parametric recipes: `build(product, idx)` → parts, `add_to_node(node, parts, origin, rot)` |
 | `gallery.py` | Every product on a tray per category, true sizes, baked light → `out/gallery.glb` + `out/gallery.json` |
-| `tests/` | pytest on a **synthetic** fixture folder (the real hq files are never read by tests) |
+| `fill.py` | Fills (`bh-fill-v1`): which product or generic good lies in which slot, how many. `layout()` (shared with the generator) and `check_fill()` (category allowed, count ≤ 3 × slot capacity, the pieces fit the slot); `python3 -I products/fill.py` checks all fills. Stdlib only |
+| `fill/morgens.json`, `fill/feierabend.json` | Morning (shortly after opening: ≈ 490 pieces in 105 slots, every category) and closing time (empty, like the walkthrough video) |
+| `waren.py` | Generic shop goods without a product card (jar, can, bottle, cup, coffee pack, bread in a paper bag, pastry bag; no brands, no text, 56–126 triangles) and low-triangle rolls for heaped baskets (`low()`, ≤ 120 triangles, same silhouette, colours and painted signature detail) |
+| `tests/` | pytest on a **synthetic** fixture folder (the real hq files are never read by tests); `test_fill.py` checks the committed fills, the shared layout, budgets and determinism |
 | `out/` | Generated, git-ignored |
 
 ## Re-import and build
@@ -130,7 +133,8 @@ triangles in total.
 whole cakes, tortes, rolls and the Blech (`LARGE` in `shapes.py`: blechkuchen, rundkuchen, kastenkuchen,
 kranzkuchen, zopf, torte, tortenboden, rolle, sahnerollen) may use **≤ 800**. There are few of them (one per display), they are
 the counter's showpieces, and a readable twist or rosette needs the extra rows. `gallery.py` exits non-zero and the
-tests fail when an instance goes over its budget. On phones, products should still be instanced and grouped into
+tests fail when an instance goes over its budget. Heaped basket rolls (`waren.low`) keep to **≤ 120**, generic goods to
+**≤ 160**. On phones, products should still be instanced and grouped into
 one tap target per basket (style.md).
 
 ## Palette
@@ -183,9 +187,8 @@ merges them into `docs/style.md`. All are sRGB, with moderate saturation.
 
 ## Privacy
 
-- Owners approved showing names, prices and texts. The zone's consent notes (`CLAUDE.md` rule 6,
-  `catalogue` consent) still say "no prices". Updating them is the lead's job, so `price_eur` stays in this data
-  file until then and is not yet shown in the twin's info cards.
+- Owners approved showing names, prices and texts (ADR 0044, `consent.prices`). The visitor catalogue
+  (`built/catalogue.json`) carries `price_eur` because of that consent; without it the generator writes `null`.
 - No allergens and no image paths are imported. The importer reads only the product folder it is given, and only
   its `*.md` files, as text. It skips symlinks and anything that resolves outside that folder.
 - `info_de` is the shop's own copy (it addresses readers as *ihr*/*unser*), so it does not follow the twin's *du*

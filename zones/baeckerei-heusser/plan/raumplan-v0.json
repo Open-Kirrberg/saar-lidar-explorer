@@ -2636,9 +2636,9 @@
         "rot_deg": 0.0
        },
        "size": {
-        "l": 0.18,
-        "d": 0.18,
-        "h": 0.18
+        "l": 0.15,
+        "d": 0.15,
+        "h": 0.15
        },
        "source": "video",
        "sigma_m": 0.4,
@@ -2646,7 +2646,7 @@
        "z_mount": "Decke",
        "form": "kugel",
        "pendel": {
-        "v": 0.25,
+        "v": 0.12,
         "sigma_m": 0.1,
         "source": "video"
        }
@@ -2664,9 +2664,9 @@
         "rot_deg": 0.0
        },
        "size": {
-        "l": 0.18,
-        "d": 0.18,
-        "h": 0.18
+        "l": 0.15,
+        "d": 0.15,
+        "h": 0.15
        },
        "source": "video",
        "sigma_m": 0.4,
@@ -2674,7 +2674,7 @@
        "z_mount": "Decke",
        "form": "kugel",
        "pendel": {
-        "v": 0.25,
+        "v": 0.12,
         "sigma_m": 0.1,
         "source": "video"
        }
@@ -2721,9 +2721,9 @@
         "rot_deg": 0.0
        },
        "size": {
-        "l": 0.18,
-        "d": 0.18,
-        "h": 0.18
+        "l": 0.15,
+        "d": 0.15,
+        "h": 0.15
        },
        "source": "video",
        "sigma_m": 0.4,
@@ -2731,7 +2731,7 @@
        "z_mount": "Decke",
        "form": "kugel",
        "pendel": {
-        "v": 0.25,
+        "v": 0.12,
         "sigma_m": 0.1,
         "source": "video"
        }
@@ -2749,9 +2749,9 @@
         "rot_deg": 0.0
        },
        "size": {
-        "l": 0.18,
-        "d": 0.18,
-        "h": 0.18
+        "l": 0.15,
+        "d": 0.15,
+        "h": 0.15
        },
        "source": "video",
        "sigma_m": 0.4,
@@ -2759,7 +2759,7 @@
        "z_mount": "Decke",
        "form": "kugel",
        "pendel": {
-        "v": 0.25,
+        "v": 0.12,
         "sigma_m": 0.1,
         "source": "video"
        }

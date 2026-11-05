@@ -311,7 +311,7 @@ export function mountZones(h: FeatureHost): () => void {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (phase === 'loading') flow.cancel();
-      else flow.exit();
+      else if (!flow.handle()?.escape?.()) flow.exit();
     }
   };
   window.addEventListener('keydown', onKey, true);
@@ -364,6 +364,7 @@ export function registerZones(ctx: AppContext): () => void {
     shortcuts: [
       { group: 'Flug', keys: ['E'], label: 'am Portal: Ort betreten', short: 'Ort betreten', codes: ['KeyE'], feature: 'zone-portals' },
       { group: 'Flug', keys: ['Esc'], label: 'im Ort: verlassen', short: 'Ort verlassen', codes: ['Escape'], feature: 'zone-portals' },
+      { group: 'Flug', keys: ['E'], label: 'im Nachbau: Info-Karte öffnen / schließen', short: 'Info-Karte', codes: ['KeyE'], feature: 'zone-portals' },
     ],
     mount: (h) => mountZones(h),
   });

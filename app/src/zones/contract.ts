@@ -100,8 +100,13 @@ export interface ZoneTwin {
   method: 'built-from-plan';
   plan: string;
   planVersion: string;
-  /** Node `extras.id` refer to this catalogue. */
+  /**
+   * Node `extras.id` refer to this catalogue. Either the catalogue format name (`bh-catalogue-v1`, packages up
+   * to round 4a) or the path of the zone's info-card catalogue (`built/catalogue.json`, `sle-zone-catalogue-v1`).
+   */
   catalogue?: string;
+  /** Set when `catalogue` is a package path (`*.json`): the info-card catalogue the runtime loads. */
+  catalogueFile?: string;
   /** The one scale factor the generator applied (0.5–2), info only. */
   scaleFactor: number;
   /** Id of the collider asset (walkable floor + edge fences); off its floor is a hole the walker does not cross. */
@@ -371,7 +376,13 @@ export function parseTwin(raw: unknown, kind: ZoneKind, assets: readonly ZoneAss
   }
   const tw: ZoneTwin = { method: 'built-from-plan', plan, planVersion, scaleFactor: raw.scaleFactor };
   const cat = str(raw.catalogue, 80);
-  if (cat) tw.catalogue = cat;
+  if (cat) {
+    tw.catalogue = cat;
+    if (cat.endsWith('.json')) {
+      if (isSafeRelativePath(cat)) tw.catalogueFile = cat;
+      else warn('twin.catalogue: not a plain relative path, no info cards');
+    }
+  }
   if (raw.nav !== undefined) {
     if (typeof raw.nav === 'string' && assets.some((a) => a.id === raw.nav && a.role === 'collider')) tw.nav = raw.nav;
     else warn('twin.nav must name a collider asset, ignored');

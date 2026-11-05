@@ -147,3 +147,29 @@ def test_built_twin():
     m = _twin()
     m["assets"][1]["role"] = "splat"
     assert any(e.endswith("unknown role") for e in Z.validate_manifest(m))
+
+
+def _catalogue() -> dict:
+    return {"schema": "sle-zone-catalogue-v1", "consent": {"prices": True},
+            "objects": {"theke": {"name_de": "Verkaufstheke", "info_de": "Hier wird bedient."},
+                        "theke/kasse": {"name_de": "Kasse", "info_de": "Hier bezahlst du.", "group": "theke"}},
+            "products": {"brezel": {"name_de": "Brezel", "short_de": "", "info_de": "", "category": "snacks", "price_eur": 1.0,
+                                    "sale_unit": "Stück"}},
+            "discoverable": ["brezel", "theke"]}
+
+
+def test_twin_catalogue_file():
+    assert Z.validate_manifest(_twin(catalogue="built/catalogue.json")) == []
+    assert Z.validate_manifest(_twin(catalogue="bh-catalogue-v1")) == []          # old packages: a format name
+    assert any(e.startswith("twin.catalogue") for e in Z.validate_manifest(_twin(catalogue="../x.json")))
+    assert Z.validate_catalogue(_catalogue()) == []
+    c = _catalogue()
+    c["consent"]["prices"] = False
+    assert any("price_eur" in e for e in Z.validate_catalogue(c))
+    c = _catalogue()
+    c["objects"]["theke/kasse"]["group"] = "brotregal"
+    assert any("group" in e for e in Z.validate_catalogue(c))
+    c = _catalogue()
+    c["discoverable"].append("unbekannt")
+    assert any("discoverable" in e for e in Z.validate_catalogue(c))
+    assert Z.validate_catalogue({"objects": {}})[0].startswith("catalogue: schema")

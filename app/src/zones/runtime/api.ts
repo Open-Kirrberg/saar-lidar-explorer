@@ -48,6 +48,8 @@ export interface ZoneHandle {
   resize(width: number, height: number): void;
   setTier?(t: ZoneTier): void;
   setQuality?(q: ZoneQuality): void;
+  /** Esc inside the zone: return true when the zone used it (e.g. closed its info card); the host then stays. */
+  escape?(): boolean;
   /** Free GPU + DOM resources; the handle is dead afterwards. */
   dispose(): void;
 }

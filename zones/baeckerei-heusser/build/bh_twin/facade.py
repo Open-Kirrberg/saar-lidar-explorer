@@ -198,21 +198,49 @@ def pretzel(radius: float, ring: bool = True):
     return affinity.scale(shape, radius, radius, origin=(0, 0))
 
 
+PLINTH_TONES = ("sockel", "sockel-grau", "sockel-hell")
+
+
+def plinth_tone(q: Polygon, kind: int, seed: str) -> str:
+    """Three muted plinth tones (Street View: pinkish red, grey-pink, buff, low contrast): light stones stay buff,
+    the others split about evenly into pinkish red and grey-pink by a hash of the stone's position."""
+    if kind == 1:
+        return "sockel-hell"
+    c = q.centroid
+    return "sockel-grau" if h01(seed, "ton", round(c.x, 2), round(c.y, 2)) < 0.45 else "sockel"
+
+
 # ----------------------------------------------------------------------------------------------- the build
 
 @dataclass
 class Gable:
-    """The SSW end as a gable: roof heights z(x, y) = min(front, back plane), ridge from x = 0 to x_cut."""
+    """The SSW end as a gable: roof heights z(x, y) = min(front, back plane), ridge from x = 0 to x_cut.
+
+    `corner`: the back corner of the gable wall is chamfered (L8) and LoD2 puts a hip over the chamfer that starts at
+    eave height. The gable's back slope then runs from the ridge down to that hip's eave corner (`corner` = the
+    triangle ridge end / hip top / hip eave corner on `corner_plane`), so both gable eaves sit at the same height as in
+    the Street View photo (the ridge stays where LoD2 has it, off-centre towards the back; the back slope is steeper).
+    `hip` / `hip_plane`: the kept LoD2 hip face over the chamfer."""
     front: np.ndarray       # (a, b, c): z = a + b x + c y
     back: np.ndarray
     x_cut: float
     eave: float
+    corner: Polygon | None = None
+    corner_plane: np.ndarray | None = None
+    hip: Polygon | None = None
+    hip_plane: np.ndarray | None = None
 
     def z(self, xy) -> np.ndarray:
         xy = np.atleast_2d(np.asarray(xy, np.float64))
         f = self.front[0] + self.front[1] * xy[:, 0] + self.front[2] * xy[:, 1]
         b = self.back[0] + self.back[1] * xy[:, 0] + self.back[2] * xy[:, 1]
-        return np.minimum(f, b)
+        out = np.minimum(f, b)
+        for poly, pl in ((self.hip, self.hip_plane), (self.corner, self.corner_plane)):
+            if poly is None:
+                continue
+            inside = np.array([poly.buffer(1e-3).contains(Point(q)) for q in xy])
+            out = np.where(inside, pl[0] + pl[1] * xy[:, 0] + pl[2] * xy[:, 1], out)
+        return out
 
     def ridge_y(self, x: float) -> float:
         a = self.front - self.back
@@ -261,6 +289,24 @@ def make_gable(walls_b: list[np.ndarray], roofs_b: list[np.ndarray]) -> tuple[li
     eave = float(min(w[:, 2].max() for w in walls_b if abs(_normal(w)[2]) < 0.25))      # gable walls reach higher
     g = Gable(planes[0], planes[1], x_cut, eave)
     roofs = []
+    for r in roofs_b:                                          # the hip over a chamfered back corner stays (Gable doc)
+        nn = _normal(r) / np.linalg.norm(_normal(r))
+        if len(r) == 3 and nn[0] < -0.3 and nn[1] > 0.3 and r[:, 0].max() <= x_cut + 1e-6:
+            top = r[np.argmax(r[:, 2])]
+            low = r[r[:, 2] < top[2] - 0.5]
+            if len(low) != 2:
+                continue
+            c = low[np.argmin(low[:, 0])]                      # eave corner on the gable wall line
+            y_r = g.ridge_y(float(c[0]))
+            r0 = np.array([c[0], y_r, float(g.z(np.array([[c[0], y_r]]))[0])])
+            A = np.column_stack([np.ones(3), [r0[0], top[0], c[0]], [r0[1], top[1], c[1]]])
+            if abs(np.linalg.det(A)) < 1e-6:
+                continue
+            g.corner_plane = np.linalg.solve(A, np.array([r0[2], top[2], c[2]]))
+            g.corner = Polygon([r0[:2], top[:2], c[:2]])
+            g.hip, g.hip_plane = Polygon(r[:, :2]), _fit_plane(r)
+            roofs.append(r)
+            break
     for r in roofs_b:
         if r[:, 0].max() <= x_cut + 1e-6:
             continue                                           # hip faces and everything left of the cut
@@ -294,7 +340,11 @@ def gable_roof_regions(footprint: Polygon, g: Gable) -> tuple[Polygon, Polygon]:
     left = footprint.intersection(sbox(-50, -50, g.x_cut, 50))
     y0, y1 = g.ridge_y(-50), g.ridge_y(g.x_cut + 50)
     front_hp = Polygon([(-50, -50), (g.x_cut + 50, -50), (g.x_cut + 50, y1), (-50, y0)])
-    return left.intersection(front_hp), left.difference(front_hp)
+    back = left.difference(front_hp)
+    for poly in (g.corner, g.hip):                             # drawn on their own planes (Gable doc)
+        if poly is not None:
+            back = back.difference(poly)
+    return left.intersection(front_hp), back
 
 
 class Facade:
@@ -345,10 +395,10 @@ class Facade:
         nl = np.array([-d[1], d[0]])
         sc.vface(node, "sockel-fuge", p0, p1, lo_shape, True)
         band = lo_shape.intersection(sbox(-1e4, PLINTH_FLOOR, 1e4, self.sockel_top))
-        stones = ashlar(band, self.f["sockel"]["rows"], (0.26, 0.34, 0.42, 0.30, 0.38), 0.012, "sockel", 0.42,
+        stones = ashlar(band, self.f["sockel"]["rows"], (0.26, 0.34, 0.42, 0.30, 0.38), 0.012, "sockel", 0.3,
                         top=self.sockel_top)
-        for kind, mat in ((0, "sockel"), (1, "sockel-hell")):
-            sc.vface(node, mat, p0 + 0.008 * nl, p1 + 0.008 * nl, [q for q, k in stones if k == kind], True)
+        for mat in PLINTH_TONES:
+            sc.vface(node, mat, p0 + 0.008 * nl, p1 + 0.008 * nl, [q for q, k in stones if plinth_tone(q, k, "sockel") == mat], True)
 
     def _plinth_cap(self, sc: Scene) -> None:
         n = sc.node("fassade/aussenwand/abdeckplatte", "ext", "fassade/aussenwand", source="photo", sigma=0.1)
@@ -452,7 +502,7 @@ class Facade:
         m = max(1, round((top - z0) / course))
         hc = (top - z0) / m
         for i in range(m):
-            mat = "sandstein-hell" if h01("lisene", i) < 0.18 else "sandstein-rot"
+            mat = "sandstein-rot"                                        # round 4: solid red sandstone
             st.block(sc, n, mat, c - w / 2, c + w / 2, z0 + i * hc + 0.004, z0 + (i + 1) * hc - 0.004, 0.0, 0.03)
         q = f["eckquader"]
         lo, sh, course = v(q["long"]), v(q["short"]), v(q["course"])
@@ -461,7 +511,7 @@ class Facade:
         for i in range(m):
             za, zb = z0 + i * hc + 0.004, z0 + (i + 1) * hc - 0.004
             a, b = (lo, sh) if i % 2 == 0 else (sh, lo)
-            mat = "sandstein-hell" if h01("eck", i) < 0.15 else "sandstein-rot"
+            mat = "sandstein-rot"
             st.block(sc, n, mat, -0.03, a, za, zb, 0.0, 0.03)              # street face, wraps the corner
             gb.block(sc, n, mat, -b, 0.0, za, zb, 0.0, 0.03)               # gable face
 
@@ -644,7 +694,7 @@ class Facade:
             shape = sbox(s_lo - e, zb, s_hi + e, ztop)
             wf.face(sc, n, "sockel-fuge", shape, e)
             for q, k in ashlar(shape, [0.24, 0.20], (0.20, 0.26, 0.32), 0.012, f"pfeiler{i}", 0.4, top=ztop):
-                wf.face(sc, n, "sockel-hell" if k else "sockel", q, e + 0.006)
+                wf.face(sc, n, plinth_tone(q, k, f"pfeiler{i}"), q, e + 0.006)
 
     # ---- the gable: verge boards, mural panel
     def _gable(self, sc: Scene, g: Gable) -> None:

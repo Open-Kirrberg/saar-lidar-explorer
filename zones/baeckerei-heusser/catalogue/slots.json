@@ -928,16 +928,16 @@
    "id": "brotregal/koerbe/korb-1/platz-01",
    "fixture": "brotregal/koerbe/korb-1",
    "pose": {
-    "x": 2.713,
-    "y": 245.114,
-    "z": 0.269,
+    "x": 2.727,
+    "y": 245.195,
+    "z": 0.264,
     "heading_deg": 70.7
    },
    "tilt_deg": 10.0,
    "size": {
     "w": 0.47,
     "d": 0.3,
-    "h": 0.2
+    "h": 0.15
    },
    "capacity": 20,
    "capacity_de": "≈ 20 Brötchen in einer Lage (gehäuft ≈ 30)",
@@ -950,16 +950,16 @@
    "id": "brotregal/koerbe/korb-2/platz-01",
    "fixture": "brotregal/koerbe/korb-2",
    "pose": {
-    "x": 2.522,
-    "y": 245.114,
-    "z": -0.279,
+    "x": 2.535,
+    "y": 245.195,
+    "z": -0.283,
     "heading_deg": 70.7
    },
    "tilt_deg": 10.0,
    "size": {
     "w": 0.47,
     "d": 0.3,
-    "h": 0.2
+    "h": 0.15
    },
    "capacity": 20,
    "capacity_de": "≈ 20 Brötchen in einer Lage (gehäuft ≈ 30)",
@@ -972,16 +972,16 @@
    "id": "brotregal/koerbe/korb-3/platz-01",
    "fixture": "brotregal/koerbe/korb-3",
    "pose": {
-    "x": 2.317,
-    "y": 245.114,
-    "z": -0.864,
+    "x": 2.331,
+    "y": 245.195,
+    "z": -0.869,
     "heading_deg": 70.7
    },
    "tilt_deg": 10.0,
    "size": {
     "w": 0.47,
     "d": 0.3,
-    "h": 0.2
+    "h": 0.15
    },
    "capacity": 20,
    "capacity_de": "≈ 20 Brötchen in einer Lage (gehäuft ≈ 30)",
@@ -994,16 +994,16 @@
    "id": "brotregal/koerbe/korb-4/platz-01",
    "fixture": "brotregal/koerbe/korb-4",
    "pose": {
-    "x": 2.126,
-    "y": 245.114,
-    "z": -1.411,
+    "x": 2.14,
+    "y": 245.195,
+    "z": -1.416,
     "heading_deg": 70.7
    },
    "tilt_deg": 10.0,
    "size": {
     "w": 0.47,
     "d": 0.3,
-    "h": 0.2
+    "h": 0.15
    },
    "capacity": 20,
    "capacity_de": "≈ 20 Brötchen in einer Lage (gehäuft ≈ 30)",
@@ -1016,16 +1016,16 @@
    "id": "brotregal/koerbe/korb-5/platz-01",
    "fixture": "brotregal/koerbe/korb-5",
    "pose": {
-    "x": 1.922,
-    "y": 245.114,
-    "z": -1.997,
+    "x": 1.935,
+    "y": 245.195,
+    "z": -2.001,
     "heading_deg": 70.7
    },
    "tilt_deg": 10.0,
    "size": {
     "w": 0.47,
     "d": 0.3,
-    "h": 0.2
+    "h": 0.15
    },
    "capacity": 20,
    "capacity_de": "≈ 20 Brötchen in einer Lage (gehäuft ≈ 30)",
@@ -1038,16 +1038,16 @@
    "id": "brotregal/koerbe/korb-6/platz-01",
    "fixture": "brotregal/koerbe/korb-6",
    "pose": {
-    "x": 1.73,
-    "y": 245.114,
-    "z": -2.544,
+    "x": 1.744,
+    "y": 245.195,
+    "z": -2.549,
     "heading_deg": 70.7
    },
    "tilt_deg": 10.0,
    "size": {
     "w": 0.47,
     "d": 0.3,
-    "h": 0.2
+    "h": 0.15
    },
    "capacity": 20,
    "capacity_de": "≈ 20 Brötchen in einer Lage (gehäuft ≈ 30)",
@@ -1569,19 +1569,19 @@
    "id": "theke/brezelstaender/platz-01",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 4.09,
+    "x": 4.079,
     "y": 245.632,
-    "z": -0.544,
+    "z": -0.574,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.045,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1590,19 +1590,19 @@
    "id": "theke/brezelstaender/platz-02",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 4.098,
+    "x": 4.094,
     "y": 245.632,
-    "z": -0.521,
+    "z": -0.531,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.045,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1611,19 +1611,19 @@
    "id": "theke/brezelstaender/platz-03",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 4.106,
+    "x": 4.109,
     "y": 245.632,
-    "z": -0.498,
+    "z": -0.489,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.045,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1632,19 +1632,19 @@
    "id": "theke/brezelstaender/platz-04",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 4.037,
+    "x": 4.05,
     "y": 245.632,
-    "z": -0.697,
+    "z": -0.659,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.075,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1653,19 +1653,19 @@
    "id": "theke/brezelstaender/platz-05",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 4.026,
+    "x": 4.025,
     "y": 245.632,
-    "z": -0.727,
+    "z": -0.73,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.075,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1674,19 +1674,19 @@
    "id": "theke/brezelstaender/platz-06",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 4.137,
+    "x": 4.107,
     "y": 245.832,
-    "z": -0.642,
+    "z": -0.631,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.045,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1695,19 +1695,19 @@
    "id": "theke/brezelstaender/platz-07",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 4.16,
+    "x": 4.15,
     "y": 245.832,
-    "z": -0.65,
+    "z": -0.646,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.045,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1716,19 +1716,19 @@
    "id": "theke/brezelstaender/platz-08",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 4.183,
+    "x": 4.192,
     "y": 245.832,
-    "z": -0.658,
+    "z": -0.661,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.045,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1737,19 +1737,19 @@
    "id": "theke/brezelstaender/platz-09",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 3.984,
+    "x": 4.022,
     "y": 245.832,
-    "z": -0.588,
+    "z": -0.602,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.075,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1758,19 +1758,19 @@
    "id": "theke/brezelstaender/platz-10",
    "fixture": "theke/brezelstaender",
    "pose": {
-    "x": 3.954,
+    "x": 3.951,
     "y": 245.832,
-    "z": -0.578,
+    "z": -0.577,
     "heading_deg": 70.7
    },
    "tilt_deg": 0.0,
    "size": {
     "w": 0.13,
-    "d": 0.04,
+    "d": 0.075,
     "h": 0.12
    },
    "capacity": 1,
-   "capacity_de": "1 Brezel (hängend)",
+   "capacity_de": "1 Brezel (hängend, die Stange durch eine Schlaufe)",
    "categories": [
     "laugengebaeck"
    ]
@@ -1790,8 +1790,8 @@
     "d": 0.56,
     "h": 0.22
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40 oder 2 Kuchenplatten",
+   "capacity": 4,
+   "capacity_de": "1 Blech 60×40 oder 2–4 Kuchen (≈ 12 Stücke)",
    "categories": [
     "kuchen",
     "suesses"
@@ -1812,8 +1812,8 @@
     "d": 0.56,
     "h": 0.22
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40 oder 2 Kuchenplatten",
+   "capacity": 4,
+   "capacity_de": "1 Blech 60×40 oder 2–4 Kuchen (≈ 12 Stücke)",
    "categories": [
     "kuchen",
     "suesses"
@@ -1834,8 +1834,8 @@
     "d": 0.56,
     "h": 0.22
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40 oder 2 Kuchenplatten",
+   "capacity": 4,
+   "capacity_de": "1 Blech 60×40 oder 2–4 Kuchen (≈ 12 Stücke)",
    "categories": [
     "kuchen",
     "suesses"
@@ -1856,8 +1856,8 @@
     "d": 0.56,
     "h": 0.22
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40 oder 2 Kuchenplatten",
+   "capacity": 4,
+   "capacity_de": "1 Blech 60×40 oder 2–4 Kuchen (≈ 12 Stücke)",
    "categories": [
     "kuchen",
     "suesses"
@@ -1878,8 +1878,8 @@
     "d": 0.56,
     "h": 0.22
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40 oder 2 Kuchenplatten",
+   "capacity": 4,
+   "capacity_de": "1 Blech 60×40 oder 2–4 Kuchen (≈ 12 Stücke)",
    "categories": [
     "kuchen",
     "suesses"
@@ -1900,8 +1900,8 @@
     "d": 0.56,
     "h": 0.22
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40 oder 2 Kuchenplatten",
+   "capacity": 4,
+   "capacity_de": "1 Blech 60×40 oder 2–4 Kuchen (≈ 12 Stücke)",
    "categories": [
     "kuchen",
     "suesses"
@@ -1922,8 +1922,8 @@
     "d": 0.38,
     "h": 0.19
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40",
+   "capacity": 12,
+   "capacity_de": "1 Blech 60×40 (≈ 12 Teilchen)",
    "categories": [
     "suesses",
     "kuchen",
@@ -1946,8 +1946,8 @@
     "d": 0.38,
     "h": 0.19
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40",
+   "capacity": 12,
+   "capacity_de": "1 Blech 60×40 (≈ 12 Teilchen)",
    "categories": [
     "suesses",
     "kuchen",
@@ -1970,8 +1970,8 @@
     "d": 0.38,
     "h": 0.19
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40",
+   "capacity": 12,
+   "capacity_de": "1 Blech 60×40 (≈ 12 Teilchen)",
    "categories": [
     "suesses",
     "kuchen",
@@ -1994,8 +1994,8 @@
     "d": 0.38,
     "h": 0.19
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40",
+   "capacity": 12,
+   "capacity_de": "1 Blech 60×40 (≈ 12 Teilchen)",
    "categories": [
     "suesses",
     "kuchen",
@@ -2018,8 +2018,8 @@
     "d": 0.38,
     "h": 0.19
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40",
+   "capacity": 12,
+   "capacity_de": "1 Blech 60×40 (≈ 12 Teilchen)",
    "categories": [
     "suesses",
     "kuchen",
@@ -2042,8 +2042,8 @@
     "d": 0.38,
     "h": 0.19
    },
-   "capacity": 1,
-   "capacity_de": "1 Blech 60×40",
+   "capacity": 12,
+   "capacity_de": "1 Blech 60×40 (≈ 12 Teilchen)",
    "categories": [
     "suesses",
     "kuchen",

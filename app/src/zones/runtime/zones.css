@@ -84,3 +84,85 @@
   .sle-zone-active .sle-overlay-slot:has(.sle-zone-gltf-ui) .sle-zone-foot { right: calc(124px + var(--safe-r, 0px)); bottom: calc(8px + var(--safe-b, 0px)); }
   .sle-zone-hint { top: calc(120px + var(--safe-t, 0px)); bottom: auto; white-space: normal; text-align: center; max-width: calc(100vw - 32px); }
 }
+
+/* Built twins with an info-card catalogue (twinUi.ts, docs/style.md „Interaction look“): light card, counter,
+   confirmation, pointer tip, crosshair. Warm bakery palette on a light panel; tap targets ≥ 44 px. */
+.sle-zone-gltf-ui > .sle-twin-ui { position: absolute; inset: 0; pointer-events: none; }
+.sle-twin-ui > * { pointer-events: auto; }
+.sle-twin-ui [hidden] { display: none !important; }
+.sle-twin-ui > .sle-twin-tip, .sle-twin-ui > .sle-twin-cross, .sle-twin-ui > .sle-twin-toast { pointer-events: none; }
+.sle-twin-card {
+  position: absolute; left: calc(12px + var(--safe-l, 0px)); bottom: calc(44px + var(--safe-b, 0px));
+  width: min(360px, calc(100vw - 24px)); box-sizing: border-box; padding: 14px 16px 16px;
+  background: #fbf7ef; color: #3a2a22; border: 1px solid rgba(194, 154, 75, 0.5); border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(40, 25, 10, 0.35); font-family: var(--ui-font); z-index: 3;
+}
+.sle-twin-pop { animation: sle-twin-pop 0.18s ease-out; }
+@keyframes sle-twin-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+.sle-twin-card-head { min-height: 0; }
+.sle-twin-card-x {
+  position: absolute; top: 2px; right: 2px; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px;
+  background: none; color: #6b5d52; font-size: 26px; line-height: 44px; cursor: pointer;
+}
+.sle-twin-card-x:hover { background: rgba(194, 154, 75, 0.16); color: #3a2a22; }
+.sle-twin-chip {
+  display: inline-block; margin: 0 0 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: rgba(194, 154, 75, 0.18); color: #7a5a1f; border: 1px solid rgba(194, 154, 75, 0.55);
+}
+.sle-twin-card-title { margin: 2px 40px 6px 0; font-size: 19px; line-height: 1.25; font-weight: 650; color: #3a2a22; }
+.sle-twin-card-text { margin: 0; font-size: 14.5px; line-height: 1.45; color: #4a3f38; }
+.sle-twin-price { margin: 10px 0 0; display: flex; align-items: baseline; gap: 8px; }
+.sle-twin-price-val { font-size: 21px; font-weight: 700; color: #8e2b2b; font-variant-numeric: tabular-nums; }
+.sle-twin-price-unit { font-size: 13px; color: #6b5d52; }
+.sle-twin-fresh {
+  display: inline-block; margin: 10px 0 0; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  background: #e9f0dc; color: #3f6630;
+}
+.sle-twin-fresh::before { content: '✓ '; }
+.sle-twin-counter {
+  position: absolute; top: calc(64px + var(--safe-t, 0px)); left: calc(12px + var(--safe-l, 0px));
+  display: flex; align-items: center; gap: 2px; min-height: 36px; padding: 0 4px 0 12px; border-radius: 999px;
+  background: rgba(251, 247, 239, 0.94); color: #3a2a22; font: 600 13px var(--ui-font);
+  box-shadow: 0 2px 10px rgba(40, 25, 10, 0.25); font-variant-numeric: tabular-nums;
+}
+.sle-twin-counter:not(:has(.sle-twin-reset:not([hidden]))) { padding-right: 12px; }
+.sle-twin-counter-done { background: #f0e1bd; }
+.sle-twin-bump { animation: sle-twin-bump 0.5s ease-out; }
+@keyframes sle-twin-bump { 30% { transform: scale(1.1); background: #f0e1bd; } }
+.sle-twin-reset {
+  min-width: 44px; height: 44px; margin: -4px 0; padding: 0 8px; border: 0; border-radius: 999px; background: none;
+  color: #8a7a6c; font: 600 15px var(--ui-font); cursor: pointer;
+}
+.sle-twin-reset:hover { color: #3a2a22; }
+.sle-twin-reset-ask { color: #8e2b2b; font-size: 12.5px; }
+.sle-twin-toast {
+  position: absolute; top: calc(64px + var(--safe-t, 0px)); left: 50%; transform: translateX(-50%);
+  max-width: calc(100vw - 32px); padding: 8px 16px; border-radius: 999px; background: rgba(58, 42, 34, 0.92);
+  color: #fff4de; font: 600 14px var(--ui-font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); transition: opacity 0.4s;
+}
+.sle-twin-toast-off { opacity: 0; }
+.sle-twin-tip {
+  position: absolute; left: 0; top: 0; padding: 4px 10px; border-radius: 8px; white-space: nowrap;
+  background: rgba(251, 247, 239, 0.95); color: #3a2a22; font: 600 13px var(--ui-font); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.sle-twin-cross {
+  position: absolute; left: 50%; top: 50%; width: 0; height: 0; display: flex; justify-content: center; align-items: flex-start;
+  padding-top: 20px; white-space: nowrap;
+}
+.sle-twin-cross-label {
+  padding: 3px 10px; border-radius: 999px; background: rgba(58, 42, 34, 0.85); color: #fff4de; font: 600 13px var(--ui-font);
+}
+.sle-twin-cross::before {
+  content: ''; position: absolute; left: -7px; top: -7px; width: 10px; height: 10px; border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.sle-twin-cross-on::before { left: -10px; top: -10px; width: 16px; height: 16px; border-color: #d4b881; box-shadow: 0 0 8px rgba(212, 184, 129, 0.8); }
+@media (max-width: 600px) {
+  .sle-twin-card { left: calc(8px + var(--safe-l, 0px)); right: calc(8px + var(--safe-r, 0px)); width: auto; bottom: calc(8px + var(--safe-b, 0px)); border-radius: 18px; }
+  .sle-twin-counter { top: calc(56px + var(--safe-t, 0px)); }
+  .sle-twin-toast { top: calc(112px + var(--safe-t, 0px)); font-size: 13px; }
+}
+/* the phone card sits where the walk pad is: the pad steps aside while a card is open */
+.sle-twin-card-open .sle-zone-walkpad { visibility: hidden; }
+@media (prefers-reduced-motion: reduce) { .sle-twin-pop, .sle-twin-bump { animation: none; } .sle-twin-toast { transition: none; } }

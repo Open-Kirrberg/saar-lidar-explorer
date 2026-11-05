@@ -135,15 +135,17 @@ def apply(fixtures: list[dict], room: dict) -> list[dict]:
                    einheiten=[{"id": "links", "l": val(0.82, 0.05), "boeden": [0.15, 0.50, 0.85, 1.20, 1.55]},
                               {"id": "rechts", "l": val(0.55, 0.05), "h": val(1.45, 0.05), "spalten": 2, "faecher": 4}])
 
-    # ---- pendant lamps: 4 on the soffit over the counter, ≈ 1.1 m apart, centred on the display (video)
+    # ---- pendant lamps: 4 on the soffit over the counter, ≈ 1.1 m apart, centred on the display (video).
+    # Round 4: Ø 0.15 on a 0.12 pendant (was 0.18 / 0.25): in the video the shades sit just under the beam and the
+    # bread wall stays visible below them; both values are within the video's uncertainty (σ 0.1)
     lamps = {}
     xc = (0.30 + L1 - 0.02) / 2
     for k, fid in enumerate(("F11", "F8", "F9", "F12")):
         lamps[fid] = _local(f1, xc + (k - 1.5) * 1.10, 0.57)
     for fid in ("F8", "F9"):
         by[fid]["pose"] = {"xy": [round(lamps[fid][0], 3), round(lamps[fid][1], 3)], "z": 0.0, "rot_deg": 0.0}
-        by[fid].update({"size": {"l": 0.18, "d": 0.18, "h": 0.18}, "source": "video", "sigma_m": 0.4,
-                        "form": "kugel", "pendel": val(0.25, 0.1)})
+        by[fid].update({"size": {"l": 0.15, "d": 0.15, "h": 0.15}, "source": "video", "sigma_m": 0.4,
+                        "form": "kugel", "pendel": val(0.12, 0.1)})
 
     # ---- F10 soffit: a narrow hanging wood beam along the counter (red edges, white cover on top) that carries the
     # pendants (video t024/t026/t038); the mesh blob (4.5 × 2.48) was the beam plus the ceiling around it
@@ -155,8 +157,8 @@ def apply(fixtures: list[dict], room: dict) -> list[dict]:
 
     new = []
     for fid in ("F11", "F12"):
-        new.append(_fx(fid, "leuchte", "Pendelleuchte", lamps[fid], 0.0, {"l": 0.18, "d": 0.18, "h": 0.18}, 0.4,
-                       z_mount="Decke", form="kugel", pendel=val(0.25, 0.1)))
+        new.append(_fx(fid, "leuchte", "Pendelleuchte", lamps[fid], 0.0, {"l": 0.15, "d": 0.15, "h": 0.15}, 0.4,
+                       z_mount="Decke", form="kugel", pendel=val(0.12, 0.1)))
 
     # ---- café back wall (W5) and north wall (W4)
     new.append(_fx("F13", "kuehlschrank", "Getränkekühlschrank", *_wall(room, "E", "F", 0.02, 0.60, 0.60),

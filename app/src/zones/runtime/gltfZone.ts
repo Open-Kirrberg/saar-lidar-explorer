@@ -18,11 +18,15 @@ import basisWasmUrl from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?ur
 import type { MeshBVH } from 'three-mesh-bvh';
 import { DroneController } from '../../controls/DroneController';
 import { createSky } from '../../terrain/Sky';
+import { browserStorage } from '../../ui/settings';
+import { parseZoneCatalogue } from '../catalogue';
+import type { ZoneCatalogue } from '../catalogue';
 import type { ZoneAsset, ZoneCaptureScale } from '../contract';
 import type { ZoneHandle, ZoneModule, ZoneMountContext, ZonePose, ZoneQuality, ZoneTier } from './api';
 import { localToEN } from './collide';
 import { colliderPlan, firstViewWeights, LodSwitcher, referenceAssets, referenceMode, sceneAssets, spawnLocal, twinFade, walkHoles, wantedLod } from './gltfPlan';
 import type { LodAction, TwinFade } from './gltfPlan';
+import { TwinInteraction } from './twinInteract';
 import { buildCollider, EYE_M, Walker } from './walk';
 
 const abortError = () => new DOMException('Zone mount aborted', 'AbortError');
@@ -165,6 +169,8 @@ class GltfZone implements ZoneHandle {
   private readonly refSlots: AssetSlot[];
   private refOn = false;
   private readonly fade: (FadeUniforms & { spec: TwinFade }) | null;
+  /** Built twin with an info-card catalogue: hover / tap, cards, „entdeckt x / y“ (twinInteract.ts). */
+  readonly twin: TwinInteraction | null;
 
   constructor(
     private readonly ctx: ZoneMountContext,
@@ -172,6 +178,7 @@ class GltfZone implements ZoneHandle {
     private readonly slots: AssetSlot[],
     private readonly bvh: MeshBVH | null,
     private readonly scaleTransform: Group,
+    catalogue: ZoneCatalogue | null = null,
   ) {
     this.quality = ctx.quality ?? 'auto';
     const m = ctx.manifest;
@@ -199,6 +206,18 @@ class GltfZone implements ZoneHandle {
     this.refGroup.visible = false;
     this.root.add(this.refGroup);
     this.ui = this.buildUi();
+    this.twin = catalogue
+      ? new TwinInteraction({
+          renderer: ctx.renderer,
+          camera: this.camera,
+          container: this.ui,
+          zoneId: m.id,
+          catalogue,
+          root: scaleTransform,
+          storage: browserStorage(),
+          walking: () => this.walking,
+        })
+      : null;
     if (referenceMode(location.search, this.refSlots.length > 0) === 'shown') this.setReference(true);
   }
 
@@ -296,7 +315,10 @@ class GltfZone implements ZoneHandle {
       fallbackGround: -1e6,
       minClearance: EYE_M,
       baseSpeed: WALK_SPEED,
+      // with info cards a click first picks; twinInteract.ts locks the pointer on a click on nothing
+      lockOnClick: !this.twin,
     });
+    this.twin?.attach(this.controls);
     const [x, y, z] = spawnLocal(spawn, m.origin, m.capture?.scale);
     this.walking = !!this.walker && spawn.mode === 'gehen';
     this.floatBtn?.setAttribute('aria-pressed', String(!this.walking));
@@ -344,12 +366,19 @@ class GltfZone implements ZoneHandle {
     }
     this.lodClock += dt;
     if (this.lodClock >= LOD_TICK_S) this.tickLods(false);
+    this.twin?.frame(dt);
     if (this.sky) this.sky.position.copy(p);
     this.ctx.renderer.render(this.scene, this.camera);
   }
 
+  /** Esc: closes an open info card first (the host leaves only when this returns false). */
+  escape(): boolean {
+    return this.twin?.escape() ?? false;
+  }
+
   exit(): ZonePose {
     const pose = this.pose();
+    this.twin?.detach();
     this.controls?.dispose();
     this.controls = null;
     const r = this.ctx.renderer;
@@ -376,6 +405,7 @@ class GltfZone implements ZoneHandle {
     if (this.controls) this.exit();
     this.ac.abort();
     clearTimeout(this.hintTimer);
+    this.twin?.dispose();
     for (const s of [...this.slots, ...this.refSlots]) for (const o of s.lods.values()) disposeTree(o);
     this.slots.length = 0;
     this.refSlots.length = 0;
@@ -413,6 +443,7 @@ class GltfZone implements ZoneHandle {
           const h = slot.lods.get(a.hide);
           if (h) h.visible = false;
         }
+        if (slot.parent === this.scaleTransform) this.twin?.reindex();
       } else if (a.type === 'drop') {
         const o = slot.lods.get(a.lod);
         // the collider BVH is a copy, so the drawn coarse level can go
@@ -438,7 +469,7 @@ class GltfZone implements ZoneHandle {
   }
 
   /** Debug / perf hook (`sle.zones.flow.handle().debug()`). */
-  debug(): { lods: Record<string, number | null>; triangles: number; walking: boolean; pose: ZonePose; twin: boolean; holes: string | null; reference: boolean; fade: TwinFade | null } {
+  debug(): { lods: Record<string, number | null>; triangles: number; walking: boolean; pose: ZonePose; twin: boolean; holes: string | null; reference: boolean; fade: TwinFade | null; cards: ReturnType<TwinInteraction['state']> | null } {
     const lods: Record<string, number | null> = {};
     for (const s of [...this.slots, ...this.refSlots]) lods[s.asset.id] = s.sw.shown;
     const tris = countTriangles(this.scaleTransform) + (this.refOn ? countTriangles(this.refGroup) : 0);
@@ -451,6 +482,7 @@ class GltfZone implements ZoneHandle {
       holes: this.walker?.holes ?? null,
       reference: this.refOn,
       fade: this.fade?.spec ?? null,
+      cards: this.twin?.state() ?? null,
     };
   }
 }
@@ -472,6 +504,21 @@ async function loadScene(gltf: GLTFLoader, url: string, signal: AbortSignal, dec
   return root;
 }
 
+/** The twin's info-card catalogue (`twin.catalogue` = `*.json`); any failure → null (no cards, zone still loads). */
+async function loadCatalogue(ctx: ZoneMountContext): Promise<ZoneCatalogue | null> {
+  const file = ctx.manifest.twin?.catalogueFile;
+  if (!file) return null;
+  const warn = (msg: string) => console.warn(`[zone ${ctx.manifest.id}] ${msg}`);
+  try {
+    const res = await fetch(ctx.baseUrl + file, { signal: ctx.signal });
+    if (!res.ok) throw new Error(`${res.status} ${file}`);
+    return parseZoneCatalogue(await res.json(), warn);
+  } catch (err) {
+    if (!ctx.signal.aborted) warn(`catalogue ${file} not loaded: ${String(err)}`);
+    return null;
+  }
+}
+
 export async function mountZone(ctx: ZoneMountContext): Promise<ZoneHandle> {
   const m = ctx.manifest;
   const assets = sceneAssets(m);
@@ -482,6 +529,7 @@ export async function mountZone(ctx: ZoneMountContext): Promise<ZoneHandle> {
   const done = assets.map(() => 0);
   const report = () => ctx.onProgress('Laden', 0.9 * done.reduce((s, d, i) => s + d * weights[i]!, 0));
   report();
+  const catalogue = loadCatalogue(ctx);
   let first: Object3D[] = [];
   try {
     // first view: every scene asset's coarsest LOD (parallel), then extra collider assets
@@ -522,8 +570,10 @@ export async function mountZone(ctx: ZoneMountContext): Promise<ZoneHandle> {
     for (const o of [...scaleT.children]) scaleT.remove(o);
     colRoot.remove(scaleT);
     if (ctx.signal.aborted) throw abortError();
+    const cat = await catalogue;
+    if (ctx.signal.aborted) throw abortError();
     ctx.onProgress('Fertig', 1);
-    return new GltfZone(ctx, loader, slots, bvh, scaleT);
+    return new GltfZone(ctx, loader, slots, bvh, scaleT, cat);
   } catch (err) {
     for (const o of first) disposeTree(o);
     loader.ktx2.dispose();

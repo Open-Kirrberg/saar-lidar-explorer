@@ -29,7 +29,7 @@ PALETTE = {
     "lack-schwarz": "#2B2B2D",
     "glas": "#CFE6EA",
     "fassade": "#E6D6CB",         # rosy-beige render (video + Street View, white-referenced; was #E7DFD2)
-    "sockel": "#8C5A4A",
+    "sockel": "#A27468",          # plinth slips: muted pinkish red (round 4: tone-on-tone with sockel-grau/-hell)
     "lampe": "#FFE2BF",
     # shop interior, sampled from the walkthrough video (white-referenced, simplified; style.md "Palette")
     "champagner": "#D2C08E",      # rod tiers, rails, display trim (the shop's "brass" is a pale champagne)
@@ -54,8 +54,9 @@ PALETTE = {
     "blume": "#E08A3A",           # garland flowers / sunflowers (simplified)
     "glow": "#FFD9A0",            # pendant lamp halo (blended)
     # facade (round 3b: street frames of the video + Street View, white-referenced, simplified; style.md "Facade")
-    "sockel-hell": "#B9A48E",     # light sandstone slips in the plinth
-    "sockel-fuge": "#A2938A",     # plinth joints
+    "sockel-hell": "#BCA890",     # buff slips in the plinth
+    "sockel-grau": "#A68C86",     # grey-pink slips in the plinth
+    "sockel-fuge": "#9C8C84",     # plinth joints
     "abdeckplatte": "#7E5A4C",    # plinth cap stone (= shop-window sill)
     "sandstein-rot": "#A0705F",   # window surrounds, quoins, pilaster, upper window frames
     "sandstein-hell": "#CBBBA6",

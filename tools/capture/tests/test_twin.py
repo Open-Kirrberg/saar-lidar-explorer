@@ -1,8 +1,11 @@
 import importlib.util
+import json
 from pathlib import Path
 
+import pytest
+
 from capture.common import REPO
-from capture.twin import REFERENCE_ID, merge_manifest, reference_assets
+from capture.twin import CATALOGUE_SCHEMA, REFERENCE_ID, copy_files, merge_manifest, reference_assets
 
 CAPTURE = {
     "format": "sle-zone-v1", "id": "baeckerei-heusser", "kind": "captured", "name_de": "Alt", "summary_de": "alt",
@@ -90,4 +93,47 @@ def test_serve_reference_false_drops_the_capture():
     again = merge_manifest(merge_manifest(CAPTURE, FRAG, PKG, PACKED), FRAG, pkg, PACKED)
     assert [a["id"] for a in again["assets"]] == ["twin", "nav"] and "referenceScale" not in again["twin"]
     m["budget"]["totalBytes"] = 600_000
+    assert _validator().validate_manifest(m) == []
+
+
+CATALOGUE = {"schema": CATALOGUE_SCHEMA, "consent": {"prices": True},
+             "objects": {"theke": {"name_de": "Verkaufstheke", "info_de": "Hier wird bedient."},
+                         "theke/kasse": {"name_de": "Kasse", "info_de": "Hier bezahlst du.", "group": "theke"}},
+             "products": {"brezel": {"name_de": "Brezel", "short_de": "", "info_de": "", "category": "snacks",
+                                     "price_eur": 1.0, "sale_unit": "Stück"}},
+             "discoverable": ["brezel", "theke"]}
+
+
+def test_catalogue_file_is_copied_and_named_by_the_twin_block(tmp_path):
+    src, out = tmp_path / "gen", tmp_path / "pkg"
+    src.mkdir()
+    (src / "catalogue.json").write_text(json.dumps(CATALOGUE), encoding="utf-8")
+    frag = {**FRAG, "twin": {**FRAG["twin"], "catalogue": "built/catalogue.json"},
+            "files": [{"raw": "catalogue.json", "path": "built/catalogue.json"}]}
+    assert copy_files(frag, src, out) == ["built/catalogue.json"]
+    assert json.loads((out / "built/catalogue.json").read_text(encoding="utf-8")) == CATALOGUE
+    m = merge_manifest(CAPTURE, frag, {**PKG, "twin": {**PKG["twin"], "serve_reference": False}}, PACKED)
+    assert m["twin"]["catalogue"] == "built/catalogue.json"
+    m["budget"]["totalBytes"] = 600_000
+    assert _validator().validate_manifest(m) == []
+
+
+@pytest.mark.parametrize("path", ["../catalogue.json", "/tmp/catalogue.json", "scene/catalogue.json"])
+def test_copy_files_refuses_paths_outside_built(tmp_path, path):
+    (tmp_path / "catalogue.json").write_text(json.dumps(CATALOGUE), encoding="utf-8")
+    with pytest.raises(SystemExit):
+        copy_files({"files": [{"raw": "catalogue.json", "path": path}]}, tmp_path, tmp_path / "pkg")
+
+
+def test_copy_files_refuses_a_catalogue_without_its_schema(tmp_path):
+    (tmp_path / "catalogue.json").write_text(json.dumps({"objects": {}}), encoding="utf-8")
+    with pytest.raises(SystemExit):
+        copy_files({"files": [{"raw": "catalogue.json", "path": "built/catalogue.json"}]}, tmp_path, tmp_path / "pkg")
+
+
+def test_old_fragment_without_files_still_packs(tmp_path):
+    assert copy_files(FRAG, tmp_path, tmp_path / "pkg") == []
+    m = merge_manifest(CAPTURE, FRAG, PKG, PACKED)
+    assert m["twin"]["catalogue"] == "bh-catalogue-v1"          # old packages: a format name, still valid
+    m["budget"]["totalBytes"] = 3_600_000
     assert _validator().validate_manifest(m) == []

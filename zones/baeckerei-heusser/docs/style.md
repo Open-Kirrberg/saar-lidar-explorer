@@ -21,7 +21,7 @@ Colours are taken from the real shop and then simplified. Values are sRGB, and t
 | `tuch-rosa` | `#C0587E` | Basket cloths (raspberry pink in the video; was `#E9A9B6`) |
 | `lack-schwarz` | `#2B2B2D` | Pendant lamps, grid shelf, price rails |
 | `glas` | `#CFE6EA` at 25–35 % opacity | Display glass, fridge door, shop window (no reflections) |
-| `fassade` / `sockel` | `#E6D6CB` / `#8C5A4A` | Exterior render (rosy beige, was `#E7DFD2`) / red sandstone slips of the plinth |
+| `fassade` / `sockel` | `#E6D6CB` / `#A27468` | Exterior render (rosy beige, was `#E7DFD2`) / muted pinkish-red plinth slips (round 4, was `#8C5A4A`) |
 
 Generator-only tokens (same family): `granit-dunkel` `#6A6B6C`, `fliese-fuge` `#DCD6CC`, `decke-raster` `#CDBB9F`, `lampe` `#FFE2BF` (the lit diffuser of the pendant lamps).
 
@@ -46,7 +46,7 @@ Shop interior tokens (round 3, sampled from the walkthrough video, white-referen
 
 | Token | Hex | Used for |
 |---|---|---|
-| `sockel-hell` / `sockel-fuge` / `abdeckplatte` | `#B9A48E` / `#A2938A` / `#7E5A4C` | Light plinth slips / plinth joints / plinth cap (= shop-window sill) |
+| `sockel-hell` / `sockel-grau` / `sockel-fuge` / `abdeckplatte` | `#BCA890` / `#A68C86` / `#9C8C84` / `#7E5A4C` | Buff / grey-pink plinth slips (tone-on-tone with `sockel`, low contrast like Street View; ≈ 30 % buff, the rest split by a hash) / plinth joints / plinth cap (= shop-window sill). Pilaster and SSW corner quoins are solid `sandstein-rot` |
 | `sandstein-rot` / `sandstein-hell` / `sandstein-relief` | `#A0705F` / `#CBBBA6` / `#C99A88` | Window surrounds, quoins, pilaster, upper window frames / light stones / the carved pretzel |
 | `glasbaustein`, `-hell`, `-gruen`, `-blau`, `glas-fuge` | `#C9D6C8`, `#DCE6DA`, `#86B391`, `#93B1C9`, `#D8D4CC` | Pale green glass blocks in basket weave with a few accent blocks, joints (opaque: nothing behind them) |
 | `fensterglas` / `rollladen` / `rollladen-fuge` | `#56636C` / `#C8CCCF` / `#A9AEB2` | Upper-floor glass (opaque) / closed roller shutter and its slats |

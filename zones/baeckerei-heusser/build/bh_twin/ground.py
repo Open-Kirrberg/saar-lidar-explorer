@@ -22,6 +22,8 @@ from .scene import Scene, smooth
 
 PATCH_R = 38.0        # ground patch radius around the shop (m)
 NAV_R = 24.0          # walkable street area around the shop entrance (m)
+GABLE_VIEW = 7.0      # walkable street in front of the south gable: disc centred this far out from the mural (m)
+GABLE_VIEW_R = 8.0    # … with this radius (the gable mural is a discoverable object, ≈ 4 m up)
 PAVEMENT = 2.5        # paved strip beside the carriageway (m)
 SKIRT = 3.0           # skirt depth below the lowest patch height (m)
 FOOT = {"footway", "path", "steps", "pedestrian"}
@@ -180,6 +182,12 @@ def nav_pieces(p: Plan, cls: Classes, dgm: Dgm, obstacles_b: list, step_height: 
     # street + pavement + passage mouth around the entrance
     ent = F.en(np.array([(x0 + x1) / 2, -1.0]))
     area = Point(ent).buffer(NAV_R, 64)
+    # + the street in front of the south gable (plan x = 0, facing −x towards the roundabout), so the gable mural can
+    # be seen face-on from the floor and not only at a grazing angle from the corner; stays off the patch rim
+    fac = p.raw.get("site", {}).get("facade") or {}
+    if "wandmalerei" in fac:
+        view = F.en(np.array([-GABLE_VIEW, float(fac["wandmalerei"]["y"]["v"])]))
+        area = area.union(Point(view).buffer(GABLE_VIEW_R, 64).intersection(cls.circle.buffer(-2.0)))
     street = cls.road.union(cls.pavement).intersection(area)
     porch_en = b_to_en(p, geom.rect(x0, 0.0, x1 + 0.3, float(C[1])))
     pieces.append(NavPiece(street.difference(porch_en), dgm))

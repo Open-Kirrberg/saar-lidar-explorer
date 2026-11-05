@@ -72,11 +72,12 @@ class Node:
             c = c * np.asarray(ao, np.float64).reshape(-1, 1)
         self.prims.setdefault(mat, Prim()).append(verts, n, np.clip(c, 0.0, 1.0), tris)
 
-    def add_planar(self, mat: str, poly, to3d: Callable[[np.ndarray], np.ndarray], normal, ao_fn=None) -> None:
+    def add_planar(self, mat: str, poly, to3d: Callable[[np.ndarray], np.ndarray], normal, ao_fn=None,
+                   cdt: bool = False) -> None:
         """2-D polygon(s) (shapely, any orientation) mapped by `to3d` ((n,2) -> (n,3)) onto a plane; triangles are
         wound counter-clockwise seen from `normal` (glTF front face). `ao_fn` gets the 2-D vertices."""
         normal = np.asarray(normal, np.float64)
-        for v2, t in triangulate(poly):
+        for v2, t in triangulate(poly, cdt):
             v3 = to3d(v2)
             t = wind(v3, t, normal)
             self.add(mat, v3, t, normal, None if ao_fn is None else ao_fn(v2))
@@ -126,8 +127,15 @@ def polys(geom) -> list[Polygon]:
     return []
 
 
-def triangulate(geom) -> Iterable[tuple[np.ndarray, np.ndarray]]:
-    """Earcut per polygon (holes supported): yields (vertices (n,2), triangles (k,3))."""
+def triangulate(geom, cdt: bool = False) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    """Earcut per polygon (holes supported): yields (vertices (n,2), triangles (k,3)).
+
+    `cdt`: constrained Delaunay instead (shapely/GEOS). Earcut can join three collinear hole corners (windows with one
+    sill height) into a zero-area triangle that `wind` drops, leaving a T-junction that shows as a hairline crack;
+    a CDT never puts a vertex inside another triangle's edge. Used for the large LoD2 walls with many openings."""
+    if cdt:
+        yield from _triangulate_cdt(geom)
+        return
     for p in polys(geom):
         p = orient(p, 1.0)
         rings = [np.asarray(p.exterior.coords)[:-1]] + [np.asarray(r.coords)[:-1] for r in p.interiors]
@@ -139,6 +147,17 @@ def triangulate(geom) -> Iterable[tuple[np.ndarray, np.ndarray]]:
         t = np.asarray(mapbox_earcut.triangulate_float64(v, ends), np.int64).reshape(-1, 3)
         if len(t):
             yield v, t
+
+
+def _triangulate_cdt(geom) -> Iterable[tuple[np.ndarray, np.ndarray]]:
+    import shapely
+    for p in polys(geom):
+        tris = [np.asarray(t.exterior.coords)[:3] for t in shapely.get_parts(shapely.constrained_delaunay_triangles(p))]
+        if not tris:
+            continue
+        idx: dict[tuple[float, float], int] = {}
+        t = np.array([[idx.setdefault((float(x), float(y)), len(idx)) for x, y in tri] for tri in tris], np.int64)
+        yield np.array(list(idx), np.float64), t
 
 
 def wind(v3: np.ndarray, t: np.ndarray, normal: np.ndarray) -> np.ndarray:

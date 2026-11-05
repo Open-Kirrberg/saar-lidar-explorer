@@ -53,6 +53,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0042](0042-baeckerei-heusser-built-twin.md) | Bäckerei Heusser as a built digital twin (mesh = reference), stylised look, consent scope shop + exterior | Accepted | 2026-11-05 | (bakery's visible scene: the captured mesh) |
 | [0043](0043-built-twin-package-reference-nav.md) | Built twin package: `reference` role, `twin` block, true scale, walking on the nav floor; capture never public | Accepted | 2026-11-05 | (0042's open contract point) |
 | [0044](0044-baeckerei-heusser-owner-consent.md) | Bäckerei Heusser: owners agree to prices, the shop's lettering and the history since 1933 (no allergens yet, nothing beyond the privacy line) | Accepted | 2026-11-05 | 0042 |
+| [0045](0045-baeckerei-heusser-fills-visitor-catalogue.md) | Bäckerei Heusser: product fills as checked data, `produkt/<slot>` nodes, visitor catalogue file `built/catalogue.json` | Accepted | 2026-11-05 | 0042, 0044 |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 

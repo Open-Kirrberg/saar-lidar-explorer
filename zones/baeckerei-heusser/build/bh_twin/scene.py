@@ -33,6 +33,7 @@ class Scene:
         self.slots: list[dict] = []    # product slots (catalogue/slots.json), filled by the fixture builders
         self.slot_geo: list = []       # (frame-B corner points of each slot's standing surface) for --debug-slots
         self.styled: set[str] = set()  # catalogue ids built as styled models this round (status `built`)
+        self.anchors: dict[str, np.ndarray] = {}  # zone-frame points products hang from (pretzel stand pole)
 
     # ---- registry ----
     def node(self, name: str, rig: str, cid: str | None = None, source: str = "plan", sigma: float = 0.1) -> geom.Node:
@@ -48,7 +49,7 @@ class Scene:
         n.add_planar(mat, poly, lambda v2: F.zone(np.column_stack([v2, np.full(len(v2), z)])),
                      F.zone_dir(np.array([0, 0, 1.0 if up else -1.0])), ao)
 
-    def vface(self, n: geom.Node, mat: str, p0, p1, shape, left: bool = True, ao=None) -> None:
+    def vface(self, n: geom.Node, mat: str, p0, p1, shape, left: bool = True, ao=None, cdt: bool = False) -> None:
         """Vertical face on the line p0 -> p1 (frame B xy); `shape` in (s, z), s = metres from p0. Normal = left of
         p0 -> p1 (or right)."""
         F = self.F
@@ -59,7 +60,7 @@ class Scene:
         def to3d(v2):
             xy = p0 + v2[:, :1] * d
             return F.zone(np.column_stack([xy, v2[:, 1]]))
-        n.add_planar(mat, shape, to3d, F.zone_dir(np.array([nl[0], nl[1], 0.0])), ao)
+        n.add_planar(mat, shape, to3d, F.zone_dir(np.array([nl[0], nl[1], 0.0])), ao, cdt)
 
     def vrect(self, n, mat, p0, p1, z0, z1, left=True, ao=None) -> None:
         L = float(np.linalg.norm(np.asarray(p1) - np.asarray(p0)))

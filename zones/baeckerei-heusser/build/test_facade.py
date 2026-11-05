@@ -92,6 +92,31 @@ def test_make_gable_turns_the_hip_into_a_gable():
     assert abs(front.area - 9.0) < 1e-6 and abs(back.area - 9.0) < 1e-6
 
 
+def test_make_gable_keeps_the_eaves_level_at_a_chamfered_corner():
+    """Back corner of the end wall chamfered with its own LoD2 hip (like L8): the gable's back slope ends at eave
+    height on the chamfer's corner, the chamfer wall keeps a level top, the hip face stays."""
+    L, eave, ridge = 10.0, 6.0, 9.0
+    walls = [np.array([[0, 0, 0], [L, 0, 0], [L, 0, eave], [0, 0, eave]], float),
+             np.array([[0, 4, 0], [0, 0, 0], [0, 0, eave], [0, 4, eave]], float),               # end wall
+             np.array([[2, 6, 0], [0, 4, 0], [0, 4, eave], [2, 6, eave]], float)]               # chamfer wall
+    roofs = [np.array([[0, 0, eave], [L, 0, eave], [L, 3, ridge], [3, 3, ridge]], float),
+             np.array([[L, 6, eave], [2, 6, eave], [3, 3, ridge], [L, 3, ridge]], float),
+             np.array([[0, 4, eave], [0, 0, eave], [3, 3, ridge]], float),
+             np.array([[2, 6, eave], [0, 4, eave], [3, 3, ridge]], float)]
+    walls2, roofs2, g = fc.make_gable(walls, roofs)
+    assert g.corner is not None and g.hip is not None
+    assert any(len(r) == 3 and np.allclose(sorted(r[:, 0]), [0, 2, 3]) for r in roofs2)       # hip face kept
+    end = next(w for w in walls2 if np.allclose(w[:, 0], 0.0))
+    top = end[end[:, 2] > 1.0]
+    assert abs(top[:, 2].max() - ridge) < 1e-6                           # ridge on the wall
+    assert abs(top[np.argmax(top[:, 1]), 2] - eave) < 1e-6               # back corner at eave height
+    cham = next(w for w in walls2 if np.allclose(sorted(set(np.round(w[:, 0], 6))), [0, 2]))
+    assert np.allclose(cham[cham[:, 2] > 1.0][:, 2], eave)
+    assert abs(g.z(np.array([[0.0, 4.0]]))[0] - eave) < 1e-6
+    front, back = fc.gable_roof_regions(Polygon([(0, 0), (L, 0), (L, 6), (2, 6), (0, 4)]), g)
+    assert back.intersection(g.corner).area < 1e-6 and back.intersection(g.hip).area < 1e-6
+
+
 def test_text_polys_height_and_holes():
     t = text_polys("H.H. 1933", 0.10)
     x0, y0, x1, y1 = t.bounds
@@ -100,3 +125,23 @@ def test_text_polys_height_and_holes():
     assert sum(len(q.interiors) for q in geom.polys(t)) == 1              # the 9 has a counter
     assert sum(len(q.interiors) for q in geom.polys(text_polys("BÄCKEREI", 0.1))) == 4      # B: 2, Ä: 1, R: 1
     assert text_polys("H", 0.1).equals(text_polys("H", 0.1))
+
+
+def test_cdt_wall_with_collinear_sills_has_no_t_junction():
+    """Three windows on one sill line: the CDT keeps every triangle (earcut joined collinear corners into a dropped
+    zero-area triangle, a hairline crack on the street wall); no vertex lies inside another triangle's edge."""
+    w = box(0, -1, 24, 6)
+    for x in (16.0, 19.0, 21.0):
+        w = w.difference(box(x, 3.3, x + 1.0, 4.95))
+    (v, t), = list(geom.triangulate(w, cdt=True))
+    a = v[t]
+    e1, e2 = a[:, 1] - a[:, 0], a[:, 2] - a[:, 0]
+    area = 0.5 * np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]).sum()
+    assert abs(area - w.area) < 1e-9 and len(t) == len(v) + 2 * 3 - 2
+    for tri in t:
+        for i in range(3):
+            p, q = v[tri[i]], v[tri[(i + 1) % 3]]
+            d = q - p
+            s = ((v - p) @ d) / (d @ d)
+            off = np.abs(d[0] * (v - p)[:, 1] - d[1] * (v - p)[:, 0]) / np.linalg.norm(d)
+            assert not np.any((s > 1e-9) & (s < 1 - 1e-9) & (off < 1e-9)), (p, q)

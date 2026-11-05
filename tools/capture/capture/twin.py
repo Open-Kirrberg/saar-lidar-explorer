@@ -18,6 +18,8 @@ Manifest rules (docs/zone-contract.md, "Built twins"):
   factor for the reference mesh moves to `twin.referenceScale`.
 - texts (name, summary, disclaimer, sources, attribution) come from `[package.twin]`; spawn, portal, footprint from
   the generator.
+- extra files of the fragment (`files: [{raw, path}]`, e.g. the visitor's catalogue `built/catalogue.json` that
+  `twin.catalogue` names) are copied as they are (`copy_files`, pure + tested); they count in `totalBytes` only.
 """
 from __future__ import annotations
 
@@ -47,6 +49,31 @@ def reference_assets(assets: list[dict]) -> list[dict]:
         elif a.get("role") == "reference":
             out.append(a)
     return out
+
+
+CATALOGUE_SCHEMA = "sle-zone-catalogue-v1"
+
+
+def copy_files(frag: dict, src: Path, out: Path) -> list[str]:
+    """Copy the fragment's extra files (`files: [{raw, path}]`) from the generator output into the package; only
+    plain relative paths under `built/`, JSON files must parse (a catalogue must carry its schema). Returns the
+    package paths."""
+    done = []
+    for f in frag.get("files", []):
+        rel = str(f["path"])
+        parts = Path(rel).parts
+        if Path(rel).is_absolute() or ".." in parts or not parts or parts[0] != "built" or "\\" in rel:
+            raise SystemExit(f"twin: file path {rel!r} must be relative and under built/")
+        data = (src / f["raw"]).read_bytes()
+        if rel.endswith(".json"):
+            doc = json.loads(data.decode("utf-8"))
+            if rel.endswith("catalogue.json") and doc.get("schema") != CATALOGUE_SCHEMA:
+                raise SystemExit(f"twin: {rel} is not a {CATALOGUE_SCHEMA} file")
+        dst = out / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(data)
+        done.append(rel)
+    return done
 
 
 def merge_manifest(m: dict, frag: dict, pkg: dict, packed: dict[str, dict]) -> dict:
@@ -140,6 +167,9 @@ def run(zone: Zone) -> dict:
         packed[a["id"]] = {"path": f"built/{a['id']}.glb", "bytes": dst.stat().st_size, "triangles": int(st["triangles"])}
         print(f"   {a['id']}: {dst.stat().st_size / 1e6:.2f} MB, {int(st['triangles'])} tris", flush=True)
 
+    files = copy_files(frag, src, out)
+    if files:
+        print("   files:", ", ".join(files), flush=True)
     new = merge_manifest(m, frag, pkg, packed)
     if not any(a["role"] == "reference" for a in new["assets"]):
         # serve_reference = false: no capture file may stay in the served package

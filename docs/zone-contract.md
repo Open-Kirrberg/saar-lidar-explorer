@@ -149,7 +149,8 @@ A captured zone whose visible scene is **built** (generated from a measured plan
   "method": "built-from-plan",               // required, the only method so far
   "plan": "sle-raumplan/0.1",                // plan format the geometry was built from
   "planVersion": "v0",
-  "catalogue": "bh-catalogue-v1",            // node extras.id refer to this catalogue
+  "catalogue": "built/catalogue.json",       // node extras.id refer to this catalogue: the info-card file (below);
+                                             // packages up to round 4a carry the format name "bh-catalogue-v1" (no cards)
   "scaleFactor": 1.0,                        // the one scale factor the generator applied (0.5–2), info
   "nav": "nav",                              // optional: id of the collider asset (walkable floor + edge fences)
   "referenceScale": {                        // optional: scale correction for the `reference` assets only
@@ -165,6 +166,38 @@ A captured zone whose visible scene is **built** (generated from a measured plan
 | Budget | `downloadBytes` = coarsest LODs of `scene` + `collider`; `triangles` and `textureBytesGpu` count `scene` only; `reference` files count in `totalBytes` only |
 | Evidence | `evidence.kind` stays `capture`; `perPart: "extras"` with node extras `{ id, source, sigma_m, confidence }` (`id` = catalogue row, `sigma_m` = 1-σ of position/size in metres) |
 | Node names | `<catalogue id>/<part>[/<detail>]` (the first segment and `extras.id` are catalogue ids, e.g. `theke/vitrine`, `brotregal/korpus` → `brotregal`); the collider asset uses `nav/floor`, `nav/edge` |
+| Products | one node per filled product slot, named `produkt/<slot id>`, extras `{ "id": "<slot id>", "product": "<product id>", "count": n }` (a slot or basket is one tap target). Generic shop goods (jars, cans, bottles, bags: no product card) carry `"ware": "<good id>"` instead of `product`; they are clickable through their slot's fixture id (`dosenregal/platz-03` → `dosenregal`) |
+
+#### 🏷️ `twin.catalogue` file: info cards (`sle-zone-catalogue-v1`, round 5)
+
+When `twin.catalogue` is a plain relative path ending in `.json`, the runtime loads it for hover / tap highlight, info cards and *entdeckt x / y*. Any other string (the format name of older packages) means: no cards, the twin behaves exactly as before. A missing or invalid file only logs a warning.
+
+```jsonc
+{
+  "schema": "sle-zone-catalogue-v1",
+  "consent": { "prices": true },             // prices are shown only when true (ADR 0044)
+  "objects": {                               // catalogue rows with status built and a non-empty info_de
+    "theke": { "name_de": "Verkaufstheke", "info_de": "Hier wird bedient: …" },
+    "brotregal/koerbe": { "name_de": "Brotkörbe", "info_de": "…", "group": "brotregal" }   // optional group: an object id
+  },
+  "products": {
+    "kornbrot-500g": { "name_de": "Kornbrot 500g", "short_de": "…", "info_de": "…", "category": "brot",
+                       "price_eur": 2.5, "sale_unit": "Laib" }     // sale_unit may be null
+  },
+  "discoverable": ["kornbrot-500g", "theke", "…"]                    // what counts for „entdeckt x / y“
+}
+```
+
+| Rule | |
+|---|---|
+| Ids | catalogue / product ids (`a-z0-9-` segments joined by `/`); invalid rows are dropped, strings are text (≤ 80 chars titles, ≤ 400 texts), never HTML |
+| Clickable | a node whose nearest `extras.product` is a known product (target = its slot), else the nearest `extras.id` — or its nearest id prefix (`theke/faecher` → `theke`) — that is a key of `objects`. Up the node tree, nearest first |
+| Groups | an object with `group` is picked as its group while the visitor is farther than 2.5 m (one tap target per shelf or basket row until you get close); the group's highlight covers all its members |
+| Enclosing | a target whose box is wider than 3 m both ways and taller than 1.5 m, or longer than 12 m (a room, a facade, the terrain), is never a target; its meshes still block picks. Producers should leave such rows out of `objects` anyway |
+| Glass | transparent materials neither block nor get picked (products behind display glass stay clickable) |
+| Discovery | `discoverable` ids (products by product id, objects by object id) unknown to `objects`/`products` are dropped; progress is stored on the device only (`localStorage` `sle.zones.entdeckt.v1.<zone id>`, ADR 0022), never in the package |
+| Producer | the file ships under `built/` and is listed in the built fragment's `files` (`{ "raw": "catalogue.json", "path": "built/catalogue.json" }`); the capture stage `twin` copies only relative `built/…` JSON that parses and carries the schema. `pipeline/zones.py` validates it with the package: schema, `info_de` ≤ 300, `group` = an ancestor id that is itself in `objects`, `price_eur` only with `consent.prices`, `discoverable` unique and known. The bakery's generator writes objects = built/verified public rows with `info_de` that are not `clickable: false` (the facade and the room shell are enclosing and never cards or groups: a detail grouped under them could only be picked as the facade from the floor), all products, discoverable = the placed products of the fill + rows marked `discover` (≈ 20) |
+| Card | title `name_de`; objects ≤ 3 sentences of `info_de`; products `short_de` + one sentence of `info_de`, category chip, price `1,20 €` + unit (`pro Laib`, `pro Viertel`, `ganze Torte`) |
 
 ## 🧱 Assets
 
@@ -246,6 +279,7 @@ interface ZoneHandle {
   resize(width: number, height: number): void;            // CSS px
   exit(): Pose | void;                     // stop input, leave the renderer as found
   setTier?(t): void; setQuality?(q): void;
+  escape?(): boolean;                      // Esc in the zone: true = used (e.g. closed an info card), the host stays
   dispose(): void;                         // free GPU + DOM; handle dead
 }
 ```
@@ -255,7 +289,7 @@ interface ZoneHandle {
 | Order | `mountZone` → `resize` → `enter(spawn)` → `frame(dt)`… → `exit()` → `dispose()` |
 | Errors | rejected `mountZone`, aborted load, throwing `frame()` → host runs `exit()` + `dispose()` (each guarded), restores the overworld, one German toast |
 | Frames | zone poses are true heights (exaggeration 1, frame `x = E − E0`, `y = h`, `z = −(N − N0)`) |
-| Keys | Esc leaves (host, capture phase). A zone binds its own keys and must remove them in `exit()` |
+| Keys | Esc leaves (host, capture phase) unless `escape()` returns true. A zone binds its own keys and must remove them in `exit()` |
 | Renderer | the host snapshots and restores tone mapping, exposure, clear colour/alpha, colour space, `autoClear`, shadows, pixel ratio |
 | `gltf` | the app's generic runtime (V2.8b, `app/src/zones/runtime/gltfZone.ts`, lazy chunk, `hostChrome: true`): loads every `scene` asset's coarsest LOD before the loading screen closes, then finer levels by `until_m` (the coarse one stays drawn until the fine one is ready); walk mode on the colliders (ground ray + wall capsule), „Schweben“ without collision; `capture.scale` applied; quality `niedrig` keeps the coarsest LOD |
 

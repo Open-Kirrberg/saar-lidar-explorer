@@ -142,9 +142,9 @@ def lod2_wall(sc: Scene, node: geom.Node, ring_b: np.ndarray, footprint: Polygon
             pass
         else:
             sc.vface(node, "sockel", p0, p1, lo, True)
-        sc.vface(node, mat, p0, p1, hi, True)
+        sc.vface(node, mat, p0, p1, hi, True, cdt=True)          # openings on one sill line: no T-junction cracks
     else:
-        sc.vface(node, mat, p0, p1, shape, True)
+        sc.vface(node, mat, p0, p1, shape, True, cdt=True)
 
 
 def roof(sc: Scene, node: geom.Node, ring_b: np.ndarray, mat: str = "dach", ao: float = 1.0) -> None:
@@ -202,7 +202,8 @@ def build_bakery(sc: Scene, p: Plan, bld: dict, lettering: bool = False) -> None
         roof(sc, roofs, ring)
     if gable is not None:
         front, back = gable_roof_regions(fp, gable)
-        for poly, plane in ((back, gable.back),):
+        regions = [(back, gable.back)] + ([(gable.corner, gable.corner_plane)] if gable.corner is not None else [])
+        for poly, plane in regions:
             for q in geom.polys(poly):
                 ring = np.asarray(q.exterior.coords)[:-1]
                 roof(sc, roofs, np.column_stack([ring, plane[0] + plane[1] * ring[:, 0] + plane[2] * ring[:, 1]]))

@@ -1,6 +1,7 @@
 """Bäckerei Heusser built twin: Raumplan (public, ../plan/raumplan-v0.json) + LoD2 + DGM1 + OSM -> stylised GLBs.
 
-    cd pipeline && uv run python -I ../zones/baeckerei-heusser/build/build.py [--update-catalogue] [--debug-slots] [--out DIR]
+    cd pipeline && uv run python -I ../zones/baeckerei-heusser/build/build.py [--fill morgens|feierabend] [--update-catalogue]
+                                                                              [--debug-slots] [--out DIR]
 
 Writes (git-ignored) build/out/:
     twin.glb       raw glTF (float32, unlit, COLOR_0 = baked light), one node per `<catalogue id>/<part>`
@@ -8,6 +9,8 @@ Writes (git-ignored) build/out/:
     report.json    node list, triangles per node and class, budgets, bbox, privacy checks
     package.json   manifest fragment for tools/capture/capture/built.py (assets, spawn, portal, footprint, twin)
     slots.json     product slots on the fixtures (zone frame); the CLI also writes it to catalogue/slots.json
+    catalogue.json the visitor's catalogue (`sle-zone-catalogue-v1`): info cards of the clickable objects, the products
+                   with prices, the „entdeckt x / y“ list; packed as built/catalogue.json (docs/zone-contract.md)
 
 Deterministic: same inputs -> byte-identical GLBs. Raw downloads are untrusted data: parsed, never executed (-I).
 """
@@ -22,23 +25,29 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-sys.path[:0] = [str(HERE), str(REPO / "pipeline")]  # -I drops the script dir; our own code only
+sys.path[:0] = [str(HERE), str(REPO / "pipeline"), str(HERE.parent / "products")]  # -I drops the script dir; our own code only
 
 import numpy as np  # noqa: E402
 from shapely.geometry import Point, Polygon  # noqa: E402
 
-from bh_twin import exterior, fixtures, ground, interior  # noqa: E402
+from bh_twin import auslage, exterior, fixtures, ground, interior  # noqa: E402
 from bh_twin.context import Dgm, circle, lod2_buildings, osm_ways  # noqa: E402
 from bh_twin.glb import write_glb  # noqa: E402
 from bh_twin.plan import E0, N0, Plan, load_plan, toml_scale_factor  # noqa: E402
 from bh_twin.scene import Scene  # noqa: E402
-from bh_twin.shade import daylight_falloff, exterior_rig, flat_rig, interior_rig, materials  # noqa: E402
+from bh_twin.shade import daylight_falloff, exterior_rig, flat_rig, interior_rig  # noqa: E402
 
 ZONE = HERE.parent
 PLAN = ZONE / "plan" / "raumplan-v0.json"
 PLAN_VERSION = PLAN.stem.split("-")[-1]   # raumplan-v0 -> v0
 CATALOGUE = ZONE / "catalogue" / "objects.json"
 SLOTS = ZONE / "catalogue" / "slots.json"
+PRODUCTS = ZONE / "products" / "products.json"
+FILLS = ZONE / "products" / "fill"
+DEFAULT_FILL = "morgens"
+CATALOGUE_FORMAT = "sle-zone-catalogue-v1"
+PRODUCT_NODE = "produkt/"     # one node per filled slot: produkt/<slot id>, extras {id: slot id, product|ware, count}
+PRODUCT_BUDGET = {"small": 300, "large": 800, "low": 120, "ware": 160}   # per instance (style.md, products/README.md)
 SLOTS_FORMAT = "bh-slots-v1"
 SLOT_CATEGORIES = ("brot", "broetchen", "laugengebaeck", "suesses", "kuchen", "glas", "dose", "flasche", "tuete")
 TOML = REPO / "tools" / "capture" / "zones" / "baeckerei-heusser.toml"
@@ -80,11 +89,12 @@ def pick_bakery(p: Plan, blds: list[dict]) -> dict:
 
 
 def build(out: Path, update_catalogue: bool = False, factor: float | None = None, debug_slots: bool = False,
-          lettering: bool = True) -> dict:
+          lettering: bool = True, fill: str = DEFAULT_FILL) -> dict:
     """`factor` overrides the one scale factor (tests only: skips the plan == TOML check). `debug_slots` adds magenta
     slot markers (`verkaufsraum/slot-marker`, never for a release). `lettering` adds the shop's own lettering on the
     facade (gable mural text, keystone inscription, sign name): on by default since the owners agreed (2026-11-05,
-    ADR 0044); `lettering=False` shows the neutral graphics only."""
+    ADR 0044); `lettering=False` shows the neutral graphics only. `fill` = a fill in products/fill/ (`morgens`: the
+    shop in the morning; `feierabend`: empty like the walkthrough video)."""
     f = toml_scale_factor(TOML) if factor is None else float(factor)
     raw = json.loads(PLAN.read_text(encoding="utf-8"))
     if factor is None and abs(float(raw["scale"]["factor"]) - f) > 1e-9:
@@ -121,6 +131,15 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
     # ---- the shop
     interior.build(sc, p)
     fixtures.build(sc, p, soffit, soffit_z)
+    import fill as FL  # noqa: PLC0415  (products/fill.py, stdlib)
+    import shapes as S  # noqa: PLC0415
+    products_doc = json.loads(PRODUCTS.read_text(encoding="utf-8"))
+    fill_doc = json.loads((FILLS / f"{fill}.json").read_text(encoding="utf-8"))
+    slots_doc = json.loads(slots_json(sc, p, cat_doc))       # this build's slots (the fill must fit them)
+    ferr = FL.check_fill(fill_doc, slots_doc, products_doc)
+    if ferr:
+        raise SystemExit(f"build: fill {fill!r} does not fit the slots:\n  - " + "\n  - ".join(ferr))
+    placed = auslage.place(sc, fill_doc, slots_doc, products_doc, sc.anchors)
     sc.bake_ao("int")
     if debug_slots:
         fixtures.slot_markers(sc, p)
@@ -145,7 +164,12 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
 
     # ---- catalogue: every visible node belongs to a catalogue row ("no catalogue entry, no geometry")
     missing = []
+    slot_ids = {s["id"] for s in sc.slots}
     for n in twin_nodes:
+        if n.name.startswith(PRODUCT_NODE):
+            if n.name[len(PRODUCT_NODE):] not in slot_ids or n.extras["id"] != n.name[len(PRODUCT_NODE):]:
+                missing.append(n.name)
+            continue
         cid = resolve_id(n.name, cat)
         if cid is None or n.name.split("/")[0] not in cat:
             missing.append(n.name)
@@ -154,7 +178,7 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
     if missing:
         raise SystemExit("build: nodes without a catalogue row: " + ", ".join(missing))
 
-    mats = materials()
+    mats = S.materials()
     out.mkdir(parents=True, exist_ok=True)
     twin_glb = write_glb(twin_nodes, mats)
     nav_glb = write_glb(nav_nodes, mats)
@@ -174,7 +198,11 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
     tris = {n.name: n.triangles for n in twin_nodes}
     by_class: dict[str, int] = {}
     per_object: dict[str, int] = {}
+    product_tris = 0
     for n in twin_nodes:
+        if n.name.startswith(PRODUCT_NODE):
+            product_tris += n.triangles
+            continue
         cid = n.extras["id"]
         top = cid.split("/")[0]
         typ = cat[top]["type"]
@@ -185,7 +213,15 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
         lim = CLASS_BUDGET.get(cat[obj]["type"])
         if lim is not None and t > lim:
             over.append(f"{obj}: {t} > {lim} ({cat[obj]['type']})")
+    for sid, st in placed.items():
+        kind = "ware" if st["kind"] == "ware" else "low" if st["low"] else \
+            "large" if st["shape"] in S.LARGE else "small"
+        if st["max_piece"] > PRODUCT_BUDGET[kind]:
+            over.append(f"produkt/{sid}: {st['max_piece']} > {PRODUCT_BUDGET[kind]} per piece ({kind})")
+    by_class["product"] = product_tris
     for name, t in tris.items():
+        if name.startswith(PRODUCT_NODE):
+            continue
         if cat[name.split('/')[0]]["type"] == "structure" and t > STRUCTURE_ELEMENT:
             over.append(f"{name}: {t} > {STRUCTURE_ELEMENT} (structure element)")
     total = sum(tris.values())
@@ -206,6 +242,9 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
                       "by_node": dict(sorted(tris.items())), "nav": sum(n.triangles for n in nav_nodes)},
         "budget_problems": over,
         "lettering": bool(lettering),
+        "fill": {"id": fill, "slots": len(placed), "pieces": sum(v["count"] for v in placed.values()),
+                 "products": sorted({v["item"] for v in placed.values() if v["kind"] == "product"}),
+                 "triangles": product_tris},
         "bbox_twin": bbox(twin_nodes),
         "bbox_nav": bbox(nav_nodes),
         "nav_area_m2": round(float(nav_union.area), 1),
@@ -222,14 +261,17 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
         "portal": portal,
         "footprint": fp,
         "twin": {"method": "built-from-plan", "plan": raw.get("schema", "sle-raumplan/0.1"), "planVersion": PLAN_VERSION,
-                 "catalogue": cat_doc["format"], "scaleFactor": f, "nav": "nav"},
+                 "catalogue": CATALOGUE_PATH, "scaleFactor": f, "nav": "nav"},
+        "files": [{"raw": "catalogue.json", "path": CATALOGUE_PATH}],
         "pivotLocal": [round(float(p.frame.zone(np.array([*p.pivot, 0.0]))[k]), 2) for k in range(3)],
     }
     (out / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     (out / "slots.json").write_text(slots_json(sc, p, cat_doc), encoding="utf-8")
     (out / "package.json").write_text(json.dumps(frag, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    (out / "catalogue.json").write_text(json.dumps(catalogue_json(cat_doc, products_doc, placed), indent=1,
+                                                   ensure_ascii=False) + "\n", encoding="utf-8")
     if update_catalogue:
-        update_catalogue_rows(cat_doc, twin_nodes, p, sc.styled)
+        update_catalogue_rows(cat_doc, [n for n in twin_nodes if not n.name.startswith(PRODUCT_NODE)], p, sc.styled)
         CATALOGUE.write_text(json.dumps(cat_doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
         SLOTS.write_text((out / "slots.json").read_text(encoding="utf-8"), encoding="utf-8")
     print(json.dumps({"out": str(out), "triangles": total, "nav": report["triangles"]["nav"], "budget_problems": over,
@@ -240,6 +282,45 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
 
 
 # ----------------------------------------------------------------------------------------------- catalogue
+
+CATALOGUE_PATH = "built/catalogue.json"
+PRODUCT_KEYS = ("name_de", "short_de", "info_de", "category", "price_eur", "sale_unit")
+
+
+def catalogue_json(cat_doc: dict, products_doc: dict, placed: dict) -> dict:
+    """The visitor's catalogue (`sle-zone-catalogue-v1`, docs/zone-contract.md): objects = built clickable rows with a
+    card text (group = the nearest ancestor that has a card too), all products (prices only with the owners' consent),
+    discoverable = every placed product + the rows marked `discover` in catalogue/objects.json."""
+    prices = (cat_doc.get("consent") or {}).get("prices") is True
+    # rows with `clickable: false` (the facade, the room shell: enclosing boxes, docs/zone-contract.md) never get a
+    # card; grouping a facade detail under them made it unreachable from the floor (the group wins beyond 2.5 m)
+    rows = [o for o in cat_doc["objects"] if o.get("status") in ("built", "verified") and (o.get("info_de") or "").strip()
+            and o.get("public", True) and o.get("clickable", True) is not False]
+    ids = {o["id"] for o in rows}
+    objects = {}
+    for o in rows:
+        e = {"name_de": o["name_de"], "info_de": o["info_de"].strip()}
+        parts = o["id"].split("/")
+        for k in range(len(parts) - 1, 0, -1):
+            if "/".join(parts[:k]) in ids:
+                e["group"] = "/".join(parts[:k])
+                break
+        objects[o["id"]] = e
+    products = {}
+    for q in products_doc["products"]:
+        e = {k: q.get(k) for k in PRODUCT_KEYS}
+        if not prices:
+            e["price_eur"] = None
+        products[q["id"]] = e
+    seen: list[str] = []
+    for sid in sorted(placed):
+        v = placed[sid]
+        if v["kind"] == "product" and v["item"] not in seen:
+            seen.append(v["item"])
+    disc = seen + [o["id"] for o in rows if o.get("discover")]
+    return {"schema": CATALOGUE_FORMAT, "consent": {"prices": prices}, "objects": objects, "products": products,
+            "discoverable": disc}
+
 
 FIXTURE_OF = {"theke": "F1", "brotregal": "F2", "gitterregal": "F3", "zeitungsaufsteller": "F4", "bistrotisch-1": "F5",
               "bistrotisch-2": "F6", "dosenregal": "F7", "haengelampe-1": "F8", "haengelampe-2": "F9",
@@ -317,8 +398,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--debug-slots", action="store_true", help="draw magenta slot markers (debug only, never release)")
     ap.add_argument("--no-lettering", dest="lettering", action="store_false",
                     help="leave out the shop's lettering on the facade (gable text, keystone inscription, sign name)")
+    ap.add_argument("--fill", default=DEFAULT_FILL, choices=sorted(q.stem for q in FILLS.glob("*.json")),
+                    help="products in the slots: morgens (default) or feierabend (empty, like the video)")
     a = ap.parse_args(argv)
-    build(a.out.resolve(), a.update_catalogue, debug_slots=a.debug_slots, lettering=a.lettering)
+    build(a.out.resolve(), a.update_catalogue, debug_slots=a.debug_slots, lettering=a.lettering, fill=a.fill)
     return 0
 
 

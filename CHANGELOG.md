@@ -4,6 +4,8 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-05 | twin | 👆 Bäckerei Heusser round 5: the twin is clickable — hover / click / crosshair + E / tap → warm outline, info card with price and unit, *entdeckt x / y* stored on the device only; loads `twin.catalogue` = `built/catalogue.json`, older packages unchanged; checked end to end with the real round-4b package (street → steps → shop, desktop + phone) |
+| 2026-11-05 | twin | 🥨 Bäckerei Heusser round 4b: shop filled (`--fill morgens`/`feierabend`, ≈ 490 pieces in 105 slots, checked fill format `bh-fill-v1`), visitor catalogue `built/catalogue.json` (`sle-zone-catalogue-v1`, validated, packed), facade polish (muted plinth, solid red quoins, crack-free walls, level gable eaves), smaller pendants, walkable street in front of the gable mural; facade and room shell are no cards, so every facade detail is its own tap target (ADR 0045) |
 | 2026-11-05 | twin | 🥐 Bäckerei Heusser round 4a: 103 products from the bakery's own list (price, unit, short text) + 33 stylised parametric product shapes at true size, gallery (`zones/baeckerei-heusser/products/`) |
 | 2026-11-05 | twin | 🥖 Bäckerei Heusser round 3: video inventory, stylised counter / bread wall / shelves / café corner, 110 product slots, facade details with the shop's lettering (owners' OK, ADR 0044) |
 | 2026-11-05 | twin | 🧹 Bäckerei Heusser: video scan no longer served (`serve_reference = false`), no debris over the twin even with `?referenz` |

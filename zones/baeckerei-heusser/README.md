@@ -10,7 +10,9 @@ Zone #2 of the Saar LiDAR Explorer: Bäckerei Heusser, Eckstr. 3, Homburg-Kirrbe
 | ✅ Round 1 (2026-11-05) | Foundation: this folder, object catalogue + schema, style rules, privacy rules, zone skills, rename `bakery` → `baeckerei-heusser`. The V2.8 capture (photogrammetry mesh, private passage end cropped) is reference only since then. |
 | ✅ Round 4a (2026-11-05) | [`products/`](products/README.md): 103 products imported from the bakery's own list (name, category, price, unit, short text; no allergens yet), 33 parametric product shapes in the twin's look at true size, product gallery |
 | ✅ Round 3 (2026-11-05) | Inventory from the walkthrough video (103 catalogue rows). Stylised fixtures instead of blockouts: counter with 2 display modules, bread wall (3 tiers + 6 baskets), shelves, fridge, café corner, lamps, decor. `catalogue/slots.json`: 110 product slots. Facade: plinth, glass blocks, sandstone surrounds with pretzel keystone, upper windows, gable with the mural, sign; the shop's lettering since the owners' OK ([ADR 0044](../../docs/adr/0044-baeckerei-heusser-owner-consent.md)) |
-| ⏳ Next (round 4b / 5) | Products placed into the slots (*Morgens* fill), look polish; click/tap highlight, info cards with price, *entdeckt x / y*, short tour; one tape measurement (`plan/messliste.md`, A) fixes the scale |
+| ✅ Round 4b (2026-11-05) | Shop filled: *Morgens* fill (≈ 490 pieces in 105 slots, every category; `--fill feierabend` = empty like the video), `produkt/<slot>` nodes, visitor catalogue `built/catalogue.json` in the package (ADR 0045); facade polish (muted plinth, solid red quoins, no wall cracks, level gable eaves), smaller pendants, du-form info texts |
+| ✅ Round 5 (2026-11-05) | Clickable twin in the app: hover / tap highlight, info cards with price and unit, *entdeckt x / y* (67 discoverable: 48 placed products + 19 objects), stored on the device only (`app/src/zones/runtime/twin*.ts`, [zone contract](../../docs/zone-contract.md)) |
+| ⏳ Next | Short tour; one tape measurement (`plan/messliste.md`, A) fixes the scale |
 | ⏳ Later | Backstube, Lager, *Umbau* variants (`variants/`) |
 
 ## 🗂️ Layout

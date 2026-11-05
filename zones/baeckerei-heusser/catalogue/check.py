@@ -95,6 +95,10 @@ def check(doc: dict) -> list[str]:
             e("info_de must be a string <= 300 chars")
         elif o.get("clickable") and o.get("status") in ("built", "verified") and not info.strip():
             e("a built clickable object needs info_de (the info card)")
+        if "discover" in o and not isinstance(o["discover"], bool):
+            e("discover must be true or false")
+        elif o.get("discover") and not (o.get("clickable") and info.strip()):
+            e("discover (counts for „entdeckt x / y“) needs a clickable object with info_de")
         dims = o.get("dims")
         if dims is not None and not (isinstance(dims, dict) and all(_num(dims.get(k)) and dims[k] > 0 for k in ("w", "d", "h"))):
             e("dims must be null or {w, d, h} > 0 (metres)")

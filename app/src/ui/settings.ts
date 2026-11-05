@@ -73,7 +73,7 @@ export const PREF_KEYS: readonly string[] = [
 ];
 
 /** Keys (or key prefixes) with private user data that a settings reset must never delete. */
-export const PRIVATE_KEY_PREFIXES: readonly string[] = ['sle.markers.', 'sle.candidates.v1', 'sle.measure.'];
+export const PRIVATE_KEY_PREFIXES: readonly string[] = ['sle.markers.', 'sle.candidates.v1', 'sle.measure.', 'sle.zones.entdeckt.'];
 
 /** Minimal Storage subset (localStorage-compatible), injectable for tests. */
 export interface KeyValueStore {

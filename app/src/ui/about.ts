@@ -65,7 +65,7 @@ export function openAbout(): void {
       <h3>Datenschutz</h3>
       <ul class="sle-about-list">
         <li>Keine Cookies, keine Analyse- oder Tracking-Dienste, keine Werbung, keine Benutzerkonten.</li>
-        <li>Einstellungen, Fundmarker, Bewertungen von Verdachtsflächen und Messungen werden nur in Ihrem Browser gespeichert
+        <li>Einstellungen, Fundmarker, Bewertungen von Verdachtsflächen, Messungen und was Sie in Orten entdeckt haben werden nur in Ihrem Browser gespeichert
         (localStorage) und von der App an keinen Server übertragen. Die App fragt Ihren Standort nicht ab.</li>
         <li>Geteilte Links und QR-Codes enthalten nur die Ansicht (Position, Blickrichtung, Darstellung), nie Fundmarker.</li>
         <li><strong>Flurstücksabfrage:</strong> Beim Setzen eines Fundmarkers oder Messpunkts wird das Flurstück zuerst aus den

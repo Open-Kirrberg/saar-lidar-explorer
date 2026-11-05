@@ -27,6 +27,8 @@ from .plan import Fixture, Plan
 from .scene import Scene, smooth
 
 BEVEL = geom.BEVEL_FIXTURE      # 12 mm (style.md: fixtures 10–20 mm)
+ROD_R = 0.0125                  # bread-shelf tier tubes, Ø 25 mm (video)
+RAIL_R = 0.022                  # rounded front rail of each tier
 SMALL = 0.006                   # thin boards, frames, rails
 
 
@@ -293,23 +295,29 @@ def theke(sc: Scene, p: Plan) -> None:
     L.box(n, "granit-rosa", r, yb, work_h - 0.03, l - r, work_d + 0.02, 0.03, 0.008, 2)
 
     # ---- till, pretzel stand, cake cover, blank table cards
+    # till ≈ 1.8 from the SW end (video t049, t062): the drawer fits under the glass top (0.37 clear), the screen
+    # stands behind the glass top's back edge (local +y = towards the customer, the till faces the staff)
     n = _node(sc, "theke/kasse", fx, "photo", 0.4)
-    T = L.sub(1.80 * f, yb + work_d / 2, work_h, rot_deg=180)          # ≈ 1.8 from the SW end (video t049, t062)
-    T.box(n, "lack-schwarz", -0.19, -0.20, 0.0, 0.38, 0.40, 0.11, 0.015, 2)
-    T.box(n, "kissen", -0.17, -0.205, 0.02, 0.34, 0.01, 0.05, 0.0)                                     # drawer line
-    T.rod(n, "lack-schwarz", (0.0, 0.08, 0.11), (0.0, 0.10, 0.25), 0.015, 6)
-    S = T.sub(0.0, 0.10, 0.25, tilt_deg=-15)
-    S.box(n, "lack-schwarz", -0.15, -0.02, 0.0, 0.30, 0.03, 0.21, 0.01, 2)
-    S.box(n, "kissen", -0.13, -0.025, 0.02, 0.26, 0.006, 0.17, 0.0)                                    # dark screen
+    yk = min(d - 0.17, yt1 + 0.04)
+    T = L.sub(1.80 * f, yk, work_h, rot_deg=180)
+    T.box(n, "lack-schwarz", -0.19, -0.17, 0.0, 0.38, 0.34, 0.11, 0.015, 2)
+    T.box(n, "kissen", -0.17, -0.175, 0.02, 0.34, 0.01, 0.05, 0.0)                                     # drawer line
+    ys = -(yt1 + 0.07 - yk)                                                                            # behind the top
+    T.rod(n, "lack-schwarz", (0.0, ys + 0.02, 0.11), (0.0, ys, 0.25), 0.015, 6)
+    S = T.sub(0.0, ys, 0.25, tilt_deg=-12)
+    S.box(n, "lack-schwarz", -0.15, -0.03, 0.0, 0.30, 0.03, 0.21, 0.01, 2)
+    S.box(n, "kissen", -0.13, -0.035, 0.02, 0.26, 0.006, 0.17, 0.0)                                    # dark screen
 
     n = _node(sc, "theke/brezelstaender", fx, "photo", 0.3)
     B = L.sub(1.15 * f, (yt0 + yt1) / 2, H + 0.002)
+    sc.anchors["theke/brezelstaender"] = sc.F.zone(B.b([[0.0, 0.0, 0.0]])[0])
+    half = 0.17                                                         # arms ≈ 0.34 (video estimate 0.30 ± 0.05)
     B.lathe(n, "holz-hell", 0, 0, 0, [(0.0, 0.0), (0.14, 0.0), (0.14, 0.018), (0.125, 0.032), (0.03, 0.036), (0.0, 0.036)], 16)
     B.rod(n, "holz-hell", (0, 0, 0.03), (0, 0, 0.58), 0.016, 8)
     arms = []
     for za, a in ((0.25, 0.0), (0.45, 90.0)):
         ca, sa = math.cos(math.radians(a)), math.sin(math.radians(a))
-        e0, e1 = (-0.15 * ca, -0.15 * sa, za), (0.15 * ca, 0.15 * sa, za)
+        e0, e1 = (-half * ca, -half * sa, za), (half * ca, half * sa, za)
         B.rod(n, "holz-hell", e0, e1, 0.011, 6)
         for e in (e0, e1):
             B.lathe(n, "holz-hell", e[0], e[1], e[2] - 0.016, [(0.0, 0.0), (0.016, 0.008), (0.016, 0.024), (0.0, 0.032)], 6)
@@ -317,24 +325,28 @@ def theke(sc: Scene, p: Plan) -> None:
     B.lathe(n, "holz-hell", 0, 0, 0.575, [(0.0, 0.0), (0.022, 0.01), (0.018, 0.03), (0.0, 0.04)], 8)
     k = 0
     for (ex, ey, ez), m in zip(arms, (3, 2, 3, 2)):
+        r0, r1 = 0.045, 0.135 if m == 3 else 0.12                     # clear of the pole and of the end knob
         for j in range(m):
             k += 1
-            t = (j + 1) / (m + 1)
-            B.slot("theke/brezelstaender", k, ex * (0.35 + 0.65 * t), ey * (0.35 + 0.65 * t), ez - 0.14, 0.13, 0.04, 0.12, 1,
-                   ["laugengebaeck"], "1 Brezel (hängend)")
+            r = (r0 + (r1 - r0) * j / (m - 1)) / half
+            B.slot("theke/brezelstaender", k, ex * r, ey * r, ez - 0.14, 0.13, (r1 - r0) / (m - 1), 0.12, 1,
+                   ["laugengebaeck"], "1 Brezel (hängend, die Stange durch eine Schlaufe)")
 
     n = _node(sc, "theke/kuchenhaube", fx, "photo", 0.3)
     ys0 = _y_at(profs[1], shelf_z) + 0.05
-    xh, yh = xs + (x1 - xs) * 0.72, ys0 + min(shelf_d, yt1 - 0.02 - ys0) / 2
+    xh = xs + 0.02 + 1.5 * (x1 - xs - 0.04) / 2                       # centre of the last glass-shelf slot (platz-06)
+    yh = ys0 + min(shelf_d, yt1 - 0.02 - ys0) / 2
+    hd = min(0.18, H - shelf_z - 0.045)                                 # dome + knob stay below the glass top
     L.lathe(n, "glas", xh, yh, shelf_z + 0.003,
-            [(0.175, 0.0), (0.175, 0.10), (0.155, 0.165), (0.10, 0.195), (0.0, 0.205)], 14, ao=None)
-    L.lathe(n, "chrom", xh, yh, shelf_z + 0.203, [(0.0, 0.0), (0.018, 0.004), (0.018, 0.02), (0.0, 0.026)], 8)
+            [(0.175, 0.0), (0.175, 0.5 * hd), (0.155, 0.8 * hd), (0.10, 0.95 * hd), (0.0, hd)], 14, ao=None)
+    L.lathe(n, "chrom", xh, yh, shelf_z + 0.001 + hd, [(0.0, 0.0), (0.016, 0.004), (0.016, 0.016), (0.0, 0.02)], 8)
 
     n = _node(sc, "theke/aufsteller", fx, "photo", 0.4)
-    for xa in (1.70 * f, 2.05 * f):
-        L.hull(n, "regal-weiss", [(xa, yt0 + 0.04, H), (xa + 0.20, yt0 + 0.04, H), (xa, yt0 + 0.16, H), (xa + 0.20, yt0 + 0.16, H),
-                                  (xa, yt0 + 0.095, H + 0.25), (xa + 0.20, yt0 + 0.095, H + 0.25),
-                                  (xa, yt0 + 0.105, H + 0.25), (xa + 0.20, yt0 + 0.105, H + 0.25)])
+    for xa in (1.72 * f, 2.02 * f):                                     # small A-frame cards (≈ 0.11 × 0.15), blank
+        cw, ch = 0.11, 0.15
+        L.hull(n, "putz-weiss", [(xa, yt0 + 0.06, H), (xa + cw, yt0 + 0.06, H), (xa, yt0 + 0.13, H), (xa + cw, yt0 + 0.13, H),
+                                 (xa, yt0 + 0.093, H + ch), (xa + cw, yt0 + 0.093, H + ch),
+                                 (xa, yt0 + 0.097, H + ch), (xa + cw, yt0 + 0.097, H + ch)])
 
     # ---- slots: trays on the deck and the glass shelf (left module 4, right 2), bags on the right half of the top
     k1 = k2 = 0
@@ -345,11 +357,11 @@ def theke(sc: Scene, p: Plan) -> None:
         for j in range(m):
             xc = xa + 0.02 + (j + 0.5) * w
             k1 += 1
-            L.slot("theke/vitrine/ebene-1", k1, xc, 0.06 + (yb - 0.08) / 2, deck_z, w - 0.02, yb - 0.10, shelf_z - deck_z - 0.03, 1,
-                   ["kuchen", "suesses"], "1 Blech 60×40 oder 2 Kuchenplatten")
+            L.slot("theke/vitrine/ebene-1", k1, xc, 0.06 + (yb - 0.08) / 2, deck_z, w - 0.02, yb - 0.10, shelf_z - deck_z - 0.03, 4,
+                   ["kuchen", "suesses"], "1 Blech 60×40 oder 2–4 Kuchen (≈ 12 Stücke)")
             k2 += 1
-            L.slot("theke/vitrine/ebene-2", k2, xc, (ys0 + ys1) / 2, shelf_z + 0.004, w - 0.02, ys1 - ys0 - 0.02, H - shelf_z - 0.03, 1,
-                   ["suesses", "kuchen", "laugengebaeck", "broetchen"], "1 Blech 60×40")
+            L.slot("theke/vitrine/ebene-2", k2, xc, (ys0 + ys1) / 2, shelf_z + 0.004, w - 0.02, ys1 - ys0 - 0.02, H - shelf_z - 0.03, 12,
+                   ["suesses", "kuchen", "laugengebaeck", "broetchen"], "1 Blech 60×40 (≈ 12 Teilchen)")
     xm = (x0 + x1) / 2 + 0.10
     w = (x1 - 0.04 - xm) / 8
     for j in range(8):
@@ -358,6 +370,9 @@ def theke(sc: Scene, p: Plan) -> None:
 
 
 # ----------------------------------------------------------------------------------------------- bread shelf (F2)
+
+BASKET_FILL_DEPTH = 0.09     # rolls lie on a cloth-covered insert this far below the basket rim
+
 
 def _basket(L: Local, n_basket, x0: float, y0: float, w: float, dd: float, hh: float) -> None:
     """Wicker basket (tapered, 4 woven bands) lined with a raspberry cloth that folds over the rim and stands up at
@@ -450,7 +465,12 @@ def brotregal(sc: Scene, p: Plan) -> None:
             xc = xc_bay + (j - (per_bay - 1) / 2) * pitch
             nbk = _node(sc, f"brotregal/koerbe/korb-{k}", fx, "photo", 0.3)
             _basket(C, nbk, xc - bw / 2, 0.01, bw, bd, bh)
-            C.slot(f"brotregal/koerbe/korb-{k}", 1, xc, 0.01 + bd / 2, 0.03, bw - 0.08, bd - 0.08, bh, 20,
+            # raised, cloth-covered insert: the rolls lie heaped up to and over the rim (video), not deep in the basket
+            zf = bh - BASKET_FILL_DEPTH
+            ins = 0.035 * (1 - zf / bh) + 0.004
+            C.poly(nbk, "tuch-rosa", [(xc - bw / 2 + ins, 0.01 + ins, zf), (xc + bw / 2 - ins, 0.01 + ins, zf),
+                                      (xc + bw / 2 - ins, 0.01 + bd - ins, zf), (xc - bw / 2 + ins, 0.01 + bd - ins, zf)][::-1], ao=0.85)
+            C.slot(f"brotregal/koerbe/korb-{k}", 1, xc, 0.01 + bd / 2, zf + 0.002, bw - 0.08, bd - 0.08, BASKET_FILL_DEPTH + 0.06, 20,
                    ["broetchen", "laugengebaeck"], "≈ 20 Brötchen in einer Lage (gehäuft ≈ 30)", a)
 
     # ---- rod tiers (front edge = z), price rails on 1–2, red front edge on the top tier
@@ -464,19 +484,20 @@ def brotregal(sc: Scene, p: Plan) -> None:
         yf = d - 0.025 - sd * math.cos(math.radians(a))
         T = L.sub(0.0, yf, z, tilt_deg=a)
         n = _node(sc, f"brotregal/{sid}", fx, "photo", 0.3)
-        for i in range(nrods):
-            yi = (i + 0.5) / nrods * sd
-            sw = min(0.042, 0.78 * sd / nrods)                         # flat slats, small gaps (video)
-            T.sweep(n, "champagner", geom.rounded_rect_profile(sw, 0.014, 0.006, 1, yi - sw / 2, 0.006), tw + 0.01, l - tw - 0.01, 3)
+        xa_, xb_ = tw + 0.01, l - tw - 0.01
+        for i in range(nrods):                                          # round champagne tubes Ø 25 mm (video)
+            yi = 0.045 + i * (sd - 0.06) / max(nrods - 1, 1)
+            T.rod(n, "champagner", (xa_, yi, ROD_R), (xb_, yi, ROD_R), ROD_R, 8)
         for xk in xstd:
-            T.box(n, "champagner", xk, 0.0, -0.028, 0.02, sd, 0.028, 0.003, 1)
-        if sid == "ebene-3":
-            T.sweep(n, "heusser-rot", geom.rounded_rect_profile(0.022, 0.05, 0.006, 1, -0.022, -0.03), tw + 0.005, l - tw - 0.005, 3)
-        else:
-            T.sweep(nr, "champagner", geom.rounded_rect_profile(0.018, 0.055, 0.005, 1, -0.018, -0.045), tw + 0.005, l - tw - 0.005, 3)
+            T.box(n, "champagner", xk, 0.02, -0.028, 0.02, sd - 0.02, 0.028, 0.003, 1)
+        # rounded front rail: a fat tube that stands a little proud of the rods (the loaves rest against it)
+        T.rod(n, "heusser-rot" if sid == "ebene-3" else "champagner", (tw + 0.005, 0.0, ROD_R - 0.004),
+              (l - tw - 0.005, 0.0, ROD_R - 0.004), RAIL_R, 12)
+        if sid != "ebene-3":                                            # slim price strip with clips below the rail
+            T.sweep(nr, "champagner", geom.rounded_rect_profile(0.008, 0.03, 0.003, 1, -0.012, -0.05), tw + 0.02, l - tw - 0.02, 3)
             for c in range(8):
                 xc = tw + (c + 0.5) * (l - 2 * tw) / 8
-                T.box(nr, "chrom", xc - 0.012, -0.03, -0.035, 0.024, 0.012, 0.035, 0.0)
+                T.box(nr, "chrom", xc - 0.010, -0.018, -0.048, 0.020, 0.008, 0.026, 0.0)
         L.slab(geom.rect(tw, yf, l - tw, d), z, 0.25, 0.32)
         m = counts.get(sid, 14)
         U = l - 2 * tw - 0.04

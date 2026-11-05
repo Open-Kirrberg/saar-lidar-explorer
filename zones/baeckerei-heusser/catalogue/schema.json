@@ -247,6 +247,10 @@
     "clickable": {
      "type": "boolean"
     },
+    "discover": {
+     "type": "boolean",
+     "description": "counts for „entdeckt x / y“ in the visitor's catalogue (needs clickable + info_de)"
+    },
     "public": {
      "type": "boolean",
      "default": true,

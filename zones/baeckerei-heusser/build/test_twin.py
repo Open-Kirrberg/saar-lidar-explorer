@@ -100,6 +100,8 @@ def test_node_names_and_catalogue(built):
     names = [n["name"] for n in built["doc"]["nodes"]]
     assert len(names) == len(set(names))
     for n in built["doc"]["nodes"]:
+        if n["name"].startswith(B.PRODUCT_NODE):
+            continue                                                       # test_products_in_the_shop
         assert NAME_RE.match(n["name"]), n["name"]
         ex = n["extras"]
         assert n["name"].split("/")[0] in cat, n["name"]
@@ -155,14 +157,15 @@ def test_nav_connects_street_porch_and_shop(built):
     tri = np.concatenate([pp[i] for _, pp, i in built["nav"]["nav/floor"]])
     U = union_all([Polygon(t[:, [0, 2]]) for t in tri if Polygon(t[:, [0, 2]]).area > 1e-8]).buffer(0.01)
     parts = geom.polys(U)
-    spots = {"spawn": B.SPAWN_B, "porch": (23.1, 0.7), "shop": (22.6, 2.3)}
+    # gable: the street in front of the south gable mural (a discoverable object), seen face-on from the floor
+    spots = {"spawn": B.SPAWN_B, "porch": (23.1, 0.7), "shop": (22.6, 2.3), "gable": (-10.3, 0.7)}
     homes = []
     for name, xy in spots.items():
         z = F.zone(np.array([xy[0], xy[1], 0.0]))
         k = [i for i, q in enumerate(parts) if q.contains(Point(z[0], z[2]))]
         assert k, f"{name} not on the walkable floor"
         homes.append(k[0])
-    assert len(set(homes)) == 1, "street, porch and shop are not one walkable area"
+    assert len(set(homes)) == 1, "street, gable view, porch and shop are not one walkable area"
     # the floor height steps up the porch: 5 risers between street and shop floor
     assert max(np.ptp(tri[:, :, 1], axis=1)) < 1.0
 
@@ -256,3 +259,96 @@ def test_facade_round_3b(built):
     b = p.frame.zone_to_b(_pts(built["twin"], ["fassade/aussenwand"]))
     end = b[b[:, 0] < 0.1]
     assert end[:, 2].max() > p.raw["site"]["building"]["eaves"]["v"] + 3.0
+
+
+# ----------------------------------------------------------------------------------------------- products (round 4b)
+
+def _slots(built) -> dict:
+    return {s["id"]: s for s in json.loads((built["out"] / "slots.json").read_text(encoding="utf-8"))["slots"]}
+
+
+def test_products_in_the_shop(built):
+    """The default fill (morgens) is placed: one node `produkt/<slot id>` per filled slot with extras {id: slot id,
+    product|ware, count}, every piece within the per-instance budgets, the whole twin under the budget."""
+    fill = json.loads((B.FILLS / f"{B.DEFAULT_FILL}.json").read_text(encoding="utf-8"))
+    prods = {p["id"] for p in json.loads(B.PRODUCTS.read_text(encoding="utf-8"))["products"]}
+    nodes = {n["name"]: n for n in built["doc"]["nodes"] if n["name"].startswith(B.PRODUCT_NODE)}
+    assert sorted(nodes) == sorted(B.PRODUCT_NODE + k for k in fill["slots"])
+    for name, n in nodes.items():
+        sid = name[len(B.PRODUCT_NODE):]
+        e, ex = fill["slots"][sid], n["extras"]
+        assert ex["id"] == sid and ex["count"] == e["count"]
+        assert ("product" in ex) != ("ware" in ex)
+        assert ex.get("product", ex.get("ware")) == e.get("product", e.get("ware"))
+        if "product" in ex:
+            assert ex["product"] in prods
+    r = built["report"]
+    assert r["fill"]["id"] == B.DEFAULT_FILL and r["fill"]["slots"] == len(fill["slots"])
+    assert r["triangles"]["total"] < 250_000
+
+
+def test_products_rest_on_their_slots(built):
+    """Each product node's geometry stays inside its slot box (slot frame, small tolerance for tilt and jitter):
+    nothing floats above the surface or sinks through it; pretzels hang below the stand's arms."""
+    import math
+    slots = _slots(built)
+    for name, items in built["twin"].items():
+        if not name.startswith(B.PRODUCT_NODE):
+            continue
+        s = slots[name[len(B.PRODUCT_NODE):]]
+        pts = np.concatenate([p.reshape(-1, 3) for _, p, _ in items])
+        h, t = math.radians(s["pose"]["heading_deg"]), math.radians(s.get("tilt_deg", 0.0))
+        f = np.array([math.sin(h), 0.0, -math.cos(h)])
+        up = np.array([0.0, 1.0, 0.0])
+        n = up * math.cos(t) + f * math.sin(t)
+        ft = f * math.cos(t) - up * math.sin(t)
+        M = np.column_stack([np.cross(n, ft), n, ft])
+        loc = (pts - np.array([s["pose"]["x"], s["pose"]["y"], s["pose"]["z"]])) @ M
+        W, D, H = s["size"]["w"], s["size"]["d"], s["size"]["h"]
+        tol = 0.012
+        if s["fixture"] == "theke/brezelstaender":
+            assert loc[:, 1].max() <= H + 0.05 and loc[:, 1].min() >= -0.05, name
+            continue
+        assert loc[:, 1].min() >= -tol, (name, loc[:, 1].min())                 # not below the surface
+        assert loc[:, 1].min() <= 0.03, (name, loc[:, 1].min())                 # standing on it, not floating
+        assert loc[:, 1].max() <= H + tol, (name, loc[:, 1].max())
+        assert np.abs(loc[:, 0]).max() <= W / 2 + tol, (name, np.abs(loc[:, 0]).max())
+        assert np.abs(loc[:, 2]).max() <= D / 2 + tol, (name, np.abs(loc[:, 2]).max())
+
+
+def test_visitor_catalogue_file(built):
+    """built/catalogue.json (sle-zone-catalogue-v1): objects = built rows with info_de, products with prices
+    (consent), discoverable = placed products + curated objects; the fragment references it."""
+    sys.path.insert(0, str(HERE.parents[2] / "pipeline"))
+    import zones as Z
+    doc = json.loads((built["out"] / "catalogue.json").read_text(encoding="utf-8"))
+    assert Z.validate_catalogue(doc) == []
+    assert doc["schema"] == B.CATALOGUE_FORMAT and doc["consent"] == {"prices": True}
+    fill = json.loads((B.FILLS / f"{B.DEFAULT_FILL}.json").read_text(encoding="utf-8"))
+    placed = {e["product"] for e in fill["slots"].values() if "product" in e}
+    assert placed <= set(doc["discoverable"]) and placed <= set(doc["products"])
+    curated = [d for d in doc["discoverable"] if d in doc["objects"]]
+    assert 12 <= len(curated) <= 24
+    assert all(o["info_de"] for o in doc["objects"].values())
+    # enclosing rows (facade, room shell: clickable false) are never cards and never groups — a facade detail
+    # grouped under `fassade` resolved to the facade from everywhere on the floor (group wins beyond 2.5 m)
+    rows = {o["id"]: o for o in json.loads(B.CATALOGUE.read_text(encoding="utf-8"))["objects"]}
+    assert "fassade" not in doc["objects"] and "verkaufsraum" not in doc["objects"]
+    assert all(rows[oid].get("clickable") is not False for oid in doc["objects"])
+    assert all(o["group"] in doc["objects"] and rows[o["group"]].get("clickable") is not False
+               for o in doc["objects"].values() if "group" in o)
+    for oid in ("fassade/wandmalerei", "fassade/glasbausteine", "fassade/schlussstein-1", "fassade/ausleger-schild"):
+        assert oid in doc["discoverable"] and "group" not in doc["objects"][oid]
+    names ={n["name"] for n in built["doc"]["nodes"]}
+    assert all(any(n == oid or n.startswith(oid + "/") for n in names) for oid in doc["objects"]), "object not built"
+    frag = json.loads((built["out"] / "package.json").read_text(encoding="utf-8"))
+    assert frag["twin"]["catalogue"] == B.CATALOGUE_PATH
+    assert {"raw": "catalogue.json", "path": B.CATALOGUE_PATH} in frag["files"]
+
+
+def test_fill_feierabend_is_empty(tmp_path):
+    B.build(tmp_path, fill="feierabend")
+    doc, _ = read_glb((tmp_path / "twin.glb").read_bytes())
+    assert not [n for n in doc["nodes"] if n["name"].startswith(B.PRODUCT_NODE)]
+    cat = json.loads((tmp_path / "catalogue.json").read_text(encoding="utf-8"))
+    assert not [d for d in cat["discoverable"] if d in cat["products"]]

@@ -116,3 +116,11 @@ def test_slots_rules():
     assert any("capacity" in e for e in slot_errs(lambda d: d["slots"][0].update(capacity=True)))
     assert any("tilt" in e for e in slot_errs(lambda d: d["slots"][0].update(tilt_deg=90)))
     assert any("prices" in e for e in slot_errs(lambda d: d["slots"][0].update(preis_eur=2.5)))
+
+
+def test_discover_needs_a_clickable_card():
+    assert errs_for(lambda d: d["objects"][0].update(discover=True)) == []
+    assert any("discover" in e for e in errs_for(lambda d: d["objects"][1].update(discover=True)))       # not clickable
+    assert any("discover" in e for e in errs_for(lambda d: d["objects"][0].update(discover="ja")))
+    doc = json.loads((HERE / "objects.json").read_text(encoding="utf-8"))
+    assert 12 <= sum(1 for o in doc["objects"] if o.get("discover")) <= 25      # a curated list, not every object

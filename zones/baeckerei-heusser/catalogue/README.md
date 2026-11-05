@@ -24,7 +24,9 @@ cd pipeline && uv run python -I -m pytest -q ../zones/baeckerei-heusser/catalogu
   "sigma_m": 0.02,                     // 1-σ uncertainty of position and size, metres
   "refs": ["Aufmaß 2026-11-12"],       // what the source is; never private file names or paths
   "status": "built",                   // planned → blockout → built → verified; retired = removed from the shop
-  "clickable": true,                   // gets hover/tap highlight, info card, counts for „entdeckt x / y“
+  "clickable": true,                   // gets hover/tap highlight, info card
+  "discover": true,                    // optional: one of the ≈ 20 curated objects that count for „entdeckt x / y“
+                                       // (needs clickable + info_de; products always count once placed)
   "public": true                       // default true; false = never exported (outside the consent scope)
 }
 ```
@@ -61,7 +63,7 @@ cd pipeline && uv run python -I -m pytest -q ../zones/baeckerei-heusser/catalogu
                                               // slot centre on its standing surface (zone frame); heading = grid heading of the slot's front
       "tilt_deg": 25.0,                       // slope of the standing surface, + = back edge up (sloped rod tiers, baskets)
       "size": { "w": 0.223, "d": 0.36, "h": 0.26 },   // usable size: across the front, front to back, clear height
-      "capacity": 1,                          // rough number of pieces (a hint for round 4, not a rule)
+      "capacity": 1,                          // pieces in one layer; a fill may put up to 3 × capacity (heaps, stacks)
       "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
       "categories": ["brot"]                  // what may stand there (from the list above)
     }
@@ -79,10 +81,12 @@ cd pipeline && uv run python -I -m pytest -q ../zones/baeckerei-heusser/catalogu
 | `categories` | Non-empty, from the fixed list. |
 | Privacy | No price fields, ever (prices are not part of the slots). |
 
-Counts (round 3): display deck 6, glass shelf 6, glass top 8 (bags), pretzel stand 10, bread shelf tiers 14 / 15 / 14, 6 baskets, grid shelf 5, jar shelf 5 + 8, fridge 5, cube shelf 8 = 110 slots. `build.py --debug-slots` draws magenta plates for them (debug only, never a release).
+Fills (`../products/fill/*.json`, `bh-fill-v1`) are checked against the slots by `../products/fill.py` (category allowed, count ≤ 3 × capacity, the layout fits the slot). Counts (round 3): display deck 6, glass shelf 6, glass top 8 (bags), pretzel stand 10, bread shelf tiers 14 / 15 / 14, 6 baskets, grid shelf 5, jar shelf 5 + 8, fridge 5, cube shelf 8 = 110 slots. `build.py --debug-slots` draws magenta plates for them (debug only, never a release).
 
 ## State (2026-11-05)
 
 24 objects, all `planned`, from the reference photos and the capture: facade (shop window, glass blocks, steps, pickup locker, mural), shop shell (tiles, panel ceiling, wood soffit with red edge), counter (glass display, granite ledge, dark-red base), bread shelf (brass rod tiers, price rails, wicker baskets with pink cloths), grid shelf with bread bags, pretzel basket, two pendant lamps, newspaper stand, drinks fridge. Products (breads, cans) come with the *Raumplan* and closer photos.
 
 Round 3 (Verkaufsraum): the shop shell and all placed fixtures, appliances and decor are styled models (`built`); the old grid-shelf bread bags went back to `planned` (products come in round 4), as did the pretzel basket, the baker figures, the radiator and the fourth picture frame (not placed yet). 110 product slots in `slots.json`.
+
+Round 4b: the morning fill puts ≈ 490 products and generic goods into 105 slots (`produkt/<slot id>` nodes); display slots hold a tray of pieces (capacity 4 / 12), basket slots sit on a raised cloth insert (heaped rolls). Short du-form `info_de` for the facade and shop objects (no mushrooms in the window decoration, granite wording on the counter, history only as the owners approved it, ADR 0044); 19 rows marked `discover` (not `theke/vitrine`: its products take nearly every pick). The build writes the visitor catalogue `built/catalogue.json` from these rows; `clickable: false` rows (`fassade`, `verkaufsraum`) are left out, so facade details and the door are their own tap targets from the street.

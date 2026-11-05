@@ -22,7 +22,7 @@
    "type": "structure",
    "area": "aussen",
    "name_de": "Fassade",
-   "info_de": "Das Haus der Bäckerei an der Eckstraße in Kirrberg.",
+   "info_de": "Das Haus der Bäckerei Heusser in der Eckstraße in Kirrberg. Die Bäckerei gibt es seit 1933.",
    "dims": {
     "w": 24.99,
     "d": 16.75,
@@ -51,7 +51,7 @@
    "type": "structure",
    "area": "aussen",
    "name_de": "Schaufenster",
-   "info_de": "Durchs Schaufenster sieht man von der Straße in den Laden.",
+   "info_de": "Durch die beiden Schaufenster schaust du von der Straße direkt in den Laden.",
    "dims": {
     "w": 4.38,
     "d": 0.62,
@@ -164,7 +164,7 @@
    "type": "structure",
    "area": "aussen",
    "name_de": "Glasbausteine",
-   "info_de": "Eine Wand aus Glasbausteinen im Flechtverband: Sie lässt Licht herein, ohne dass man hindurchsieht. Ein paar Steine sind grün und blau.",
+   "info_de": "Eine Wand aus Glasbausteinen im Flechtverband: Sie lässt Licht herein, aber niemand schaut hindurch. Findest du die grünen und blauen Steine?",
    "dims": {
     "w": 3.6,
     "d": 0.06,
@@ -186,7 +186,8 @@
     "Street View (angesehen, nicht gespeichert)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "fassade/eingangsstufen",
@@ -238,7 +239,7 @@
    "type": "decor",
    "area": "aussen",
    "name_de": "Wandbild am Giebel",
-   "info_de": "Am Giebel zum Kreisel hängt ein altes Wandbild: ein Backofen mit Brot und zwei Brotschiebern.",
+   "info_de": "Am Giebel hängt ein Wandbild: ein Backofen mit Brot und zwei Brotschiebern, darunter steht „Bäckerei Heinrich Heusser seit 1933“.",
    "dims": {
     "w": 0.05,
     "d": 1.85,
@@ -259,7 +260,8 @@
     "Street View (angesehen, nicht gespeichert)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "fassade/fenstergewaende",
@@ -294,7 +296,7 @@
    "type": "decor",
    "area": "aussen",
    "name_de": "Schlussstein mit Brezel",
-   "info_de": "Über dem Schaufenster ist eine Brezel in den Sandstein gehauen – das alte Zeichen der Bäcker.",
+   "info_de": "Schau mal nach oben: Über dem Schaufenster ist eine Brezel in den Sandstein gehauen, das alte Zeichen der Bäcker.",
    "dims": {
     "w": 0.42,
     "d": 0.07,
@@ -315,14 +317,15 @@
     "Street View (angesehen, nicht gespeichert)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "fassade/schlussstein-2",
    "type": "decor",
    "area": "aussen",
    "name_de": "Schlussstein",
-   "info_de": "",
+   "info_de": "Auf diesem Schlussstein steht „H.H. 1933“, so wie „Heinrich Heusser“ und „seit 1933“ auf dem Wandbild am Giebel.",
    "dims": {
     "w": 0.42,
     "d": 0.06,
@@ -343,7 +346,8 @@
     "Street View (angesehen, nicht gespeichert)"
    ],
    "status": "built",
-   "clickable": false
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "fassade/ausleger-schild",
@@ -372,7 +376,8 @@
     "Street View (angesehen, nicht gespeichert)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "fassade/fallrohr",
@@ -519,7 +524,7 @@
    "type": "structure",
    "area": "verkaufsraum",
    "name_de": "Verkaufsraum",
-   "info_de": "Der Laden: hier gibt es Brot, Brötchen und Gebäck.",
+   "info_de": "Der Laden der Bäckerei: vorne die Theke mit der Vitrine, dahinter das Brotregal, am Schaufenster ein kleines Café.",
    "dims": {
     "w": 7.47,
     "d": 6.52,
@@ -801,7 +806,7 @@
    "type": "fixture",
    "area": "verkaufsraum",
    "name_de": "Verkaufstheke",
-   "info_de": "Hier wird bedient: vorne die Glasvitrine, oben die Granitablage.",
+   "info_de": "Die Verkaufstheke: hinter Glas liegen Kuchen und Teilchen, oben auf der Glasabdeckung hängen die Brezeln. Vorne läuft eine rosa-graue Granitablage entlang.",
    "dims": {
     "w": 4.45,
     "d": 1.31,
@@ -823,14 +828,15 @@
     "Capture 2026-11-04 (Referenz-Mesh)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "theke/vitrine",
    "type": "fixture",
    "area": "verkaufsraum",
    "name_de": "Glasvitrine",
-   "info_de": "Hinter dem Glas liegt die Auslage.",
+   "info_de": "In der gekühlten Glasvitrine liegen unten Kuchen und Torten, auf dem Glasboden darüber die Teilchen.",
    "dims": {
     "w": 3.95,
     "d": 0.87,
@@ -1055,13 +1061,13 @@
    "info_de": "Hier bezahlst du deinen Einkauf.",
    "dims": {
     "w": 0.38,
-    "d": 0.4,
+    "d": 0.34,
     "h": 0.46
    },
    "placement": {
     "plan": {
-     "x": 3.59,
-     "z": -1.14,
+     "x": 3.55,
+     "z": -1.13,
      "base_m": 0.9,
      "rot_deg": 70.7
     }
@@ -1073,17 +1079,18 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "theke/brezelstaender",
    "type": "container",
    "area": "verkaufsraum",
    "name_de": "Brezelständer",
-   "info_de": "An den Armen des Holzständers hängen die Brezeln.",
+   "info_de": "Am Holzständer hängen die Brezeln an zwei Querarmen, frisch zum Mitnehmen.",
    "dims": {
-    "w": 0.33,
-    "d": 0.33,
+    "w": 0.37,
+    "d": 0.37,
     "h": 0.62
    },
    "placement": {
@@ -1101,23 +1108,24 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "theke/kuchenhaube",
    "type": "container",
    "area": "verkaufsraum",
    "name_de": "Kuchenhaube",
-   "info_de": "",
+   "info_de": "Unter der Haube bleibt Kuchen frisch und geschützt.",
    "dims": {
     "w": 0.35,
     "d": 0.34,
-    "h": 0.23
+    "h": 0.19
    },
    "placement": {
     "plan": {
-     "x": 3.49,
-     "z": -3.25,
+     "x": 3.48,
+     "z": -3.28,
      "base_m": 1.05,
      "rot_deg": 70.7
     }
@@ -1129,7 +1137,7 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": false
+   "clickable": true
   },
   {
    "id": "theke/aufsteller",
@@ -1138,14 +1146,14 @@
    "name_de": "Tischaufsteller",
    "info_de": "",
    "dims": {
-    "w": 0.55,
-    "d": 0.12,
-    "h": 0.25
+    "w": 0.41,
+    "d": 0.07,
+    "h": 0.15
    },
    "placement": {
     "plan": {
-     "x": 3.96,
-     "z": -1.45,
+     "x": 3.98,
+     "z": -1.41,
      "base_m": 1.27,
      "rot_deg": 70.7
     }
@@ -1164,11 +1172,11 @@
    "type": "fixture",
    "area": "verkaufsraum",
    "name_de": "Brotregal",
-   "info_de": "Das Brotregal hinter der Theke: Brote auf schrägen Böden und in Körben.",
+   "info_de": "Das Brotregal hinter der Theke: oben drei schräge Stangenböden für die Brote, darunter sechs Körbe für die Brötchen.",
    "dims": {
     "w": 3.6,
     "d": 0.6,
-    "h": 2.02
+    "h": 2.03
    },
    "placement": {
     "plan": {
@@ -1186,7 +1194,8 @@
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "brotregal/preisschienen",
@@ -1195,13 +1204,13 @@
    "name_de": "Preisschienen",
    "info_de": "",
    "dims": {
-    "w": 3.52,
-    "d": 0.04,
-    "h": 0.35
+    "w": 3.49,
+    "d": 0.02,
+    "h": 0.33
    },
    "placement": {
     "plan": {
-     "x": 2.38,
+     "x": 2.37,
      "z": -1.19,
      "base_m": 1.15,
      "rot_deg": 70.7
@@ -1221,7 +1230,7 @@
    "type": "container",
    "area": "verkaufsraum",
    "name_de": "Brotkörbe",
-   "info_de": "Weidenkörbe mit rosa Tüchern.",
+   "info_de": "Sechs Weidenkörbe mit himbeerrosa Tüchern: Hier liegen morgens die Brötchen.",
    "dims": {
     "w": 3.56,
     "d": 0.45,
@@ -1241,7 +1250,8 @@
     "Referenzfoto Brotregal (Website der Bäckerei, privat)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "brotregal/koerbe/korb-1",
@@ -1418,13 +1428,13 @@
    "name_de": "Stangenboden unten",
    "info_de": "",
    "dims": {
-    "w": 3.51,
-    "d": 0.37,
-    "h": 0.21
+    "w": 3.52,
+    "d": 0.4,
+    "h": 0.2
    },
    "placement": {
     "plan": {
-     "x": 2.2,
+     "x": 2.21,
      "z": -1.13,
      "base_m": 1.18,
      "rot_deg": 70.7
@@ -1447,13 +1457,13 @@
    "name_de": "Stangenboden Mitte",
    "info_de": "",
    "dims": {
-    "w": 3.51,
-    "d": 0.37,
-    "h": 0.21
+    "w": 3.52,
+    "d": 0.4,
+    "h": 0.2
    },
    "placement": {
     "plan": {
-     "x": 2.2,
+     "x": 2.21,
      "z": -1.13,
      "base_m": 1.48,
      "rot_deg": 70.7
@@ -1478,13 +1488,13 @@
    "dims": {
     "w": 3.52,
     "d": 0.49,
-    "h": 0.26
+    "h": 0.24
    },
    "placement": {
     "plan": {
      "x": 2.25,
      "z": -1.15,
-     "base_m": 1.77,
+     "base_m": 1.78,
      "rot_deg": 70.7
     }
    },
@@ -1559,7 +1569,7 @@
    "type": "fixture",
    "area": "verkaufsraum",
    "name_de": "Gitterregal",
-   "info_de": "",
+   "info_de": "Im Chromregal am Schaufenster stehen Brote in Papiertüten zum Mitnehmen.",
    "dims": {
     "w": 0.91,
     "d": 0.45,
@@ -1580,7 +1590,8 @@
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
    "status": "built",
-   "clickable": false
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "gitterregal/brottueten",
@@ -1658,7 +1669,7 @@
    "type": "fixture",
    "area": "verkaufsraum",
    "name_de": "Würfelregal",
-   "info_de": "Im weißen Regal hinter der Theke stehen Tassen, Becher und Sirup für den Kaffee.",
+   "info_de": "Im weißen Würfelregal hinter der Theke stehen Becher, Tassen und Sirup für den Kaffee.",
    "dims": {
     "w": 0.77,
     "d": 0.83,
@@ -1679,7 +1690,8 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "wuerfelregal/wandboards",
@@ -1735,7 +1747,8 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "brotschneidemaschine",
@@ -1763,7 +1776,8 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "waermevitrine",
@@ -1791,7 +1805,8 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "arbeitstisch",
@@ -1856,15 +1871,15 @@
    "name_de": "Hängelampe",
    "info_de": "",
    "dims": {
-    "w": 0.18,
-    "d": 0.18,
-    "h": 0.5
+    "w": 0.17,
+    "d": 0.17,
+    "h": 0.34
    },
    "placement": {
     "plan": {
      "x": 3.91,
      "z": -1.16,
-     "base_m": 1.5,
+     "base_m": 1.66,
      "rot_deg": 115.7
     }
    },
@@ -1884,15 +1899,15 @@
    "name_de": "Hängelampe",
    "info_de": "",
    "dims": {
-    "w": 0.18,
-    "d": 0.18,
-    "h": 0.5
+    "w": 0.17,
+    "d": 0.17,
+    "h": 0.34
    },
    "placement": {
     "plan": {
      "x": 3.55,
      "z": -2.2,
-     "base_m": 1.5,
+     "base_m": 1.66,
      "rot_deg": 115.7
     }
    },
@@ -1912,15 +1927,15 @@
    "name_de": "Hängelampe",
    "info_de": "",
    "dims": {
-    "w": 0.18,
-    "d": 0.18,
-    "h": 0.5
+    "w": 0.17,
+    "d": 0.17,
+    "h": 0.34
    },
    "placement": {
     "plan": {
      "x": 4.27,
      "z": -0.12,
-     "base_m": 1.5,
+     "base_m": 1.66,
      "rot_deg": 115.7
     }
    },
@@ -1940,15 +1955,15 @@
    "name_de": "Hängelampe",
    "info_de": "",
    "dims": {
-    "w": 0.18,
-    "d": 0.18,
-    "h": 0.5
+    "w": 0.17,
+    "d": 0.17,
+    "h": 0.34
    },
    "placement": {
     "plan": {
      "x": 3.19,
      "z": -3.24,
-     "base_m": 1.5,
+     "base_m": 1.66,
      "rot_deg": 115.7
     }
    },
@@ -2099,14 +2114,15 @@
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "dosenregal",
    "type": "fixture",
    "area": "verkaufsraum",
    "name_de": "Regal mit Gläsern und Dosen",
-   "info_de": "Hier stehen Gläser, Dosen, Soßen, Kaffee und Eier zum Mitnehmen.",
+   "info_de": "Im dunklen Holzregal stehen Gläser, Dosen, Soßen, Kaffee und Eier zum Mitnehmen.",
    "dims": {
     "w": 1.37,
     "d": 0.35,
@@ -2127,7 +2143,8 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "baeckerpuppen",
@@ -2337,7 +2354,8 @@
     "Raumplan v0 (öffentliche Fassung)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "bistrotisch-2",
@@ -2484,7 +2502,7 @@
    "type": "decor",
    "area": "verkaufsraum",
    "name_de": "Schaufenster-Deko",
-   "info_de": "Sonnenblumen, Kürbisse und Pilze auf grünem Filz: die Deko im Schaufenster.",
+   "info_de": "Kürbisse auf grünem Filz und eine Blumengirlande: die Herbstdeko im Schaufenster.",
    "dims": {
     "w": 1.67,
     "d": 0.3,
@@ -2512,7 +2530,7 @@
    "type": "decor",
    "area": "verkaufsraum",
    "name_de": "Schaufenster-Deko",
-   "info_de": "Sonnenblumen, Kürbisse und Pilze auf grünem Filz: die Deko im Schaufenster.",
+   "info_de": "Sonnenblumen und Kürbisse auf grünem Filz, darüber eine Blumengirlande: die Herbstdeko im Schaufenster.",
    "dims": {
     "w": 2.08,
     "d": 0.32,
@@ -2540,7 +2558,7 @@
    "type": "decor",
    "area": "verkaufsraum",
    "name_de": "Alte Bilder",
-   "info_de": "Alte Fotos und Zeichnungen in Bilderrahmen erinnern an frühere Zeiten.",
+   "info_de": "Alte Fotos und Zeichnungen aus der Geschichte der Bäckerei, darunter ein Gruppenfoto von 1946. Hier siehst du sie nur als Rahmen.",
    "dims": {
     "w": 0.65,
     "d": 0.02,
@@ -2561,7 +2579,8 @@
     "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "bilderwand/rahmen-1",

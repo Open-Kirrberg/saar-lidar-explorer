@@ -247,6 +247,9 @@ def validate_manifest(m, modules: set[str] | None = None) -> list[str]:
             e("twin.referenceScale: invalid (factor 0.5-2, pivotLocal [x, y, z])")
         elif isinstance(m.get("capture"), dict) and isinstance(m["capture"].get("scale"), dict) and m["capture"]["scale"].get("factor") != 1:
             e("twin: capture.scale.factor must be 1 (the twin is built at true scale, see twin.referenceScale)")
+        elif "catalogue" in tw and not (isinstance(tw["catalogue"], str) and 0 < len(tw["catalogue"]) <= 80
+                                        and (not tw["catalogue"].endswith(".json") or safe_path(tw["catalogue"]))):
+            e("twin.catalogue: a format name (old packages) or the package path of the catalogue file (built/catalogue.json)")
 
     pr = m.get("preset")
     if pr is not None:
@@ -334,6 +337,36 @@ def glb_extensions_required(path: Path) -> list[str]:
     return list(doc.get("extensionsRequired", []))
 
 
+CATALOGUE_SCHEMA = "sle-zone-catalogue-v1"
+
+
+def validate_catalogue(doc) -> list[str]:
+    """The visitor's catalogue of a built twin (`twin.catalogue` = its package path, docs/zone-contract.md)."""
+    if not isinstance(doc, dict) or doc.get("schema") != CATALOGUE_SCHEMA:
+        return [f"catalogue: schema must be {CATALOGUE_SCHEMA!r}"]
+    errs = []
+    prices = isinstance(doc.get("consent"), dict) and doc["consent"].get("prices") is True
+    objs, prods, disc = doc.get("objects"), doc.get("products"), doc.get("discoverable")
+    if not isinstance(objs, dict) or not isinstance(prods, dict) or not isinstance(disc, list):
+        return errs + ["catalogue: needs objects {}, products {}, discoverable []"]
+    for k, o in objs.items():
+        if not (isinstance(o, dict) and isinstance(o.get("name_de"), str) and o["name_de"].strip()
+                and isinstance(o.get("info_de"), str) and o["info_de"].strip() and len(o["info_de"]) <= 300):
+            errs.append(f"catalogue: object {k}: name_de and info_de (≤ 300 chars) required")
+        elif "group" in o and (o["group"] not in objs or not k.startswith(o["group"] + "/")):
+            errs.append(f"catalogue: object {k}: group must be an ancestor id in objects")
+    for k, q in prods.items():
+        if not (isinstance(q, dict) and isinstance(q.get("name_de"), str) and q["name_de"].strip()):
+            errs.append(f"catalogue: product {k}: name_de required")
+            continue
+        pr = q.get("price_eur")
+        if pr is not None and not (prices and _num(pr) and pr >= 0):
+            errs.append(f"catalogue: product {k}: price_eur only with consent.prices (a number ≥ 0) or null")
+    if len(set(map(str, disc))) != len(disc) or not all(isinstance(d, str) and (d in objs or d in prods) for d in disc):
+        errs.append("catalogue: discoverable must list unique ids from objects or products")
+    return errs
+
+
 def validate_package(zone_dir: Path, modules: set[str] | None = None) -> list[str]:
     """Manifest + files: every LOD exists, declared bytes match, only allowed glTF extensions, folder = id."""
     zone_dir = Path(zone_dir)
@@ -365,6 +398,15 @@ def validate_package(zone_dir: Path, modules: set[str] | None = None) -> list[st
                 continue
             if bad:
                 errs.append(f"{lod['path']}: extensions not allowed: {', '.join(bad)}")
+    tw = m.get("twin") if isinstance(m, dict) else None
+    cat = tw.get("catalogue") if isinstance(tw, dict) else None
+    if isinstance(cat, str) and cat.endswith(".json") and safe_path(cat):
+        f = zone_dir / cat
+        try:
+            errs += validate_catalogue(json.loads(f.read_text(encoding="utf-8")))
+            total += f.stat().st_size
+        except (OSError, ValueError) as err:
+            errs.append(f"{cat}: {err}")
     bud = m.get("budget") if isinstance(m, dict) else None
     if isinstance(bud, dict) and _num(bud.get("totalBytes")) and total > bud["totalBytes"]:
         errs.append(f"assets total {total} B > budget.totalBytes")

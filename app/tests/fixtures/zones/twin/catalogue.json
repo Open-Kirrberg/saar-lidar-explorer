@@ -1,0 +1,21 @@
+{
+  "schema": "sle-zone-catalogue-v1",
+  "consent": { "prices": true },
+  "objects": {
+    "theke": { "name_de": "Testtheke", "info_de": "Hier wird bedient. Vorne ist Glas. Oben ist Stein. Und noch ein Satz." },
+    "theke/vitrine": { "name_de": "Testvitrine", "info_de": "Hinter dem Glas liegt die Auslage.", "group": "theke" },
+    "regal": { "name_de": "Testregal", "info_de": "Ein Regal." },
+    "regal/korb-1": { "name_de": "Korb", "info_de": "Ein Korb mit Tuch.", "group": "regal" },
+    "raum": { "name_de": "Testraum", "info_de": "Der ganze Raum." },
+    "kaputt": { "name_de": "Ohne Text" },
+    "Falsch Id": { "name_de": "x", "info_de": "y" },
+    "waise": { "name_de": "Waise", "info_de": "Gruppe fehlt.", "group": "gibt-es-nicht" }
+  },
+  "products": {
+    "testbrot": { "name_de": "Testbrot 500g", "short_de": "Kräftig & saftig.", "info_de": "Ein Brot zum Testen. Mit Kruste. Und Krume.", "category": "brot", "price_eur": 3.4, "sale_unit": "Laib" },
+    "testweck": { "name_de": "Testweck", "short_de": "", "info_de": "Ein Brötchen. Knusprig.", "category": "broetchen", "price_eur": 0.7, "sale_unit": "Stück" },
+    "torte": { "name_de": "Testtorte", "short_de": "Süß.", "info_de": "", "category": "torten", "price_eur": 45, "sale_unit": "ganze Torte" },
+    "teuer": { "name_de": "Zu teuer", "short_de": "", "info_de": "", "category": "kuchen", "price_eur": 1e9, "sale_unit": null }
+  },
+  "discoverable": ["testbrot", "testweck", "theke", "regal", "theke", "unbekannt", 7]
+}
