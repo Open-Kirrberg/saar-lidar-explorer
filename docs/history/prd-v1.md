@@ -15,7 +15,7 @@
 | Layer | What | Examples |
 |---|---|---|
 | 🌍 **Overworld** | The real land **today** (2025): streamed LiDAR terrain, aerial-photo ground, **real trees** (one per CHM crown), LoD2 houses, OSM paths; game minimap with the player in the centre and the view cone | The whole `overall` AOI (6 × 8 km) |
-| 🏰 **Zones** ("dungeons") | Detailed places, entered through a portal with a loading screen; richer renderer preset, same sky and vegetation modules | Schloss Karlsberg **1789** (reconstructed); Hoon's bakery in Kirrberg (captured from video, inside + outside) |
+| 🏰 **Zones** ("dungeons") | Detailed places, entered through a portal with a loading screen; richer renderer preset, same sky and vegetation modules | Schloss Karlsberg **1789** (reconstructed); Bäckerei Heusser in Kirrberg (captured from video, inside + outside) |
 
 You move like in a game with a cheat mode: fly, walk, change speed. **Relict finding** is the first real activity: the **Relikt-Blick** lens fades the trees and shows the relief, and candidates glow inside it. It becomes a profession with quests in v3; in v4 peers follow each other through the world.
 
@@ -56,7 +56,7 @@ You move like in a game with a cheat mode: fly, walk, change speed. **Relict fin
 | U5 | Turn on draped OSM paths to check whether a linear feature is a known path or an unmapped old road. |
 | U6 (v2) | Open the link on the phone, fly from Kirrberg to the castle, enter it through the portal, walk into the Festsaal. |
 | U7 (v2) | Turn on *Relikt-Blick* over the forest, see a glowing candidate, mark it with a note. |
-| U8 (v2) | Enter Hoon's bakery and walk through it. |
+| U8 (v2) | Enter Bäckerei Heusser and walk through it. |
 | U9 (v4) | Follow a friend's avatar and inspect a site together. |
 
 ## 4. Data Sources
@@ -432,7 +432,7 @@ The skill roadmap `.claude/skills/sle-roadmap/references/roadmap.md` still descr
 | 2026-11-04 | Core = explore the home area like a game; relict finding is the first activity and becomes a profession with quests (v3) | Workshop; "relics are the MVP of actual actions for actual people on actual land" |
 | 2026-11-04 | Two rendering layers: **overworld** (2025, streamed) + **zones** (portal + loading screen, richer preset); entering the castle = travelling to 1789 | WoW-style instances; a hard cut keeps each renderer simple; the overworld/zone split gives the epoch story |
 | 2026-11-04 | Zones come in two kinds, **reconstructed** (research, procedural) and **captured** (own video → photogrammetry/splats → georeferenced); the zone contract and an automated captured pipeline are the scaling lever | Many zones are planned; the castle took ≈ 75 k LOC of bespoke code, so per-zone effort decides everything |
-| 2026-11-04 | Zone #2 = Hoon's bakery in Kirrberg, inside + outside, from his own video (no people in it) | Rights clear; tests interiors in the zone contract early, next to the castle |
+| 2026-11-04 | Zone #2 = Bäckerei Heusser in Kirrberg, inside + outside, from his own video (no people in it) | Rights clear; tests interiors in the zone contract early, next to the castle |
 | 2026-11-04 | **Real trees**: one instanced tree per CHM crown, shared by overworld and zones; LOD tiers keep the silhouette and cross-fade | The draped CHM reads as green curtains; castle trees are seeded (also in its "2025" mode), not real, and pop at tier swaps (`forest.ts` TIER_STEP 8 m, caps) |
 | 2026-11-04 | Default look = **game look** (sky, sun, haze, aerial-photo ground, trees); relief becomes the **Relikt-Blick** lens | The analytical look suits experts; the lens keeps the core magic one click away |
 | 2026-11-04 | Feature tiers Standard / Entdecker / Labor + Freeze/Remove as in §6 v2 | ≈ 60 controls today (explorer + castle); target ≈ 8 in Standard |

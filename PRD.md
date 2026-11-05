@@ -10,7 +10,7 @@ Explore your home area like a game: fly or walk over the **real** Kirrberg, Homb
 | Layer | What | ADR |
 |---|---|---|
 | 🌍 **Overworld** | The land today (2025): streamed LiDAR terrain, aerial-photo ground, one real tree per CHM crown, LoD2 houses, OSM paths; game minimap with the player and view cone | [0015](docs/adr/0015-overworld-zones-portals.md) [0017](docs/adr/0017-real-trees-from-chm.md) |
-| 🏰 **Zones** | Detailed places behind a portal and a loading screen: Schloss Karlsberg **1789** (reconstructed), Hoon's bakery (captured from video) | [0016](docs/adr/0016-zone-kinds-zone-contract.md) |
+| 🏰 **Zones** | Detailed places behind a portal and a loading screen: Schloss Karlsberg **1789** (reconstructed), Bäckerei Heusser (captured from video) | [0016](docs/adr/0016-zone-kinds-zone-contract.md) |
 | 🔍 **Relikt-Blick** | A lens that fades the trees, shows the relief and makes candidates glow | [0018](docs/adr/0018-game-look-relikt-blick-lens.md) |
 
 **Focus area** (no expansion before v5, [0014](docs/adr/0014-audience-scope-devices.md)): Schloss Karlsberg (≈ 49.335 N, 7.379 E, straddles SL/RLP) · Kirrberg incl. Merburg · Homburg incl. Schlossberg.
@@ -40,7 +40,7 @@ Explore your home area like a game: fly or walk over the **real** Kirrberg, Homb
 |---|---|---|
 | U1 | Open the link on the phone, fly from Kirrberg to the castle, enter through the portal, walk into the Festsaal | 🟢 |
 | U2 | Put on *Relikt-Blick* over the forest, see a glowing candidate, *Merken* it with a note | 🟢 |
-| U3 | Walk through Hoon's bakery | 🟢 |
+| U3 | Walk through Bäckerei Heusser | 🟢 |
 | U4 | Compare a linear feature with the 1840 map, or check whether an OSM path covers it | 🟡 |
 | U5 | Review candidates, measure a profile, export markers, write a report for the LDA | 🔴 |
 | U6 (v4) | Follow a friend's avatar and inspect a site together | — |

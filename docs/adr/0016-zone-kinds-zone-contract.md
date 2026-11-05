@@ -10,7 +10,7 @@
 | Kind | Made by | First zone |
 |---|---|---|
 | 🏛️ **Reconstructed** | Procedural generator from sources (`schloss-karlsberg/`) | Schloss Karlsberg 1789 |
-| 🎥 **Captured** | Video → photogrammetry or Gaussian splats → georeferenced (`schloss-karlsberg/video2world/`) | Hoon's bakery in Kirrberg, inside + outside, no people |
+| 🎥 **Captured** | Video → photogrammetry or Gaussian splats → georeferenced (`schloss-karlsberg/video2world/`) | Bäckerei Heusser in Kirrberg, inside + outside, no people |
 
 - One **zone contract**, written before the code (as in [0004](0004-contract-first.md)): georeferenced footprint, portal and spawn, assets and LOD, renderer preset, attribution, evidence and confidence.
 - The captured pipeline gets automated end to end. **Efficiency per zone is a first-class goal.**
