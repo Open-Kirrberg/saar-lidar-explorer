@@ -114,6 +114,7 @@ radius = 1.0
 # The one scale factor (`scale_factor` above) is applied by the generator: plan `scale.factor` must equal it.
 [package.twin]
 build = "zones/baeckerei-heusser/build/out"
+serve_reference = false   # the video mesh is NOT served (looked like debris over the twin); it stays in data/work only
 name_de = "Bäckerei Heusser"
 summary_de = "Die Bäckerei in Kirrberg zum Hineingehen: von der Straße über die Stufen in den Verkaufsraum. Nachgebaut nach Raumplan, LoD2 und einem Handvideo, mit Erlaubnis der Inhaber."
 disclaimer_de = "Nachbau, kein Foto: Maße aus Raumplan und Video (± 11 % bis zum Aufmaß), Einrichtung vereinfacht. Privatbereiche sind nicht dargestellt."
@@ -122,7 +123,7 @@ sources_de = [
   "Raumplan v0 aus LoD2 und Handvideo (Maße ± 11 %, bis zum Aufmaß)",
   "LoD2-Gebäude und DGM1 (GeoBasis-DE/LVGL-SL)",
   "Straßen und Gehwege aus OpenStreetMap",
-  "Handvideo als Referenz (ausgeblendet)",
+  "Handvideo (nur zum Einmessen, nicht enthalten)",
 ]
 attribution = [
   "Nachbau Bäckerei Heusser, Kirrberg, mit Erlaubnis der Inhaber, eigenes Werk",

@@ -12,6 +12,8 @@ Runs at the end of stage `package` when `[package.twin]` exists (package rebuild
 Manifest rules (docs/zone-contract.md, "Built twins"):
 - assets: `twin` (role scene) + `nav` (role collider) first; the capture LODs become role `reference` (never drawn by
   default, never collide, outside the first-view budget). Apps without `reference` skip them (unknown role).
+  `serve_reference = false` in `[package.twin]` drops them from the package entirely (zone.json and the `scene/`
+  files); the capture then stays only in the zone's private work folder (alignment, measuring).
 - `capture.scale.factor` = 1: the twin is built at true scale (the one factor is applied by the generator). The
   factor for the reference mesh moves to `twin.referenceScale`.
 - texts (name, summary, disclaimer, sources, attribution) come from `[package.twin]`; spawn, portal, footprint from
@@ -61,12 +63,16 @@ def merge_manifest(m: dict, frag: dict, pkg: dict, packed: dict[str, dict]) -> d
         p = packed[a["id"]]
         assets.append({"id": a["id"], "role": a["role"], "bboxLocal": a["bboxLocal"],
                        "lods": [{"path": p["path"], "until_m": None, "bytes": int(p["bytes"]), "triangles": int(p["triangles"])}]})
-    refs = reference_assets(m.get("assets", []))
+    serve_ref = bool(tw.get("serve_reference", True))
+    refs = reference_assets(m.get("assets", [])) if serve_ref else []
     sp = frag["spawn"]
     portal = {"id": "strasse", "label_de": pkg.get("portal_label_de", "Betreten"), "E": frag["portal"]["E"], "N": frag["portal"]["N"],
               "h": None, "radius_m": float(pkg.get("portal_radius_m", 40)), "facing_deg": frag["portal"]["facing_deg"], "spawn": "strasse"}
     twin = {**frag["twin"]}
-    twin["referenceScale"] = {"factor": ref_factor, "pivotLocal": old_scale.get("pivotLocal", frag["pivotLocal"])}
+    if refs:
+        twin["referenceScale"] = {"factor": ref_factor, "pivotLocal": old_scale.get("pivotLocal", frag["pivotLocal"])}
+    else:
+        twin.pop("referenceScale", None)
     out = {k: v for k, v in m.items()}
     out.update({
         "name_de": tw.get("name_de", m.get("name_de")),
@@ -135,6 +141,12 @@ def run(zone: Zone) -> dict:
         print(f"   {a['id']}: {dst.stat().st_size / 1e6:.2f} MB, {int(st['triangles'])} tris", flush=True)
 
     new = merge_manifest(m, frag, pkg, packed)
+    if not any(a["role"] == "reference" for a in new["assets"]):
+        # serve_reference = false: no capture file may stay in the served package
+        kept = {l["path"].split("/")[0] for a in new["assets"] for l in a["lods"]}
+        for d in out.iterdir():
+            if d.is_dir() and d.name not in kept:
+                shutil.rmtree(d)
     save_json(mf, new)
     files = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
     new["budget"]["totalBytes"] = files + 64

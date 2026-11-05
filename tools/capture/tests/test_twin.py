@@ -78,3 +78,16 @@ def test_reference_assets_drops_built_and_keeps_references():
     col = {"id": "c", "role": "collider", "lods": [{"path": "scene/c.glb"}]}
     assert reference_assets([built, ref, col]) == [ref]
     assert reference_assets([{"id": "scene", "role": "scene", "lods": [{"path": "scene/a.glb"}]}])[0]["id"] == REFERENCE_ID
+
+
+def test_serve_reference_false_drops_the_capture():
+    pkg = {**PKG, "twin": {**PKG["twin"], "serve_reference": False}}
+    m = merge_manifest(CAPTURE, FRAG, pkg, PACKED)
+    assert [a["id"] for a in m["assets"]] == ["twin", "nav"]
+    assert "referenceScale" not in m["twin"] and m["capture"]["scale"]["factor"] == 1.0
+    assert not any("scene/" in l["path"] for a in m["assets"] for l in a["lods"])
+    # also from an earlier package that still carried the reference
+    again = merge_manifest(merge_manifest(CAPTURE, FRAG, PKG, PACKED), FRAG, pkg, PACKED)
+    assert [a["id"] for a in again["assets"]] == ["twin", "nav"] and "referenceScale" not in again["twin"]
+    m["budget"]["totalBytes"] = 600_000
+    assert _validator().validate_manifest(m) == []
