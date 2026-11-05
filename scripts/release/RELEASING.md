@@ -60,6 +60,10 @@ Size report: `../_release/data-size-report.txt`. What it does:
   Of `candidates/` only the manifest's GeoJSON and mask chunks are staged; saar-lidar-detect side files in the AOI dir
   (`run.json`, `report*.html`, `eval*`, `fachbericht*`, `manifest.json.bak-*`, `*.sld-new/`) are never staged, and the
   export **aborts** if a staged AOI text file still contains `crater`/`Bombentrichter`/`Trichterfeld`.
+- **Zone packages** (`app/public/data/zones/`) are not staged yet. When they are: for `baeckerei-heusser` stage only
+  `zone.json` and `built/` (the built twin + nav floor), drop every asset with `role: "reference"` from `zone.json`
+  and never stage `scene/` (the photogrammetry capture is local-only, [ADR 0043](../../docs/adr/0043-built-twin-package-reference-nav.md));
+  run the `bh-datenschutz` checklist first.
 - Both: `.nojekyll`, `README.md` (contents, licences, the **candidates are unverified hypotheses** note,
   „Schauen, nicht graben“), `ATTRIBUTION`, `index.html` landing page linking to the app.
 

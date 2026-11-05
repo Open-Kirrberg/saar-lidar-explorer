@@ -1,0 +1,2186 @@
+{
+ "schema": "sle-raumplan/0.1",
+ "id": "baeckerei-heusser",
+ "name_de": "Bäckerei Heusser – Raumplan v0 (Außen + Verkaufsraum)",
+ "address": "Eckstraße 3, 66424 Homburg-Kirrberg",
+ "status": "entwurf",
+ "created": "2026-11-05",
+ "statement_de": "Entwurf aus LoD2 + Videoaufnahme, Maße ±11 % bis Aufmaß. Werte mit source=mesh skalieren mit einem einzigen Bandmaß (siehe scale).",
+ "crs": {
+  "horizontal": "EPSG:25832",
+  "vertical": "DHHN2016 (m ü. NHN)"
+ },
+ "frame": {
+  "name": "B",
+  "description_de": "Lokales Gebäudesystem: Ursprung = SSW-Ende der LoD2-Straßenfassade, x entlang der Fassade nach NNO, y senkrecht ins Gebäude (WNW), z nach oben ab ±0,00",
+  "origin": {
+   "E": 381464.68,
+   "N": 5462236.762,
+   "source": "lod2",
+   "sigma_m": 0.1
+  },
+  "x_axis_bearing_deg": 25.746,
+  "y_axis_bearing_deg": 295.746,
+  "x_axis_EN": [
+   0.434387,
+   0.900726
+  ],
+  "y_axis_EN": [
+   -0.900726,
+   0.434387
+  ],
+  "to_epsg25832": "E = origin.E + x*x_axis_EN[0] + y*y_axis_EN[0];  N = origin.N + x*x_axis_EN[1] + y*y_axis_EN[1]",
+  "z0_m_nhn": {
+   "v": 244.25,
+   "sigma_m": 0.1,
+   "source": "mesh+dgm1",
+   "meaning": "±0,00 = Fertigfußboden Verkaufsraum"
+  },
+  "zone_local": {
+   "E0": 381467.0,
+   "N0": 5462254.0,
+   "note": "explorer zone frame: x = E - E0, y = h, z = -(N - N0)"
+  }
+ },
+ "scale": {
+  "applies_to": "alle Werte mit source enthält 'mesh'",
+  "factor": 1.0,
+  "source": "camera-height",
+  "rel_sigma": 0.111,
+  "pivot_xy": [
+   24.656,
+   0.0
+  ],
+  "pivot_note": "= LoD2-Nordostecke = capture.scale.pivotLocal der Zone",
+  "rule": "xy' = pivot + factor*(xy - pivot); Längen und Höhen über ±0,00: L' = factor*L",
+  "how_to_fix": "Messliste A messen: factor = Band / Planwert; dann sigma_m aller mesh-Werte neu: sqrt(0.16^2 + (0.01*d)^2)"
+ },
+ "uncertainty_model": {
+  "mesh_point": "sigma = sqrt(0.16^2 + 0.03^2 + (0.111 * Abstand zum pivot)^2)",
+  "mesh_length": "sigma = sqrt(e1^2 + e2^2 + (0.111 * L)^2), e = Kantenschärfe 0.03 (Wandfläche) .. 0.3 (Foto)",
+  "lod2": "Grundriss ±0.10, Dachhöhen ±0.30",
+  "dgm1": "±0.15",
+  "tape": "±0.01 (Ziel)"
+ },
+ "sources": [
+  {
+   "id": "lod2",
+   "name": "LoD2-Gebäudemodell Saarland",
+   "licence": "dl-de/by-2-0",
+   "attribution": "© GeoBasis-DE/LVGL-SL (2026)"
+  },
+  {
+   "id": "dgm1",
+   "name": "DGM1 Saarland (ALS 2025)",
+   "licence": "dl-de/by-2-0",
+   "attribution": "© GeoBasis-DE/LVGL-SL (2026)"
+  },
+  {
+   "id": "alkis",
+   "name": "ALKIS-Flurstücke (WFS)",
+   "licence": "dl-de/by-2-0",
+   "attribution": "© GeoBasis-DE/LVGL-SL (2026)"
+  },
+  {
+   "id": "osm",
+   "name": "OpenStreetMap (Straßen, Kreisel)",
+   "licence": "ODbL",
+   "attribution": "© OpenStreetMap-Mitwirkende"
+  },
+  {
+   "id": "mesh",
+   "name": "Handvideo 2026-11-04 → Apple Object Capture, georef. an LoD2/DGM1",
+   "licence": "eigenes Werk, mit Erlaubnis der Inhaber"
+  },
+  {
+   "id": "photo",
+   "name": "private Referenzfotos (Theke, Brotregal)",
+   "licence": "nur Layout-Referenz, nicht veröffentlichen"
+  },
+  {
+   "id": "tape",
+   "name": "Bandmaß/Laser vor Ort (Messliste)",
+   "licence": "eigenes Werk"
+  }
+ ],
+ "site": {
+  "parcel": {
+   "kennzeichen": "102100001000240002__",
+   "gemarkung": "Kirrberg",
+   "flur": "Flur 1",
+   "nummer": "24/2",
+   "lage": "Eckstraße 3, Ortsteil 0040",
+   "flaeche_amtlich_m2": 357,
+   "ring": [
+    [
+     9.31,
+     9.54
+    ],
+    [
+     2.82,
+     9.69
+    ],
+    [
+     0.11,
+     7.13
+    ],
+    [
+     0.04,
+     1.08
+    ],
+    [
+     0.04,
+     0.37
+    ],
+    [
+     24.35,
+     0.03
+    ],
+    [
+     25.03,
+     0.1
+    ],
+    [
+     25.19,
+     8.94
+    ],
+    [
+     25.21,
+     10.17
+    ],
+    [
+     24.48,
+     10.08
+    ],
+    [
+     24.51,
+     14.07
+    ],
+    [
+     27.26,
+     15.51
+    ],
+    [
+     23.95,
+     20.27
+    ],
+    [
+     26.93,
+     22.24
+    ],
+    [
+     24.23,
+     26.11
+    ],
+    [
+     14.48,
+     19.15
+    ],
+    [
+     16.05,
+     17.38
+    ],
+    [
+     16.72,
+     16.62
+    ],
+    [
+     16.17,
+     16.18
+    ],
+    [
+     9.55,
+     10.82
+    ],
+    [
+     9.31,
+     9.54
+    ]
+   ],
+   "source": "alkis",
+   "sigma_m": 0.1
+  },
+  "building": {
+   "id": "DESLA0AKQYG11262",
+   "funktion_alkis": "31001_1100",
+   "funktion_de": "Gemischt genutztes Gebäude mit Wohnen",
+   "roofType": "5000",
+   "measuredHeight": {
+    "v": 11.04,
+    "sigma_m": 0.3,
+    "source": "lod2"
+   },
+   "footprint": {
+    "ring": [
+     [
+      16.279,
+      14.423
+     ],
+     [
+      17.74,
+      8.995
+     ],
+     [
+      24.113,
+      8.886
+     ],
+     [
+      24.843,
+      8.873
+     ],
+     [
+      24.656,
+      0.0
+     ],
+     [
+      24.004,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      0.008,
+      0.709
+     ],
+     [
+      0.074,
+      6.757
+     ],
+     [
+      2.785,
+      9.316
+     ],
+     [
+      9.263,
+      9.175
+     ],
+     [
+      9.511,
+      10.471
+     ],
+     [
+      15.82,
+      16.127
+     ],
+     [
+      16.279,
+      14.423
+     ]
+    ],
+    "area": {
+     "v": 255.01,
+     "sigma_m": 1.0,
+     "source": "lod2"
+    },
+    "source": "lod2",
+    "sigma_m": 0.1
+   },
+   "edges": [
+    {
+     "id": "L0",
+     "from": [
+      16.279,
+      14.423
+     ],
+     "to": [
+      17.74,
+      8.995
+     ],
+     "length": {
+      "v": 5.62,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    },
+    {
+     "id": "L1",
+     "from": [
+      17.74,
+      8.995
+     ],
+     "to": [
+      24.113,
+      8.886
+     ],
+     "length": {
+      "v": 6.37,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": "Rückwand Vorderhaus"
+    },
+    {
+     "id": "L2",
+     "from": [
+      24.113,
+      8.886
+     ],
+     "to": [
+      24.843,
+      8.873
+     ],
+     "length": {
+      "v": 0.73,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    },
+    {
+     "id": "L3",
+     "from": [
+      24.843,
+      8.873
+     ],
+     "to": [
+      24.656,
+      0.0
+     ],
+     "length": {
+      "v": 8.88,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": "Nordwand (zum Durchgang)"
+    },
+    {
+     "id": "L4",
+     "from": [
+      24.656,
+      0.0
+     ],
+     "to": [
+      24.004,
+      0.0
+     ],
+     "length": {
+      "v": 0.65,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": "Eckpfeiler/Fassade Nordende"
+    },
+    {
+     "id": "L5",
+     "from": [
+      24.004,
+      0.0
+     ],
+     "to": [
+      0.0,
+      0.0
+     ],
+     "length": {
+      "v": 24.0,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": "Straßenfassade (Eckstraße)"
+    },
+    {
+     "id": "L6",
+     "from": [
+      0.0,
+      0.0
+     ],
+     "to": [
+      0.008,
+      0.709
+     ],
+     "length": {
+      "v": 0.71,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    },
+    {
+     "id": "L7",
+     "from": [
+      0.008,
+      0.709
+     ],
+     "to": [
+      0.074,
+      6.757
+     ],
+     "length": {
+      "v": 6.05,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    },
+    {
+     "id": "L8",
+     "from": [
+      0.074,
+      6.757
+     ],
+     "to": [
+      2.785,
+      9.316
+     ],
+     "length": {
+      "v": 3.73,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    },
+    {
+     "id": "L9",
+     "from": [
+      2.785,
+      9.316
+     ],
+     "to": [
+      9.263,
+      9.175
+     ],
+     "length": {
+      "v": 6.48,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    },
+    {
+     "id": "L10",
+     "from": [
+      9.263,
+      9.175
+     ],
+     "to": [
+      9.511,
+      10.471
+     ],
+     "length": {
+      "v": 1.32,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    },
+    {
+     "id": "L11",
+     "from": [
+      9.511,
+      10.471
+     ],
+     "to": [
+      15.82,
+      16.127
+     ],
+     "length": {
+      "v": 8.47,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    },
+    {
+     "id": "L12",
+     "from": [
+      15.82,
+      16.127
+     ],
+     "to": [
+      16.279,
+      14.423
+     ],
+     "length": {
+      "v": 1.76,
+      "sigma_m": 0.1,
+      "source": "lod2"
+     },
+     "name_de": null
+    }
+   ],
+   "ground_lod2": {
+    "v": -1.02,
+    "sigma_m": 0.15,
+    "source": "lod2",
+    "h_nhn": 243.23
+   },
+   "eaves": {
+    "v": 6.13,
+    "sigma_m": 0.3,
+    "source": "lod2",
+    "h_nhn": 250.38,
+    "note": "Traufe Straßenseite"
+   },
+   "ridge_front": {
+    "v": 9.64,
+    "sigma_m": 0.3,
+    "source": "lod2",
+    "h_nhn": 253.89,
+    "note": "First Vorderhaus, parallel zur Straße bei y ≈ 4,5"
+   },
+   "ridge_max": {
+    "v": 10.02,
+    "sigma_m": 0.3,
+    "source": "lod2",
+    "h_nhn": 254.27
+   },
+   "street_side": "x-Achse (y = 0), Eckstraße",
+   "entrance_side": "Straßenseite am Nordende (offener Eckvorbau, x 21,83..24,40) + seitlich zum überbauten Durchgang",
+   "survey_fixed_faces": [
+    "W1 außen (y = 0)",
+    "W4 außen (LoD2-Kante L3)",
+    "Nordostecke = pivot"
+   ]
+  },
+  "neighbours": [
+   {
+    "id": "DESLA0AKQWQC15A8",
+    "funktion_alkis": "31001_2463",
+    "measuredHeight": "2.517",
+    "ring": [
+     [
+      48.77,
+      4.39
+     ],
+     [
+      42.92,
+      3.48
+     ],
+     [
+      42.03,
+      9.26
+     ],
+     [
+      47.87,
+      10.16
+     ],
+     [
+      48.77,
+      4.39
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQV706C2B",
+    "funktion_alkis": "31001_1100",
+    "measuredHeight": "13.795",
+    "ring": [
+     [
+      -0.78,
+      -31.05
+     ],
+     [
+      -7.12,
+      -33.84
+     ],
+     [
+      -11.19,
+      -24.56
+     ],
+     [
+      -13.36,
+      -19.61
+     ],
+     [
+      -16.59,
+      -12.23
+     ],
+     [
+      -7.98,
+      -8.49
+     ],
+     [
+      -6.99,
+      -10.58
+     ],
+     [
+      2.37,
+      -8.25
+     ],
+     [
+      6.35,
+      -20.01
+     ],
+     [
+      -0.07,
+      -21.99
+     ],
+     [
+      -1.78,
+      -22.51
+     ],
+     [
+      1.49,
+      -29.37
+     ],
+     [
+      1.76,
+      -29.92
+     ],
+     [
+      -0.78,
+      -31.05
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQV32D6E5",
+    "funktion_alkis": "31001_2000",
+    "measuredHeight": "7.894",
+    "ring": [
+     [
+      19.67,
+      -29.15
+     ],
+     [
+      15.94,
+      -29.2
+     ],
+     [
+      13.32,
+      -20.28
+     ],
+     [
+      13.65,
+      -20.27
+     ],
+     [
+      13.52,
+      -19.03
+     ],
+     [
+      15.83,
+      -18.79
+     ],
+     [
+      16.28,
+      -18.74
+     ],
+     [
+      18.73,
+      -26.27
+     ],
+     [
+      19.67,
+      -29.15
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQZTA9AF8",
+    "funktion_alkis": "31001_1000",
+    "measuredHeight": "11.142",
+    "ring": [
+     [
+      2.52,
+      18.47
+     ],
+     [
+      -2.63,
+      24.23
+     ],
+     [
+      4.26,
+      30.3
+     ],
+     [
+      9.57,
+      24.31
+     ],
+     [
+      2.52,
+      18.47
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQWXB1097",
+    "funktion_alkis": "31001_1100",
+    "measuredHeight": "11.173",
+    "ring": [
+     [
+      15.29,
+      -14.66
+     ],
+     [
+      15.83,
+      -18.79
+     ],
+     [
+      13.52,
+      -19.03
+     ],
+     [
+      13.65,
+      -20.27
+     ],
+     [
+      13.32,
+      -20.28
+     ],
+     [
+      8.29,
+      -20.48
+     ],
+     [
+      7.02,
+      -15.55
+     ],
+     [
+      5.85,
+      -11.02
+     ],
+     [
+      14.7,
+      -10.06
+     ],
+     [
+      15.29,
+      -14.66
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQZN85E04",
+    "funktion_alkis": "31001_2463",
+    "measuredHeight": "5.955",
+    "ring": [
+     [
+      26.6,
+      22.21
+     ],
+     [
+      23.61,
+      20.21
+     ],
+     [
+      19.85,
+      17.7
+     ],
+     [
+      20.97,
+      16.1
+     ],
+     [
+      16.28,
+      14.42
+     ],
+     [
+      15.82,
+      16.13
+     ],
+     [
+      16.38,
+      16.63
+     ],
+     [
+      15.71,
+      17.39
+     ],
+     [
+      14.13,
+      19.17
+     ],
+     [
+      23.94,
+      26.21
+     ],
+     [
+      26.6,
+      22.21
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQUXC94FE",
+    "funktion_alkis": "31001_1000",
+    "measuredHeight": "9.095",
+    "ring": [
+     [
+      33.32,
+      -10.12
+     ],
+     [
+      43.85,
+      -8.03
+     ],
+     [
+      45.2,
+      -14.53
+     ],
+     [
+      34.68,
+      -16.68
+     ],
+     [
+      33.32,
+      -10.12
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQWT11A2E",
+    "funktion_alkis": "31001_1000",
+    "measuredHeight": "9.828",
+    "ring": [
+     [
+      38.98,
+      1.45
+     ],
+     [
+      29.53,
+      0.49
+     ],
+     [
+      28.95,
+      5.71
+     ],
+     [
+      28.43,
+      10.47
+     ],
+     [
+      38.22,
+      11.52
+     ],
+     [
+      38.41,
+      9.01
+     ],
+     [
+      39.94,
+      9.13
+     ],
+     [
+      40.11,
+      6.87
+     ],
+     [
+      40.3,
+      4.29
+     ],
+     [
+      38.77,
+      4.18
+     ],
+     [
+      38.98,
+      1.45
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQZP8B9AA",
+    "funktion_alkis": "31001_2463",
+    "measuredHeight": "2.588",
+    "ring": [
+     [
+      15.01,
+      24.54
+     ],
+     [
+      11.15,
+      29.51
+     ],
+     [
+      16.09,
+      33.44
+     ],
+     [
+      19.06,
+      29.91
+     ],
+     [
+      20.4,
+      28.38
+     ],
+     [
+      15.01,
+      24.54
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQWW27B86",
+    "funktion_alkis": "31001_1000",
+    "measuredHeight": "10.66",
+    "ring": [
+     [
+      29.53,
+      0.49
+     ],
+     [
+      24.66,
+      0.0
+     ],
+     [
+      24.87,
+      10.09
+     ],
+     [
+      28.43,
+      10.47
+     ],
+     [
+      29.53,
+      0.49
+     ]
+    ],
+    "source": "lod2",
+    "note_de": "überbaut den Durchgang (lt. LoD2 und Video)"
+   },
+   {
+    "id": "DESLA0BBHPKF376E",
+    "funktion_alkis": "31001_2463",
+    "measuredHeight": "5.042",
+    "ring": [
+     [
+      9.51,
+      10.47
+     ],
+     [
+      2.52,
+      18.47
+     ],
+     [
+      9.57,
+      24.31
+     ],
+     [
+      11.91,
+      21.67
+     ],
+     [
+      14.13,
+      19.17
+     ],
+     [
+      15.71,
+      17.39
+     ],
+     [
+      16.38,
+      16.63
+     ],
+     [
+      15.82,
+      16.13
+     ],
+     [
+      9.51,
+      10.47
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQV1079D9",
+    "funktion_alkis": "31001_1000",
+    "measuredHeight": "11.4",
+    "ring": [
+     [
+      26.47,
+      -10.98
+     ],
+     [
+      27.8,
+      -17.52
+     ],
+     [
+      21.61,
+      -18.17
+     ],
+     [
+      22.94,
+      -25.23
+     ],
+     [
+      18.73,
+      -26.27
+     ],
+     [
+      16.28,
+      -18.74
+     ],
+     [
+      15.83,
+      -18.79
+     ],
+     [
+      14.7,
+      -10.06
+     ],
+     [
+      26.23,
+      -9.78
+     ],
+     [
+      26.47,
+      -10.98
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0BBHPA3966B",
+    "funktion_alkis": "31001_1100",
+    "measuredHeight": "13.017",
+    "ring": [
+     [
+      -3.41,
+      9.03
+     ],
+     [
+      -11.05,
+      2.81
+     ],
+     [
+      -18.7,
+      12.3
+     ],
+     [
+      -10.8,
+      18.34
+     ],
+     [
+      -8.51,
+      15.45
+     ],
+     [
+      -7.64,
+      16.13
+     ],
+     [
+      -4.64,
+      12.35
+     ],
+     [
+      -5.5,
+      11.66
+     ],
+     [
+      -3.41,
+      9.03
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLA0AKQUY829A0",
+    "funktion_alkis": "31001_2463",
+    "measuredHeight": null,
+    "ring": [
+     [
+      30.5,
+      -19.88
+     ],
+     [
+      29.71,
+      -16.83
+     ],
+     [
+      33.08,
+      -15.88
+     ],
+     [
+      33.86,
+      -19.18
+     ],
+     [
+      35.17,
+      -23.67
+     ],
+     [
+      30.5,
+      -19.88
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLT9862A107FF8",
+    "funktion_alkis": "31001_2000",
+    "measuredHeight": "3.153",
+    "ring": [
+     [
+      15.01,
+      24.54
+     ],
+     [
+      17.09,
+      26.02
+     ],
+     [
+      19.33,
+      22.9
+     ],
+     [
+      14.13,
+      19.17
+     ],
+     [
+      11.63,
+      22.0
+     ],
+     [
+      15.01,
+      24.54
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   },
+   {
+    "id": "DESLTG8062231A32",
+    "funktion_alkis": "31001_2463",
+    "measuredHeight": "4.659",
+    "ring": [
+     [
+      29.23,
+      23.97
+     ],
+     [
+      32.37,
+      19.27
+     ],
+     [
+      26.33,
+      15.23
+     ],
+     [
+      23.19,
+      19.93
+     ],
+     [
+      26.6,
+      22.21
+     ],
+     [
+      29.23,
+      23.97
+     ]
+    ],
+    "source": "lod2",
+    "note_de": null
+   }
+  ],
+  "dgm1": {
+   "strasse_eingang": {
+    "xy": [
+     23.0,
+     -0.5
+    ],
+    "h_nhn": {
+     "v": 243.54,
+     "sigma_m": 0.15,
+     "source": "dgm1"
+    }
+   },
+   "fassade_sued": {
+    "xy": [
+     0.0,
+     -0.5
+    ],
+    "h_nhn": {
+     "v": 243.26,
+     "sigma_m": 0.15,
+     "source": "dgm1"
+    }
+   },
+   "fassade_mitte": {
+    "xy": [
+     12.0,
+     -0.5
+    ],
+    "h_nhn": {
+     "v": 243.43,
+     "sigma_m": 0.15,
+     "source": "dgm1"
+    }
+   },
+   "strassenmitte": {
+    "xy": [
+     20.0,
+     -4.0
+    ],
+    "h_nhn": {
+     "v": 243.52,
+     "sigma_m": 0.15,
+     "source": "dgm1"
+    }
+   }
+  },
+  "streets": [
+   {
+    "name": "Eckstraße",
+    "side": "y < 0",
+    "source": "osm"
+   },
+   {
+    "name": "Kreisel Ortsstraße/Mörsbacher Straße/Am Dorfplatz",
+    "centre_xy": [
+     -42.22,
+     -0.07
+    ],
+    "distance_from_origin_m": 42.22,
+    "source": "osm"
+   }
+  ],
+  "passage": {
+   "id": "P1",
+   "name_de": "Durchgang (überbaut)",
+   "x_range": [
+    24.66,
+    27.62
+   ],
+   "clear_width": {
+    "v": 2.87,
+    "sigma_m": 0.33,
+    "source": "mesh"
+   },
+   "floor": {
+    "v": -0.65,
+    "sigma_m": 0.08,
+    "source": "mesh+dgm1"
+   },
+   "note_de": "öffentlich nur bis zur Ladentür (Rahmen B y ≤ 1,60); der hintere Teil ist privat",
+   "public_until_y": 1.6
+  },
+  "fixtures": [
+   {
+    "id": "X1",
+    "type": "schrank",
+    "name_de": "Abholschrank (außen)",
+    "pose": null,
+    "size": {
+     "l": 0.95,
+     "d": 0.4,
+     "h": 1.7
+    },
+    "source": "mesh+video",
+    "sigma_m": 0.39,
+    "status": "nur_privat",
+    "note_de": "steht im privaten Teil des Durchgangs: Lage nur im privaten Plan"
+   },
+   {
+    "id": "X2",
+    "type": "wandmalerei",
+    "name_de": "Wandmalerei über Pavillon",
+    "status": "unbestaetigt",
+    "source": "nutzerangabe",
+    "pose": null,
+    "sigma_m": null,
+    "candidate": {
+     "wall": "L6/L7 (Südgiebel, Blickrichtung 205,7° genau auf den Kreisel)",
+     "xy": [
+      0.0,
+      3.4
+     ]
+    },
+    "note_de": "laut Nutzer vom Kreisel sichtbar (Google Maps); nicht im Video, kein Bild vorhanden – Lage am Südgiebel nur vermutet"
+   }
+  ]
+ },
+ "levels": [
+  {
+   "id": "EG",
+   "name_de": "Erdgeschoss",
+   "z": 0.0,
+   "rooms": [
+    {
+     "id": "R1",
+     "name_de": "Verkaufsraum",
+     "status": "erfasst",
+     "source": "mesh",
+     "floor": {
+      "v": 0.0,
+      "sigma_m": 0.1,
+      "source": "mesh+dgm1",
+      "h_nhn": 244.25
+     },
+     "ceiling": {
+      "v": 2.28,
+      "sigma_m": 0.26,
+      "source": "mesh",
+      "note": "abgehängte Platten; Sturz über Schaufenstern ≈ 2,05"
+     },
+     "area": {
+      "v": 25.87,
+      "sigma_m": 5.74,
+      "source": "mesh",
+      "unit": "m2"
+     },
+     "points": {
+      "A": {
+       "xy": [
+        16.77,
+        0.62
+       ],
+       "sigma_m": 0.89,
+       "source": "mesh"
+      },
+      "B": {
+       "xy": [
+        21.76,
+        0.62
+       ],
+       "sigma_m": 0.37,
+       "source": "mesh"
+      },
+      "C": {
+       "xy": [
+        21.76,
+        1.52
+       ],
+       "sigma_m": 0.4,
+       "source": "mesh"
+      },
+      "D": {
+       "xy": [
+        24.24,
+        1.52
+       ],
+       "sigma_m": 0.24,
+       "source": "mesh"
+      },
+      "E": {
+       "xy": [
+        24.24,
+        4.11
+       ],
+       "sigma_m": 0.49,
+       "source": "mesh"
+      },
+      "F": {
+       "xy": [
+        22.11,
+        4.11
+       ],
+       "sigma_m": 0.56,
+       "source": "mesh"
+      },
+      "G": {
+       "xy": [
+        21.59,
+        4.63
+       ],
+       "sigma_m": 0.64,
+       "source": "mesh"
+      },
+      "H": {
+       "xy": [
+        20.65,
+        5.57
+       ],
+       "sigma_m": 0.78,
+       "source": "mesh"
+      },
+      "I": {
+       "xy": [
+        20.266,
+        5.954
+       ],
+       "sigma_m": 0.84,
+       "source": "mesh"
+      },
+      "K": {
+       "xy": [
+        16.77,
+        2.458
+       ],
+       "sigma_m": 0.93,
+       "source": "mesh"
+      }
+     },
+     "polygon": [
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "K"
+     ],
+     "walls": [
+      {
+       "id": "W1",
+       "from": "A",
+       "to": "B",
+       "kind": "aussen",
+       "face": "innen",
+       "length": {
+        "v": 4.99,
+        "sigma_m": 0.56,
+        "source": "mesh"
+       },
+       "name_de": "Fassade (Schaufensterseite)",
+       "lod2_edge": "L5",
+       "thickness": {
+        "v": 0.62,
+        "sigma_m": 0.1,
+        "source": "mesh",
+        "note": "Außenfläche = LoD2 (survey-fest), Innenfläche aus Mesh"
+       },
+       "survey_fixed": true
+      },
+      {
+       "id": "W2",
+       "from": "B",
+       "to": "C",
+       "kind": "glaswand",
+       "face": "innen",
+       "length": {
+        "v": 0.9,
+        "sigma_m": 0.11,
+        "source": "mesh"
+       },
+       "name_de": "Glas-Seitenwand zum Eingangsvorbau",
+       "note": "Rahmen u = 21,76..21,83"
+      },
+      {
+       "id": "W3",
+       "from": "C",
+       "to": "D",
+       "kind": "glasfront",
+       "face": "innen",
+       "length": {
+        "v": 2.48,
+        "sigma_m": 0.28,
+        "source": "mesh"
+       },
+       "name_de": "Ladenfront Glas mit Tür"
+      },
+      {
+       "id": "W4",
+       "from": "D",
+       "to": "E",
+       "kind": "aussen",
+       "face": "innen",
+       "length": {
+        "v": 2.59,
+        "sigma_m": 0.29,
+        "source": "mesh"
+       },
+       "name_de": "Nordwand (zum Durchgang)",
+       "lod2_edge": "L3",
+       "thickness": {
+        "v": 0.48,
+        "sigma_m": 0.09,
+        "source": "mesh",
+        "note": "LoD2-Außenfläche minus Mesh-Innenfläche"
+       },
+       "survey_fixed": true
+      },
+      {
+       "id": "W5",
+       "from": "E",
+       "to": "F",
+       "kind": "innen",
+       "face": "innen",
+       "length": {
+        "v": 2.13,
+        "sigma_m": 0.24,
+        "source": "mesh"
+       },
+       "name_de": "Rückwand Café",
+       "thickness": null,
+       "note": "Rückseite nicht erfasst"
+      },
+      {
+       "id": "W6",
+       "from": "F",
+       "to": "I",
+       "kind": "innen",
+       "face": "innen",
+       "length": {
+        "v": 2.61,
+        "sigma_m": 0.29,
+        "source": "mesh"
+       },
+       "name_de": "Diagonalwand rechts (45°)",
+       "thickness": null,
+       "note": "enthält Öffnung O6"
+      },
+      {
+       "id": "W7",
+       "from": "I",
+       "to": "K",
+       "kind": "innen",
+       "face": "innen",
+       "length": {
+        "v": 4.94,
+        "sigma_m": 0.55,
+        "source": "mesh"
+       },
+       "name_de": "Diagonalwand hinter Theke (Brotregal, 45°)",
+       "thickness": null
+      },
+      {
+       "id": "W8",
+       "from": "K",
+       "to": "A",
+       "kind": "innen",
+       "face": "innen",
+       "length": {
+        "v": 1.84,
+        "sigma_m": 0.21,
+        "source": "mesh"
+       },
+       "name_de": "Seitenwand SW",
+       "thickness": null,
+       "note": "enthält Öffnung O7 (geschätzt)"
+      }
+     ],
+     "openings": [
+      {
+       "id": "O1",
+       "type": "fenster",
+       "wall": "W1",
+       "from": [
+        16.85,
+        0.0
+       ],
+       "to": [
+        18.55,
+        0.0
+       ],
+       "width": {
+        "v": 1.7,
+        "sigma_m": 0.28,
+        "source": "mesh"
+       },
+       "name_de": "Schaufenster 1",
+       "sill": {
+        "v": 0.05,
+        "sigma_m": 0.1,
+        "source": "mesh",
+        "ref": "FFB"
+       },
+       "head": {
+        "v": 1.9,
+        "sigma_m": 0.25,
+        "source": "mesh",
+        "ref": "FFB"
+       },
+       "note": "SW-Laibung unscharf (Glas/Spiegelung)"
+      },
+      {
+       "id": "O2",
+       "type": "fenster",
+       "wall": "W1",
+       "from": [
+        19.12,
+        0.0
+       ],
+       "to": [
+        21.23,
+        0.0
+       ],
+       "width": {
+        "v": 2.11,
+        "sigma_m": 0.24,
+        "source": "mesh"
+       },
+       "name_de": "Schaufenster 2",
+       "sill": {
+        "v": 0.05,
+        "sigma_m": 0.1,
+        "source": "mesh",
+        "ref": "FFB"
+       },
+       "head": {
+        "v": 1.9,
+        "sigma_m": 0.25,
+        "source": "mesh",
+        "ref": "FFB"
+       }
+      },
+      {
+       "id": "O3",
+       "type": "eingang_vorbau",
+       "wall": null,
+       "from": [
+        21.83,
+        0.0
+       ],
+       "to": [
+        24.4,
+        0.0
+       ],
+       "width": {
+        "v": 2.57,
+        "sigma_m": 0.29,
+        "source": "mesh"
+       },
+       "name_de": "Eingang (offener Vorbau, Straßenseite)",
+       "head": {
+        "v": 2.0,
+        "sigma_m": 0.25,
+        "source": "mesh",
+        "ref": "FFB",
+        "note": "Bogen, Scheitel ≈ 2,0"
+       }
+      },
+      {
+       "id": "O4",
+       "type": "tuer",
+       "wall": "W3",
+       "from": [
+        21.76,
+        1.52
+       ],
+       "to": [
+        24.24,
+        1.52
+       ],
+       "width": {
+        "v": 2.48,
+        "sigma_m": 0.28,
+        "source": "mesh"
+       },
+       "name_de": "Ladentür (Glasfront, zweiflüglig)",
+       "note": "Breite = ganze Glasfront; lichte Türbreite und Flügel nicht bestimmt"
+      },
+      {
+       "id": "O5",
+       "type": "durchgang",
+       "wall": null,
+       "from": [
+        24.44,
+        0.45
+       ],
+       "to": [
+        24.44,
+        1.52
+       ],
+       "width": {
+        "v": 1.07,
+        "sigma_m": 0.18,
+        "source": "mesh"
+       },
+       "name_de": "Vorbau seitlich offen zum Durchgang"
+      },
+      {
+       "id": "O6",
+       "type": "durchgang",
+       "wall": "W6",
+       "from": [
+        21.59,
+        4.63
+       ],
+       "to": [
+        20.65,
+        5.57
+       ],
+       "width": {
+        "v": 1.33,
+        "sigma_m": 0.19,
+        "source": "mesh"
+       },
+       "name_de": "Durchgang hinten (Lager/Backstube, nicht erfasst)",
+       "clear_width": {
+        "v": 0.94,
+        "sigma_m": 0.15,
+        "source": "mesh"
+       },
+       "leads_to": "R-nicht-erfasst",
+       "note": "Flur 0,94 breit bis y = 7,14, dort Tür (Türblatt im Video)"
+      },
+      {
+       "id": "O7",
+       "type": "durchgang",
+       "wall": "W8",
+       "from": [
+        16.77,
+        1.5
+       ],
+       "to": [
+        16.77,
+        2.35
+       ],
+       "width": {
+        "v": 0.85,
+        "sigma_m": 0.43,
+        "source": "photo+mesh"
+       },
+       "name_de": "Durchgang Backstube (nicht erfasst)",
+       "status": "geschaetzt",
+       "leads_to": "R-nicht-erfasst",
+       "note": "Foto zeigt Öffnung links hinter dem Gitterregal; im Mesh ist die Wand geschlossen (Türblatt?)"
+      }
+     ],
+     "fixtures": [
+      {
+       "id": "F1",
+       "type": "theke",
+       "name_de": "Theke mit Vitrine",
+       "pose": {
+        "xy": [
+         18.47,
+         0.764
+        ],
+        "z": 0.0,
+        "rot_deg": 45.0
+       },
+       "size": {
+        "l": 4.25,
+        "d": 1.09,
+        "h": 1.27
+       },
+       "source": "mesh",
+       "sigma_m": 0.71,
+       "status": "geschaetzt",
+       "parts": [
+        {
+         "id": "sockel",
+         "h": {
+          "v": 0.65,
+          "sigma_m": 0.1,
+          "source": "mesh"
+         },
+         "note_de": "dunkelroter Sockel, Granitablage kundenseitig"
+        },
+        {
+         "id": "vitrine",
+         "h": {
+          "v": 1.27,
+          "sigma_m": 0.2,
+          "source": "mesh"
+         },
+         "note_de": "Glasaufsatz, 2 Ebenen (Foto); im Mesh kaum vorhanden"
+        }
+       ],
+       "front": "kundenseite = +y_lokal gedreht (Seite zur Ladenfront)",
+       "note_de": "SW-Ende gerundet (Foto/Video)",
+       "length": {
+        "v": 4.25,
+        "sigma_m": 0.5,
+        "source": "mesh"
+       },
+       "depth": {
+        "v": 1.09,
+        "sigma_m": 0.14,
+        "source": "mesh"
+       },
+       "slots": [
+        {
+         "id": "vitrine-oben",
+         "z": 1.05,
+         "l": 3.950000000000002,
+         "d": 0.5
+        },
+        {
+         "id": "vitrine-unten",
+         "z": 0.75,
+         "l": 3.950000000000002,
+         "d": 0.6
+        }
+       ]
+      },
+      {
+       "id": "F2",
+       "type": "regal",
+       "name_de": "Brotregal (Messing, schräge Stangenböden)",
+       "pose": {
+        "xy": [
+         17.402,
+         2.468
+        ],
+        "z": 0.0,
+        "rot_deg": 45.0
+       },
+       "size": {
+        "l": 4.25,
+        "d": 0.44,
+        "h": 2.0
+       },
+       "source": "mesh+photo",
+       "sigma_m": 0.87,
+       "status": "geschaetzt",
+       "length": {
+        "v": 4.25,
+        "sigma_m": 0.55,
+        "source": "mesh"
+       },
+       "slots": [
+        {
+         "id": "ebene-0",
+         "z": 0.55,
+         "l": 4.25,
+         "d": 0.4,
+         "neigung_deg": 25,
+         "note_de": "Körbe mit Brötchen"
+        },
+        {
+         "id": "ebene-1",
+         "z": 0.95,
+         "l": 4.25,
+         "d": 0.4,
+         "neigung_deg": 25,
+         "note_de": "Boden 1"
+        },
+        {
+         "id": "ebene-2",
+         "z": 1.25,
+         "l": 4.25,
+         "d": 0.4,
+         "neigung_deg": 25,
+         "note_de": "Boden 2"
+        },
+        {
+         "id": "ebene-3",
+         "z": 1.55,
+         "l": 4.25,
+         "d": 0.4,
+         "neigung_deg": 25,
+         "note_de": "Boden 3"
+        },
+        {
+         "id": "ebene-4",
+         "z": 1.85,
+         "l": 4.25,
+         "d": 0.4,
+         "neigung_deg": 25,
+         "note_de": "Boden 4"
+        }
+       ],
+       "note_de": "Wandseitig, gegenüber der Theke; Preisschilder auf Schienen (Foto)"
+      },
+      {
+       "id": "F3",
+       "type": "regal",
+       "name_de": "Gitterregal (Brottüten)",
+       "pose": {
+        "xy": [
+         17.22,
+         0.8
+        ],
+        "z": 0.0,
+        "rot_deg": 90.0
+       },
+       "size": {
+        "l": 0.65,
+        "d": 0.45,
+        "h": 1.8
+       },
+       "source": "photo",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "note_de": "laut Foto links, vor dem Durchgang Backstube; Lage geschätzt"
+      },
+      {
+       "id": "F4",
+       "type": "werbetafel",
+       "name_de": "Zeitungs-Werbetafel",
+       "pose": {
+        "xy": [
+         21.461,
+         3.359
+        ],
+        "z": 0.0,
+        "rot_deg": 45.0
+       },
+       "size": {
+        "l": 0.35,
+        "d": 0.25,
+        "h": 1.2
+       },
+       "source": "photo+mesh",
+       "sigma_m": 0.6,
+       "status": "geschaetzt",
+       "note_de": "am rechten (NO-)Ende der Theke, Kundenseite"
+      },
+      {
+       "id": "F5",
+       "type": "tisch",
+       "name_de": "Bistrotisch (Café)",
+       "pose": {
+        "xy": [
+         20.95,
+         1.3
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.6,
+        "d": 0.6,
+        "h": 0.75
+       },
+       "source": "mesh+video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "form": "rund"
+      },
+      {
+       "id": "F6",
+       "type": "tisch",
+       "name_de": "Bistrotisch (Café)",
+       "pose": {
+        "xy": [
+         23.0,
+         2.75
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.6,
+        "d": 0.6,
+        "h": 0.75
+       },
+       "source": "mesh+video",
+       "sigma_m": 0.5,
+       "status": "geschaetzt",
+       "form": "rund"
+      },
+      {
+       "id": "F7",
+       "type": "regal",
+       "name_de": "Warenregal / Kühlschrank",
+       "pose": {
+        "xy": [
+         22.25,
+         3.71
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 1.99,
+        "d": 0.4,
+        "h": 1.9
+       },
+       "source": "mesh+video",
+       "sigma_m": 0.4,
+       "status": "geschaetzt",
+       "note_de": "an der Café-Rückwand (Video)"
+      },
+      {
+       "id": "F8",
+       "type": "leuchte",
+       "name_de": "Pendelleuchte",
+       "pose": {
+        "xy": [
+         19.198,
+         2.298
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.25,
+        "d": 0.25,
+        "h": null
+       },
+       "source": "photo",
+       "sigma_m": 0.6,
+       "status": "geschaetzt",
+       "z_mount": "Decke"
+      },
+      {
+       "id": "F9",
+       "type": "leuchte",
+       "name_de": "Pendelleuchte",
+       "pose": {
+        "xy": [
+         20.259,
+         3.359
+        ],
+        "z": 0.0,
+        "rot_deg": 0.0
+       },
+       "size": {
+        "l": 0.25,
+        "d": 0.25,
+        "h": null
+       },
+       "source": "photo",
+       "sigma_m": 0.6,
+       "status": "geschaetzt",
+       "z_mount": "Decke"
+      },
+      {
+       "id": "F10",
+       "type": "decke",
+       "name_de": "Abhängung Holz mit roter Kante (über Theke)",
+       "pose": {
+        "xy": [
+         18.738,
+         0.919
+        ],
+        "z": 0.0,
+        "rot_deg": 45.0
+       },
+       "size": {
+        "l": 4.5,
+        "d": 2.48,
+        "h": null
+       },
+       "source": "photo+mesh",
+       "sigma_m": 0.6,
+       "status": "geschaetzt",
+       "underside": {
+        "v": 2.0,
+        "sigma_m": 0.25,
+        "source": "mesh",
+        "ref": "FFB",
+        "note": "Abhängung 1,9-2,1 im Mesh, unsicher"
+       }
+      }
+     ],
+     "zones": [
+      {
+       "id": "Z1",
+       "name_de": "Kundenbereich / Café",
+       "note_de": "zwischen Ladenfront, Fenstern und Theke"
+      },
+      {
+       "id": "Z2",
+       "name_de": "Gang hinter der Theke",
+       "width": {
+        "v": 0.87,
+        "sigma_m": 0.12,
+        "source": "mesh"
+       }
+      },
+      {
+       "id": "Z3",
+       "name_de": "Arbeitsplatz am Schaufenster 1 (Brotschneidemaschine)",
+       "status": "geschaetzt"
+      }
+     ],
+     "notes_de": [
+      "Fußboden hinter der Theke im SW-Teil evtl. +0,15..0,20 (Podest?) – Spiegelboden, unsicher"
+     ]
+    },
+    {
+     "id": "R-vorbau",
+     "name_de": "Eingangsvorbau (offen)",
+     "status": "erfasst",
+     "source": "mesh",
+     "polygon_xy": [
+      [
+       21.83,
+       0.0
+      ],
+      [
+       24.4,
+       0.0
+      ],
+      [
+       24.4,
+       0.45
+      ],
+      [
+       24.677075171869717,
+       0.45
+      ],
+      [
+       24.687612757804576,
+       1.52
+      ],
+      [
+       21.83,
+       1.52
+      ]
+     ],
+     "stairs": [
+      {
+       "id": "S1",
+       "type": "treppe",
+       "name_de": "Eingangsstufen",
+       "from_v": 0.0,
+       "to_v": 1.24,
+       "x_range": [
+        21.83,
+        24.4
+       ],
+       "risers": 5,
+       "rise": {
+        "v": 0.14,
+        "sigma_m": 0.02,
+        "source": "mesh"
+       },
+       "tread": {
+        "v": 0.31,
+        "sigma_m": 0.04,
+        "source": "mesh"
+       },
+       "total_rise": {
+        "v": 0.72,
+        "sigma_m": 0.08,
+        "source": "mesh+dgm1"
+       },
+       "landing": {
+        "v": 0.28,
+        "sigma_m": 0.06,
+        "source": "mesh"
+       }
+      }
+     ]
+    },
+    {
+     "id": "R-nicht-erfasst",
+     "name_de": null,
+     "status": "nicht_erfasst",
+     "note_de": "Rest des LoD2-Grundrisses (Backstube, Lager, Wohnteil); Umriss = LoD2 minus R1/R-vorbau"
+    }
+   ]
+  }
+ ],
+ "variants": [
+  {
+   "id": "bestand-2026",
+   "name_de": "Bestand Nov. 2026",
+   "base": null,
+   "patches": []
+  }
+ ],
+ "fixture_frame": "Fixture-Ursprung = vordere Ecke am Anfang der Länge (Zugangsseite: Kunde bzw. Gang), x entlang l, y von der Vorderkante in die Tiefe d, z nach oben ab pose.z; rot_deg = Winkel von x_fixture gegen x_B (gegen den Uhrzeigersinn). Runde Tische: Ursprung = Mitte.",
+ "catalogue_placements": [
+  {
+   "example": true,
+   "item": "katalog:holzofen-bauernlandbrot",
+   "fixture": "F2",
+   "slot": "ebene-3",
+   "s": 0.4,
+   "count": 6,
+   "note": "s = Lage entlang des Fixtures (0..1 von dessen Ursprung); Höhe/Neigung kommt vom Slot"
+  }
+ ],
+ "measurements": "messliste.md (A–J); Ergebnisse als source=tape-Werte hier eintragen und scale.factor setzen",
+ "privacy": {
+  "version": "public",
+  "rule": "bh-datenschutz: Einwilligung = Laden + Außenansicht; nichts hinter der Ladentür im Durchgang, keine Privatbereiche",
+  "passage_public_until_y": 1.6,
+  "full_version": "privater Materialordner (lokal, nicht im Repo)"
+ }
+}

@@ -13,7 +13,7 @@ import { el } from '../../shell/dom';
 import { isTyping } from '../../ui/keys';
 import { modalOpen } from '../../ui/modalKeys';
 import type { EN, ZoneManifest } from '../contract';
-import { loadZones } from '../contract';
+import { loadZones, zoneBadge_de } from '../contract';
 import type { ZoneSessionState } from '../session';
 import type { ZoneModule } from './api';
 import { builtinZones, builtinZonesEnabled } from './builtin';
@@ -141,7 +141,7 @@ function aoiBbox(ctx: AppContext): [EN, EN] {
   ];
 }
 
-const evidenceBadge = (z: ZoneManifest) => (z.evidence.kind === 'capture' ? 'Aufnahme' : 'Hypothese');
+const evidenceBadge = zoneBadge_de;
 
 export function mountZones(h: FeatureHost): () => void {
   const { ctx, shell } = h;

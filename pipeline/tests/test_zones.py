@@ -111,3 +111,39 @@ def test_capture_scale():
     bad = "capture.scale: invalid (factor 0.5-2, pivotLocal [x, y, z])"
     assert bad in Z.validate_manifest(_captured({"factor": 3, "pivotLocal": [0, 0, 0]}))
     assert bad in Z.validate_manifest(_captured({"factor": 1, "pivotLocal": [0, 0]}))
+
+
+def _twin(**over) -> dict:
+    """A built twin (ADR 0042): twin scene + nav collider + the capture as hidden reference, `twin` block."""
+    m = _captured({"factor": 1.0, "pivotLocal": [8.39, 243.51, -4.97]})
+    scene = m["assets"][0]
+    m["assets"] = [
+        {**scene, "id": "twin"},
+        {"id": "nav", "role": "collider", "lods": [{"path": "built/nav.glb", "until_m": None, "bytes": 10, "triangles": 2}]},
+        {**scene, "id": "referenz", "role": "reference"},
+    ]
+    m["evidence"]["perPart"] = "extras"
+    m["twin"] = {"method": "built-from-plan", "plan": "sle-raumplan/0.1", "planVersion": "v0", "catalogue": "bh-catalogue-v1",
+                 "scaleFactor": 1.0, "nav": "nav", "referenceScale": {"factor": 1.04, "pivotLocal": [8.39, 243.51, -4.97]}}
+    m["twin"].update(over)
+    return m
+
+
+def test_built_twin():
+    assert Z.validate_manifest(_twin()) == []
+    m = _twin()
+    del m["twin"]  # a reference asset is valid without the twin block too (forward compatible)
+    assert Z.validate_manifest(m) == []
+    assert "twin.nav must name a collider asset" in Z.validate_manifest(_twin(nav="referenz"))
+    assert any(e.startswith("twin: invalid") for e in Z.validate_manifest(_twin(scaleFactor=3)))
+    assert any(e.startswith("twin.referenceScale") for e in Z.validate_manifest(_twin(referenceScale={"factor": 1})))
+    m = _twin()
+    m["capture"]["scale"]["factor"] = 1.04  # the twin is true scale: the reference factor lives in twin.referenceScale
+    assert any("capture.scale.factor must be 1" in e for e in Z.validate_manifest(m))
+    m = _twin()
+    m["kind"], m["evidence"]["kind"] = "reconstructed", "hypothesis"
+    del m["capture"]
+    assert "twin: an object, only for captured zones" in Z.validate_manifest(m)
+    m = _twin()
+    m["assets"][1]["role"] = "splat"
+    assert any(e.endswith("unknown role") for e in Z.validate_manifest(m))

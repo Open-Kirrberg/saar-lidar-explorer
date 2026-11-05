@@ -36,5 +36,6 @@ The repo and the explorer are **public**. The owners agreed to show **the shop (
 4. Zone package (if re-packaged): in the app, look at the spawn, the shop, the passage door and the walk end, plus a top view (headless, screenshots in the git-ignored `docs/shots/baeckerei-heusser/`). Check that nothing beyond the passage door shows, and no person, plate or name is readable. After every `mesh` or `export` run, also look at the texture atlas (all tiles).
 5. Variants: only those the owners released (`variants/README.md`).
 6. Public release (GitHub Pages / data repo): only through `scripts/release/` and its review (`scripts/release/RELEASING.md`), with this checklist ticked in the release notes.
+7. Raumplan and generators: `python3 -I zones/baeckerei-heusser/plan/check_plan.py` (public plan + source scan of `plan/` and `build/`). Private facts (beyond the passage door) go only into the private folder's `plan/work/private_facts.json`, never into scripts, tests or docs. The capture (`reference` assets, `scene/`) never goes into a public export (ADR 0043).
 
 If something private turns up in a published artifact: remove it from the package (crop or mask, then re-package), tell the user right away, and note it in the commit message. Don't wait for the next round.

@@ -1,14 +1,19 @@
 /**
  * V2.8b: pure planning for the generic `gltf` zone runtime (gltfZone.ts): which LOD each asset wants, the
  * load → show → drop order (coarse first, the shown level stays until the next one is ready), which meshes
- * collide, and the `capture.scale` correction. No three.js, no DOM.
+ * collide, and the `capture.scale` correction. Built twins (ADR 0042): `reference` assets, the nav hole policy,
+ * the radial context fade, the *Referenz* debug switch. No three.js, no DOM.
  */
 import type { Pose, Vec3, ZoneAsset, ZoneCaptureScale, ZoneManifest } from '../contract';
+import type { HolePolicy } from './walk';
 import { pickLod } from '../portal';
 import type { ZoneQuality } from './api';
 
 /** Assets the runtime draws (`scene`, valid LOD chain). Unknown roles were dropped by the parser. */
 export const sceneAssets = (m: Pick<ZoneManifest, 'assets'>): ZoneAsset[] => m.assets.filter((a) => a.role === 'scene' && a.lods.length > 0);
+
+/** `reference` assets of a built twin (the capture): drawn only on request, never collide, not in the first view. */
+export const referenceAssets = (m: Pick<ZoneManifest, 'assets'>): ZoneAsset[] => m.assets.filter((a) => a.role === 'reference' && a.lods.length > 0);
 
 /** Contract: colliders are `collider` assets; without one, the scene assets' coarsest LOD (the first loaded). */
 export function colliderPlan(m: Pick<ZoneManifest, 'assets'>): { asset: ZoneAsset; lod: number; drawn: boolean }[] {
@@ -90,4 +95,58 @@ export function firstViewWeights(assets: readonly ZoneAsset[]): number[] {
   const bytes = assets.map((a) => a.lods[a.lods.length - 1]!.bytes ?? 0);
   const sum = bytes.reduce((s, b) => s + b, 0);
   return sum > 0 ? bytes.map((b) => b / sum) : assets.map(() => 1 / Math.max(1, assets.length));
+}
+
+/**
+ * Hole policy of the walker: a built twin whose collider is its exact nav floor (`twin.nav`) blocks at the
+ * floor's edge; captured meshes (noisy, with holes) keep the height and walk on.
+ */
+export function walkHoles(m: Pick<ZoneManifest, 'assets' | 'twin'>): HolePolicy {
+  const nav = m.twin?.nav;
+  if (!nav) return 'keep';
+  const plan = colliderPlan(m);
+  return plan.length > 0 && plan.every((c) => c.asset.id === nav) ? 'block' : 'keep';
+}
+
+/** Radial fade of a built twin's context into the horizon haze (zone frame x/z, metres). */
+export interface TwinFade {
+  cx: number;
+  cz: number;
+  /** Fully visible within r0, fully haze at r1 (just inside the ground patch edge). */
+  r0: number;
+  r1: number;
+}
+
+/**
+ * Fade circle for the first `scene` asset's `bboxLocal` (the twin with its ground patch): centred on the
+ * patch, r1 = 95 % of the smaller half extent (the square patch edge never shows), r0 = r1 − max(8 m, 40 % r1).
+ * Null without a twin or a bbox (no fade, as before).
+ */
+export function twinFade(m: Pick<ZoneManifest, 'assets' | 'twin'>): TwinFade | null {
+  if (!m.twin) return null;
+  const b = sceneAssets(m).find((a) => a.bboxLocal)?.bboxLocal;
+  if (!b) return null;
+  const half = Math.min(b[1][0] - b[0][0], b[1][2] - b[0][2]) / 2;
+  if (!(half > 2)) return null;
+  const r1 = 0.95 * half;
+  const r0 = Math.max(0.5, r1 - Math.max(8, 0.4 * r1));
+  return { cx: (b[0][0] + b[1][0]) / 2, cz: (b[0][2] + b[1][2]) / 2, r0, r1 };
+}
+
+/** Fade weight 0 (clear) … 1 (haze) at (x, z): smoothstep(r0, r1, distance), as the shader. */
+export function fadeAt(f: TwinFade, x: number, z: number): number {
+  const d = Math.hypot(x - f.cx, z - f.cz);
+  const t = Math.min(1, Math.max(0, (d - f.r0) / (f.r1 - f.r0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * *Referenz* debug switch (URL `?referenz`, built twins with a `reference` asset only): `off` = no button,
+ * `hidden` = button, capture hidden (default), `shown` = `?referenz=an|1|ja` shows it on enter.
+ */
+export function referenceMode(search: string, hasReference: boolean): 'off' | 'hidden' | 'shown' {
+  if (!hasReference) return 'off';
+  const q = new URLSearchParams(search);
+  if (!q.has('referenz')) return 'off';
+  return ['an', '1', 'ja', 'true'].includes((q.get('referenz') ?? '').toLowerCase()) ? 'shown' : 'hidden';
 }

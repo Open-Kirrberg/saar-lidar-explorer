@@ -22,4 +22,4 @@ Zone #2 is a photogrammetry mesh from one handheld video (V2.8). It walks, but g
 - ✅ The visible scene carries no capture texture, which removes most privacy risk.
 - ⚠️ Building is manual work per object class. The catalogue, style rules and four zone skills (`bh-*`) keep it repeatable.
 - ⚠️ Until the built twin ships, the cropped capture stays the zone's visible scene (V2.8 runtime).
-- ⏳ The contract has kinds `reconstructed` (hypothesis) and `captured`. A measured, built twin fits neither evidence kind exactly. Decide (additive contract change) when the first built package exists.
+- ✅ The contract has kinds `reconstructed` (hypothesis) and `captured`. A measured, built twin fits neither exactly: decided in [0043](0043-built-twin-package-reference-nav.md) (stays `captured`, additive `twin` block, asset role `reference`, walking on a nav floor).

@@ -1,0 +1,59 @@
+{
+  "format": "sle-zone-v1",
+  "id": "twin-fixture",
+  "kind": "captured",
+  "name_de": "Testladen",
+  "summary_de": "Synthetischer Nachbau im Fixture-Gebiet (keine echten Daten).",
+  "crs": "EPSG:25832",
+  "heightDatum": "DHHN2016",
+  "origin": { "E0": 382000, "N0": 5466000 },
+  "footprint": [[382580, 5466580], [382620, 5466580], [382620, 5466620], [382580, 5466620]],
+  "portals": [
+    { "id": "strasse", "label_de": "Laden betreten", "E": 382600, "N": 5466570, "h": null,
+      "radius_m": 40, "facing_deg": 0, "spawn": "strasse" }
+  ],
+  "spawns": {
+    "strasse": { "E": 382600, "N": 5466585, "h": 301.7, "heading_deg": 0, "pitch_deg": -3, "mode": "gehen" }
+  },
+  "exit": { "rule": "restore" },
+  "runtime": { "kind": "gltf" },
+  "assets": [
+    { "id": "twin", "role": "scene", "bboxLocal": [[570, 290, -630], [630, 310, -570]],
+      "lods": [{ "path": "built/twin.glb", "until_m": null, "bytes": 500000, "triangles": 24000 }] },
+    { "id": "nav", "role": "collider", "bboxLocal": [[590, 299, -610], [610, 302, -590]],
+      "lods": [{ "path": "built/nav.glb", "until_m": null, "bytes": 40000, "triangles": 2000 }] },
+    { "id": "referenz", "role": "reference", "bboxLocal": [[590, 299, -610], [610, 304, -590]],
+      "lods": [
+        { "path": "scene/medium.glb", "until_m": 60, "bytes": 2000000, "triangles": 90000 },
+        { "path": "scene/reduced.glb", "until_m": null, "bytes": 1000000, "triangles": 45000 }
+      ] }
+  ],
+  "preset": { "look": "natur", "sky": "shared", "trees": "none", "timeOfDay": "now" },
+  "attribution": ["Testladen, eigenes Werk (synthetisch)"],
+  "evidence": {
+    "kind": "capture",
+    "confidence": "med",
+    "perPart": "extras",
+    "sources_de": ["keine (Testdaten)"],
+    "disclaimer_de": "Nachbau, kein Foto (Testdaten)."
+  },
+  "capture": {
+    "date": "2026-11-04",
+    "method": "photogrammetry-mesh",
+    "georef": { "method": "lod2-walls+dgm1", "controlPoints": 1, "rmsError_m": 0.16 },
+    "privacy": "synthetisch",
+    "scale": { "factor": 1.0, "pivotLocal": [600, 300, -600], "source": "camera-height", "relUncertainty": 0.11 }
+  },
+  "twin": {
+    "method": "built-from-plan",
+    "plan": "sle-raumplan/0.1",
+    "planVersion": "v0",
+    "catalogue": "bh-catalogue-v1",
+    "scaleFactor": 1.0,
+    "nav": "nav",
+    "referenceScale": { "factor": 1.04, "pivotLocal": [600, 300, -600] }
+  },
+  "budget": { "downloadBytes": 540000, "totalBytes": 3540000, "triangles": 24000, "textureBytesGpu": 0 },
+  "generated": "2026-11-05T00:00:00Z",
+  "generator": "hand-written fixture"
+}

@@ -23,6 +23,18 @@ Colours are taken from the real shop and then simplified. Values are sRGB, and t
 | `glas` | `#CFE6EA` at 25–35 % opacity | Display glass, fridge door, shop window (no reflections) |
 | `fassade` / `sockel` | `#E7DFD2` / `#8C5A4A` | Exterior render / sandstone plinth |
 
+Generator-only tokens (same family): `granit-dunkel` `#6A6B6C`, `fliese-fuge` `#DCD6CC`, `decke-raster` `#CFCAC0`, `lampe` `#FFE2BF` (the lit diffuser of the pendant lamps).
+
+**Context** (around the shop, sampled from the orthophoto and then simplified; `../build/bh_twin/shade.py`):
+
+| Token | Hex | Used for |
+|---|---|---|
+| `dach` | `#A0675A` | LoD2 roofs (neighbours ± 10 % brightness, seeded by the building id) |
+| `nachbar-1` / `nachbar-2` / `nachbar-3` | `#E9E3D8` / `#E2D6C2` / `#D9D4CB` | Neighbour walls (picked per LoD2 id) |
+| `asphalt` / `gehweg` | `#8E8C8D` / `#C8C2B8` | Carriageway (OSM buffers) / pavement and the passage mouth |
+| `gelaende` / `erde` | `#9FAA80` / `#8C7A66` | DGM1 ground patch / its skirt |
+| `schatten` | `#4A4440` | Reserved for deep shade. The plain end wall where the public part of the passage ends (privacy line) is `nachbar-2` with a baked shade gradient (darker at the floor): a flat dark slab there read as a hole or a garage door |
+
 Use a new colour only after sampling it from a reference photo, then add it here. Keep saturation moderate (the comic look comes from shapes, not from neon colours).
 
 ## Shapes and edges
@@ -35,7 +47,7 @@ Use a new colour only after sampling it from a reference photo, then add it here
 ## Light and shading
 
 - **Warm and inviting.** The key light is warm white (≈ 3200 K, `#FFE2BF`). Add a soft sky or hemisphere fill (cool `#DDE6F0` above, warm `#E8D8C4` below), and give the pendant lamps a small warm glow.
-- **Shading:** flat or soft Lambert, or a 3-step toon ramp. Use no PBR texture maps and no glossy specular (keep at most a small, soft highlight on glass and brass). Baked or vertex AO grounds objects in corners and under the shelves.
+- **Shading:** flat or soft Lambert, or a 3-step toon ramp. *Round 2 (generator):* unlit materials (`KHR_materials_unlit`, base colour = token) × baked light in `COLOR_0` (soft Lambert from the warm key + hemisphere fill, times vertex AO); `NORMAL` stays in the file so a later renderer can relight. Use no PBR texture maps and no glossy specular (keep at most a small, soft highlight on glass and brass). Baked or vertex AO grounds objects in corners and under the shelves.
 - **Shadows:** soft and short. One shadow-casting light at most on the phone. Use blob or baked contact shadows for products.
 - **Tone mapping:** neutral, slightly lifted shadows. The scene should read as daytime, open shop.
 - **No photo textures** in the visible scene. Allowed are small procedural or hand-made patterns: tile grout, panel grid, wicker weave as a normal-free colour pattern, crust scoring as geometry or a decal.

@@ -4,6 +4,7 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-05 | twin | 🥖 Bäckerei Heusser round 2: *Raumplan* v0 (public, redacted; private facts only in the private folder), built stylised shell + street context from the plan, walker on an exact nav floor, capture as hidden `reference` asset (ADR 0043) |
 | 2026-11-05 | twin | 🥖 Bäckerei Heusser becomes a built digital twin: `zones/baeckerei-heusser/` (catalogue + schema + check, style rules, plan/variants stubs, 4 `bh-*` skills), zone id `bakery` → `baeckerei-heusser`, private passage end cropped from the capture (ADR 0042) |
 | 2026-11-04 | V2.8 | 🥖 Bäckerei Heusser as zone #2: capture tool `tools/capture/` (video → blurred frames → mesh → georeferenced zone package, ≈ 1.15 h per zone) + generic glTF zone runtime, walk on the captured mesh (ADR 0027, 0039, 0041) |
 | 2026-11-04 | perf | ⚡ Phone-proxy pass: castle Festsaal stall gone, castle under 1.5 M triangles, cold enter 18 s, ortho sharpness by screen need (ADR 0040) |

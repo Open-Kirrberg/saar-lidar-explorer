@@ -44,9 +44,16 @@ export interface ZoneLod {
   triangles?: number;
 }
 
+/**
+ * `scene` = drawn, `collider` = walk collision only (never drawn), `reference` = built twins (ADR 0042): the
+ * capture, hidden by default, never collides, outside the first-view budget.
+ */
+export type ZoneAssetRole = 'scene' | 'collider' | 'reference';
+export const ZONE_ASSET_ROLES: readonly ZoneAssetRole[] = ['scene', 'collider', 'reference'];
+
 export interface ZoneAsset {
   id: string;
-  role: 'scene' | 'collider';
+  role: ZoneAssetRole;
   bboxLocal?: [Vec3, Vec3];
   lods: ZoneLod[];
 }
@@ -88,6 +95,21 @@ export interface ZoneCapture {
   scale?: ZoneCaptureScale;
 }
 
+/** Built twin of a captured zone (ADR 0042, contract „twin“): the scene is generated from a measured plan. */
+export interface ZoneTwin {
+  method: 'built-from-plan';
+  plan: string;
+  planVersion: string;
+  /** Node `extras.id` refer to this catalogue. */
+  catalogue?: string;
+  /** The one scale factor the generator applied (0.5–2), info only. */
+  scaleFactor: number;
+  /** Id of the collider asset (walkable floor + edge fences); off its floor is a hole the walker does not cross. */
+  nav?: string;
+  /** Scale correction for the `reference` assets only (the capture's own factor). */
+  referenceScale?: ZoneCaptureScale;
+}
+
 export const SCALE_FACTOR_MIN = 0.5;
 export const SCALE_FACTOR_MAX = 2;
 
@@ -118,6 +140,8 @@ export interface ZoneManifest {
   attribution: string[];
   evidence: ZoneEvidence;
   capture: ZoneCapture | null;
+  /** Built twin (ADR 0042); null/absent for every other zone (optional so hand-made manifests stay valid). */
+  twin?: ZoneTwin | null;
   budget: ZoneBudget | null;
 }
 
@@ -221,7 +245,7 @@ function parseAsset(raw: unknown, i: number, seen: Set<string>, warn: (m: string
   if (!isObj(raw)) return warn(`${at}: not an object`), null;
   if (typeof raw.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(raw.id)) return warn(`${at}: invalid id`), null;
   if (seen.has(raw.id)) return warn(`${at}: duplicate id ${raw.id}`), null;
-  const role = oneOf(raw.role, ['scene', 'collider'] as const);
+  const role = oneOf(raw.role, ZONE_ASSET_ROLES);
   if (!role) return warn(`${at}: unknown role, skipped`), null;
   if (!Array.isArray(raw.lods) || raw.lods.length === 0) return warn(`${at}: no lods`), null;
   const lods: ZoneLod[] = [];
@@ -331,6 +355,36 @@ export function parseCaptureScale(raw: unknown): ZoneCaptureScale | null {
   return out;
 }
 
+/**
+ * Tolerant parse of the optional `twin` block (captured zones only). An invalid block is dropped (the zone
+ * then renders as before: scene drawn, reference assets hidden). `nav` must name a collider asset, else it
+ * is dropped. A twin needs `capture.scale.factor` 1 (it is built at true scale): otherwise a warning.
+ */
+export function parseTwin(raw: unknown, kind: ZoneKind, assets: readonly ZoneAsset[], capture: ZoneCapture | null, warn: (m: string) => void): ZoneTwin | null {
+  if (raw === undefined || raw === null) return null;
+  if (kind !== 'captured') return warn('twin: only for captured zones, ignored'), null;
+  if (!isObj(raw)) return warn('twin: not an object, ignored'), null;
+  const plan = str(raw.plan, 80);
+  const planVersion = str(raw.planVersion, 40);
+  if (raw.method !== 'built-from-plan' || !plan || !planVersion || !fin(raw.scaleFactor) || raw.scaleFactor < SCALE_FACTOR_MIN || raw.scaleFactor > SCALE_FACTOR_MAX) {
+    return warn(`twin: invalid (method built-from-plan, plan, planVersion, scaleFactor ${SCALE_FACTOR_MIN}–${SCALE_FACTOR_MAX}), ignored`), null;
+  }
+  const tw: ZoneTwin = { method: 'built-from-plan', plan, planVersion, scaleFactor: raw.scaleFactor };
+  const cat = str(raw.catalogue, 80);
+  if (cat) tw.catalogue = cat;
+  if (raw.nav !== undefined) {
+    if (typeof raw.nav === 'string' && assets.some((a) => a.id === raw.nav && a.role === 'collider')) tw.nav = raw.nav;
+    else warn('twin.nav must name a collider asset, ignored');
+  }
+  if (raw.referenceScale !== undefined) {
+    const rs = parseCaptureScale(raw.referenceScale);
+    if (rs) tw.referenceScale = rs;
+    else warn(`twin.referenceScale: invalid (factor ${SCALE_FACTOR_MIN}–${SCALE_FACTOR_MAX}, pivotLocal [x, y, z]) → factor 1`);
+  }
+  if (capture?.scale && capture.scale.factor !== 1) warn('twin: capture.scale.factor must be 1 (the twin is built at true scale, see twin.referenceScale)');
+  return tw;
+}
+
 function parseBudget(raw: unknown, warn: (m: string) => void): ZoneBudget | null {
   if (raw === undefined || raw === null) return null;
   const keys = Object.keys(ZONE_BUDGET_LIMITS) as (keyof ZoneBudget)[];
@@ -409,6 +463,9 @@ export function parseZoneManifest(json: unknown, opts: ParseZoneOptions = {}): P
     : [];
   if (attribution.length === 0) warn('attribution: missing (≥ 1 entry, no ";")');
 
+  const capture = parseCapture(json.capture, kind, warn);
+  const twin = parseTwin(json.twin, kind, assets, capture, warn);
+
   const summary = typeof json.summary_de === 'string' ? json.summary_de.trim() : '';
   if (summary.length > 300) warn('summary_de: > 300 chars, truncated');
 
@@ -431,7 +488,8 @@ export function parseZoneManifest(json: unknown, opts: ParseZoneOptions = {}): P
       preset: parsePreset(json.preset, warn),
       attribution,
       evidence: parseEvidence(json.evidence, kind, warn),
-      capture: parseCapture(json.capture, kind, warn),
+      capture,
+      twin,
       budget: parseBudget(json.budget, warn),
     },
     warnings,
@@ -445,6 +503,7 @@ export function budgetViolations(m: ZoneManifest): string[] {
   for (const k of Object.keys(ZONE_BUDGET_LIMITS) as (keyof ZoneBudget)[]) {
     if (m.budget[k] > ZONE_BUDGET_LIMITS[k]) out.push(`budget.${k} ${m.budget[k]} > ${ZONE_BUDGET_LIMITS[k]}`);
   }
+  // scene assets only, as pipeline/zones.py (a lower bound: `reference` assets load on request only)
   const firstView = m.assets.filter((a) => a.role === 'scene').reduce((s, a) => s + (a.lods[a.lods.length - 1]!.bytes ?? 0), 0);
   if (firstView > m.budget.downloadBytes) out.push(`coarsest LODs (${firstView} B) exceed budget.downloadBytes`);
   return out;
@@ -455,6 +514,10 @@ export function validateZoneStrict(json: unknown, opts: ParseZoneOptions = {}): 
   const r = parseZoneManifest(json, opts);
   return r.value ? [...r.warnings, ...budgetViolations(r.value)] : r.warnings;
 }
+
+/** Short evidence badge of a zone (loading screen, chrome, portal label): built twin › capture › hypothesis. */
+export const zoneBadge_de = (z: Pick<ZoneManifest, 'evidence' | 'twin'>): string =>
+  z.twin ? 'Nachbau' : z.evidence.kind === 'capture' ? 'Aufnahme' : 'Hypothese';
 
 /** Tolerant parse of `zones/index.json`. Invalid/duplicate entries are dropped. */
 export function parseZoneIndex(json: unknown): ParseResult<ZoneIndexEntry[]> {

@@ -3,6 +3,8 @@
  * metres): the ground is a ray down from the knees (steps ≤ STEP_UP), walls are near-vertical triangles in a
  * band WALL_LOW…WALL_HIGH above the feet that push a vertical capsule back horizontally. Thresholds are tuned
  * on the bakery capture (handheld route, noisy floor, clutter): err on walking through an artefact. Holes in the mesh (glass, dark corners) keep the last height.
+ * A built twin's walkable floor (`twin.nav`, ADR 0042) is exact instead: there a hole is the edge of the world, and
+ * `holes: 'block'` stops the visitor at it (sliding along the edge, one axis at a time).
  * three.js + three-mesh-bvh only, no DOM: unit-tested on synthetic geometry.
  */
 import { Box3, BufferAttribute, BufferGeometry, DoubleSide, Line3, Ray, Vector3 } from 'three';
@@ -21,6 +23,9 @@ export const WALL_HIGH = 1.5;
 /** Triangles with n.y above this are floor (≈ 53° slope); |n.y| below it is wall. */
 const FLOOR_NY = 0.6;
 const DOWN = new Vector3(0, -1, 0);
+
+/** What a step onto no floor does: `keep` = walk on at the same height (noisy captures), `block` = stop (exact nav floors). */
+export type HolePolicy = 'keep' | 'block';
 
 /**
  * Merge the meshes under `root` (world matrices applied, quantized attributes decoded) into one indexed
@@ -78,6 +83,7 @@ export class Walker {
     readonly bvh: MeshBVH,
     groundY: number,
     readonly bodyR = BODY_R,
+    readonly holes: HolePolicy = 'keep',
   ) {
     this.groundY = groundY;
   }
@@ -115,18 +121,31 @@ export class Walker {
 
   /**
    * Move from (x0, z0) to (x1, z1): the feet follow the floor (up ≤ STEP_UP, down ≤ STEP_DOWN, else a hole),
-   * then walls push the capsule out. Returns the new feet position.
+   * then walls push the capsule out. Returns the new feet position. With `holes: 'block'` a move onto no floor
+   * (or too high) slides along the blocked axis instead, else stays.
    */
   step(x0: number, z0: number, x1: number, z1: number): { x: number; z: number; y: number } {
+    const r = this.tryStep(x1, z1);
+    if (r) return r;
+    if (this.holes === 'block') {
+      const slide = (x1 !== x0 ? this.tryStep(x1, z0) : null) ?? (z1 !== z0 ? this.tryStep(x0, z1) : null);
+      if (slide) return slide;
+    }
+    return { x: x0, z: z0, y: this.groundY };
+  }
+
+  /** One move attempt; null = blocked (too high, or a hole under `holes: 'block'`). */
+  private tryStep(x1: number, z1: number): { x: number; z: number; y: number } | null {
     const feet = this.groundY;
-    // No floor here (hole, mesh edge, a mirror world below shiny tiles): stay level.
+    const block = this.holes === 'block';
+    // No floor here (hole, mesh edge, a mirror world below shiny tiles): stay level, or NaN when blocking.
     const floor = (x: number, z: number) => {
       const g = this.floorAt(x, z, feet);
-      return Number.isNaN(g) ? feet : g;
+      return Number.isNaN(g) && !block ? feet : g;
     };
     // Floor first, then walls against the new feet height (a riser ahead is not a wall).
     let g = floor(x1, z1);
-    if (g - feet > STEP_UP + 0.05) return { x: x0, z: z0, y: feet }; // too high (counter, furniture): stay
+    if (Number.isNaN(g) || g - feet > STEP_UP + 0.05) return null; // hole (block) or too high (counter, furniture)
     let x = x1;
     let z = z1;
     for (let pass = 0; pass < 3; pass++) {
@@ -137,7 +156,7 @@ export class Walker {
     }
     if (x !== x1 || z !== z1) {
       g = floor(x, z);
-      if (g - feet > STEP_UP + 0.05) return { x: x0, z: z0, y: feet };
+      if (Number.isNaN(g) || g - feet > STEP_UP + 0.05) return null;
     }
     this.groundY = g;
     return { x, z, y: g };

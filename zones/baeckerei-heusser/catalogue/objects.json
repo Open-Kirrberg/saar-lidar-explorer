@@ -20,8 +20,19 @@
    "area": "aussen",
    "name_de": "Fassade",
    "info_de": "Das Haus der Bäckerei an der Eckstraße in Kirrberg.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 24.84,
+    "d": 16.19,
+    "h": 12.04
+   },
+   "placement": {
+    "plan": {
+     "x": -4.16,
+     "z": 2.56,
+     "base_m": -2.02,
+     "rot_deg": 115.7
+    }
+   },
    "where_de": "Straßenfassade, an LoD2 eingepasst (Median 0,04 m)",
    "source": "mesh",
    "sigma_m": 0.2,
@@ -29,7 +40,7 @@
     "Capture 2026-11-04 (Referenz-Mesh)",
     "LoD2-Gebäude (GeoBasis-DE/LVGL-SL)"
    ],
-   "status": "planned",
+   "status": "built",
    "clickable": false
   },
   {
@@ -38,16 +49,112 @@
    "area": "aussen",
    "name_de": "Schaufenster",
    "info_de": "Durchs Schaufenster sieht man von der Straße in den Laden.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 4.46,
+    "d": 0.68,
+    "h": 1.9
+   },
+   "placement": {
+    "plan": {
+     "x": 5.7,
+     "z": -0.03,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
    "source": "mesh",
    "sigma_m": 0.3,
    "refs": [
     "Capture 2026-11-04 (Referenz-Mesh)",
     "Street View (angesehen, nicht gespeichert)"
    ],
-   "status": "planned",
+   "status": "built",
    "clickable": true
+  },
+  {
+   "id": "fassade/aussenwand",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Außenwand",
+   "info_de": "",
+   "dims": {
+    "w": 24.84,
+    "d": 16.13,
+    "h": 11.58
+   },
+   "placement": {
+    "plan": {
+     "x": -4.19,
+     "z": 2.55,
+     "base_m": -2.02,
+     "rot_deg": 115.7
+    }
+   },
+   "where_de": "LoD2-Wände mit Schaufenstern, Vorbau-Bogen und Seitenöffnung",
+   "source": "plan",
+   "sigma_m": 0.1,
+   "refs": [
+    "LoD2-Gebäude (GeoBasis-DE/LVGL-SL)",
+    "Raumplan v0 (öffentliche Fassung)"
+   ],
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "fassade/dach",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Dach",
+   "info_de": "",
+   "dims": {
+    "w": 24.84,
+    "d": 16.13,
+    "h": 3.89
+   },
+   "placement": {
+    "plan": {
+     "x": -4.19,
+     "z": 2.55,
+     "base_m": 6.13,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "plan",
+   "sigma_m": 0.3,
+   "refs": [
+    "LoD2-Gebäude (GeoBasis-DE/LVGL-SL)"
+   ],
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "fassade/vorbau",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Eingangsvorbau",
+   "info_de": "",
+   "dims": {
+    "w": 2.86,
+    "d": 1.52,
+    "h": 3.48
+   },
+   "placement": {
+    "plan": {
+     "x": 7.1,
+     "z": -4.04,
+     "base_m": -1.2,
+     "rot_deg": 115.7
+    }
+   },
+   "where_de": "offener Vorbau mit Bogen und Eckpfeiler vor der Ladentür",
+   "source": "mesh",
+   "sigma_m": 0.3,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Raumplan v0 (öffentliche Fassung)"
+   ],
+   "status": "built",
+   "clickable": false
   },
   {
    "id": "fassade/glasbausteine",
@@ -72,15 +179,26 @@
    "area": "aussen",
    "name_de": "Eingangsstufen",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 2.85,
+    "d": 1.52,
+    "h": 1.2
+   },
+   "placement": {
+    "plan": {
+     "x": 7.1,
+     "z": -4.04,
+     "base_m": -1.2,
+     "rot_deg": 115.7
+    }
+   },
    "where_de": "vor der Ladentür",
    "source": "mesh",
    "sigma_m": 0.15,
    "refs": [
     "Capture 2026-11-04 (Referenz-Mesh)"
    ],
-   "status": "planned",
+   "status": "built",
    "clickable": false
   },
   {
@@ -123,8 +241,19 @@
    "area": "verkaufsraum",
    "name_de": "Verkaufsraum",
    "info_de": "Der Laden: hier gibt es Brot, Brötchen und Gebäck.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 7.47,
+    "d": 6.52,
+    "h": 2.28
+   },
+   "placement": {
+    "plan": {
+     "x": 3.09,
+     "z": -2.92,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
    "where_de": "Raumschale aus dem Capture, Maße bis zum Raumplan ± 11 %",
    "source": "mesh",
    "sigma_m": 0.3,
@@ -132,7 +261,35 @@
     "Capture 2026-11-04 (Referenz-Mesh)",
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "verkaufsraum/boden",
+   "type": "structure",
+   "area": "verkaufsraum",
+   "name_de": "Fliesenboden",
+   "info_de": "",
+   "dims": {
+    "w": 7.47,
+    "d": 6.52,
+    "h": 0.01
+   },
+   "placement": {
+    "plan": {
+     "x": 3.09,
+     "z": -2.92,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "mesh",
+   "sigma_m": 0.3,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Raumplan v0 (öffentliche Fassung)"
+   ],
+   "status": "built",
    "clickable": false
   },
   {
@@ -141,15 +298,26 @@
    "area": "verkaufsraum",
    "name_de": "Wandfliesen",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 7.47,
+    "d": 6.52,
+    "h": 2.28
+   },
+   "placement": {
+    "plan": {
+     "x": 3.09,
+     "z": -2.92,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
    "where_de": "weiße Fliesen in Marmoroptik an den Wänden",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "built",
    "clickable": false
   },
   {
@@ -158,15 +326,26 @@
    "area": "verkaufsraum",
    "name_de": "Rasterdecke",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 7.47,
+    "d": 6.52,
+    "h": 0.23
+   },
+   "placement": {
+    "plan": {
+     "x": 3.09,
+     "z": -2.92,
+     "base_m": 2.05,
+     "rot_deg": 115.7
+    }
+   },
    "where_de": "abgehängte Plattendecke",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "built",
    "clickable": false
   },
   {
@@ -175,15 +354,111 @@
    "area": "verkaufsraum",
    "name_de": "Holzblende an der Decke",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 4.5,
+    "d": 2.48,
+    "h": 0.28
+   },
+   "placement": {
+    "plan": {
+     "x": 3.08,
+     "z": -1.75,
+     "base_m": 2.0,
+     "rot_deg": 70.7
+    }
+   },
    "where_de": "holzverkleidete Deckenblende mit roter Kante über der Theke",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "verkaufsraum/glaswand",
+   "type": "structure",
+   "area": "verkaufsraum",
+   "name_de": "Glaswand zum Vorbau",
+   "info_de": "",
+   "dims": {
+    "w": 0.07,
+    "d": 0.9,
+    "h": 2.28
+   },
+   "placement": {
+    "plan": {
+     "x": 6.18,
+     "z": -2.86,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "mesh",
+   "sigma_m": 0.3,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Raumplan v0 (öffentliche Fassung)"
+   ],
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "verkaufsraum/ladentuer",
+   "type": "structure",
+   "area": "verkaufsraum",
+   "name_de": "Ladentür",
+   "info_de": "Die gläserne Doppeltür zum Vorbau und zu den Stufen.",
+   "dims": {
+    "w": 2.48,
+    "d": 0.91,
+    "h": 2.28
+   },
+   "placement": {
+    "plan": {
+     "x": 5.96,
+     "z": -4.31,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "mesh",
+   "sigma_m": 0.3,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Raumplan v0 (öffentliche Fassung)"
+   ],
+   "status": "built",
+   "clickable": true
+  },
+  {
+   "id": "verkaufsraum/hintertuer",
+   "type": "structure",
+   "area": "verkaufsraum",
+   "name_de": "Tür nach hinten",
+   "info_de": "",
+   "dims": {
+    "w": 0.94,
+    "d": 0.09,
+    "h": 2.05
+   },
+   "placement": {
+    "plan": {
+     "x": 0.46,
+     "z": -4.87,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
+   "where_de": "geschlossene Tür am Ende des kurzen Flurs",
+   "source": "mesh",
+   "sigma_m": 0.5,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Raumplan v0 (öffentliche Fassung)"
+   ],
+   "status": "built",
    "clickable": false
   },
   {
@@ -192,8 +467,19 @@
    "area": "verkaufsraum",
    "name_de": "Verkaufstheke",
    "info_de": "Hier wird bedient: vorne die Glasvitrine, oben die Granitablage.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 4.29,
+    "d": 1.17,
+    "h": 1.27
+   },
+   "placement": {
+    "plan": {
+     "x": 3.82,
+     "z": -1.56,
+     "base_m": 0.0,
+     "rot_deg": 70.7
+    }
+   },
    "where_de": "quer im Raum vor dem Brotregal",
    "source": "photo",
    "sigma_m": 0.3,
@@ -201,7 +487,7 @@
     "Referenzfoto Verkaufstheke von vorne (privat)",
     "Capture 2026-11-04 (Referenz-Mesh)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": true
   },
   {
@@ -210,14 +496,25 @@
    "area": "verkaufsraum",
    "name_de": "Glasvitrine",
    "info_de": "Hinter dem Glas liegt die Auslage.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 3.93,
+    "d": 0.82,
+    "h": 0.63
+   },
+   "placement": {
+    "plan": {
+     "x": 3.83,
+     "z": -1.72,
+     "base_m": 0.64,
+     "rot_deg": 70.7
+    }
+   },
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": true
   },
   {
@@ -226,14 +523,25 @@
    "area": "verkaufsraum",
    "name_de": "Granitablage",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 4.29,
+    "d": 1.17,
+    "h": 0.03
+   },
+   "placement": {
+    "plan": {
+     "x": 3.82,
+     "z": -1.56,
+     "base_m": 0.62,
+     "rot_deg": 70.7
+    }
+   },
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": false
   },
   {
@@ -242,15 +550,26 @@
    "area": "verkaufsraum",
    "name_de": "Thekensockel",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 4.25,
+    "d": 1.09,
+    "h": 0.62
+   },
+   "placement": {
+    "plan": {
+     "x": 3.8,
+     "z": -1.56,
+     "base_m": 0.0,
+     "rot_deg": 70.7
+    }
+   },
    "where_de": "dunkelroter Sockel",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": false
   },
   {
@@ -259,8 +578,19 @@
    "area": "verkaufsraum",
    "name_de": "Brotregal",
    "info_de": "Das Brotregal hinter der Theke: Brote auf schrägen Böden und in Körben.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 4.25,
+    "d": 0.43,
+    "h": 2.0
+   },
+   "placement": {
+    "plan": {
+     "x": 2.1,
+     "z": -1.44,
+     "base_m": 0.0,
+     "rot_deg": 70.7
+    }
+   },
    "where_de": "an der Rückwand hinter der Theke; Schrägböden aus Messing-Rundstäben, Ebenen zählen und als brotregal/ebene-1 … anlegen",
    "source": "photo",
    "sigma_m": 0.3,
@@ -268,7 +598,7 @@
     "Referenzfoto Brotregal (Website der Bäckerei, privat)",
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": true
   },
   {
@@ -277,15 +607,26 @@
    "area": "verkaufsraum",
    "name_de": "Preisschienen",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 4.21,
+    "d": 0.01,
+    "h": 1.34
+   },
+   "placement": {
+    "plan": {
+     "x": 2.3,
+     "z": -1.51,
+     "base_m": 0.43,
+     "rot_deg": 70.7
+    }
+   },
    "where_de": "an den Vorderkanten der Böden; Schienen ja, Preise nur mit Zustimmung der Inhaber",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
     "Referenzfoto Brotregal (Website der Bäckerei, privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": false
   },
   {
@@ -294,14 +635,25 @@
    "area": "verkaufsraum",
    "name_de": "Brotkörbe",
    "info_de": "Weidenkörbe mit rosa Tüchern.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 4.19,
+    "d": 0.32,
+    "h": 0.21
+   },
+   "placement": {
+    "plan": {
+     "x": 2.15,
+     "z": -1.46,
+     "base_m": 0.49,
+     "rot_deg": 70.7
+    }
+   },
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
     "Referenzfoto Brotregal (Website der Bäckerei, privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": true
   },
   {
@@ -310,15 +662,26 @@
    "area": "verkaufsraum",
    "name_de": "Gitterregal",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 0.65,
+    "d": 0.45,
+    "h": 1.8
+   },
+   "placement": {
+    "plan": {
+     "x": 4.05,
+     "z": 1.44,
+     "base_m": 0.0,
+     "rot_deg": 25.7
+    }
+   },
    "where_de": "links neben der Theke",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": false
   },
   {
@@ -327,14 +690,25 @@
    "area": "verkaufsraum",
    "name_de": "Brottüten",
    "info_de": "Verpacktes Brot zum Mitnehmen.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 0.53,
+    "d": 0.35,
+    "h": 1.34
+   },
+   "placement": {
+    "plan": {
+     "x": 4.06,
+     "z": 1.45,
+     "base_m": 0.26,
+     "rot_deg": 25.7
+    }
+   },
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": true
   },
   {
@@ -359,15 +733,26 @@
    "area": "verkaufsraum",
    "name_de": "Hängelampe",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 0.25,
+    "d": 0.25,
+    "h": 0.38
+   },
+   "placement": {
+    "plan": {
+     "x": 3.95,
+     "z": -1.05,
+     "base_m": 1.62,
+     "rot_deg": 115.7
+    }
+   },
    "where_de": "schwarze Pendelleuchte über der Theke",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": false
   },
   {
@@ -376,15 +761,26 @@
    "area": "verkaufsraum",
    "name_de": "Hängelampe",
    "info_de": "",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 0.25,
+    "d": 0.25,
+    "h": 0.38
+   },
+   "placement": {
+    "plan": {
+     "x": 3.45,
+     "z": -2.47,
+     "base_m": 1.62,
+     "rot_deg": 115.7
+    }
+   },
    "where_de": "zweite schwarze Pendelleuchte über der Theke",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": false
   },
   {
@@ -393,15 +789,26 @@
    "area": "verkaufsraum",
    "name_de": "Zeitungsaufsteller",
    "info_de": "Die Tageszeitung zum Mitnehmen.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 0.35,
+    "d": 0.25,
+    "h": 1.2
+   },
+   "placement": {
+    "plan": {
+     "x": 3.8,
+     "z": -3.68,
+     "base_m": 0.0,
+     "rot_deg": 70.7
+    }
+   },
    "where_de": "Zeitungen nur als neutrale Grafik, keine echten Titelseiten",
    "source": "photo",
    "sigma_m": 0.5,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": true
   },
   {
@@ -410,16 +817,224 @@
    "area": "verkaufsraum",
    "name_de": "Getränkekühlschrank",
    "info_de": "Kalte Getränke zum Mitnehmen.",
-   "dims": null,
-   "placement": null,
+   "dims": {
+    "w": 1.99,
+    "d": 0.42,
+    "h": 1.9
+   },
+   "placement": {
+    "plan": {
+     "x": 4.26,
+     "z": -5.39,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
    "where_de": "Dosen und Flaschen ohne fremde Markenlogos",
    "source": "photo",
    "sigma_m": 0.5,
    "refs": [
     "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
-   "status": "planned",
+   "status": "blockout",
    "clickable": true
+  },
+  {
+   "id": "bistrotisch-1",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Bistrotisch",
+   "info_de": "Ein kleiner runder Tisch für einen Kaffee im Stehen.",
+   "dims": {
+    "w": 0.6,
+    "d": 0.6,
+    "h": 0.75
+   },
+   "placement": {
+    "plan": {
+     "x": 5.61,
+     "z": -2.2,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "mesh",
+   "sigma_m": 0.5,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Raumplan v0 (öffentliche Fassung)"
+   ],
+   "status": "blockout",
+   "clickable": true
+  },
+  {
+   "id": "bistrotisch-2",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Bistrotisch",
+   "info_de": "Ein kleiner runder Tisch für einen Kaffee im Stehen.",
+   "dims": {
+    "w": 0.6,
+    "d": 0.6,
+    "h": 0.75
+   },
+   "placement": {
+    "plan": {
+     "x": 5.19,
+     "z": -4.67,
+     "base_m": 0.0,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "mesh",
+   "sigma_m": 0.5,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Raumplan v0 (öffentliche Fassung)"
+   ],
+   "status": "blockout",
+   "clickable": true
+  },
+  {
+   "id": "umgebung",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Umgebung",
+   "info_de": "",
+   "dims": {
+    "w": 76.0,
+    "d": 76.0,
+    "h": 20.68
+   },
+   "placement": {
+    "plan": {
+     "x": 5.9,
+     "z": -2.11,
+     "base_m": -4.73,
+     "rot_deg": 115.7
+    }
+   },
+   "where_de": "Geländeausschnitt rund um die Bäckerei",
+   "source": "plan",
+   "sigma_m": 0.3,
+   "refs": [
+    "LoD2-Gebäude (GeoBasis-DE/LVGL-SL)",
+    "DGM1 (GeoBasis-DE/LVGL-SL)",
+    "OpenStreetMap (ODbL)"
+   ],
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "umgebung/gelaende",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Gelände",
+   "info_de": "",
+   "dims": {
+    "w": 76.0,
+    "d": 76.0,
+    "h": 20.68
+   },
+   "placement": {
+    "plan": {
+     "x": 5.9,
+     "z": -2.11,
+     "base_m": -4.73,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "plan",
+   "sigma_m": 0.15,
+   "refs": [
+    "DGM1 (GeoBasis-DE/LVGL-SL)"
+   ],
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "umgebung/strasse",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Straße und Gehweg",
+   "info_de": "",
+   "dims": {
+    "w": 76.0,
+    "d": 47.62,
+    "h": 1.24
+   },
+   "placement": {
+    "plan": {
+     "x": -6.42,
+     "z": -8.06,
+     "base_m": -1.44,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "plan",
+   "sigma_m": 0.5,
+   "refs": [
+    "OpenStreetMap (ODbL)",
+    "DGM1 (GeoBasis-DE/LVGL-SL)"
+   ],
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "umgebung/nachbarhaeuser",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Nachbarhäuser",
+   "info_de": "",
+   "dims": {
+    "w": 55.8,
+    "d": 62.63,
+    "h": 13.43
+   },
+   "placement": {
+    "plan": {
+     "x": 6.75,
+     "z": -6.45,
+     "base_m": -2.57,
+     "rot_deg": 115.7
+    }
+   },
+   "source": "plan",
+   "sigma_m": 0.3,
+   "refs": [
+    "LoD2-Gebäude (GeoBasis-DE/LVGL-SL)"
+   ],
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "umgebung/durchgang",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Durchgang (Anfang)",
+   "info_de": "",
+   "dims": {
+    "w": 2.96,
+    "d": 1.6,
+    "h": 3.29
+   },
+   "placement": {
+    "plan": {
+     "x": 8.31,
+     "z": -6.65,
+     "base_m": -1.29,
+     "rot_deg": 115.7
+    }
+   },
+   "where_de": "überbauter Durchgang neben dem Laden, nur bis zur Ladentür",
+   "source": "mesh",
+   "sigma_m": 0.35,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "LoD2-Gebäude (GeoBasis-DE/LVGL-SL)"
+   ],
+   "status": "built",
+   "clickable": false
   }
  ]
 }

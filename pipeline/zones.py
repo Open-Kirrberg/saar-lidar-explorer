@@ -185,6 +185,7 @@ def validate_manifest(m, modules: set[str] | None = None) -> list[str]:
 
     assets = m.get("assets", [])
     seen = set()
+    roles: dict[str, str] = {}
     scene = False
     first_view = 0
     if not isinstance(assets, list):
@@ -196,9 +197,10 @@ def validate_manifest(m, modules: set[str] | None = None) -> list[str]:
             e(f"{at}: invalid or duplicate id")
             continue
         seen.add(a["id"])
-        if a.get("role") not in ("scene", "collider"):
+        if a.get("role") not in ("scene", "collider", "reference"):
             e(f"{at}: unknown role")
             continue
+        roles[a["id"]] = a["role"]
         lods = a.get("lods")
         if not isinstance(lods, list) or not lods:
             e(f"{at}: no lods")
@@ -228,6 +230,23 @@ def validate_manifest(m, modules: set[str] | None = None) -> list[str]:
             first_view += last_lod.get("bytes", 0) if _num(last_lod.get("bytes", 0)) else 0
     if runtime == "gltf" and not scene:
         e("gltf runtime needs a scene asset")
+
+    tw = m.get("twin")  # built twin (ADR 0042): optional, captured zones only
+    if tw is not None:
+        rs = tw.get("referenceScale") if isinstance(tw, dict) else None
+        piv = rs.get("pivotLocal") if isinstance(rs, dict) else None
+        if not isinstance(tw, dict) or kind != "captured":
+            e("twin: an object, only for captured zones")
+        elif not (tw.get("method") == "built-from-plan" and isinstance(tw.get("plan"), str) and isinstance(tw.get("planVersion"), str)
+                  and _num(tw.get("scaleFactor")) and 0.5 <= tw["scaleFactor"] <= 2):
+            e("twin: invalid (method built-from-plan, plan, planVersion, scaleFactor 0.5-2)")
+        elif "nav" in tw and roles.get(tw["nav"]) != "collider":
+            e("twin.nav must name a collider asset")
+        elif rs is not None and not (isinstance(rs, dict) and _num(rs.get("factor")) and 0.5 <= rs["factor"] <= 2
+                                     and isinstance(piv, list) and len(piv) == 3 and all(_num(v) for v in piv)):
+            e("twin.referenceScale: invalid (factor 0.5-2, pivotLocal [x, y, z])")
+        elif isinstance(m.get("capture"), dict) and isinstance(m["capture"].get("scale"), dict) and m["capture"]["scale"].get("factor") != 1:
+            e("twin: capture.scale.factor must be 1 (the twin is built at true scale, see twin.referenceScale)")
 
     pr = m.get("preset")
     if pr is not None:

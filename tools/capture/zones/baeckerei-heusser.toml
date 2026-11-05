@@ -108,3 +108,24 @@ xz = [[6.9, -5.55], [5.0, -6.1], [4.0, -6.5], [3.0, -6.7], [1.5, -7.6], [-3.0, -
 [[package.privacy_mask]]
 center = [2.4, 244.2, -8.3]     # residents' belongings at the private house door, passage end (also inside the crop: belt and braces)
 radius = 1.0
+
+# Built twin (ADR 0042): the visible scene is generated from the Raumplan (zones/baeckerei-heusser/build/run.sh);
+# stage `package` (or `twin` alone) packs it into the package and keeps the capture above as the hidden reference.
+# The one scale factor (`scale_factor` above) is applied by the generator: plan `scale.factor` must equal it.
+[package.twin]
+build = "zones/baeckerei-heusser/build/out"
+name_de = "Bäckerei Heusser"
+summary_de = "Die Bäckerei in Kirrberg zum Hineingehen: von der Straße über die Stufen in den Verkaufsraum. Nachgebaut nach Raumplan, LoD2 und einem Handvideo, mit Erlaubnis der Inhaber."
+disclaimer_de = "Nachbau, kein Foto: Maße aus Raumplan und Video (± 11 % bis zum Aufmaß), Einrichtung vereinfacht. Privatbereiche sind nicht dargestellt."
+confidence = "med"
+sources_de = [
+  "Raumplan v0 aus LoD2 und Handvideo (Maße ± 11 %, bis zum Aufmaß)",
+  "LoD2-Gebäude und DGM1 (GeoBasis-DE/LVGL-SL)",
+  "Straßen und Gehwege aus OpenStreetMap",
+  "Handvideo als Referenz (ausgeblendet)",
+]
+attribution = [
+  "Nachbau Bäckerei Heusser, Kirrberg, mit Erlaubnis der Inhaber, eigenes Werk",
+  "LoD2-Gebäude und DGM1 © GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0",
+  "Straßen © OpenStreetMap-Mitwirkende, ODbL",
+]

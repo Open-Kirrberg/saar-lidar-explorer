@@ -75,6 +75,7 @@ Castle values are illustrative (V2.7 sets the real ones).
   "assets": [{                              // "gltf" runtime: ≥ 1 scene asset. "module" runtime: optional
     "id": "shop",                           // unique in the zone
     "role": "scene",                        // "scene" (rendered) | "collider" (walk collision only, never drawn)
+                                            // | "reference" (built twins: the capture, hidden by default, no collision)
     "bboxLocal": [[-12, 230, -18], [12, 245, 18]],  // zone frame, used for LOD distances before loading
     "lods": [                               // finest first; the last level has "until_m": null
       { "path": "shop/lod0.glb", "until_m": 25,   "bytes": 9100000, "triangles": 400000 },
@@ -105,6 +106,7 @@ Castle values are illustrative (V2.7 sets the real ones).
   },
 
   "capture": null,                          // captured zones only, see below
+  "twin": null,                             // optional, built twins of captured zones only (ADR 0042), see below
 
   "budget": {                               // declared by the producer, checked by the validators (limits below)
     "downloadBytes": 24000000,              // sum of the first-view set (every asset's coarsest LOD + module chunk)
@@ -138,6 +140,32 @@ Castle values are illustrative (V2.7 sets the real ones).
 
 **Scale correction.** Geometry is metric as georeferenced. When the scale rests on a prior (camera height, ± 11 % on the bakery), one tape measurement fixes it without a rebuild: `factor = true length / length in the zone`, written into `capture.scale.factor`. The runtime applies `p' = pivot + factor · (p − pivot)` to assets, colliders and spawns; portals and the footprint are not moved. Missing or invalid → factor 1.
 
+### 🧩 `twin` (built twins, ADR 0042, [0043](adr/0043-built-twin-package-reference-nav.md))
+
+A captured zone whose visible scene is **built** (generated from a measured plan, stylised) instead of the photogrammetry mesh. Additive: apps that do not know it still show the twin (it is the `scene` asset) and skip the `reference` assets (unknown role). Producer: `zones/baeckerei-heusser/build/` + `tools/capture` stage `twin`.
+
+```jsonc
+"twin": {
+  "method": "built-from-plan",               // required, the only method so far
+  "plan": "sle-raumplan/0.1",                // plan format the geometry was built from
+  "planVersion": "v0",
+  "catalogue": "bh-catalogue-v1",            // node extras.id refer to this catalogue
+  "scaleFactor": 1.0,                        // the one scale factor the generator applied (0.5–2), info
+  "nav": "nav",                              // optional: id of the collider asset (walkable floor + edge fences)
+  "referenceScale": {                        // optional: scale correction for the `reference` assets only
+    "factor": 1.0, "pivotLocal": [8.39, 243.51, -4.97]
+  }
+}
+```
+
+| Rule | |
+|---|---|
+| Assets | `scene` = the built twin (unlit, `COLOR_0` = baked light, `NORMAL` kept), `collider` = the walkable floor (`nav/floor`) + invisible edge fences (`nav/edge`, −0.3 … +2.0 m), `reference` = the capture LODs (draw only on request, e.g. a „Referenz“ toggle; never collide) |
+| Scale | the twin is built at true scale: `capture.scale.factor` **must be 1** (the runtime applies it to every asset and spawn). The capture's own factor moves to `twin.referenceScale` and applies to `reference` assets only |
+| Budget | `downloadBytes` = coarsest LODs of `scene` + `collider`; `triangles` and `textureBytesGpu` count `scene` only; `reference` files count in `totalBytes` only |
+| Evidence | `evidence.kind` stays `capture`; `perPart: "extras"` with node extras `{ id, source, sigma_m, confidence }` (`id` = catalogue row, `sigma_m` = 1-σ of position/size in metres) |
+| Node names | `<catalogue id>/<part>[/<detail>]` (the first segment and `extras.id` are catalogue ids, e.g. `theke/vitrine`, `brotregal/korpus` → `brotregal`); the collider asset uses `nav/floor`, `nav/edge` |
+
 ## 🧱 Assets
 
 | | Rule | Why |
@@ -150,6 +178,7 @@ Castle values are illustrative (V2.7 sets the real ones).
 | Per-part evidence | `evidence.perPart = "_CONF"`: SCALAR `UNSIGNED_BYTE` vertex attribute, 0 low · 1 med · 2 high (as sle-recon-v1). `"extras"`: node `extras: { "confidence": "high"|"med"|"low", "evidence": "D"|"I"|"HMS"… }` | the *Gewissheit* control ([0011](adr/0011-castle-evidence-no-hms.md), [0019](adr/0019-feature-tiers.md)) |
 | Node names | `<assetId>/<part>[/<detail>]`, read from the glTF JSON (three sanitises `Object3D.name`) | picking, *Gehe zu* |
 | Colliders | `role: "collider"`: one low-poly mesh, never drawn; missing → walk mode collides with the `scene` assets' coarsest LOD (the first one loaded) | phone budget |
+| References | `role: "reference"` (built twins): not drawn by default, never collides, outside the first-view budget; older apps skip the role; never in a public export ([0043](adr/0043-built-twin-package-reference-nav.md)) | the capture stays available locally for checking the twin |
 | Privacy | **No people, no readable licence plates**, no house numbers other than the zone's own, nothing outside the consent scope (private entrances, courtyards: cropped by the producer) | H13, ADR 0009, [0042](adr/0042-baeckerei-heusser-built-twin.md) |
 
 **LOD.** The runtime picks per asset the first level whose `until_m` ≥ the camera's distance to `bboxLocal` (null = ∞) and keeps the previous level drawn until the next one has loaded (no hole, no pop to nothing). Coarse first: the first-view set is every asset's last LOD.
@@ -235,8 +264,8 @@ interface ZoneHandle {
 | | 🏰 Castle (reconstructed) | 🥖 `baeckerei-heusser` (captured; was `bakery`) | 🧪 Fixture |
 |---|---|---|---|
 | `runtime` | `module: "schloss-karlsberg"` (generator + viewer code, lazy chunk) | `gltf` | `gltf` |
-| assets | optional (terrain, textures fetched by the module) | one `scene` asset, 2 LODs (100 k tris + 3072² KTX2, 50 k + 2048²), no collider | one 2-LOD box |
-| `evidence` | `hypothesis`, `_CONF` | `capture`, `none`, `capture.georef.rmsError_m`, `capture.scale` | `hypothesis`, `extras` |
+| assets | optional (terrain, textures fetched by the module) | built twin: `twin` (scene, 1 LOD, ≈ 24 k tris, no textures) + `nav` (collider) + `referenz` (the capture, role `reference`, 2 LODs with KTX2) | one 2-LOD box |
+| `evidence` | `hypothesis`, `_CONF` | `capture`, `extras`, `capture.georef.rmsError_m`, `capture.scale` (factor 1), `twin` | `hypothesis`, `extras` |
 | preset | `kino`, sky shared, 1789-07-15 19:30 | `natur`, sky shared, trees none, `now` | `dokumentation`, `none` |
 
 The full fixture is [`app/tests/fixtures/zones/fixture/zone.json`](../app/tests/fixtures/zones/fixture/zone.json) (inside the `fixture` AOI).

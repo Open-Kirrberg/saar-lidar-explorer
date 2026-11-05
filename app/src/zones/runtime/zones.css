@@ -65,6 +65,12 @@
   min-height: 40px; padding: 4px 14px; border-radius: 10px; font-size: 14px;
 }
 .sle-zone-float[aria-pressed='true'] { background: rgba(255, 207, 90, 0.3); border-color: #ffcf5a; }
+/* Built twins, debug only (`?referenz`): the capture on/off, below *Schweben*. */
+.sle-zone-ref {
+  position: absolute; top: calc(120px + var(--safe-t, 0px)); right: calc(12px + var(--safe-r, 0px));
+  min-height: 40px; padding: 4px 14px; border-radius: 10px; font-size: 14px;
+}
+.sle-zone-ref[aria-pressed='true'] { background: rgba(255, 207, 90, 0.3); border-color: #ffcf5a; }
 .sle-zone-gltf-ui .sle-zone-walkpad { flex-direction: column; gap: 10px; }
 @media (pointer: coarse) { .sle-zone-gltf-ui .sle-zone-walkpad { display: flex; } }
 .sle-zone-hint {

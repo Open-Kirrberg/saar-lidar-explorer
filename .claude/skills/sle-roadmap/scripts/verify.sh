@@ -4,7 +4,7 @@
 #   .claude/skills/sle-roadmap/scripts/verify.sh            # all
 #   .claude/skills/sle-roadmap/scripts/verify.sh app        # app only
 #   .claude/skills/sle-roadmap/scripts/verify.sh pipeline   # pipeline only
-#   .claude/skills/sle-roadmap/scripts/verify.sh twin       # Bäckerei Heusser catalogue only
+#   .claude/skills/sle-roadmap/scripts/verify.sh twin       # Bäckerei Heusser: catalogue, plan, built twin
 set -uo pipefail
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 WHAT="${1:-all}"
@@ -27,6 +27,9 @@ if [[ "$WHAT" == all || "$WHAT" == docs ]]; then
 fi
 if [[ "$WHAT" == all || "$WHAT" == twin ]]; then
   run "twin: catalogue check + tests" check "python3 -I '$ROOT/zones/baeckerei-heusser/catalogue/check.py' && cd '$ROOT/pipeline' && uv run python -I -m pytest -q -p no:cacheprovider ../zones/baeckerei-heusser/catalogue 2>&1 | tail -3"
+  run "twin: plan check + tests"      check "python3 -I '$ROOT/zones/baeckerei-heusser/plan/check_plan.py' && cd '$ROOT/pipeline' && uv run python -I -m pytest -q -p no:cacheprovider ../zones/baeckerei-heusser/plan 2>&1 | tail -3"
+  run "twin: generator tests"         check "cd '$ROOT/pipeline' && uv run python -I -m pytest -q -p no:cacheprovider ../zones/baeckerei-heusser/build 2>&1 | tail -3"
+  run "twin: capture tool tests"      check "cd '$ROOT/tools/capture' && uv run --quiet python -I -m pytest -q -p no:cacheprovider tests 2>&1 | tail -3"
 fi
 if [[ "$WHAT" == all || "$WHAT" == pipeline ]]; then
   run "pipeline: contract tests"    check "cd '$ROOT/pipeline' && uv run pytest -q 2>&1 | tail -15"

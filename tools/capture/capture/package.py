@@ -365,4 +365,7 @@ def run(zone: Zone) -> dict:
                "walkPath": path_waypoints(cams, float(cfg.get("walk_path_step_m", 1.5)))}
     save_json(tmp / "package.json", summary)
     print("   package:", json.dumps({k: summary[k] for k in ("out", "budget", "masked_texels", "cropped_faces")}), flush=True)
+    if cfg.get("twin"):  # built twin (ADR 0042): the capture just packaged becomes its hidden reference
+        from . import twin
+        summary["twin"] = twin.run(zone)
     return summary

@@ -6,9 +6,9 @@ Zone #2 of the Saar LiDAR Explorer: Bäckerei Heusser, Eckstr. 3, Homburg-Kirrbe
 
 | | |
 |---|---|
-| ✅ Live (V2.8) | Captured zone behind the portal *Bäckerei betreten*: photogrammetry mesh from one walk-through video ([`tools/capture/`](../../tools/capture/README.md), [ADR 0041](../../docs/adr/0041-gltf-zone-runtime-walk-on-mesh.md)). Since 2026-11-05 the private part of the passage is cropped. From now on this mesh is **reference only** (alignment, measuring), not the twin's look. |
-| 🚧 Round 1 (2026-11-05) | Foundation: this folder, object catalogue + schema, style rules, privacy rules, zone skills, rename `bakery` → `baeckerei-heusser`. No 3D built yet. |
-| ⏳ Next | *Raumplan* v0 (`plan/`, parallel task) → blockout of exterior + *Verkaufsraum* → styled objects, click/tap highlight, info cards, *entdeckt x / y* |
+| ✅ Round 2 (2026-11-05) | *Raumplan* v0 ([`plan/`](plan/README.md): public, redacted plan + A3 sheet, `check_plan.py`). Built, stylised twin from the plan ([`build/`](build/README.md)): shop shell (tiles, panel ceiling, soffit, glass front with open door leaves), facade with shop windows, porch and 5 steps, fixture blockouts, DGM1 ground patch, road, neighbour blocks, the passage mouth up to the shop's door. Visitors walk on an exact nav floor from the street into the shop. The capture is a hidden `reference` asset (`?referenz`, local only). [ADR 0043](../../docs/adr/0043-built-twin-package-reference-nav.md) |
+| ✅ Round 1 (2026-11-05) | Foundation: this folder, object catalogue + schema, style rules, privacy rules, zone skills, rename `bakery` → `baeckerei-heusser`. The V2.8 capture (photogrammetry mesh, private passage end cropped) is reference only since then. |
+| ⏳ Next (round 3) | Products on the shelves and in the counter, upper-floor windows and the glass-block band (needs plan values + catalogue rows), building bevels and an optional outline, click/tap highlight, info cards, *entdeckt x / y*; one tape measurement (`plan/messliste.md`, A) fixes the scale |
 | ⏳ Later | Backstube, Lager, *Umbau* variants (`variants/`) |
 
 ## 🗂️ Layout
@@ -18,7 +18,8 @@ Zone #2 of the Saar LiDAR Explorer: Bäckerei Heusser, Eckstr. 3, Homburg-Kirrbe
 | [`CLAUDE.md`](CLAUDE.md) | Rules for working on the twin (read first) |
 | [`docs/style.md`](docs/style.md) | Look: palette, edges, light, detail per object class, interaction |
 | [`catalogue/`](catalogue/README.md) | Object catalogue: schema, `objects.json`, `check.py` |
-| [`plan/`](plan/README.md) | *Raumplan*: the dimensional backbone (v0 arrives from a parallel task) |
+| [`plan/`](plan/README.md) | *Raumplan*: the dimensional backbone (v0, public version; the full plan stays private) |
+| [`build/`](build/README.md) | Generator: plan + open survey data → `twin.glb` + `nav.glb` → zone package |
 | [`variants/`](variants/README.md) | *Umbau* variants against the current state (*Ist-Stand*) |
 | `.claude/skills/` | `bh-twin-objekte`, `bh-aktualisieren`, `bh-umbau`, `bh-datenschutz` |
 
@@ -26,8 +27,9 @@ Generated packages go to the git-ignored `app/public/data/zones/baeckerei-heusse
 
 ```bash
 python3 -I zones/baeckerei-heusser/catalogue/check.py          # catalogue check (stdlib only)
-tools/capture/run.sh baeckerei-heusser package                 # re-package the reference capture (≈ 30 s)
-.claude/skills/sle-roadmap/scripts/verify.sh twin              # catalogue gate (also part of `verify.sh` all)
+zones/baeckerei-heusser/build/run.sh                           # build the twin + pack it into the zone package
+tools/capture/run.sh baeckerei-heusser package                 # re-package the reference capture (≈ 30 s, runs `twin` too)
+.claude/skills/sle-roadmap/scripts/verify.sh twin              # catalogue, plan, generator, capture tool (also part of `verify.sh` all)
 ```
 
 ## ⚖️ Principles
