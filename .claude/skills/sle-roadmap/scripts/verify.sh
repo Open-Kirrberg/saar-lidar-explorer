@@ -4,6 +4,7 @@
 #   .claude/skills/sle-roadmap/scripts/verify.sh            # all
 #   .claude/skills/sle-roadmap/scripts/verify.sh app        # app only
 #   .claude/skills/sle-roadmap/scripts/verify.sh pipeline   # pipeline only
+#   .claude/skills/sle-roadmap/scripts/verify.sh twin       # Bäckerei Heusser catalogue only
 set -uo pipefail
 ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
 WHAT="${1:-all}"
@@ -23,6 +24,9 @@ if [[ "$WHAT" == all || "$WHAT" == castle ]]; then
 fi
 if [[ "$WHAT" == all || "$WHAT" == docs ]]; then
   run "docs: ADR index + PRD length"  check "python3 -I '$ROOT/.claude/skills/sle-roadmap/scripts/check_docs.py' '$ROOT'"
+fi
+if [[ "$WHAT" == all || "$WHAT" == twin ]]; then
+  run "twin: catalogue check + tests" check "python3 -I '$ROOT/zones/baeckerei-heusser/catalogue/check.py' && cd '$ROOT/pipeline' && uv run python -I -m pytest -q -p no:cacheprovider ../zones/baeckerei-heusser/catalogue 2>&1 | tail -3"
 fi
 if [[ "$WHAT" == all || "$WHAT" == pipeline ]]; then
   run "pipeline: contract tests"    check "cd '$ROOT/pipeline' && uv run pytest -q 2>&1 | tail -15"

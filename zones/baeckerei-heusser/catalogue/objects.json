@@ -1,0 +1,425 @@
+{
+ "format": "bh-catalogue-v1",
+ "frame": {
+  "crs": "EPSG:25832",
+  "E0": 381467,
+  "N0": 5462254,
+  "heightDatum": "DHHN2016"
+ },
+ "consent": {
+  "scope": [
+   "verkaufsraum",
+   "aussen"
+  ],
+  "prices": false
+ },
+ "objects": [
+  {
+   "id": "fassade",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Fassade",
+   "info_de": "Das Haus der Bäckerei an der Eckstraße in Kirrberg.",
+   "dims": null,
+   "placement": null,
+   "where_de": "Straßenfassade, an LoD2 eingepasst (Median 0,04 m)",
+   "source": "mesh",
+   "sigma_m": 0.2,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "LoD2-Gebäude (GeoBasis-DE/LVGL-SL)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "fassade/schaufenster",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Schaufenster",
+   "info_de": "Durchs Schaufenster sieht man von der Straße in den Laden.",
+   "dims": null,
+   "placement": null,
+   "source": "mesh",
+   "sigma_m": 0.3,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Street View (angesehen, nicht gespeichert)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "fassade/glasbausteine",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Glasbausteine",
+   "info_de": "Eine Wand aus Glasbausteinen lässt Licht herein, ohne dass man hindurchsieht.",
+   "dims": null,
+   "placement": null,
+   "where_de": "Straßenfassade neben den Eingangsstufen",
+   "source": "mesh",
+   "sigma_m": 0.2,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "fassade/eingangsstufen",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Eingangsstufen",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "vor der Ladentür",
+   "source": "mesh",
+   "sigma_m": 0.15,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "fassade/abholschrank",
+   "type": "fixture",
+   "area": "aussen",
+   "name_de": "Abholschrank",
+   "info_de": "Ein Schrank an der Fassade, aus dem man Bestellungen abholen kann.",
+   "dims": null,
+   "placement": null,
+   "where_de": "an der Fassade (Lage aus Street View, im Capture nicht sicher)",
+   "source": "photo",
+   "sigma_m": 0.5,
+   "refs": [
+    "Street View (angesehen, nicht gespeichert)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "fassade/wandmalerei",
+   "type": "decor",
+   "area": "aussen",
+   "name_de": "Wandmalerei über dem Pavillon",
+   "info_de": "Eine Wandmalerei, gut zu sehen vom Kreisel aus.",
+   "dims": null,
+   "placement": null,
+   "where_de": "über dem Pavillon, Blick vom Kreisel; Motiv nur als vereinfachte Grafik, Rechte klären",
+   "source": "photo",
+   "sigma_m": 1.0,
+   "refs": [
+    "Street View (angesehen, nicht gespeichert)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "verkaufsraum",
+   "type": "structure",
+   "area": "verkaufsraum",
+   "name_de": "Verkaufsraum",
+   "info_de": "Der Laden: hier gibt es Brot, Brötchen und Gebäck.",
+   "dims": null,
+   "placement": null,
+   "where_de": "Raumschale aus dem Capture, Maße bis zum Raumplan ± 11 %",
+   "source": "mesh",
+   "sigma_m": 0.3,
+   "refs": [
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "verkaufsraum/wandfliesen",
+   "type": "structure",
+   "area": "verkaufsraum",
+   "name_de": "Wandfliesen",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "weiße Fliesen in Marmoroptik an den Wänden",
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "verkaufsraum/rasterdecke",
+   "type": "structure",
+   "area": "verkaufsraum",
+   "name_de": "Rasterdecke",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "abgehängte Plattendecke",
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "verkaufsraum/deckenblende",
+   "type": "structure",
+   "area": "verkaufsraum",
+   "name_de": "Holzblende an der Decke",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "holzverkleidete Deckenblende mit roter Kante über der Theke",
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "theke",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Verkaufstheke",
+   "info_de": "Hier wird bedient: vorne die Glasvitrine, oben die Granitablage.",
+   "dims": null,
+   "placement": null,
+   "where_de": "quer im Raum vor dem Brotregal",
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)",
+    "Capture 2026-11-04 (Referenz-Mesh)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "theke/vitrine",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Glasvitrine",
+   "info_de": "Hinter dem Glas liegt die Auslage.",
+   "dims": null,
+   "placement": null,
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "theke/granitablage",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Granitablage",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "theke/sockel",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Thekensockel",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "dunkelroter Sockel",
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "brotregal",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Brotregal",
+   "info_de": "Das Brotregal hinter der Theke: Brote auf schrägen Böden und in Körben.",
+   "dims": null,
+   "placement": null,
+   "where_de": "an der Rückwand hinter der Theke; Schrägböden aus Messing-Rundstäben, Ebenen zählen und als brotregal/ebene-1 … anlegen",
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Brotregal (Website der Bäckerei, privat)",
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "brotregal/preisschienen",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Preisschienen",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "an den Vorderkanten der Böden; Schienen ja, Preise nur mit Zustimmung der Inhaber",
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Brotregal (Website der Bäckerei, privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "brotregal/koerbe",
+   "type": "container",
+   "area": "verkaufsraum",
+   "name_de": "Brotkörbe",
+   "info_de": "Weidenkörbe mit rosa Tüchern.",
+   "dims": null,
+   "placement": null,
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Brotregal (Website der Bäckerei, privat)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "gitterregal",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Gitterregal",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "links neben der Theke",
+   "source": "photo",
+   "sigma_m": 0.4,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "gitterregal/brottueten",
+   "type": "container",
+   "area": "verkaufsraum",
+   "name_de": "Brottüten",
+   "info_de": "Verpacktes Brot zum Mitnehmen.",
+   "dims": null,
+   "placement": null,
+   "source": "photo",
+   "sigma_m": 0.4,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "brezelkorb",
+   "type": "container",
+   "area": "verkaufsraum",
+   "name_de": "Brezelkorb",
+   "info_de": "Frische Brezeln.",
+   "dims": null,
+   "placement": null,
+   "source": "photo",
+   "sigma_m": 0.4,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "haengelampe-1",
+   "type": "appliance",
+   "area": "verkaufsraum",
+   "name_de": "Hängelampe",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "schwarze Pendelleuchte über der Theke",
+   "source": "photo",
+   "sigma_m": 0.4,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "haengelampe-2",
+   "type": "appliance",
+   "area": "verkaufsraum",
+   "name_de": "Hängelampe",
+   "info_de": "",
+   "dims": null,
+   "placement": null,
+   "where_de": "zweite schwarze Pendelleuchte über der Theke",
+   "source": "photo",
+   "sigma_m": 0.4,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": false
+  },
+  {
+   "id": "zeitungsaufsteller",
+   "type": "sign",
+   "area": "verkaufsraum",
+   "name_de": "Zeitungsaufsteller",
+   "info_de": "Die Tageszeitung zum Mitnehmen.",
+   "dims": null,
+   "placement": null,
+   "where_de": "Zeitungen nur als neutrale Grafik, keine echten Titelseiten",
+   "source": "photo",
+   "sigma_m": 0.5,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": true
+  },
+  {
+   "id": "getraenkekuehlschrank",
+   "type": "appliance",
+   "area": "verkaufsraum",
+   "name_de": "Getränkekühlschrank",
+   "info_de": "Kalte Getränke zum Mitnehmen.",
+   "dims": null,
+   "placement": null,
+   "where_de": "Dosen und Flaschen ohne fremde Markenlogos",
+   "source": "photo",
+   "sigma_m": 0.5,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)"
+   ],
+   "status": "planned",
+   "clickable": true
+  }
+ ]
+}

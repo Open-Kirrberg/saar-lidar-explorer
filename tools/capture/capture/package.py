@@ -4,7 +4,8 @@
   <out>/<zone>/scene/<detail>.glb   meshopt + quantized + KTX2 (ETC1S) + unlit, finest LOD first in the manifest
   <out>/index.json                  merged: other zones' entries kept
 
-Steps: privacy mask (texels of faces inside `[[package.privacy_mask]]` spheres are inpainted, every LOD) ->
+Steps: privacy crop (faces inside a `[[package.privacy_crop]]` plan polygon are removed and their texels inpainted:
+areas without consent) + privacy mask (texels of faces inside `[[package.privacy_mask]]` spheres are inpainted) per LOD ->
 `pack/pack.mjs` per LOD (Node, pinned glTF Transform + Basis encoder) -> manifest from the georef, the camera poses
 (spawn + portal = first street frame) and the mesh hull -> strict validation (pipeline/zones.py) -> index merge.
 
@@ -117,10 +118,39 @@ def bbox_en(rings: list[list[list[float]]], pad_m: float = 0.0) -> list[list[flo
     return [[math.floor(lo[0]), math.floor(lo[1])], [math.ceil(hi[0]), math.ceil(hi[1])]]
 
 
-def merge_index(index: dict | None, entry: dict) -> dict:
-    """zones/index.json with `entry` inserted or replaced by id; other zones kept in order."""
-    zones = [z for z in (index or {}).get("zones", []) if isinstance(z, dict) and z.get("id") != entry["id"]]
+def merge_index(index: dict | None, entry: dict, drop: tuple[str, ...] | list[str] = ()) -> dict:
+    """zones/index.json with `entry` inserted or replaced by id; entries of `drop` (former ids of this zone) removed;
+    other zones kept in order."""
+    gone = {entry["id"], *drop}
+    zones = [z for z in (index or {}).get("zones", []) if isinstance(z, dict) and z.get("id") not in gone]
     return {"format": "sle-zones-v1", "zones": zones + [entry]}
+
+
+def in_polygons(xz: np.ndarray, polygons: list[dict]) -> np.ndarray:
+    """Points (local x/z) inside any crop polygon ({xz: [[x, z], ...]}, ring, either orientation; even-odd rule)."""
+    pts = np.asarray(xz, float).reshape(-1, 2)
+    inside_any = np.zeros(len(pts), bool)
+    for poly in polygons:
+        ring = np.asarray(poly["xz"], float)
+        inside = np.zeros(len(pts), bool)
+        x, z = pts[:, 0], pts[:, 1]
+        for (x1, z1), (x2, z2) in zip(ring, np.roll(ring, -1, axis=0)):
+            crosses = (z1 > z) != (z2 > z)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                xc = x1 + (z - z1) * (x2 - x1) / (z2 - z1)
+            inside ^= crosses & (x < xc)
+        inside_any |= inside
+    return inside_any
+
+
+def walk_cameras(cams: list[dict], polygons: list[dict], end_heading_deg: float | None = None) -> list[dict]:
+    """Camera route without the poses inside crop polygons (the walk ends before a cropped area).
+
+    `end_heading_deg` turns the last pose (the end of the walk / U3 target) to look somewhere harmless."""
+    kept = [c for c in cams if not polygons or not in_polygons([[c["x"], c["z"]]], polygons)[0]]
+    if kept and end_heading_deg is not None:
+        kept[-1] = {**kept[-1], "heading_deg": float(end_heading_deg) % 360.0}
+    return kept
 
 
 def faces_in_spheres(centroids: np.ndarray, spheres: list[dict]) -> np.ndarray:
@@ -144,15 +174,18 @@ def scale_about(p, pivot, factor: float) -> list[float]:
 
 # --------------------------------------------------------------------------------------------- privacy mask
 
-def mask_texture(mesh, spheres: list[dict], dilate_px: int = 6):
-    """Inpaint the texels of faces inside the privacy spheres. Returns (PIL image, masked texel count)."""
+def mask_texture(mesh, spheres: list[dict], dilate_px: int = 6, extra: np.ndarray | None = None):
+    """Inpaint the texels of faces inside the privacy spheres (and of the faces flagged in `extra`, e.g. cropped ones).
+    Returns (PIL image, masked texel count)."""
     import cv2
     from PIL import Image
 
     img = mesh.visual.material.baseColorTexture.convert("RGB")
-    if not spheres:
+    sel = faces_in_spheres(mesh.triangles_center, spheres) if spheres else np.zeros(len(mesh.faces), bool)
+    if extra is not None:
+        sel |= extra
+    if not sel.any():
         return img, 0
-    sel = faces_in_spheres(mesh.triangles_center, spheres)
     a = np.asarray(img).copy()
     h, w = a.shape[:2]
     mask = np.zeros((h, w), np.uint8)
@@ -213,12 +246,20 @@ def run(zone: Zone) -> dict:
     order = cfg.get("lods", ["medium", "reduced"])
     until = cfg.get("until_m", [60])
     spheres = cfg.get("privacy_mask", [])
-    lods, tex_gpu, masked, hull_pts, bb = [], 0, {}, None, None
+    crops = cfg.get("privacy_crop", [])
+    lods, tex_gpu, masked, cropped, hull_pts, bb = [], 0, {}, {}, None, None
     for k, detail in enumerate(order):
         src = zone.work / "export" / side["lods"][detail]["file"]
         mesh = trimesh.load(src, force="mesh", process=False)
-        img, n_masked = mask_texture(mesh, spheres)
+        cut = in_polygons(mesh.triangles_center[:, [0, 2]], crops) if crops else None
+        img, n_masked = mask_texture(mesh, spheres, extra=cut)
         masked[detail] = n_masked
+        cropped[detail] = int(cut.sum()) if cut is not None else 0
+        if cropped[detail]:  # drop the geometry too: no consent for that area (the atlas texels are inpainted above)
+            mesh.update_faces(~cut)
+            mesh.remove_unreferenced_vertices()
+            src = tmp / f"{detail}_cropped.glb"
+            src.write_bytes(trimesh.exchange.gltf.export_glb(trimesh.Scene(mesh), include_normals=True))
         side_px = int(cfg.get("texture_px", {}).get(detail, max(img.size)))
         if max(img.size) > side_px:  # the wasm Basis encoder stops at ~12 Mpix (3072² ok, 4096² not)
             from PIL import Image
@@ -235,11 +276,14 @@ def run(zone: Zone) -> dict:
         bb = b if bb is None else np.stack([np.minimum(bb[0], b[0]), np.maximum(bb[1], b[1])])
         if k == len(order) - 1:  # coarsest = fewest vertices for the hull
             hull_pts = np.asarray(mesh.vertices)[:, [0, 2]]
-        print(f"   {detail}: {st['bytes'] / 1e6:.2f} MB, {st['triangles']} tris, masked {n_masked} texels, {st['seconds']:.1f} s", flush=True)
+        print(f"   {detail}: {st['bytes'] / 1e6:.2f} MB, {st['triangles']} tris, cropped {cropped[detail]} faces, "
+              f"masked {n_masked} texels, {st['seconds']:.1f} s", flush=True)
 
     # ---- spawn + portal: first street frame of the walk (video order)
-    cams = camera_poses_local(poses, np.array(geo["mesh_to_local"]))
+    cams = walk_cameras(camera_poses_local(poses, np.array(geo["mesh_to_local"])), crops, cfg.get("walk_end_heading_deg"))
     c0 = cams[int(cfg.get("spawn_index", 0))]
+    if "spawn_heading_deg" in cfg:
+        c0 = {**c0, "heading_deg": float(cfg["spawn_heading_deg"]) % 360.0}
     eye = float(cfg.get("eye_m", 1.6))
     ground = float(res.get("ground_ref_h", c0["y"] - res["scale"]["camera_height_m"]))
     sE, sN = local_to_en(c0["x"], c0["z"], E0, N0)
@@ -314,10 +358,11 @@ def run(zone: Zone) -> dict:
     idx_path = out_root / "index.json"
     idx = json.loads(idx_path.read_text()) if idx_path.exists() else None
     entry = {"id": zone.id, "bboxEN": bbox_en([fp, [[portal["E"], portal["N"]]]], pad_m=1.0)}
-    save_json(idx_path, merge_index(idx, entry), indent=2)
-    summary = {"out": str(out.relative_to(REPO)), "lods": lods, "masked_texels": masked, "budget": manifest["budget"],
+    save_json(idx_path, merge_index(idx, entry, drop=cfg.get("former_ids", [])), indent=2)
+    summary = {"out": str(out.relative_to(REPO)), "lods": lods, "masked_texels": masked, "cropped_faces": cropped,
+               "budget": manifest["budget"],
                "spawn": spawn, "portal": portal, "footprint_vertices": len(fp),
                "walkPath": path_waypoints(cams, float(cfg.get("walk_path_step_m", 1.5)))}
     save_json(tmp / "package.json", summary)
-    print("   package:", json.dumps({k: summary[k] for k in ("out", "budget", "masked_texels")}), flush=True)
+    print("   package:", json.dumps({k: summary[k] for k in ("out", "budget", "masked_texels", "cropped_faces")}), flush=True)
     return summary

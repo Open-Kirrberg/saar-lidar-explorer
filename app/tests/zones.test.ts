@@ -107,7 +107,7 @@ describe('zone contract: tolerance', () => {
     expect(bad(mod).value!.runtime).toEqual({ kind: 'module', module: 'schloss-karlsberg' });
     const j = raw();
     mod(j);
-    expect(parseZoneManifest(j, { modules: new Set(['bakery']) }).value).toBeNull();
+    expect(parseZoneManifest(j, { modules: new Set(['other-module']) }).value).toBeNull();
     expect(parseZoneManifest(j, { modules: new Set(['schloss-karlsberg']) }).value).not.toBeNull();
   });
 

@@ -1,0 +1,258 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "bh-catalogue-v1",
+ "title": "Bäckerei Heusser twin: object catalogue",
+ "description": "Structural schema. Cross-object rules (parents exist, rel targets, cycles, consent scope, prices, private refs, geometry required after 'planned') are enforced by check.py.",
+ "type": "object",
+ "required": [
+  "format",
+  "objects"
+ ],
+ "properties": {
+  "format": {
+   "const": "bh-catalogue-v1"
+  },
+  "frame": {
+   "type": "object",
+   "description": "Zone frame (docs/zone-contract.md): x = E - E0, y = h, z = -(N - N0)",
+   "properties": {
+    "crs": {
+     "const": "EPSG:25832"
+    },
+    "E0": {
+     "type": "number"
+    },
+    "N0": {
+     "type": "number"
+    },
+    "heightDatum": {
+     "type": "string"
+    }
+   }
+  },
+  "consent": {
+   "type": "object",
+   "properties": {
+    "scope": {
+     "type": "array",
+     "items": {
+      "enum": [
+       "aussen",
+       "verkaufsraum",
+       "backstube",
+       "lager"
+      ]
+     },
+     "description": "areas the owners agreed to show publicly"
+    },
+    "prices": {
+     "type": "boolean",
+     "description": "true only after the owners agreed to show prices"
+    }
+   }
+  },
+  "objects": {
+   "type": "array",
+   "items": {
+    "$ref": "#/$defs/object"
+   }
+  }
+ },
+ "$defs": {
+  "object": {
+   "type": "object",
+   "required": [
+    "id",
+    "type",
+    "area",
+    "name_de",
+    "source",
+    "sigma_m",
+    "status",
+    "clickable"
+   ],
+   "properties": {
+    "id": {
+     "type": "string",
+     "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$",
+     "description": "path id, parent = prefix: brotregal/ebene-2/brot-03"
+    },
+    "type": {
+     "enum": [
+      "structure",
+      "fixture",
+      "appliance",
+      "container",
+      "product",
+      "sign",
+      "decor"
+     ]
+    },
+    "area": {
+     "enum": [
+      "aussen",
+      "verkaufsraum",
+      "backstube",
+      "lager"
+     ]
+    },
+    "name_de": {
+     "type": "string",
+     "minLength": 1,
+     "maxLength": 60
+    },
+    "info_de": {
+     "type": "string",
+     "maxLength": 300,
+     "description": "info card text (German)"
+    },
+    "where_de": {
+     "type": "string",
+     "description": "placement hint while the object is still 'planned'"
+    },
+    "dims": {
+     "oneOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "object",
+       "required": [
+        "w",
+        "d",
+        "h"
+       ],
+       "properties": {
+        "w": {
+         "type": "number",
+         "exclusiveMinimum": 0
+        },
+        "d": {
+         "type": "number",
+         "exclusiveMinimum": 0
+        },
+        "h": {
+         "type": "number",
+         "exclusiveMinimum": 0
+        }
+       },
+       "description": "bounding size in metres: width (object's right), depth (front-back), height"
+      }
+     ]
+    },
+    "placement": {
+     "oneOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "object",
+       "required": [
+        "plan"
+       ],
+       "additionalProperties": false,
+       "properties": {
+        "plan": {
+         "type": "object",
+         "required": [
+          "x",
+          "z"
+         ],
+         "properties": {
+          "x": {
+           "type": "number"
+          },
+          "z": {
+           "type": "number"
+          },
+          "base_m": {
+           "type": "number",
+           "description": "base above the room floor"
+          },
+          "rot_deg": {
+           "type": "number",
+           "description": "grid heading the object's front faces, clockwise"
+          }
+         }
+        }
+       }
+      },
+      {
+       "type": "object",
+       "required": [
+        "rel"
+       ],
+       "additionalProperties": false,
+       "properties": {
+        "rel": {
+         "type": "object",
+         "required": [
+          "to",
+          "offset"
+         ],
+         "properties": {
+          "to": {
+           "type": "string",
+           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$"
+          },
+          "offset": {
+           "type": "array",
+           "items": {
+            "type": "number"
+           },
+           "minItems": 3,
+           "maxItems": 3,
+           "description": "[right, up, forward] in the reference object's frame, metres"
+          },
+          "rot_deg": {
+           "type": "number",
+           "description": "extra rotation about up, relative to the reference"
+          }
+         }
+        }
+       }
+      }
+     ]
+    },
+    "source": {
+     "enum": [
+      "plan",
+      "photo",
+      "mesh",
+      "tape"
+     ]
+    },
+    "sigma_m": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 5,
+     "description": "1-sigma uncertainty of position and size, metres"
+    },
+    "refs": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "source descriptions, never private file names or paths"
+    },
+    "status": {
+     "enum": [
+      "planned",
+      "blockout",
+      "built",
+      "verified",
+      "retired"
+     ]
+    },
+    "clickable": {
+     "type": "boolean"
+    },
+    "public": {
+     "type": "boolean",
+     "default": true,
+     "description": "false = never exported (outside the consent scope)"
+    }
+   }
+  }
+ }
+}

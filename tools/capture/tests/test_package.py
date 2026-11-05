@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from capture.package import (bbox_en, camera_poses_local, convex_hull_en, faces_in_spheres, frame_no, gpu_texture_bytes,
-                             heading_pitch, merge_index, path_waypoints, quat_to_R, scale_about)
+                             heading_pitch, in_polygons, merge_index, path_waypoints, quat_to_R, scale_about, walk_cameras)
 
 
 def test_heading_pitch_grid_convention():
@@ -57,11 +57,39 @@ def test_convex_hull_is_padded_ccw_ring():
 
 def test_bbox_and_index_merge():
     assert bbox_en([[[1.2, 2.7], [3.4, 5.1]]], pad_m=1.0) == [[0, 1], [5, 7]]
-    idx = {"format": "sle-zones-v1", "zones": [{"id": "schloss-karlsberg", "bboxEN": [[0, 0], [1, 1]]}, {"id": "bakery", "bboxEN": "old"}]}
-    out = merge_index(idx, {"id": "bakery", "bboxEN": [[2, 2], [3, 3]]})
-    assert [z["id"] for z in out["zones"]] == ["schloss-karlsberg", "bakery"]
+    idx = {"format": "sle-zones-v1", "zones": [{"id": "schloss-karlsberg", "bboxEN": [[0, 0], [1, 1]]},
+                                               {"id": "baeckerei-heusser", "bboxEN": "old"}]}
+    out = merge_index(idx, {"id": "baeckerei-heusser", "bboxEN": [[2, 2], [3, 3]]})
+    assert [z["id"] for z in out["zones"]] == ["schloss-karlsberg", "baeckerei-heusser"]
     assert out["zones"][1]["bboxEN"] == [[2, 2], [3, 3]]
     assert merge_index(None, {"id": "a"}) == {"format": "sle-zones-v1", "zones": [{"id": "a"}]}
+
+
+def test_index_merge_drops_former_ids():
+    # a renamed zone (bakery -> baeckerei-heusser) must not leave its old entry behind
+    idx = {"format": "sle-zones-v1", "zones": [{"id": "bakery", "bboxEN": [[0, 0], [1, 1]]}, {"id": "schloss-karlsberg", "bboxEN": [[0, 0], [1, 1]]}]}
+    out = merge_index(idx, {"id": "baeckerei-heusser", "bboxEN": [[2, 2], [3, 3]]}, drop=["bakery"])
+    assert [z["id"] for z in out["zones"]] == ["schloss-karlsberg", "baeckerei-heusser"]
+
+
+def test_privacy_crop_polygons():
+    square = {"xz": [[0, 0], [2, 0], [2, 2], [0, 2]]}
+    pts = np.array([[1, 1], [3, 1], [-0.1, 1], [1.9, 1.9]], float)
+    assert in_polygons(pts, [square]).tolist() == [True, False, False, True]
+    cw = {"xz": square["xz"][::-1]}  # orientation does not matter
+    assert in_polygons(pts, [cw]).tolist() == [True, False, False, True]
+    assert not in_polygons(pts, []).any()
+    tri = {"xz": [[5, 0], [7, 0], [6, 2]]}
+    assert in_polygons([[6, 1], [1, 1]], [square, tri]).tolist() == [True, True]
+
+
+def test_walk_cameras_stop_before_the_crop_and_turn_the_end():
+    cams = [{"x": float(i), "y": 244.0, "z": 0.0, "heading_deg": 270.0} for i in range(6)]  # walking toward x = 5
+    crop = [{"xz": [[3.5, -1], [10, -1], [10, 1], [3.5, 1]]}]
+    kept = walk_cameras(cams, crop, end_heading_deg=450.0)
+    assert [c["x"] for c in kept] == [0, 1, 2, 3]
+    assert kept[-1]["heading_deg"] == pytest.approx(90.0) and cams[3]["heading_deg"] == 270.0  # input untouched
+    assert walk_cameras(cams, []) == cams
 
 
 def test_privacy_spheres_select_faces():

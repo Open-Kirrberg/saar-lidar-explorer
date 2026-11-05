@@ -81,6 +81,7 @@ Decisions with options → `Proposed` ADRs (none open). Still open:
 | Q-34 | ☁️ v5 hosting: ≈ 22 000 km² ≈ 650 GB, beyond GitHub Pages | v5 | Contracts must not assume one small AOI |
 | Q-35 | 🏷️ Product name for the public | — | Rename later |
 | Q-15 | 🔍 F15 precision unknown (recall 8/18 at 30 m on `overall`) | Glow quality in the lens | Review a few hundred candidates in Labor, then tune |
+| Q-37 | 🥖 Bäckerei Heusser twin ([ADR 0042](docs/adr/0042-baeckerei-heusser-built-twin.md)): zone `kind`/`evidence` for a built, measured twin; may prices be shown? | First built twin package | Additive contract change; prices only with the owners' yes |
 
 🧊 Parked v1 questions (Q-6 … Q-31): [PRD v1 §8](docs/history/prd-v1.md#8-open-questions).
 

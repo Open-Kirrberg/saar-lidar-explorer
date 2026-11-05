@@ -588,7 +588,7 @@ pnpm run build && pnpm exec vite preview --port 5241 --strictPort --host 127.0.0
 pnpm run perf                                  # phone proxy + desktop; JSON + shots → docs/shots/perf-*
 pnpm run perf -- --profiles phone --url 'http://127.0.0.1:5241/?aoi=overall'
 pnpm run perf:zone -- --url 'http://127.0.0.1:5241/?aoi=karlsberg'   # castle zone (needs zone data): enter, Rundflug, Festsaal walk (src/zones/README.md)
-pnpm run perf:gltf -- --url 'http://127.0.0.1:5241/?aoi=overall'    # bakery (U3): portal → loading → street → shop → courtyard → back (src/zones/README.md)
+pnpm run perf:gltf -- --url 'http://127.0.0.1:5241/?aoi=overall'    # baeckerei-heusser (U3): portal → loading → street → shop → passage → back (src/zones/README.md)
 ```
 
 **Method** (`scripts/perf-proxy.mjs`, puppeteer-core with the system Chrome, headless by default since b1023b4 (`--headed` for the V2.0 method: headed so rAF runs and WebGL uses the real GPU — compare like with like); not part of the bundle):

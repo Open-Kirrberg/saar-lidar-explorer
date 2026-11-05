@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// V2.8b: U3 walkthrough + performance of a `runtime.kind: "gltf"` zone (bakery) on the phone proxy (ADR 0028)
+// V2.8b: U3 walkthrough + performance of a `runtime.kind: "gltf"` zone (baeckerei-heusser, the captured bakery) on the phone proxy (ADR 0028)
 // and desktop. Overworld at the portal → *Betreten* (prompt button, cold: cache off, 4G on the phone) → loading
 // screen → walk street → shop → courtyard (route planned on the collider toward the capture camera's shop and
 // courtyard points) with the real input (W key on desktop,
 // the ▲ hold button on the phone; the script turns the heading like a drag-look) → *Verlassen* → overworld pose.
 //
 //   pnpm run build && pnpm exec vite preview --port 5262 --strictPort &   # serves dist + public/data
-//   pnpm run perf:gltf -- [--url 'http://127.0.0.1:5262/?aoi=overall'] [--zone bakery]
-//                         [--path ../data/work/zones/bakery/package/package.json] [--profiles phone,desktop]
+//   pnpm run perf:gltf -- [--url 'http://127.0.0.1:5262/?aoi=overall'] [--zone baeckerei-heusser]
+//                         [--path ../data/work/zones/baeckerei-heusser/package/package.json] [--profiles phone,desktop]
 //
 // The route is `walkPath` from the capture tool's package summary (JSON, read only). Headless Chrome only
 // (puppeteer-core + system Chrome): never a visible window. Headless frame pacing is a proxy, not a phone; the
@@ -24,7 +24,7 @@ const opt = (name, def) => {
   return i >= 0 ? args[i + 1] : def;
 };
 const URL_ = opt('url', 'http://127.0.0.1:5262/?aoi=overall');
-const ZONE = opt('zone', 'bakery');
+const ZONE = opt('zone', 'baeckerei-heusser');
 const PATH_JSON = resolve(opt('path', join(ROOT, 'data', 'work', 'zones', ZONE, 'package', 'package.json')));
 const PROFILE_IDS = opt('profiles', 'phone,desktop').split(',');
 const CHROME = opt('chrome', process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');

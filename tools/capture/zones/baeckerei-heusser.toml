@@ -1,8 +1,10 @@
 # Captured zone: Bäckerei Heusser, Eckstr. 3, 66424 Homburg-Kirrberg (consented public business, PRD Q-36 / H6).
-# Footage: DJI action cam, 4000x3000 @ 29.97 fps, 119 s, wide-angle (fisheye) lens; street -> shop -> courtyard.
+# Footage: DJI action cam, 4000x3000 @ 29.97 fps, 119 s, wide-angle (fisheye) lens; street -> shop -> passage.
+# Zone id `baeckerei-heusser` (was `bakery` until 2026-11-05). Since ADR 0042 this capture is the twin's REFERENCE
+# (alignment, measuring), not its visible scene: the built twin lives in zones/baeckerei-heusser/.
 [zone]
-video = "data/raw/zones/bakery/DJI_0079.MP4"     # untrusted input, never executed
-work = "data/work/zones/bakery"
+video = "data/raw/zones/baeckerei-heusser/DJI_0079.MP4"     # untrusted input, never executed
+work = "data/work/zones/baeckerei-heusser"
 
 [frames]
 analysis_width = 960
@@ -61,12 +63,13 @@ crop_above_m = 25
 texture_px = { medium = 4096, reduced = 2048 }
 preview_detail = "medium"
 
-[package]                  # zone package (docs/zone-contract.md) -> app/public/data/zones/bakery/ + zones/index.json
+[package]                  # zone package (docs/zone-contract.md) -> app/public/data/zones/baeckerei-heusser/ + zones/index.json
+former_ids = ["bakery"]    # renamed 2026-11-05: the index entry of the old id is dropped on the next package run
 name_de = "Bäckerei Heusser"
-summary_de = "Ein Gang durch die Bäckerei in Kirrberg: von der Straße in den Laden und hinten durch den Durchgang. Aus einem Handvideo berechnet, mit Erlaubnis der Inhaber."
+summary_de = "Ein Gang durch die Bäckerei in Kirrberg: von der Straße in den Laden und hinten hinaus in den Durchgang. Aus einem Handvideo berechnet, mit Erlaubnis der Inhaber."
 portal_label_de = "Bäckerei betreten"
 disclaimer_de = "Echter Ort, aus einem Handvideo berechnet: Glas und Theke fehlen teils, Maße ± 11 %. Personen und Kennzeichen unkenntlich gemacht."
-privacy_de = "Kennzeichen und Personen vor der Rekonstruktion unscharf, Nahaufnahmen von Personen verworfen, ein Beinfragment im Laden aus der Textur entfernt"
+privacy_de = "Kennzeichen und Personen vor der Rekonstruktion unscharf, Nahaufnahmen von Personen verworfen, ein Beinfragment im Laden aus der Textur entfernt, privater Teil des Durchgangs (Hauseingang) abgeschnitten"
 attribution = [
   "Aufnahme Bäckerei Heusser, Kirrberg, mit Erlaubnis der Inhaber, eigenes Werk",
   "Georeferenz: LoD2-Gebäude und DGM1 © GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0",
@@ -79,11 +82,12 @@ lods = ["medium", "reduced"]  # finest first
 until_m = [60]                # medium within 60 m of the scene bbox (the whole walk), reduced beyond
 ktx2_quality = 160            # ETC1S quality 1-255
 texture_px = { medium = 3072, reduced = 2048 }   # KTX2 atlas side; the wasm Basis encoder caps at ~12 Mpix (4096² fails)
-spawn_index = 0               # camera pose in video order: 0 = first street frame
+spawn_index = 0               # camera pose in video order: 0 = first street frame (faces the street facade, NNW)
+walk_end_heading_deg = 113    # end of the walk (last pose before the crop, U3 target) looks out of the passage to the street
 eye_m = 1.6
 portal_radius_m = 40
 # One tape measurement fixes the scale (camera-height prior, +-11 %): factor = true length / length in the zone.
-# Applied by the runtime about capture.scale.pivotLocal (the LoD2 corner); edit here + `run.sh bakery package`,
+# Applied by the runtime about capture.scale.pivotLocal (the LoD2 corner); edit here + `run.sh baeckerei-heusser package`,
 # or edit capture.scale.factor in the generated zone.json directly.
 scale_factor = 1.0
 
@@ -91,3 +95,16 @@ scale_factor = 1.0
 [[package.privacy_mask]]
 center = [5.95, 244.8, -1.45]   # blurred legs of a person baked into the shop floor (medium atlas ~ px 2390-2560, 3072-3320)
 radius = 0.6
+
+# Privacy crop (2026-11-05): consent covers the shop and its exterior, not the private part of the passage. Everything
+# beyond the shop's passage door (mailbox and meter box of No. 3, the private house door, residents' belongings at the
+# passage end, the passage roof over it) is removed from every LOD and its atlas texels are inpainted. Plan polygon in the
+# zone frame (x = E - E0, z = -(N - N0)), all heights: edge 1 runs across the passage just west of the shop door
+# (perpendicular to the passage axis, heading ~113 deg), then along the passage-side face of the shop's north wall
+# (0.25-0.45 m into the wall, the shop's inner wall face stays) to the west end; checked against the mesh walls.
+[[package.privacy_crop]]
+xz = [[6.9, -5.55], [5.0, -6.1], [4.0, -6.5], [3.0, -6.7], [1.5, -7.6], [-3.0, -9.5], [-3.0, -14.0], [10.47, -14.0]]
+
+[[package.privacy_mask]]
+center = [2.4, 244.2, -8.3]     # residents' belongings at the private house door, passage end (also inside the crop: belt and braces)
+radius = 1.0

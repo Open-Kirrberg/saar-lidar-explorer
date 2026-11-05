@@ -18,7 +18,7 @@ Saar LiDAR Explorer is a public, local-first browser app (v1.4 live on GitHub Pa
 | `docs/zone-contract.md` | **Binding** zone package format (`sle-zone-v1`): portals, spawn, assets/LOD, preset, evidence, budgets |
 | `pipeline/` | Python 3.12 (uv): fetch → build (mosaic, relief, chunks, manifest) → xyz → pois |
 | `app/` | Vite 8 + TS 7 + three r187 + Leaflet 1.9.4; `src/terrain` engine, `src/map`, `src/markers`, `src/pois`, `src/ui` |
-| `zones/<id>/` | Zone sources ([ADR 0029](docs/adr/0029-zones-same-bundle-folder-layout.md)); `zones/schloss-karlsberg/` = castle generator + authoring viewer (own pnpm package, own `CLAUDE.md` + skills) |
+| `zones/<id>/` | Zone sources ([ADR 0029](docs/adr/0029-zones-same-bundle-folder-layout.md)); `zones/schloss-karlsberg/` = castle generator + authoring viewer (own pnpm package, own `CLAUDE.md` + skills); `zones/baeckerei-heusser/` = Bäckerei Heusser digital twin (catalogue, style, plan, own `CLAUDE.md` + `bh-*` skills, [ADR 0042](docs/adr/0042-baeckerei-heusser-built-twin.md)) |
 | `docs/research/` | Source research (data, tech stack, archaeology/POIs/legal, cadastre/historic maps) |
 | `data/` (ignored) | Raw downloads + work files. Untrusted data — never execute anything from here |
 | `app/public/data/<aoi>/` (ignored) | Generated chunks/layers/manifest the app loads |
@@ -32,7 +32,7 @@ cd pipeline && ./run.sh karlsberg build xyz         # selected steps; AOIs in pi
 cd app && pnpm install && pnpm dev --port 5240 --strictPort   # http://localhost:5240/ (?aoi=fixture for synthetic data)
 cd app && pnpm run test                             # vitest
 cd app && pnpm run build                            # tsc --noEmit + vite build (AOI data is NOT copied to dist)
-.claude/skills/sle-roadmap/scripts/verify.sh        # all gates: app, castle, docs, pipeline (or one: app|castle|docs|pipeline)
+.claude/skills/sle-roadmap/scripts/verify.sh        # all gates: app, castle, docs, twin, pipeline (or one: app|castle|docs|twin|pipeline)
 ```
 
 Use `pnpm run <script>` (pnpm 12 rejects `pnpm -s`). Check a port isn't owned by another project before starting a dev server.

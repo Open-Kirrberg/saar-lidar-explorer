@@ -45,7 +45,7 @@ s = zoneSession(s, { type: 'exit' });                           // unmount, cam.
 
 **Perf:** `pnpm run perf:zone` (`scripts/perf-zone.mjs`, headless, needs a running preview with zone data; `--profile` adds a CPU profile of the goto) runs the phone proxy and desktop through enter → Rundflug → spawn → „Gehe zu“ Festsaal → walk → exit. JSON + shots go to `docs/shots/`.
 
-**🥖 Bakery (V2.8b, [ADR 0041](../../../docs/adr/0041-gltf-zone-runtime-walk-on-mesh.md)):** `pnpm run perf:gltf` (`scripts/perf-gltf-zone.mjs`, headless, needs a preview with the bakery package and `data/work/zones/bakery/package/package.json` for the `walkPath`) runs U3 with real input: fly to the portal → E → loading → street → BFS-planned walk (W / touch ▲) to the shop (highest camera point) and the courtyard (last camera point) → *Verlassen* → pose compared. JSON + `u3-<profile>-*.jpg` → `docs/shots/v2.8b/`.
+**🥖 Bakery (V2.8b, [ADR 0041](../../../docs/adr/0041-gltf-zone-runtime-walk-on-mesh.md)):** `pnpm run perf:gltf` (`scripts/perf-gltf-zone.mjs`, headless, needs a preview with the bakery package (zone id `baeckerei-heusser`, was `bakery`) and `data/work/zones/baeckerei-heusser/package/package.json` for the `walkPath`) runs U3 with real input: fly to the portal → E → loading → street → BFS-planned walk (W / touch ▲) to the shop (highest camera point) and the courtyard (last camera point) → *Verlassen* → pose compared. JSON + `u3-<profile>-*.jpg` → `docs/shots/v2.8b/`.
 
 | 2026-11-04, M4 Max | Phone proxy (390 px @3×, 4× CPU, 4G, quality mobil) | Desktop (1440 px @2×) |
 |---|---:|---:|

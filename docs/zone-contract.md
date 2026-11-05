@@ -23,7 +23,7 @@ Reference implementation: `app/src/zones/contract.ts` (TS loader/validator), `pi
   "format": "sle-zones-v1",
   "zones": [
     { "id": "schloss-karlsberg", "bboxEN": [[381255, 5464643], [383159, 5467054]] },  // bbox of footprint + portals
-    { "id": "bakery",            "bboxEN": [[Emin, Nmin], [Emax, Nmax]] }
+    { "id": "baeckerei-heusser", "bboxEN": [[Emin, Nmin], [Emax, Nmax]] }
   ]
 }
 ```
@@ -150,7 +150,7 @@ Castle values are illustrative (V2.7 sets the real ones).
 | Per-part evidence | `evidence.perPart = "_CONF"`: SCALAR `UNSIGNED_BYTE` vertex attribute, 0 low · 1 med · 2 high (as sle-recon-v1). `"extras"`: node `extras: { "confidence": "high"|"med"|"low", "evidence": "D"|"I"|"HMS"… }` | the *Gewissheit* control ([0011](adr/0011-castle-evidence-no-hms.md), [0019](adr/0019-feature-tiers.md)) |
 | Node names | `<assetId>/<part>[/<detail>]`, read from the glTF JSON (three sanitises `Object3D.name`) | picking, *Gehe zu* |
 | Colliders | `role: "collider"`: one low-poly mesh, never drawn; missing → walk mode collides with the `scene` assets' coarsest LOD (the first one loaded) | phone budget |
-| Privacy | **No people, no readable licence plates**, no house numbers other than the zone's own | H13, ADR 0009 |
+| Privacy | **No people, no readable licence plates**, no house numbers other than the zone's own, nothing outside the consent scope (private entrances, courtyards: cropped by the producer) | H13, ADR 0009, [0042](adr/0042-baeckerei-heusser-built-twin.md) |
 
 **LOD.** The runtime picks per asset the first level whose `until_m` ≥ the camera's distance to `bboxLocal` (null = ∞) and keeps the previous level drawn until the next one has loaded (no hole, no pop to nothing). Coarse first: the first-view set is every asset's last LOD.
 
@@ -232,7 +232,7 @@ interface ZoneHandle {
 
 ## 🧪 Examples
 
-| | 🏰 Castle (reconstructed) | 🥖 Bakery (captured) | 🧪 Fixture |
+| | 🏰 Castle (reconstructed) | 🥖 `baeckerei-heusser` (captured; was `bakery`) | 🧪 Fixture |
 |---|---|---|---|
 | `runtime` | `module: "schloss-karlsberg"` (generator + viewer code, lazy chunk) | `gltf` | `gltf` |
 | assets | optional (terrain, textures fetched by the module) | one `scene` asset, 2 LODs (100 k tris + 3072² KTX2, 50 k + 2048²), no collider | one 2-LOD box |

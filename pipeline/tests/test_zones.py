@@ -60,7 +60,7 @@ def test_module_registry():
     m = fixture()
     m["runtime"] = {"kind": "module", "module": "schloss-karlsberg"}
     assert Z.validate_manifest(m) == []
-    assert Z.validate_manifest(m, modules={"bakery"}) == ["zone module schloss-karlsberg not registered"]
+    assert Z.validate_manifest(m, modules={"other-module"}) == ["zone module schloss-karlsberg not registered"]
 
 
 def test_package_files(tmp_path: Path):

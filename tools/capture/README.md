@@ -6,8 +6,8 @@ runtime: [ADR 0041](../../docs/adr/0041-gltf-zone-runtime-walk-on-mesh.md)). It 
 `app/public/data/zones/<zone>/` + an entry in `zones/index.json`, valid per [`sle-zone-v1`](../../docs/zone-contract.md).
 
 ```bash
-tools/capture/run.sh bakery                    # all stages
-tools/capture/run.sh bakery georef export package   # selected stages (each reads the previous stage's output; ≈ 45 s)
+tools/capture/run.sh baeckerei-heusser                    # all stages
+tools/capture/run.sh baeckerei-heusser georef export package   # selected stages (each reads the previous stage's output; ≈ 45 s)
 cd tools/capture && uv run python -I -m pytest # tests
 ```
 
@@ -33,7 +33,7 @@ flowchart LR
 | `mesh` | Dense reconstruction, meshing, decimation and texture baking at several detail levels in one alignment | Apple Object Capture (`swift/pgtool.swift`) |
 | `georef` | Level → scale from camera height → indoor/outdoor cameras → plan fit vs LoD2 (fixed scale) → height from DGM1 → residuals | numpy/scipy, `capture/similarity.py` |
 | `export` | Crop, transform to the zone-local frame, downsize texture (JPEG), GLB per LOD + sidecar JSON + preview renders | trimesh |
-| `package` | Zone package: GLB → meshopt + quantized + KTX2 ETC1S atlas + unlit (`pack/pack.mjs`), privacy-mask texels inpainted, spawn = first camera, portal, footprint = padded hull of mesh + cameras, `zone.json` + `zones/index.json` merge, strict check (`pipeline/zones.py`); `walkPath` (cameras every 1.5 m) for `perf:gltf` | gltf-transform, ktx2-encoder (Basis wasm), meshoptimizer |
+| `package` | Zone package: GLB → meshopt + quantized + KTX2 ETC1S atlas + unlit (`pack/pack.mjs`), privacy crop (faces in `[[package.privacy_crop]]` plan polygons removed, their texels inpainted) + privacy-mask texels inpainted, spawn = first camera, portal, footprint = padded hull of mesh + cameras, `zone.json` + `zones/index.json` merge, strict check (`pipeline/zones.py`); `walkPath` (cameras every 1.5 m) for `perf:gltf` | gltf-transform, ktx2-encoder (Basis wasm), meshoptimizer |
 | `clean` | Delete unblurred raw frames, COLMAP database + duplicate model (≈ 1.3 GB on the bakery) | — |
 
 Every stage appends its wall-clock time to `data/work/zones/<zone>/timings.json` (the "hours per zone" metric).
@@ -75,7 +75,14 @@ Object Capture output is not metric, and a walk-through sees few walls, so every
 - **Output frame:** `x = E − E0`, `y = h` (DHHN2016), `z = −(N − N0)`; E0/N0 = rounded zone anchor, stored in the
   sidecar `<zone>.glb.json` together with the 4×4 transforms.
 
-## 🥖 Zone `bakery`
+## 🥖 Zone `baeckerei-heusser` (was `bakery`)
+
+> Since [ADR 0042](../../docs/adr/0042-baeckerei-heusser-built-twin.md) this capture is the **reference** for the built
+> digital twin in [`zones/baeckerei-heusser/`](../../zones/baeckerei-heusser/README.md) (alignment, measuring), not its
+> visible scene. **Rename (2026-11-05):** TOML `zones/baeckerei-heusser.toml`, work dir `data/work/zones/baeckerei-heusser/`
+> (move an old `data/work/zones/bakery/` there, then `run.sh baeckerei-heusser export package`: export file names carry
+> the id), package `app/public/data/zones/baeckerei-heusser/`; `former_ids = ["bakery"]` drops the old index entry,
+> delete an old `app/public/data/zones/bakery/` by hand.
 
 Bäckerei Heusser, Eckstr. 3, 66424 Homburg-Kirrberg (consented, PRD H6). One handheld wide-angle clip
 (`DJI_0079.MP4`, 4000×3000, 3568 frames): along the street → into the shop → back out → covered passage.
@@ -103,7 +110,7 @@ Bäckerei Heusser, Eckstr. 3, 66424 Homburg-Kirrberg (consented, PRD H6). One ha
 - Privacy: 363 frames blurred, 1540 boxes (137 plate tracks, 119 person tracks). Reviewed: `people_frames = [0, 1240]`
   (staff + customers in the shop); after it, only small or distant people, all blurred.
 
-**Zone package** (`app/public/data/zones/bakery/`, git-ignored):
+**Zone package** (`app/public/data/zones/baeckerei-heusser/`, git-ignored; numbers from 2026-11-04, before the privacy crop):
 
 | | `scene/medium.glb` | `scene/reduced.glb` |
 |---|---:|---:|
@@ -140,10 +147,28 @@ Looked at the whole reduced atlas and all 16 tiles (1024²) of the medium atlas:
 fragment (already blurred) on the shop floor is removed by `[[package.privacy_mask]]` (sphere r 0.6 m, all LODs;
 136 k / 40 k texels inpainted). Repeat this check after every `mesh` or `export` run.
 
+### 🔒 Privacy crop: private part of the passage (2026-11-05)
+Consent covers the shop and its exterior, not the private house entrance of No. 3 at the end of the covered passage
+(mailbox, meter box, house door, residents' belongings). `[[package.privacy_crop]]` removes everything beyond the shop's
+passage door: one plan polygon (zone frame x/z, all heights), its first edge across the passage just west of the shop
+door, then along the passage-side face of the shop's north wall (0.25–0.45 m into the wall, so the shop's inner wall
+face stays). Removed faces' atlas texels are inpainted too, plus a belt-and-braces `privacy_mask` sphere (r 1 m) at
+the passage end. Result: medium 6,652 / reduced 3,266 faces cut (850 k / 223 k texels inpainted incl. the leg mask),
+100 k → 93 k triangles. The walk path (`walkPath`, U3 target) ends at the last camera before the crop and looks out to
+the street (`walk_end_heading_deg = 113`); the spawn (first street frame) faces the street facade. Checked in the app
+from the passage, from above and at the walk end (before/after shots in the git-ignored `docs/shots/baeckerei-heusser/`).
+
+| TOML key (`[package]`) | Meaning |
+|---|---|
+| `[[package.privacy_crop]] xz = [[x, z], …]` | plan polygon (zone frame), faces with their centroid inside are removed in every LOD, texels inpainted |
+| `[[package.privacy_mask]] center, radius` | sphere, texels of faces inside are inpainted (geometry stays) |
+| `walk_end_heading_deg` / `spawn_heading_deg` | override the heading of the walk's last pose / of the spawn |
+| `former_ids = […]` | old ids of a renamed zone: their `zones/index.json` entries are dropped on merge |
+
 ### 📏 Fixing the scale with one tape measurement
 1. Measure one straight length on site (e.g. shop door width, counter length).
 2. Measure the same length in the zone (*Schweben*, `sle.zones.flow.handle().debug().pose` at both ends).
-3. `scale_factor = true / zone` in `zones/bakery.toml` → `run.sh bakery package` (or edit `capture.scale.factor` in
+3. `scale_factor = true / zone` in `zones/baeckerei-heusser.toml` → `run.sh baeckerei-heusser package` (or edit `capture.scale.factor` in
    `zone.json`). The runtime scales about the fitted LoD2 corner (`capture.scale.pivotLocal`); also set
    `capture.scale.source = "measured"`.
 
@@ -156,7 +181,7 @@ fragment (already blurred) on the shop floor is removed by `[[package.privacy_ma
   `frames/undistorted` (pinhole K in `undistort.json`).
 
 ### 🖼️ QA renders (git-ignored, regenerated by `georef` / `export`)
-`docs/shots/v2.8/bakery_georef_top.jpg` (mesh over LoD2 + ortho, cameras), `bakery_mesh_{oblique_se,oblique_nw,top}.jpg`
+`docs/shots/v2.8/<zone>_georef_top.jpg` (mesh over LoD2 + ortho, cameras), `<zone>_mesh_{oblique_se,oblique_nw,top}.jpg`
 
 ## 🧰 Toolchain (as run)
 
