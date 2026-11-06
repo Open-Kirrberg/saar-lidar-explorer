@@ -42,9 +42,9 @@ The capture's scale rests on an assumed camera height (± 11 %). **One tape leng
 
 ## Privacy
 
-Consent covers the shop and its exterior (`bh-datenschutz`). The public plan is made by `scripts/redact.py`: the passage is public only up to the shop's side opening (frame B `y ≤ 1.60`), nothing beyond it is drawn, and the pickup locker's position stays private. `check_plan.py` checks this. The full plan, the measurements and the work files stay in the *privater Materialordner (lokal, nicht im Repo)*.
+Consent covers the shop and its exterior (`bh-datenschutz`). The public plan is made by `scripts/redact.py`: the passage is public only up to the privacy line (frame B `y ≤ 4.35`, just behind the pickup cabinet; [ADR 0047](../../../docs/adr/0047-baeckerei-heusser-abholschrank-backstube-entrance.md), was 1.60 before 2026-11-06), nothing beyond it is drawn, and no ground sample inside the passage is published. The pickup cabinet (X1) is public with its position. `check_plan.py` checks this. The full plan, the measurements and the work files stay in the *privater Materialordner (lokal, nicht im Repo)*.
 
-Facts beyond the passage door that the full plan needs (positions, labels, the full sheet's extra drawing) are **data in the private folder** (`plan/work/private_facts.json`, read by `model.private_facts()`), never values in the committed scripts. Without that file the generators produce the public content only. `check_plan.py` also scans `plan/` and `build/` for private words and for the private coordinate pairs listed in that file ([ADR 0043](../../../docs/adr/0043-built-twin-package-reference-nav.md)).
+Facts beyond the privacy line that the full plan needs (positions, labels, the full sheet's extra drawing) are **data in the private folder** (`plan/work/private_facts.json`, read by `model.private_facts()`), never values in the committed scripts. Without that file the generators produce the public content only. `check_plan.py` also scans `plan/` and `build/` for private words and for the private coordinate pairs listed in that file ([ADR 0043](../../../docs/adr/0043-built-twin-package-reference-nav.md)).
 
 ## Commands
 

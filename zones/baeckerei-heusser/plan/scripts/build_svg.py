@@ -3,8 +3,8 @@
     python -I build_svg.py            # full sheet from the private plan -> <private>/plan/raumplan-v0.svg
     python -I build_svg.py --public   # public sheet from plan/raumplan-v0.json (redact.py) -> plan/raumplan-v0.svg
 
-Both sheets draw only the shop and its exterior up to the shop's passage door (bh-datenschutz); beyond it the public
-sheet shows a neutral "privat" hatch. The full sheet adds the drawing ops listed under `sheet` in the private facts
+Both sheets draw only the shop and its exterior, the covered passage up to the privacy line (redact.PASSAGE_PUBLIC_Y,
+ADR 0047: with the pickup cabinet, bh-datenschutz); beyond it the public sheet shows a neutral "privat" hatch. The full sheet adds the drawing ops listed under `sheet` in the private facts
 file (model.private_facts(), private folder only), so no private detail lives in this script.
 """
 import json
@@ -17,13 +17,14 @@ import paths  # noqa: E402
 import numpy as np
 
 from model import *
+from redact import PASSAGE_PUBLIC_Y  # noqa: E402
 
 PUBLIC = "--public" in sys.argv[1:]
 SRC = (paths.PLAN if PUBLIC else paths.PRIV) / "raumplan-v0.json"
 J = json.load(open(SRC))
 OUT = str((paths.PLAN if PUBLIC else paths.PRIV) / "raumplan-v0.svg")
 OV = [] if PUBLIC else private_facts().get("sheet", [])   # private sheet: extra drawing ops (data, not code)
-PV = 1.60  # public: the passage is drawn only up to the shop's passage door (privacy crop line, frame B y)
+PV = PASSAGE_PUBLIC_Y  # the passage is drawn only up to the privacy line (frame B y, ADR 0047)
 
 # ----------------------------------------------------------------------------- sheet + view transform
 W, H = 420, 297
@@ -364,6 +365,16 @@ for fid in ("F8", "F9"):
 pline([td(13.9, M["back_wall_c"]), td(18.4, M["back_wall_c"]), td(18.4, 12.6), td(13.9, 12.6), td(13.9, M["back_wall_c"])],
       stroke=ORA, stroke_width=0.2, stroke_dasharray="3 1.2")
 ptext(td(18.2, (M["shelf_front_c"] + cc0) / 2 + 0.06), "Abhängung Holz, UK ≈ 2,0 (über Schnitt)", size=1.3, anchor="end", rot=-45, fill=ORA)
+# Abholschrank in the passage (public, ADR 0047): fixture frame origin = street-side front corner, length along +y
+X1 = next((f for f in J["site"].get("fixtures", []) if f["id"] == "X1" and f.get("pose")), None)
+if X1:
+    (xf, yf), sz = X1["pose"]["xy"], X1["size"]
+    xb, y1 = xf - sz["d"], yf + sz["l"]
+    poly([(xb, yf), (xf, yf), (xf, y1), (xb, y1)], fill="#fbe9d9", stroke=ORA, stroke_width=0.35, stroke_dasharray="1 0.5")
+    line((xb, yf), (xf, y1), stroke=ORA, stroke_width=0.12)
+    line((xb, y1), (xf, yf), stroke=ORA, stroke_width=0.12)
+    ptext((xf + 0.15, (yf + y1) / 2 + 0.1), "Abholschrank", size=1.8, fill=ORA, weight="bold")
+    ptext((xf + 0.15, (yf + y1) / 2 - 0.17), f"{num(sz['l'])} × {num(sz['d'])}, H ≈ {num(sz['h'])} ab Durchgang", size=1.4, fill=ORA)
 overlay("fixtures")
 
 # ---- labels
@@ -379,7 +390,7 @@ ptext((ce + 0.2, 5.78), "(nicht erfasst)", size=1.5, fill=BLUE)
 ptext((26.15, 1.1), "Durchgang", size=2.2, anchor="middle", weight="bold")
 ptext((26.15, 0.88), "(überbaut)", size=1.4, anchor="middle")
 if not OV:
-    ptext((26.3, 5.4), "privat – nicht dargestellt", size=2.2, anchor="middle", fill=GREY, style="italic", rot=-90)
+    ptext((26.3, (PV + 9.8) / 2), "privat – nicht dargestellt", size=2.2, anchor="middle", fill=GREY, style="italic", rot=-90)
 overlay("labels")
 ptext((18.0, 7.6), "noch nicht erfasst", size=2.4, anchor="middle", fill=GREY, style="italic")
 ptext((15.6, 0.9), "noch nicht erfasst", size=2.0, anchor="middle", fill=GREY, style="italic", rot=-90)
@@ -397,9 +408,9 @@ for (u, v, s_) in ((22.0, -0.45, "−0,72 (243,53) Straße, DGM1 243,54"), (25.0
 # ---- dimension chains
 # D1: facade openings (outside, mesh)
 d1 = [(M["win1_sw_u"], 0), (M["pier1_sw_u"], 0), (M["pier1_ne_u"], 0), (M["pier2_sw_u"], 0), (M["pier2_ne_u"], 0), (M["pillar_sw_u"], 0), (north_outer_u(0), 0)]
-chain(d1, -0.75, sig_edges=[0.15, 0.03, 0.06, 0.03, 0.03, 0.03, 0.10], letters={})
+chain(d1, -0.75, sig_edges=[0.15, 0.15, 0.15, 0.03, 0.03, 0.03, 0.10], letters={})  # pier 1 from the photo ratio (±0.15)
 # A marker over pier1 SW .. pillar
-dim((M["pier1_sw_u"], 0), (M["pillar_sw_u"], 0), -1.25, f"A = {lab(M['pillar_sw_u'] - M['pier1_sw_u'], sig_len(5.85))} (Maßstab!)", color="#d1006f", size=1.9)
+dim((M["pier1_sw_u"], 0), (M["pillar_sw_u"], 0), -1.25, f"A = {lab(M['pillar_sw_u'] - M['pier1_sw_u'], sig_len(M['pillar_sw_u'] - M['pier1_sw_u']))} (Maßstab!)", color="#d1006f", size=1.9)
 circle_letter(X(18.1), Y(-1.25), "A")
 # D2: interior widths (mesh)
 dim((M["sw_wall_u"], 1.0), (gs, 1.0), 0.0, lab(gs - M["sw_wall_u"], sig_len(5.0)), color=BLUE, letter=None, ext=False)
@@ -411,6 +422,10 @@ chain([(27.05, 0.0), (27.05, gf), (27.05, M["cafe_back_v"]), (27.05, cend)], -0.
 circle_letter(X(27.05) - 3.4, Y((gf + M["cafe_back_v"]) / 2 + 0.4), "C")
 # passage width
 dim((M["north_outer_mesh_u"], 0.5), (pf, 0.5), 0.0, lab(pf - M["north_outer_mesh_u"], sig_len(2.87)), color=BLUE)
+if X1:  # J: street end of the passage .. Abholschrank
+    dim((X1["pose"]["xy"][0] + 0.05, 0.0), (X1["pose"]["xy"][0] + 0.05, X1["pose"]["xy"][1]), 0.0,
+        f"{num(X1['pose']['xy'][1])} ±{num(X1['sigma_m'])}", color=ORA, size=1.6)
+    circle_letter(X(X1["pose"]["xy"][0] + 0.05) + 3.0, Y(2.2), "J")
 overlay("dims")
 # diagonal: back wall K->I
 dim(K, ROOM["I"], 0.55, lab(math.dist(K, ROOM["I"]), sig_len(4.95, 0.05, 0.08)), color=BLUE, letter="D")

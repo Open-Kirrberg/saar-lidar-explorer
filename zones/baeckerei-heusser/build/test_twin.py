@@ -17,11 +17,13 @@ sys.path[:0] = [str(HERE), str(HERE.parents[2] / "pipeline")]
 
 import build as B  # noqa: E402
 from bh_twin import geom  # noqa: E402
+from bh_twin.auslage import CARD_INK, CARD_MAT  # noqa: E402
 from bh_twin.glb import node_geometry, read_glb  # noqa: E402
 from bh_twin.plan import load_plan  # noqa: E402
 
 pytestmark = pytest.mark.skipif(not (B.DTM.is_file() and B.OSM.is_file() and B.LOD2.is_dir()),
                                 reason="local data (data/work/overall/dtm.tif, data/raw/lod2, data/raw/osm) missing")
+CARD_MATS = (CARD_MAT, CARD_INK)
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*){1,2}$")
 
 
@@ -139,6 +141,11 @@ def test_nothing_detailed_beyond_the_privacy_line(built):
         in_passage = (b[:, 0] > xo + 0.05) & (b[:, 0] < p.passage_far_x + 0.3)
         beyond = in_passage & (b[:, 1] > p.passage_public_y + 0.02)
         assert not beyond.any(), f"{beyond.sum()} vertices in the private passage, e.g. {b[beyond][:3]}"
+    # the pickup cabinet stands in front of the line, back to the shop's north wall, on the passage floor
+    cb = F.zone_to_b(_pts(built["twin"], ["fassade/abholschrank"]))
+    assert cb[:, 1].max() < p.passage_public_y - 0.1 and cb[:, 1].min() > 2.5
+    xo = np.array([p.north_outer_x(y) for y in cb[:, 1]])
+    assert (cb[:, 0] > xo - 0.03).all() and (cb[:, 0] < xo + 0.5).all()
     # the walkable floor stays on the customer side of the counter inside the shop
     nb = F.zone_to_b(_pts(built["nav"], ["nav/floor"]))
     f1 = p.fixtures["F1"]
@@ -158,14 +165,20 @@ def test_nav_connects_street_porch_and_shop(built):
     U = union_all([Polygon(t[:, [0, 2]]) for t in tri if Polygon(t[:, [0, 2]]).area > 1e-8]).buffer(0.01)
     parts = geom.polys(U)
     # gable: the street in front of the south gable mural (a discoverable object), seen face-on from the floor
-    spots = {"spawn": B.SPAWN_B, "porch": (23.1, 0.7), "shop": (22.6, 2.3), "gable": (-10.3, 0.7)}
+    # passage: in front of the pickup cabinet; backstube: the landing in front of the closed door (ADR 0047)
+    spots = {"spawn": B.SPAWN_B, "porch": (23.1, 0.7), "shop": (22.6, 2.3), "gable": (-10.3, 0.7),
+             "passage": (26.0, 3.6), "backstube": (2.0, 1.2)}
     homes = []
     for name, xy in spots.items():
         z = F.zone(np.array([xy[0], xy[1], 0.0]))
         k = [i for i, q in enumerate(parts) if q.contains(Point(z[0], z[2]))]
         assert k, f"{name} not on the walkable floor"
         homes.append(k[0])
-    assert len(set(homes)) == 1, "street, gable view, porch and shop are not one walkable area"
+    assert len(set(homes)) == 1, "street, gable view, porch, shop, passage and Backstube steps are not one walkable area"
+    # nobody walks into the pickup cabinet or up to the passage end wall
+    for xy in ((25.0, 3.6), (25.9, p.passage_public_y - 0.05)):
+        z = F.zone(np.array([xy[0], xy[1], 0.0]))
+        assert not U.buffer(-0.02).contains(Point(z[0], z[2])), xy
     # the floor height steps up the porch: 5 risers between street and shop floor
     assert max(np.ptp(tri[:, :, 1], axis=1)) < 1.0
 
@@ -227,7 +240,8 @@ def test_product_slots(built):
     for s in doc["slots"]:
         count[s["fixture"]] = count.get(s["fixture"], 0) + 1
     want = {"theke/vitrine/ebene-1": 6, "theke/vitrine/ebene-2": 6, "theke/vitrine/ebene-3": 8, "theke/brezelstaender": 10,
-            "brotregal/ebene-1": 14, "brotregal/ebene-2": 15, "brotregal/ebene-3": 14, "gitterregal": 5, "dosenregal": 13,
+            "brotregal/ebene-1": 14, "brotregal/ebene-2": 14, "brotregal/ebene-3": 14, "brotregal/ebene-4": 14,
+            "gitterregal": 5, "dosenregal": 13,
             "getraenkekuehlschrank": 5, "wuerfelregal": 8}
     want.update({f"brotregal/koerbe/korb-{k}": 1 for k in range(1, 7)})
     assert count == want
@@ -244,8 +258,8 @@ def test_product_slots(built):
 
 
 def test_facade_round_3b(built):
-    """Facade details are built; the shop lettering is on by default (owners' OK, ADR 0044); nothing of the pickup cabinet (its place is
-    in the private part of the passage)."""
+    """Facade details are built; the shop lettering is on by default (owners' OK, ADR 0044); wave A (ADR 0047): the
+    Backstube entrance and the pickup cabinet are built, nothing of the mailboxes or the residents' door."""
     names = set(built["twin"])
     for must in ("fassade/glasbausteine", "fassade/fenstergewaende", "fassade/schlussstein-1", "fassade/schlussstein-2",
                  "fassade/wandmalerei", "fassade/obergeschoss-fenster", "fassade/fenster-rollladen", "fassade/fallrohr",
@@ -253,7 +267,12 @@ def test_facade_round_3b(built):
         assert must in names, must
     assert [n for n in names if n.endswith("/schrift")], "lettering is on by default (ADR 0044)"
     assert built["report"]["lettering"] is True
-    assert not [n for n in names if n.startswith("fassade/abholschrank")]
+    for must in ("fassade/backstube-eingang", "fassade/backstube-eingang/tuer", "fassade/backstube-eingang/handlauf",
+                 "fassade/abholschrank/korpus", "fassade/abholschrank/tueren", "fassade/abholschrank/schild",
+                 "umgebung/durchgang/pflaster"):
+        assert must in names, must
+    out_of_scope = re.compile(r"briefkast|hauseingang|haustuer|klingel|hof\b|zaehler")
+    assert not [n for n in names if out_of_scope.search(n)]
     # the SSW end is a gable now: the end wall reaches the ridge
     p = built["plan"]
     b = p.frame.zone_to_b(_pts(built["twin"], ["fassade/aussenwand"]))
@@ -297,7 +316,7 @@ def test_products_rest_on_their_slots(built):
         if not name.startswith(B.PRODUCT_NODE):
             continue
         s = slots[B.product_slot(name)]
-        pts = np.concatenate([p.reshape(-1, 3) for _, p, _ in items])
+        pts = np.concatenate([p.reshape(-1, 3) for m, p, _ in items if m not in CARD_MATS])     # price cards: own test
         h, t = math.radians(s["pose"]["heading_deg"]), math.radians(s.get("tilt_deg", 0.0))
         f = np.array([math.sin(h), 0.0, -math.cos(h)])
         up = np.array([0.0, 1.0, 0.0])
@@ -370,3 +389,69 @@ def test_fill_feierabend_first(tmp_path):
     assert prods and all(n["extras"]["fills"] == ["morgens"] for n in prods)
     cat = json.loads((tmp_path / "catalogue.json").read_text(encoding="utf-8"))
     assert cat["fills"]["default"] == "feierabend" and [s["id"] for s in cat["fills"]["states"]] == ["feierabend", "morgens"]
+
+
+# ----------------------------------------------------------------------------------------------- wave B: Verkaufsraum
+
+def _normals(p: np.ndarray, i: np.ndarray) -> np.ndarray:
+    a, b, c = p[i[:, 0]], p[i[:, 1]], p[i[:, 2]]
+    n = np.cross(b - a, c - a)
+    return n / np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-12)
+
+
+def test_wave_b_shell(built):
+    """White aluminium glazing (only the door sensor stays black), the soffit's wood only on its vertical fascia (white
+    plank underside), 4 bread tiers (red front rail on the top one, white price rails on the two lower ones)."""
+    tw = built["twin"]
+    for name in ("verkaufsraum/glaswand", "verkaufsraum/ladentuer"):
+        mats = {m: len(i) for m, _, i in tw[name]}
+        assert mats.get("alu-weiss", 0) > 50, name
+        assert mats.get("lack-schwarz", 0) <= 60, (name, mats)              # the motion sensor only (one small box)
+        assert "chrom" not in mats, name
+    soffit = tw["verkaufsraum/deckenblende"]
+    mats = {m for m, _, _ in soffit}
+    assert {"holz", "heusser-rot", "decke"} <= mats
+    for m, p, i in soffit:
+        if m == "holz":
+            assert np.abs(_normals(p, i)[:, 1]).max() < 0.05, "wood only on the vertical fascia"
+        if m == "decke":
+            assert (_normals(p, i)[:, 1] < -0.99).any(), "white underside"
+    names = set(tw)
+    assert {f"brotregal/ebene-{k}" for k in range(1, 5)} <= names and "brotregal/ebene-5" not in names
+    assert any(m == "heusser-rot" for m, _, _ in tw["brotregal/ebene-4"])
+    assert not any(m == "heusser-rot" for k in (1, 2, 3) for m, _, _ in tw[f"brotregal/ebene-{k}"])
+    assert any(m == "regal-weiss" for m, _, _ in tw["brotregal/preisschienen"])
+
+
+def test_price_cards(built):
+    """Every product on a tier with a price rail carries its white card (name + price from products.json) at the
+    tier's front edge, below the slot surface; no other product node has one; the morning fill fills both rails."""
+    import math
+    slots = _slots(built)
+    fill = json.loads((B.FILLS / f"{B.DEFAULT_FILL}.json").read_text(encoding="utf-8"))
+    prods = {p["id"]: p for p in json.loads(B.PRODUCTS.read_text(encoding="utf-8"))["products"]}
+    railed = {sid for sid in slots if sid.startswith(("brotregal/ebene-1/", "brotregal/ebene-2/"))}
+    assert len(railed) == 28 and railed <= set(fill["slots"])
+    for name, items in built["twin"].items():
+        if not name.startswith(B.PRODUCT_NODE):
+            continue
+        sid = B.product_slot(name)
+        card = [p for m, p, _ in items if m == CARD_MAT]
+        ink = [p for m, p, _ in items if m == CARD_INK]
+        e = fill["slots"].get(sid, {})
+        want = sid in railed and prods.get(e.get("product"), {}).get("price_eur") is not None
+        assert bool(card) == want and bool(ink) == want, name
+        if not want:
+            continue
+        s = slots[sid]
+        pts = np.concatenate(card)
+        h, t = math.radians(s["pose"]["heading_deg"]), math.radians(s.get("tilt_deg", 0.0))
+        f = np.array([math.sin(h), 0.0, -math.cos(h)])
+        up = np.array([0.0, 1.0, 0.0])
+        n = up * math.cos(t) + f * math.sin(t)
+        ft = f * math.cos(t) - up * math.sin(t)
+        loc = (pts - np.array([s["pose"]["x"], s["pose"]["y"], s["pose"]["z"]])) @ np.column_stack([np.cross(n, ft), n, ft])
+        assert loc[:, 1].max() < 0.0, name                                   # hangs below the loaves' surface
+        assert loc[:, 2].min() > s["size"]["d"] / 2, name                     # in front of the slot
+        assert np.ptp(loc[:, 0]) <= s["size"]["w"] + 0.01, name              # one card per slot, no overlap
+

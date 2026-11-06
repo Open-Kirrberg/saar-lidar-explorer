@@ -120,6 +120,53 @@ def gable_frame(p) -> WallFrame:
     return WallFrame(a + t * u, u, np.array([u[1], -u[0]]))
 
 
+# ----------------------------------------------------------------------------------------------- plinth cap
+
+def plinth_cap_spans(fac: dict, x_end: float) -> list[tuple[float, float]]:
+    """Street-face spans of the plinth cap from the SSW corner to the porch, open over the Backstube entrance niche
+    (from its rounded left edge to the corner post right of it). Pure."""
+    b = fac.get("backstube_eingang")
+    if not b:
+        return [(0.0, x_end)]
+    a = v(b["x0"]) - v(b["kante_links_r"])
+    c = v(b["x1"]) + v(b["eckpfosten"]["b"]) / 2
+    return [(0.0, a), (c, x_end)]
+
+
+# ----------------------------------------------------------------------------------------------- keystones
+
+def keystone_half_width(k: dict, z0: float, z1: float):
+    """Half width of a keystone at height z: a trapezoid from `w_bottom` (at z0) to `w_top` (at z1); a plain `w` (older
+    plans) gives a rectangle. Pure."""
+    wb = v(k.get("w_bottom"), v(k["w"]))
+    wt = v(k.get("w_top"), v(k["w"]))
+    return lambda z: (wb + (wt - wb) * min(max((z - z0) / (z1 - z0), 0.0), 1.0)) / 2
+
+
+KEYSTONE_MARGIN = 0.025  # free stone between the inscription and the slanted sides
+
+
+def inscription_polys(k: dict, z0: float, z1: float, half_w) -> list:
+    """The keystone's inscription lines (plan `inschrift`, top line first; old plans: „H.H.“ over „1933“) as outlines
+    centred on s = 0: the lines stacked from the bottom up with a gap of 0.3 × their height, each shrunk to fit the
+    stone at its height (KEYSTONE_MARGIN from the slanted sides). Pure (fonts from the pinned matplotlib)."""
+    from .lettering import text_polys
+    lines = k.get("inschrift") or [{"text": "H.H.", "h": 0.10}, {"text": "1933", "h": 0.07}]
+    out, base = [], z0 + 0.06
+    for ln in reversed(lines):
+        t = text_polys(ln["text"], v(ln["h"]), fraktur=ln.get("schrift") == "fraktur")
+        bx0, by0, bx1, by1 = t.bounds
+        t = affinity.translate(t, 0.0, base - by0)                        # descenders stay inside the stone
+        lim = 2 * (half_w(base) - KEYSTONE_MARGIN)
+        if bx1 - bx0 > lim:
+            t = affinity.scale(t, lim / (bx1 - bx0), lim / (bx1 - bx0), origin=(0.0, base))
+        out.insert(0, t)
+        base = t.bounds[3] + 0.3 * v(ln["h"])
+    if out and out[0].bounds[3] > z1 - 0.03:
+        raise ValueError(f"inscription of {k.get('id')} does not fit the keystone ({out[0].bounds[3]:.3f} > {z1 - 0.03:.3f})")
+    return out
+
+
 # ----------------------------------------------------------------------------------------------- pure patterns
 
 def ashlar(shape, rows: list[float], lengths: tuple[float, ...], joint: float, seed: str, light_share: float = 0.4,
@@ -404,7 +451,8 @@ class Facade:
         n = sc.node("fassade/aussenwand/abdeckplatte", "ext", "fassade/aussenwand", source="photo", sigma=0.1)
         top, h, pr = self.sockel_top, v(self.f["sockel"]["cap_h"]), v(self.f["sockel"]["cap_proj"])
         x_end = float(self.p.openings["O3"]["from"][0])
-        self.st.block(sc, n, "abdeckplatte", 0.0, x_end, top - h, top, 0.0, pr, 0.008)
+        for a, b in plinth_cap_spans(self.f, x_end):           # interrupted by the Backstube entrance niche
+            self.st.block(sc, n, "abdeckplatte", a, b, top - h, top, 0.0, pr, 0.008)
 
     # ---- glass-block panel
     def _glass_blocks(self, sc: Scene) -> None:
@@ -467,29 +515,36 @@ class Facade:
                     st.block(sc, n, mat, a, b, z0 + i * hc + 0.004, z0 + (i + 1) * hc - 0.004, 0.0, pr)
             k = keys[oid]
             kw, kh = v(k["w"]), v(k["h"])
+            kz0, kz1 = z1 - 0.02, z1 - 0.02 + kh
+            half_w = keystone_half_width(k, kz0, kz1)       # trapezoid (Street View 2026-11-06: wider at the top)
             cx = (x0 + x1) / 2
             left, right = x0 - min(band + 0.06, lim[-1]), x1 + min(band + 0.06, lim[1])
-            # head row: 3 stones each side of the keystone, the ones next to it light (as on the real facade)
+            # head row: 3 stones each side of the keystone, the ones next to it light (as on the real facade); the
+            # stone next to the keystone follows its slanted side
+            za, zb = z1 + 0.004, z1 + head_h
             for a_, b_, sgn in ((left, cx - kw / 2, -1), (cx + kw / 2, right, 1)):
                 xs = np.linspace(a_, b_, 4)
                 for j in range(3):
                     near = (j == 2) if sgn < 0 else (j == 0)
                     mat = "sandstein-hell" if near else "sandstein-rot"
-                    st.block(sc, n, mat, xs[j] + 0.004, xs[j + 1] - 0.004, z1 + 0.004, z1 + head_h, 0.0, pr)
+                    if near:
+                        ea, eb = cx + sgn * (half_w(za) + 0.004), cx + sgn * (half_w(zb) + 0.004)
+                        outer = xs[j] + 0.004 if sgn < 0 else xs[j + 1] - 0.004
+                        st.relief(sc, n, mat, Polygon([(outer, za), (ea, za), (eb, zb), (outer, zb)]), 0.0, pr)
+                    else:
+                        st.block(sc, n, mat, xs[j] + 0.004, xs[j + 1] - 0.004, za, zb, 0.0, pr)
             kn = sc.node(f"fassade/{k['id']}", "ext", source="photo", sigma=k["w"]["sigma_m"])
             sc.styled.add(kn.name)
-            kz0, kz1 = z1 - 0.02, z1 - 0.02 + kh
-            st.block(sc, kn, "sandstein-rot", cx - kw / 2, cx + kw / 2, kz0, kz1, 0.0, pr + 0.015, 0.008)
             front = pr + 0.015
+            st.relief(sc, kn, "sandstein-rot", Polygon([(cx - half_w(kz0), kz0), (cx + half_w(kz0), kz0),
+                                                       (cx + half_w(kz1), kz1), (cx - half_w(kz1), kz1)]), 0.0, front)
             if k.get("motiv") == "brezel":
                 shape = affinity.translate(pretzel(min(kw, kh) * 0.40), cx, (kz0 + kz1) / 2)
                 st.relief(sc, kn, "sandstein-relief", shape, front, 0.018)
             elif self.lettering:
-                from .lettering import text_polys
                 tn = sc.node(f"fassade/{k['id']}/schrift", "ext", f"fassade/{k['id']}", source="photo", sigma=0.1)
-                for txt, zc, hgt in (("H.H.", (kz0 + kz1) / 2 + 0.04, 0.10), ("1933", kz0 + 0.07, 0.07)):
-                    t = affinity.translate(text_polys(txt, hgt), cx, zc)
-                    st.relief(sc, tn, "sandstein-relief", t, front, 0.010)
+                for t in inscription_polys(k, kz0, kz1, half_w):
+                    st.relief(sc, tn, "sandstein-relief", affinity.translate(t, cx, 0.0), front, 0.010)
 
     # ---- pilaster beside window 1 and quoins at the SSW corner
     def _pilaster_and_quoins(self, sc: Scene) -> None:
@@ -686,12 +741,21 @@ class Facade:
         e = 0.012
         faces = ((np.array([x0, y0]), np.array([x1, y0])), (np.array([x1, y0]), np.array([x1, y1])),
                  (np.array([x1, y1]), np.array([x0, y1])), (np.array([x0, y1]), np.array([x0, y0])))
+        treads = porch.get("pillar_treads") or []              # E3: the pillar stands on the lowest treads
         for i, (a, b) in enumerate(faces):
             wf = WallFrame.of_line(a, b)
             if np.dot(wf.n, (a + b) / 2 - np.array([(x0 + x1) / 2, (y0 + y1) / 2])) < 0:
                 wf = WallFrame.of_line(b, a)
             s_lo, s_hi = sorted([wf.s_of(a), wf.s_of(b)])
             shape = sbox(s_lo - e, zb, s_hi + e, ztop)
+            for ya, yb, _, zt in treads:
+                g = e + 0.002                                        # the cladding stands e proud of the pillar
+                foot = sbox(x0 - g, ya - (g if ya <= y0 + 1e-6 else 0.0), x1 + g, yb + (g if yb >= y1 - 1e-6 else 0.0))
+                seg = LineString([a, b]).intersection(foot)
+                if seg.is_empty or seg.length < 1e-4:
+                    continue
+                ss = sorted(wf.s_of(q) for q in np.asarray(seg.coords))
+                shape = shape.difference(sbox(ss[0] - e - 0.001, zb - 1.0, ss[-1] + e + 0.001, zt))
             wf.face(sc, n, "sockel-fuge", shape, e)
             for q, k in ashlar(shape, [0.24, 0.20], (0.20, 0.26, 0.32), 0.012, f"pfeiler{i}", 0.4, top=ztop):
                 wf.face(sc, n, plinth_tone(q, k, f"pfeiler{i}"), q, e + 0.006)

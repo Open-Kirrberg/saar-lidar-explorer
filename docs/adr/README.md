@@ -51,9 +51,11 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0040](0040-castle-triangles-phone-viewport.md) | Castle triangles within 1.5 M in the phone viewport: far crown hulls, waiver dropped | Accepted | 2026-11-04 | ADR 0033 triangle waiver (3.7 M) |
 | [0041](0041-gltf-zone-runtime-walk-on-mesh.md) | Generic glTF zone runtime: coarse-first LODs, walk on the captured mesh, scale as data | Accepted | 2026-11-04 | |
 | [0042](0042-baeckerei-heusser-built-twin.md) | Bäckerei Heusser as a built digital twin (mesh = reference), stylised look, consent scope shop + exterior | Accepted | 2026-11-05 | (bakery's visible scene: the captured mesh) |
-| [0043](0043-built-twin-package-reference-nav.md) | Built twin package: `reference` role, `twin` block, true scale, walking on the nav floor; capture never public | Accepted | 2026-11-05 | (0042's open contract point) |
-| [0044](0044-baeckerei-heusser-owner-consent.md) | Bäckerei Heusser: owners agree to prices, the shop's lettering and the history since 1933 (no allergens yet, nothing beyond the privacy line) | Accepted | 2026-11-05 | 0042 |
+| [0043](0043-built-twin-package-reference-nav.md) | Built twin package: `reference` role, `twin` block, true scale, walking on the nav floor; capture never public | Accepted (passage line superseded by [0047](0047-baeckerei-heusser-abholschrank-backstube-entrance.md)) | 2026-11-05 | (0042's open contract point) |
+| [0044](0044-baeckerei-heusser-owner-consent.md) | Bäckerei Heusser: owners agree to prices, the shop's lettering and the history since 1933 (no allergens yet, nothing beyond the privacy line) | Accepted (cabinet line superseded by [0047](0047-baeckerei-heusser-abholschrank-backstube-entrance.md)) | 2026-11-05 | 0042 |
 | [0045](0045-baeckerei-heusser-fills-visitor-catalogue.md) | Bäckerei Heusser: product fills as checked data, `produkt/<slot>` nodes, visitor catalogue file `built/catalogue.json` | Accepted | 2026-11-05 | 0042, 0044 |
+| [0046](0046-built-twin-tour-fills-routes.md) | Built twins: fill toggle + guided tour as optional catalogue data, pick proxies never through walls, tour glides routed through the door | Accepted | 2026-11-06 | |
+| [0047](0047-baeckerei-heusser-abholschrank-backstube-entrance.md) | Bäckerei Heusser: Abholschrank and Backstube entrance in scope, passage privacy line 1.60 → 4.35, equal shop windows | Accepted | 2026-11-06 | 0043 (passage line), 0044 (cabinet unbuilt) |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 

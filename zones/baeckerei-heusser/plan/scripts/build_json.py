@@ -129,11 +129,13 @@ def opening(id_, typ, wall_id, a, c, name, source, edge=0.05, **kw):
 
 
 openings = [
-    opening("O1", "fenster", "W1", (M["win1_sw_u"], 0), (M["pier1_sw_u"], 0), "Schaufenster 1", "mesh", edge=0.15,
+    opening("O1", "fenster", "W1", (M["win1_sw_u"], 0), (M["pier1_sw_u"], 0), "Schaufenster 1", "mesh+photo", edge=0.1,
             sill=val(0.05, 0.10, "mesh", ref="FFB"), head=val(1.90, 0.25, "mesh", ref="FFB"),
-            note="SW-Laibung unscharf (Glas/Spiegelung)"),
-    opening("O2", "fenster", "W1", (M["pier1_ne_u"], 0), (M["pier2_sw_u"], 0), "Schaufenster 2", "mesh",
-            sill=val(0.05, 0.10, "mesh", ref="FFB"), head=val(1.90, 0.25, "mesh", ref="FFB")),
+            note=("gleich breit wie Schaufenster 2 (Street View, Breitenverhältnis ±5 %, Nutzerangabe 2026-11-06); "
+                  "SW-Laibung unscharf (Glas/Spiegelung), Pfeiler 1 nach dem Foto verschoben")),
+    opening("O2", "fenster", "W1", (M["pier1_ne_u"], 0), (M["pier2_sw_u"], 0), "Schaufenster 2", "mesh+photo", edge=0.1,
+            sill=val(0.05, 0.10, "mesh", ref="FFB"), head=val(1.90, 0.25, "mesh", ref="FFB"),
+            note="gleich breit wie Schaufenster 1 (Street View); NO-Laibung scharf im Mesh"),
     opening("O3", "eingang_vorbau", None, (M["pier2_ne_u"], 0), (M["pillar_sw_u"], 0), "Eingang (offener Vorbau, Straßenseite)", "mesh",
             head=val(2.00, 0.25, "mesh", ref="FFB", note="Bogen, Scheitel ≈ 2,0")),
     opening("O4", "tuer", "W3", ROOM["C"], ROOM["D"], "Ladentür (Glasfront, zweiflüglig)", "mesh",
@@ -190,9 +192,10 @@ fixtures = [
             {"l": 18.4 - 13.9, "d": 12.6 - M["back_wall_c"], "h": None}, "photo+mesh", 0.6,
             underside=val(2.00, 0.25, "mesh", ref="FFB", note="Abhängung 1,9-2,1 im Mesh, unsicher")),
 ]
-fixtures = fixtures_r3.apply(fixtures, ROOM)   # round 3: video corrections + new fixtures (one source of truth)
+fixtures = fixtures_r3.apply(fixtures, ROOM, fixtures_r3.window_spans(openings))   # round 3 (one source of truth)
 
-ext_fixtures = PF.get("site_fixtures", [])
+# public site fixtures (the pickup cabinet since 2026-11-06, exterior_r3) + private ones from the private facts file
+ext_fixtures = exterior_r3.site_fixtures(north_outer_u) + PF.get("site_fixtures", [])
 
 wandmalerei = {"id": "X2", "type": "wandmalerei", "name_de": "Wandmalerei über Pavillon", "status": "unbestaetigt",
                "source": "nutzerangabe", "pose": None, "sigma_m": None,

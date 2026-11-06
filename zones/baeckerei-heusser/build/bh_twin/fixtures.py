@@ -20,7 +20,7 @@ import math
 
 import numpy as np
 from shapely import affinity
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon
 
 from . import geom
 from .plan import Fixture, Plan
@@ -30,6 +30,9 @@ BEVEL = geom.BEVEL_FIXTURE      # 12 mm (style.md: fixtures 10–20 mm)
 ROD_R = 0.0125                  # bread-shelf tier tubes, Ø 25 mm (video)
 RAIL_R = 0.022                  # rounded front rail of each tier
 SMALL = 0.006                   # thin boards, frames, rails
+BREAD_SLOTS = 14                # product slots per bread tier (≈ 0.24 wide: one round loaf, or loaves lengthwise)
+PRICE_RAIL = (0.010, 0.035)     # white price rail under a tier's front rail: thickness, height (2026 photo) ...
+PRICE_RAIL_Y, PRICE_RAIL_Z = -0.016, -0.055   # ... its front face and lower edge in the tilted tier frame
 
 
 def _floor_ao(vb: np.ndarray) -> np.ndarray:
@@ -144,6 +147,14 @@ class Local:
             v3 = np.column_stack([v2[:, 0], np.full(len(v2), y), v2[:, 1]])
             vz = F.zone(self.b(v3))
             n.add(mat, vz, geom.wind(vz, t, nz), nz, None if ao is None else np.full(len(vz), float(ao)))
+
+    def card_frame(self, x, y, z) -> np.ndarray:
+        """Zone-frame frame of a flat card hung at local (x, y, z) facing local −y: rows origin, right (local +x),
+        up (local +z), front (local −y). Products code draws price cards in it (auslage.price_card)."""
+        F = self.sc.F
+        o = F.zone(self.b([[x, y, z]])[0])
+        axes = [F.zone_dir(self.dir_b(v)) for v in ([1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, -1.0, 0.0])]
+        return np.vstack([o] + [a / np.linalg.norm(a) for a in axes])
 
     # ---- AO and slots
     def slab(self, poly, z, k=0.3, reach=0.5) -> None:
@@ -473,13 +484,14 @@ def brotregal(sc: Scene, p: Plan) -> None:
             C.slot(f"brotregal/koerbe/korb-{k}", 1, xc, 0.01 + bd / 2, zf + 0.002, bw - 0.08, bd - 0.08, BASKET_FILL_DEPTH + 0.06, 20,
                    ["broetchen", "laugengebaeck"], "≈ 20 Brötchen in einer Lage (gehäuft ≈ 30)", a)
 
-    # ---- rod tiers (front edge = z), price rails on 1–2, red front edge on the top tier
+    # ---- rod tiers (front edge = z; the plan's `ebene-1..n`, bottom up): white price rails with cards on the tiers the
+    # plan marks `preisschiene` (2026 photo), red front edge on the top tier
     nr = _node(sc, "brotregal/preisschienen", fx, "photo", 0.3)
-    counts = {"ebene-1": 14, "ebene-2": 15, "ebene-3": 14}
-    for sid in ("ebene-1", "ebene-2", "ebene-3"):
-        s = sl.get(sid)
-        if not s:
-            continue
+    tiers = sorted((k for k in sl if k.startswith("ebene-")), key=lambda k: int(k.split("-")[1]))
+    zs_ = [f * sl[k]["z"] for k in tiers]
+    for ti, sid in enumerate(tiers):
+        s = sl[sid]
+        top = ti == len(tiers) - 1
         z, sd, a, nrods = f * s["z"], f * s["d"], float(s.get("neigung_deg", 25)), int(s.get("stangen", 7))
         yf = d - 0.025 - sd * math.cos(math.radians(a))
         T = L.sub(0.0, yf, z, tilt_deg=a)
@@ -491,19 +503,23 @@ def brotregal(sc: Scene, p: Plan) -> None:
         for xk in xstd:
             T.box(n, "champagner", xk, 0.02, -0.028, 0.02, sd - 0.02, 0.028, 0.003, 1)
         # rounded front rail: a fat tube that stands a little proud of the rods (the loaves rest against it)
-        T.rod(n, "heusser-rot" if sid == "ebene-3" else "champagner", (tw + 0.005, 0.0, ROD_R - 0.004),
+        T.rod(n, "heusser-rot" if top else "champagner", (tw + 0.005, 0.0, ROD_R - 0.004),
               (l - tw - 0.005, 0.0, ROD_R - 0.004), RAIL_R, 12)
-        if sid != "ebene-3":                                            # slim price strip with clips below the rail
-            T.sweep(nr, "champagner", geom.rounded_rect_profile(0.008, 0.03, 0.003, 1, -0.012, -0.05), tw + 0.02, l - tw - 0.02, 3)
-            for c in range(8):
-                xc = tw + (c + 0.5) * (l - 2 * tw) / 8
-                T.box(nr, "chrom", xc - 0.010, -0.018, -0.048, 0.020, 0.008, 0.026, 0.0)
+        rail = bool(s.get("preisschiene"))
+        if rail:                                                        # white price rail under the front rail
+            T.sweep(nr, "regal-weiss", geom.rounded_rect_profile(PRICE_RAIL[0], PRICE_RAIL[1], 0.003, 1, PRICE_RAIL_Y, PRICE_RAIL_Z),
+                    tw + 0.02, l - tw - 0.02, 3)
         L.slab(geom.rect(tw, yf, l - tw, d), z, 0.25, 0.32)
-        m = counts.get(sid, 14)
+        m = BREAD_SLOTS
         U = l - 2 * tw - 0.04
+        # clear height: under the next tier (perpendicular to the slope, less its rods); the top tier is open
+        hc = 0.30 if top else min(0.30, (zs_[ti + 1] - z) * math.cos(math.radians(a)) - 2 * ROD_R - 0.01)
         for j in range(m):
-            T.slot(f"brotregal/{sid}", j + 1, tw + 0.02 + (j + 0.5) * U / m, sd / 2, 0.026, U / m - 0.01, sd - 0.04,
-                   0.30 if sid == "ebene-3" else 0.26, 1, ["brot"], "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)", a)
+            xc = tw + 0.02 + (j + 0.5) * U / m
+            T.slot(f"brotregal/{sid}", j + 1, xc, sd / 2, 0.026, U / m - 0.01, sd - 0.03, round(hc, 3), 2, ["brot"],
+                   "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)", a)
+            if rail:                                                    # where the slot's price card clips on
+                sc.price_cards[f"brotregal/{sid}/platz-{j + 1:02d}"] = T.card_frame(xc, PRICE_RAIL_Y - 0.002, PRICE_RAIL_Z + PRICE_RAIL[1])
 
 
 # ----------------------------------------------------------------------------------------------- grid shelf (F3)
@@ -827,14 +843,21 @@ def haengelampen(sc: Scene, p: Plan, soffit_poly, soffit_z: float) -> None:
         mount = _mount(p, fx, soffit_poly, soffit_z)
         zb = _lamp_bottom(p, fx, mount)
         R = (fx.l or 0.18) / 2
+        H = fx.h or 2 * R
         L = Local.at(sc, fx.xy, 0.0)
         n = _node(sc, f"{cid}/leuchte", fx)
         L.lathe(n, "lack-schwarz", 0, 0, mount - 0.025, [(0.04, 0.0), (0.04, 0.025), (0.0, 0.025)], 10, cap_bottom=True, ao=None)
-        L.rod(n, "lack-schwarz", (0, 0, zb + 2 * R - 0.005), (0, 0, mount - 0.025), 0.003, 4, ao=None)
-        prof = [(0.48 * R, zb)] + [(R * math.sin(a), zb + R - R * math.cos(a)) for a in np.linspace(math.radians(45), math.radians(165), 6)] + [(0.0, zb + 2 * R)]
-        L.lathe(n, "lack-schwarz", 0, 0, 0, prof, 14, ao=None)
-        L.lathe(n, "lampe", 0, 0, zb + 0.012, [(0.47 * R, 0.0), (0.0, 0.0)], 12, ao=None)
+        L.rod(n, "lack-schwarz", (0, 0, zb + H - 0.005), (0, 0, mount - 0.025), 0.003, 4, ao=None)
+        L.lathe(n, "lack-schwarz", 0, 0, 0, egg_profile(R, H, zb), 14, ao=None)
+        L.lathe(n, "lampe", 0, 0, zb + 0.012, [(0.52 * R, 0.0), (0.0, 0.0)], 12, ao=None)
         L.lathe(n, "glow", 0, 0, zb + 0.004, [(0.0, -0.045), (0.07, -0.02), (0.085, 0.0), (0.0, 0.0)], 12, ao=None)
+
+
+def egg_profile(R: float, H: float, zb: float) -> list[tuple[float, float]]:
+    """Black egg / teardrop shade (2026 photo, video): open at the bottom, widest low down, tapering to the cord.
+    (r, z) from the rim at `zb` to the tip at zb + H. Pure."""
+    shape = ((0.58, 0.0), (0.86, 0.07), (1.0, 0.25), (0.97, 0.44), (0.84, 0.62), (0.62, 0.78), (0.34, 0.91), (0.12, 0.98), (0.0, 1.0))
+    return [(R * r, zb + H * t) for r, t in shape]
 
 
 def strahler(sc: Scene, p: Plan) -> None:
@@ -948,14 +971,72 @@ def cafe_deko(sc: Scene, p: Plan) -> None:
     for q in fr.raw.get("rahmen", []):
         n = _node(sc, f"bilderwand/{q['id']}", fr)
         x, z, w, hh = q["x"] * f, q["z"] * f - fr.z, q["w"] * f, q["h"] * f
-        Rr.box(n, "chrom", x, 0.0, z, w, fr.d, hh, 0.006, 1, ao=None)
-        Rr.flat(n, "sepia", geom.rect(x + 0.035, z + 0.035, x + w - 0.035, z + hh - 0.035), -0.002)
+        Rr.box(n, "chrom", x, 0.0, z, w, fr.d, hh, 0.006, 1, ao=None)        # thin silver frame (video)
+        Rr.flat(n, "regal-weiss", geom.rect(x + 0.018, z + 0.018, x + w - 0.018, z + hh - 0.018), -0.002)   # white mat
+        paper = (x + 0.045, z + 0.045, x + w - 0.045, z + hh - 0.045)
+        Rr.flat(n, "sepia-hell", geom.rect(*paper), -0.003)
+        for mat, shape in vignette(VIGNETTES.get(q["id"], "weizen"), *paper):
+            Rr.flat(n, mat, shape, -0.004 if mat == "sepia" else -0.005)
 
     fc = p.fixtures["F27"]
     Cc = Local.of(sc, fc)
     n = _node(sc, "wanduhr/korpus", fc)
     Cc.box(n, "chrom", 0.0, 0.0, 0.0, fc.l, fc.d, fc.h, 0.01, 2, ao=None)
     Cc.flat(n, "lack-schwarz", geom.rect(0.025, 0.03, fc.l - 0.025, fc.h - 0.03), -0.002)
+
+
+# Old pictures as simple drawn vignettes with neutral motifs (no faces, no people, no copies of the historic photos;
+# ADR 0044 covers the photos, the style rules forbid photo textures): frame id -> motif
+VIGNETTES = {"rahmen-1": "weizen", "rahmen-2": "haus", "rahmen-3": "ofen"}
+
+
+def vignette(kind: str, x0: float, z0: float, x1: float, z1: float) -> list[tuple[str, object]]:
+    """Flat sepia drawing inside the paper rectangle (x along the wall, z up): [(material, shapely shape)], mid tone
+    (`sepia`) first, line work (`sepia-dunkel`) on top. Motifs: `weizen` (three ears of wheat), `haus` (an old gabled
+    shop house with two shop windows), `ofen` (a brick oven arch with loaves and a peel). Deterministic, pure."""
+    from shapely.ops import unary_union
+    W, H = x1 - x0, z1 - z0
+    cx = (x0 + x1) / 2
+    mid, ink = [], []
+    if kind == "weizen":
+        for k, ang in enumerate((-16.0, 0.0, 16.0)):
+            stem = geom.rect(cx - 0.003, z0 + 0.10 * H, cx + 0.003, z0 + 0.62 * H)
+            grains = [affinity.rotate(affinity.scale(Point(cx + side * 0.012, z0 + (0.60 + 0.055 * j) * H).buffer(0.02, 6), 0.45, 1.0),
+                                      -side * 25, origin=(cx + side * 0.012, z0 + (0.60 + 0.055 * j) * H))
+                      for j in range(6) for side in ((-1, 1) if j < 5 else (0,))]
+            ear = unary_union([stem] + grains)
+            ink.append(affinity.rotate(ear, ang, origin=(cx, z0 + 0.10 * H)))
+        mid.append(affinity.scale(Point(cx, z0 + 0.12 * H).buffer(0.25 * W, 12), 1.0, 0.18))           # ribbon
+    elif kind == "haus":
+        bx0, bx1, gz, ez = x0 + 0.12 * W, x1 - 0.12 * W, z0 + 0.12 * H, z0 + 0.58 * H
+        mid.append(geom.rect(bx0, gz, bx1, ez))                                                              # house
+        mid.append(Polygon([(bx0 - 0.02 * W, ez), (bx1 + 0.02 * W, ez), (cx, z0 + 0.86 * H)]))           # gable
+        ink.append(geom.rect(x0 + 0.04 * W, gz - 0.006, x1 - 0.04 * W, gz))                                # street
+        ww = (bx1 - bx0) / 7
+        ink += [geom.rect(bx0 + ww * a, gz + 0.04 * H, bx0 + ww * (a + 1.6), gz + 0.22 * H) for a in (0.6, 4.8)]   # shop windows
+        ink.append(geom.rect(cx - 0.35 * ww, gz, cx + 0.35 * ww, gz + 0.24 * H))                           # door
+        ink += [geom.rect(bx0 + ww * a, gz + 0.30 * H, bx0 + ww * (a + 0.9), gz + 0.40 * H) for a in (0.9, 3.05, 5.2)]
+        ink.append(geom.rect(cx - 0.4 * ww, ez + 0.06 * H, cx + 0.4 * ww, ez + 0.14 * H))                 # gable window
+    elif kind == "ofen":
+        r_out, r_in = 0.30 * H, 0.20 * H
+        cz = z0 + 0.30 * H
+        arch = Point(cx, cz).buffer(r_out, 16).difference(Point(cx, cz).buffer(r_in, 16)).intersection(
+            geom.rect(cx - r_out, cz, cx + r_out, cz + r_out))
+        mid.append(unary_union([arch, geom.rect(cx - r_out, z0 + 0.10 * H, cx - r_in, cz),
+                                geom.rect(cx + r_in, z0 + 0.10 * H, cx + r_out, cz)]))                     # brick oven front
+        mouth = Point(cx, cz).buffer(r_in, 16).intersection(geom.rect(cx - r_in, cz, cx + r_in, cz + r_in)).union(
+            geom.rect(cx - r_in, z0 + 0.22 * H, cx + r_in, cz))
+        loaves = unary_union([affinity.scale(Point(cx + dx * r_in, z0 + 0.25 * H).buffer(0.05 * H, 8), 1.6, 0.8) for dx in (-0.5, 0.0, 0.5)])
+        ink.append(mouth.difference(loaves.buffer(0.004)))
+        ink.append(geom.rect(x0 + 0.05 * W, z0 + 0.09 * H, x1 - 0.05 * W, z0 + 0.10 * H))                  # floor
+        for k in range(3):                                                                                     # brick joints
+            a = math.pi * (k + 1) / 4
+            ink.append(affinity.rotate(geom.rect(cx + r_in, cz - 0.002, cx + r_out, cz + 0.002), math.degrees(a), origin=(cx, cz)))
+        peel = affinity.rotate(geom.rect(cx + 0.32 * W, z0 + 0.18 * H, cx + 0.34 * W, z0 + 0.80 * H), 18.0, origin=(cx + 0.33 * W, z0 + 0.18 * H))
+        blade = affinity.scale(Point(cx + 0.33 * W, z0 + 0.15 * H).buffer(0.045 * H, 8), 1.4, 0.9)
+        ink.append(unary_union([peel, blade]))
+    paper = geom.rect(x0, z0, x1, z1)
+    return [("sepia", g.intersection(paper)) for g in mid] + [("sepia-dunkel", g.intersection(paper)) for g in ink]
 
 
 def matten(sc: Scene, p: Plan) -> None:

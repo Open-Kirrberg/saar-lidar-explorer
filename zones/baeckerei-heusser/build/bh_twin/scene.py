@@ -34,6 +34,7 @@ class Scene:
         self.slot_geo: list = []       # (frame-B corner points of each slot's standing surface) for --debug-slots
         self.styled: set[str] = set()  # catalogue ids built as styled models this round (status `built`)
         self.anchors: dict[str, np.ndarray] = {}  # zone-frame points products hang from (pretzel stand pole)
+        self.price_cards: dict[str, np.ndarray] = {}  # slot id -> zone-frame card frame (origin, right, up, front)
 
     # ---- registry ----
     def node(self, name: str, rig: str, cid: str | None = None, source: str = "plan", sigma: float = 0.1) -> geom.Node:

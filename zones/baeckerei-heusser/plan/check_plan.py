@@ -6,7 +6,7 @@
 Rules: every measured value is `{v, sigma_m, source}`, every point `{xy, sigma_m, source}`, every fixture and
 opening carries a source and a sigma, references (wall points, opening walls, polygon) resolve, the plan's
 `scale.factor` equals the one scale factor in tools/capture/zones/baeckerei-heusser.toml, and (public file, the
-default) nothing beyond the shop's passage door and no courtyard is in it (bh-datenschutz). `--private` skips the
+default) nothing beyond the passage privacy line and no courtyard is in it (bh-datenschutz). `--private` skips the
 privacy rules for the full plan in the private folder. `check(doc, public=True)` is the tested pure function.
 
 The public *sources* are checked too (`scan_sources`): the generator scripts (plan/scripts, build/) must not name
@@ -27,7 +27,7 @@ TOML = REPO / "tools" / "capture" / "zones" / "baeckerei-heusser.toml"
 SCHEMA = "sle-raumplan/0.1"
 SOURCES = {"lod2", "dgm1", "alkis", "osm", "mesh", "photo", "tape", "video", "nutzerangabe"}
 PASSAGE_X = 24.6          # frame B: the covered passage lies at x > 24.6 (outside the bakery's north wall)
-PASSAGE_PUBLIC_Y = 1.60   # ... and is public only up to the shop's passage door
+PASSAGE_PUBLIC_Y = 4.35   # ... and is public only up to this line (ADR 0047: just behind the pickup cabinet; was 1.60)
 PRIVATE_WORDS = re.compile(r"\b(Hof|Hauseingang|Briefkasten|Zähler\w*|Klingel\w*)\b", re.I)
 PRIVATE_FACTS = Path(os.environ.get("BH_PRIVAT", REPO.parent / "baeckerei-heusser-privat")) / "plan" / "work" / "private_facts.json"
 ZONE = HERE.parent
@@ -137,7 +137,7 @@ def check(doc, public: bool = True, toml_factor: float | None = None) -> list[st
 
 
 def privacy(doc) -> list[str]:
-    """Public file: nothing beyond the shop's passage door, no courtyard, no private paths."""
+    """Public file: nothing beyond the passage privacy line (PASSAGE_PUBLIC_Y), no courtyard, no private paths."""
     errs = []
     for at, s in _strings(doc):
         if PRIVATE_WORDS.search(s):

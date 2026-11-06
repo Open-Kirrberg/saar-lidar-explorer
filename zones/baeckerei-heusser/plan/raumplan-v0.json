@@ -1267,24 +1267,51 @@
     "sigma_m": 0.08,
     "source": "mesh+dgm1"
    },
-   "note_de": "öffentlich nur bis zur Ladentür (Rahmen B y ≤ 1,60); der hintere Teil ist privat",
-   "public_until_y": 1.6
+   "note_de": "öffentlich bis kurz hinter den Abholschrank (Rahmen B y ≤ 4,35); der hintere Teil ist privat",
+   "public_until_y": 4.35
   },
   "fixtures": [
    {
     "id": "X1",
     "type": "schrank",
-    "name_de": "Abholschrank (außen)",
-    "pose": null,
-    "size": {
-     "l": 0.95,
-     "d": 0.4,
-     "h": 1.7
+    "name_de": "Abholschrank",
+    "pose": {
+     "xy": [
+      25.153,
+      3.225
+     ],
+     "z": -0.65,
+     "rot_deg": 90.0
     },
-    "source": "mesh+video",
-    "sigma_m": 0.39,
-    "status": "nur_privat",
-    "note_de": "steht im privaten Teil des Durchgangs: Lage nur im privaten Plan"
+    "size": {
+     "l": 0.9,
+     "d": 0.42,
+     "h": 1.75
+    },
+    "dims": {
+     "w": {
+      "v": 0.9,
+      "sigma_m": 0.1,
+      "source": "photo"
+     },
+     "d": {
+      "v": 0.42,
+      "sigma_m": 0.05,
+      "source": "photo"
+     },
+     "h": {
+      "v": 1.75,
+      "sigma_m": 0.1,
+      "source": "photo",
+      "ref": "Durchgangsboden"
+     }
+    },
+    "source": "mesh+video+photo",
+    "sigma_m": 0.3,
+    "status": "geschaetzt",
+    "z_ref": -0.65,
+    "front": "+x (Türen zum Durchgang)",
+    "note_de": "im überdachten Durchgang an der Nordwand der Bäckerei, gleich um die Ecke vom Eingang; grauer Kunststoffschrank mit 2 × 2 Lamellentüren und schwarzem Griffband; Schild nur „Abholstation“"
    },
    {
     "id": "X2",
@@ -1364,7 +1391,7 @@
      "sigma_m": 0.03,
      "source": "video"
     },
-    "note_de": "Glasbausteine im Flechtverband, blassgrün; die Eckseite im Rücksprung ist nicht dargestellt"
+    "note_de": "Glasbausteine im Flechtverband, blassgrün; die Eckseite im Rücksprung gehört zum Backstube-Eingang"
    },
    "fenster_rollladen": {
     "from": [
@@ -1486,7 +1513,17 @@
      "id": "schlussstein-1",
      "opening": "O1",
      "w": {
-      "v": 0.42,
+      "v": 0.44,
+      "sigma_m": 0.06,
+      "source": "photo"
+     },
+     "w_top": {
+      "v": 0.48,
+      "sigma_m": 0.06,
+      "source": "photo"
+     },
+     "w_bottom": {
+      "v": 0.4,
       "sigma_m": 0.06,
       "source": "photo"
      },
@@ -1496,13 +1533,23 @@
       "source": "photo"
      },
      "motiv": "brezel",
-     "note_de": "Brezel im Kreis als Relief"
+     "note_de": "Trapez; Brezel im Kreis als Relief"
     },
     {
      "id": "schlussstein-2",
      "opening": "O2",
      "w": {
-      "v": 0.42,
+      "v": 0.44,
+      "sigma_m": 0.06,
+      "source": "photo"
+     },
+     "w_top": {
+      "v": 0.48,
+      "sigma_m": 0.06,
+      "source": "photo"
+     },
+     "w_bottom": {
+      "v": 0.4,
       "sigma_m": 0.06,
       "source": "photo"
      },
@@ -1511,8 +1558,28 @@
       "sigma_m": 0.06,
       "source": "photo"
      },
-     "motiv": "glatt",
-     "note_de": "trägt eine Inschrift; nur mit Build-Flag `--lettering` (Standard aus: glatter Stein)"
+     "motiv": "inschrift",
+     "inschrift": [
+      {
+       "text": "H.H.",
+       "schrift": "fraktur",
+       "h": {
+        "v": 0.18,
+        "sigma_m": 0.03,
+        "source": "photo"
+       }
+      },
+      {
+       "text": "AD 1933",
+       "schrift": "fraktur",
+       "h": {
+        "v": 0.07,
+        "sigma_m": 0.01,
+        "source": "photo"
+       }
+      }
+     ],
+     "note_de": "Trapez; Inschrift „H.H.“ in Frakturschrift über „AD 1933“, Relief im selben Stein (Schriftzug der Bäckerei, ADR 0044)"
     }
    ],
    "kellergitter": [
@@ -1703,7 +1770,8 @@
     "sturz": "flach",
     "source": "video",
     "sigma_m": 0.2,
-    "note_de": "gerader Sturz, Untersicht = Vorbaudecke; Eckpfeiler mit Sandsteinquadern rot/hell"
+    "stufen_unter_pfeiler": 2,
+    "note_de": "gerader Sturz, Untersicht = Vorbaudecke; Eckpfeiler mit Sandsteinquadern rot/hell; die zwei untersten Stufen laufen unter dem Eckpfeiler bis zur Gebäudekante durch (Video)"
    },
    "handlauf": {
     "h": {
@@ -1730,6 +1798,163 @@
      "source": "mesh+video"
     },
     "note_de": "vordere Dachfläche links der Lisene mit Schiefer in Rautendeckung (Street View)"
+   },
+   "backstube_eingang": {
+    "x0": {
+     "v": 1.35,
+     "sigma_m": 0.25,
+     "source": "photo"
+    },
+    "x1": {
+     "v": 2.65,
+     "sigma_m": 0.25,
+     "source": "photo"
+    },
+    "depth": {
+     "v": 1.4,
+     "sigma_m": 0.25,
+     "source": "photo"
+    },
+    "head": {
+     "v": 3.3,
+     "sigma_m": 0.4,
+     "source": "photo"
+    },
+    "risers": 5,
+    "total_rise": {
+     "v": 0.97,
+     "sigma_m": 0.15,
+     "source": "dgm1+photo"
+    },
+    "tread": {
+     "v": 0.27,
+     "sigma_m": 0.04,
+     "source": "photo"
+    },
+    "landing": {
+     "v": 0.32,
+     "sigma_m": 0.1,
+     "source": "photo"
+    },
+    "landing_z": {
+     "v": 0.0,
+     "sigma_m": 0.1,
+     "source": "photo",
+     "ref": "FFB"
+    },
+    "belag": "terrazzo",
+    "kante_links_r": {
+     "v": 0.12,
+     "sigma_m": 0.04,
+     "source": "photo"
+    },
+    "wange_links": {
+     "b": {
+      "v": 0.12,
+      "sigma_m": 0.04,
+      "source": "photo"
+     },
+     "h": {
+      "v": 0.12,
+      "sigma_m": 0.04,
+      "source": "photo"
+     },
+     "note_de": "Sandstein-Wange entlang der Treppe an der linken Wand"
+    },
+    "wange_rechts": {
+     "cap_top": {
+      "v": 0.05,
+      "sigma_m": 0.05,
+      "source": "photo",
+      "ref": "FFB"
+     },
+     "cap_proj": {
+      "v": 0.06,
+      "sigma_m": 0.02,
+      "source": "photo"
+     },
+     "note_de": "Sandstein-Riemchen mit Abdeckplatte wie der Fassadensockel, darüber Glasbausteine bis zum Sturz"
+    },
+    "eckpfosten": {
+     "b": {
+      "v": 0.08,
+      "sigma_m": 0.02,
+      "source": "photo"
+     },
+     "note_de": "hellgrauer Metallpfosten an der Ecke zur Glasbausteinwand"
+    },
+    "tuer": {
+     "w": {
+      "v": 1.0,
+      "sigma_m": 0.1,
+      "source": "photo"
+     },
+     "h": {
+      "v": 2.1,
+      "sigma_m": 0.15,
+      "source": "photo"
+     },
+     "rahmen": {
+      "v": 0.06,
+      "sigma_m": 0.02,
+      "source": "photo"
+     },
+     "anschlag": "links",
+     "griff": "rechts",
+     "staebe": 4,
+     "tritt": {
+      "v": 0.3,
+      "sigma_m": 0.05,
+      "source": "photo"
+     },
+     "note_de": "geschlossene Aluminiumtür mit Riffelglas, 4 senkrechten Stäben und Trittblech; nichts dahinter dargestellt"
+    },
+    "handlauf": {
+     "seite": "rechts",
+     "h": {
+      "v": 0.9,
+      "sigma_m": 0.1,
+      "source": "photo"
+     },
+     "d": {
+      "v": 0.03,
+      "sigma_m": 0.01,
+      "source": "photo"
+     },
+     "y_top": {
+      "v": 1.3,
+      "sigma_m": 0.15,
+      "source": "photo"
+     },
+     "note_de": "schwarzer Rundstahl, oben Wandhalter am Türrahmen, unten kurz senkrecht auf die Abdeckplatte"
+    },
+    "note_de": "Eingang zur Backstube (Nutzerangabe 2026-11-06), Nische mit Terrazzostufen rechts neben den Eckquadern; nur außen dargestellt, die Tür bleibt zu"
+   },
+   "durchgang": {
+    "belag": {
+     "verband": "fischgraet",
+     "stein_l": {
+      "v": 0.2,
+      "sigma_m": 0.03,
+      "source": "video"
+     },
+     "stein_b": {
+      "v": 0.1,
+      "sigma_m": 0.02,
+      "source": "video"
+     },
+     "note_de": "rotbraunes Betonpflaster im Fischgrätverband (Video, Foto)"
+    },
+    "sockelband": {
+     "top": {
+      "v": -0.07,
+      "sigma_m": 0.15,
+      "source": "photo",
+      "ref": "FFB"
+     },
+     "note_de": "braun gestrichener Sockel an beiden Wänden des Durchgangs (Foto, Video)"
+    },
+    "note_de": "Schlitzrinnen im Pflaster sind nicht dargestellt (Lage nicht bestimmt)"
    }
   }
  },
@@ -1996,13 +2221,13 @@
         0.0
        ],
        "to": [
-        18.55,
+        18.755,
         0.0
        ],
        "width": {
-        "v": 1.7,
-        "sigma_m": 0.28,
-        "source": "mesh"
+        "v": 1.9,
+        "sigma_m": 0.25,
+        "source": "mesh+photo"
        },
        "name_de": "Schaufenster 1",
        "sill": {
@@ -2017,14 +2242,14 @@
         "source": "mesh",
         "ref": "FFB"
        },
-       "note": "SW-Laibung unscharf (Glas/Spiegelung)"
+       "note": "gleich breit wie Schaufenster 2 (Street View, Breitenverhältnis ±5 %, Nutzerangabe 2026-11-06); SW-Laibung unscharf (Glas/Spiegelung), Pfeiler 1 nach dem Foto verschoben"
       },
       {
        "id": "O2",
        "type": "fenster",
        "wall": "W1",
        "from": [
-        19.12,
+        19.325,
         0.0
        ],
        "to": [
@@ -2032,9 +2257,9 @@
         0.0
        ],
        "width": {
-        "v": 2.11,
-        "sigma_m": 0.24,
-        "source": "mesh"
+        "v": 1.91,
+        "sigma_m": 0.25,
+        "source": "mesh+photo"
        },
        "name_de": "Schaufenster 2",
        "sill": {
@@ -2048,7 +2273,8 @@
         "sigma_m": 0.25,
         "source": "mesh",
         "ref": "FFB"
-       }
+       },
+       "note": "gleich breit wie Schaufenster 1 (Street View); NO-Laibung scharf im Mesh"
       },
       {
        "id": "O3",
@@ -2351,36 +2577,48 @@
         },
         {
          "id": "ebene-1",
-         "z": 1.2,
+         "z": 1.12,
          "d": 0.4,
          "neigung_deg": 25,
          "stangen": 7,
+         "preisschiene": true,
          "sigma_m": 0.1,
-         "source": "video",
-         "note_de": "Stangenboden mit Preisschiene"
+         "source": "photo",
+         "note_de": "Stangenboden mit weißer Preisschiene und Preiskärtchen"
         },
         {
          "id": "ebene-2",
-         "z": 1.5,
+         "z": 1.36,
+         "d": 0.4,
+         "neigung_deg": 25,
+         "stangen": 7,
+         "preisschiene": true,
+         "sigma_m": 0.1,
+         "source": "photo",
+         "note_de": "Stangenboden mit weißer Preisschiene und Preiskärtchen"
+        },
+        {
+         "id": "ebene-3",
+         "z": 1.6,
          "d": 0.4,
          "neigung_deg": 25,
          "stangen": 7,
          "sigma_m": 0.1,
-         "source": "video",
-         "note_de": "Stangenboden mit Preisschiene"
+         "source": "photo",
+         "note_de": "Stangenboden"
         },
         {
-         "id": "ebene-3",
-         "z": 1.8,
+         "id": "ebene-4",
+         "z": 1.84,
          "d": 0.5,
          "neigung_deg": 25,
          "stangen": 11,
          "sigma_m": 0.1,
-         "source": "video",
+         "source": "photo",
          "note_de": "oben, rote Vorderkante"
         }
        ],
-       "note_de": "Wandseitig, gegenüber der Theke; 3 Felder à ≈ 1,2 m, Vorderkante der Böden = z",
+       "note_de": "Wandseitig, gegenüber der Theke; 3 Felder à ≈ 1,2 m, Vorderkante der Böden = z. Stand 2026 (Foto): 4 Stangenböden + Korbebene; im Video 2019 waren es 3",
        "bays": 3,
        "koerbe": {
         "n": 6,
@@ -3203,7 +3441,7 @@
        "name_de": "Strahlerschiene",
        "pose": {
         "xy": [
-         16.95,
+         17.053,
          0.8
         ],
         "z": 0.0,
@@ -3226,7 +3464,7 @@
        "name_de": "Strahlerschiene",
        "pose": {
         "xy": [
-         19.27,
+         19.378,
          0.8
         ],
         "z": 0.0,
@@ -3327,14 +3565,14 @@
         "rot_deg": 180.0
        },
        "size": {
-        "l": 1.95,
+        "l": 1.75,
         "d": 0.3,
         "h": 0.4
        },
        "source": "video",
        "sigma_m": 0.4,
        "status": "geschaetzt",
-       "note_de": "Filz, Kürbisse, Sonnenblumen; Girlande am Sturz"
+       "note_de": "Filz, Kürbisse, Sonnenblumen; Girlande am Sturz; 8 cm Abstand zu beiden Laibungen"
       },
       {
        "id": "F36",
@@ -3342,7 +3580,7 @@
        "name_de": "Schaufenster-Deko (Schaufenster 1)",
        "pose": {
         "xy": [
-         18.5,
+         18.705,
          0.9
         ],
         "z": 0.0,
@@ -3482,8 +3720,8 @@
  "measurements": "messliste.md (A–J); Ergebnisse als source=tape-Werte hier eintragen und scale.factor setzen",
  "privacy": {
   "version": "public",
-  "rule": "bh-datenschutz: Einwilligung = Laden + Außenansicht; nichts hinter der Ladentür im Durchgang, keine Privatbereiche",
-  "passage_public_until_y": 1.6,
+  "rule": "bh-datenschutz: Einwilligung = Laden + Außenansicht; im Durchgang nichts hinter der Grenze y = 4,35 (Abholschrank ja, ADR 0047), keine Privatbereiche",
+  "passage_public_until_y": 4.35,
   "full_version": "privater Materialordner (lokal, nicht im Repo)"
  }
 }

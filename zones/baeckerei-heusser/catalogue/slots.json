@@ -26,18 +26,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.747,
-    "y": 245.558,
+    "y": 245.478,
     "z": 0.395,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -47,18 +47,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.664,
-    "y": 245.558,
+    "y": 245.478,
     "z": 0.16,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -68,18 +68,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.582,
-    "y": 245.558,
+    "y": 245.478,
     "z": -0.075,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -89,18 +89,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.5,
-    "y": 245.558,
+    "y": 245.478,
     "z": -0.311,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -110,18 +110,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.418,
-    "y": 245.558,
+    "y": 245.478,
     "z": -0.546,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -131,18 +131,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.336,
-    "y": 245.558,
+    "y": 245.478,
     "z": -0.781,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -152,18 +152,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.253,
-    "y": 245.558,
+    "y": 245.478,
     "z": -1.017,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -173,18 +173,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.171,
-    "y": 245.558,
+    "y": 245.478,
     "z": -1.252,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -194,18 +194,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.089,
-    "y": 245.558,
+    "y": 245.478,
     "z": -1.487,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -215,18 +215,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 2.007,
-    "y": 245.558,
+    "y": 245.478,
     "z": -1.723,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -236,18 +236,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 1.925,
-    "y": 245.558,
+    "y": 245.478,
     "z": -1.958,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -257,18 +257,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 1.842,
-    "y": 245.558,
+    "y": 245.478,
     "z": -2.193,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -278,18 +278,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 1.76,
-    "y": 245.558,
+    "y": 245.478,
     "z": -2.429,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -299,18 +299,18 @@
    "fixture": "brotregal/ebene-1",
    "pose": {
     "x": 1.678,
-    "y": 245.558,
+    "y": 245.478,
     "z": -2.664,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.36,
-    "h": 0.26
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -319,19 +319,19 @@
    "id": "brotregal/ebene-2/platz-01",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.749,
-    "y": 245.858,
-    "z": 0.403,
+    "x": 2.747,
+    "y": 245.718,
+    "z": 0.395,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -340,19 +340,19 @@
    "id": "brotregal/ebene-2/platz-02",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.673,
-    "y": 245.858,
-    "z": 0.184,
+    "x": 2.664,
+    "y": 245.718,
+    "z": 0.16,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -361,19 +361,19 @@
    "id": "brotregal/ebene-2/platz-03",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.596,
-    "y": 245.858,
-    "z": -0.036,
+    "x": 2.582,
+    "y": 245.718,
+    "z": -0.075,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -382,19 +382,19 @@
    "id": "brotregal/ebene-2/platz-04",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.519,
-    "y": 245.858,
-    "z": -0.256,
+    "x": 2.5,
+    "y": 245.718,
+    "z": -0.311,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -403,19 +403,19 @@
    "id": "brotregal/ebene-2/platz-05",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.443,
-    "y": 245.858,
-    "z": -0.475,
+    "x": 2.418,
+    "y": 245.718,
+    "z": -0.546,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -424,19 +424,19 @@
    "id": "brotregal/ebene-2/platz-06",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.366,
-    "y": 245.858,
-    "z": -0.695,
+    "x": 2.336,
+    "y": 245.718,
+    "z": -0.781,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -445,19 +445,19 @@
    "id": "brotregal/ebene-2/platz-07",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.289,
-    "y": 245.858,
-    "z": -0.915,
+    "x": 2.253,
+    "y": 245.718,
+    "z": -1.017,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -466,19 +466,19 @@
    "id": "brotregal/ebene-2/platz-08",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.212,
-    "y": 245.858,
-    "z": -1.134,
+    "x": 2.171,
+    "y": 245.718,
+    "z": -1.252,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -487,19 +487,19 @@
    "id": "brotregal/ebene-2/platz-09",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.136,
-    "y": 245.858,
-    "z": -1.354,
+    "x": 2.089,
+    "y": 245.718,
+    "z": -1.487,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -508,19 +508,19 @@
    "id": "brotregal/ebene-2/platz-10",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 2.059,
-    "y": 245.858,
-    "z": -1.574,
+    "x": 2.007,
+    "y": 245.718,
+    "z": -1.723,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -529,19 +529,19 @@
    "id": "brotregal/ebene-2/platz-11",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 1.982,
-    "y": 245.858,
-    "z": -1.793,
+    "x": 1.925,
+    "y": 245.718,
+    "z": -1.958,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -550,19 +550,19 @@
    "id": "brotregal/ebene-2/platz-12",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 1.905,
-    "y": 245.858,
-    "z": -2.013,
+    "x": 1.842,
+    "y": 245.718,
+    "z": -2.193,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -571,19 +571,19 @@
    "id": "brotregal/ebene-2/platz-13",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 1.829,
-    "y": 245.858,
-    "z": -2.233,
+    "x": 1.76,
+    "y": 245.718,
+    "z": -2.429,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -592,40 +592,19 @@
    "id": "brotregal/ebene-2/platz-14",
    "fixture": "brotregal/ebene-2",
    "pose": {
-    "x": 1.752,
-    "y": 245.858,
-    "z": -2.452,
+    "x": 1.678,
+    "y": 245.718,
+    "z": -2.664,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
-   "categories": [
-    "brot"
-   ]
-  },
-  {
-   "id": "brotregal/ebene-2/platz-15",
-   "fixture": "brotregal/ebene-2",
-   "pose": {
-    "x": 1.675,
-    "y": 245.858,
-    "z": -2.672,
-    "heading_deg": 70.7
-   },
-   "tilt_deg": 25.0,
-   "size": {
-    "w": 0.223,
-    "d": 0.36,
-    "h": 0.26
-   },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -634,19 +613,19 @@
    "id": "brotregal/ebene-3/platz-01",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.789,
-    "y": 246.179,
-    "z": 0.38,
+    "x": 2.747,
+    "y": 245.958,
+    "z": 0.395,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -655,19 +634,19 @@
    "id": "brotregal/ebene-3/platz-02",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.707,
-    "y": 246.179,
-    "z": 0.145,
+    "x": 2.664,
+    "y": 245.958,
+    "z": 0.16,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -676,19 +655,19 @@
    "id": "brotregal/ebene-3/platz-03",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.625,
-    "y": 246.179,
-    "z": -0.09,
+    "x": 2.582,
+    "y": 245.958,
+    "z": -0.075,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -697,19 +676,19 @@
    "id": "brotregal/ebene-3/platz-04",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.543,
-    "y": 246.179,
-    "z": -0.326,
+    "x": 2.5,
+    "y": 245.958,
+    "z": -0.311,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -718,19 +697,19 @@
    "id": "brotregal/ebene-3/platz-05",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.461,
-    "y": 246.179,
-    "z": -0.561,
+    "x": 2.418,
+    "y": 245.958,
+    "z": -0.546,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -739,19 +718,19 @@
    "id": "brotregal/ebene-3/platz-06",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.378,
-    "y": 246.179,
-    "z": -0.796,
+    "x": 2.336,
+    "y": 245.958,
+    "z": -0.781,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -760,19 +739,19 @@
    "id": "brotregal/ebene-3/platz-07",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.296,
-    "y": 246.179,
-    "z": -1.032,
+    "x": 2.253,
+    "y": 245.958,
+    "z": -1.017,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -781,19 +760,19 @@
    "id": "brotregal/ebene-3/platz-08",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.214,
-    "y": 246.179,
-    "z": -1.267,
+    "x": 2.171,
+    "y": 245.958,
+    "z": -1.252,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -802,19 +781,19 @@
    "id": "brotregal/ebene-3/platz-09",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.132,
-    "y": 246.179,
-    "z": -1.502,
+    "x": 2.089,
+    "y": 245.958,
+    "z": -1.487,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -823,19 +802,19 @@
    "id": "brotregal/ebene-3/platz-10",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 2.05,
-    "y": 246.179,
-    "z": -1.738,
+    "x": 2.007,
+    "y": 245.958,
+    "z": -1.723,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -844,19 +823,19 @@
    "id": "brotregal/ebene-3/platz-11",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 1.967,
-    "y": 246.179,
-    "z": -1.973,
+    "x": 1.925,
+    "y": 245.958,
+    "z": -1.958,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -865,19 +844,19 @@
    "id": "brotregal/ebene-3/platz-12",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 1.885,
-    "y": 246.179,
-    "z": -2.208,
+    "x": 1.842,
+    "y": 245.958,
+    "z": -2.193,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -886,19 +865,19 @@
    "id": "brotregal/ebene-3/platz-13",
    "fixture": "brotregal/ebene-3",
    "pose": {
-    "x": 1.803,
-    "y": 246.179,
-    "z": -2.444,
+    "x": 1.76,
+    "y": 245.958,
+    "z": -2.429,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
-    "h": 0.3
+    "d": 0.37,
+    "h": 0.183
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]
@@ -907,19 +886,313 @@
    "id": "brotregal/ebene-3/platz-14",
    "fixture": "brotregal/ebene-3",
    "pose": {
+    "x": 1.678,
+    "y": 245.958,
+    "z": -2.664,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.37,
+    "h": 0.183
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-01",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.789,
+    "y": 246.219,
+    "z": 0.38,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-02",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.707,
+    "y": 246.219,
+    "z": 0.145,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-03",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.625,
+    "y": 246.219,
+    "z": -0.09,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-04",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.543,
+    "y": 246.219,
+    "z": -0.326,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-05",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.461,
+    "y": 246.219,
+    "z": -0.561,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-06",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.378,
+    "y": 246.219,
+    "z": -0.796,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-07",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.296,
+    "y": 246.219,
+    "z": -1.032,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-08",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.214,
+    "y": 246.219,
+    "z": -1.267,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-09",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.132,
+    "y": 246.219,
+    "z": -1.502,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-10",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 2.05,
+    "y": 246.219,
+    "z": -1.738,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-11",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 1.967,
+    "y": 246.219,
+    "z": -1.973,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-12",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 1.885,
+    "y": 246.219,
+    "z": -2.208,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-13",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
+    "x": 1.803,
+    "y": 246.219,
+    "z": -2.444,
+    "heading_deg": 70.7
+   },
+   "tilt_deg": 25.0,
+   "size": {
+    "w": 0.239,
+    "d": 0.47,
+    "h": 0.3
+   },
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
+   "categories": [
+    "brot"
+   ]
+  },
+  {
+   "id": "brotregal/ebene-4/platz-14",
+   "fixture": "brotregal/ebene-4",
+   "pose": {
     "x": 1.721,
-    "y": 246.179,
+    "y": 246.219,
     "z": -2.679,
     "heading_deg": 70.7
    },
    "tilt_deg": 25.0,
    "size": {
     "w": 0.239,
-    "d": 0.46,
+    "d": 0.47,
     "h": 0.3
    },
-   "capacity": 1,
-   "capacity_de": "1 Brot (rund Ø ≈ 0,22 oder Kastenbrot quer)",
+   "capacity": 2,
+   "capacity_de": "1–3 Brote (rund Ø ≈ 0,21 oder längs, Kastenbrote hintereinander)",
    "categories": [
     "brot"
    ]

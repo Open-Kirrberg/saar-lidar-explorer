@@ -7,7 +7,9 @@ clickable object). Piece positions come from `products/fill.layout` (the checker
 stands on its slot's surface (tilted with sloped rod tiers and baskets), inside its cell, below the clear height.
 After the deterministic variation of `shapes.build` a piece that would leave its cell is rebuilt without the turn,
 then scaled down to fit. Heaped baskets use the low-triangle rolls (`products/waren.low`), pretzels hang on the arms
-of the pretzel stand through one of their loops, multi-piece rows in the display stand on a black tray.
+of the pretzel stand through one of their loops, multi-piece rows in the display stand on a black tray. A product
+in a slot with a price rail (`Scene.price_cards`, the two lower bread tiers) also gets its white price card with the
+name and the price from products.json (ADR 0044) in the same node: the card comes and goes with the product.
 """
 from __future__ import annotations
 
@@ -22,6 +24,8 @@ from .scene import Scene
 
 TRAY_H = 0.008          # black display trays under rows of pieces in the counter's display
 HANG_GAP = 0.004        # between neighbouring pretzels on one arm
+CARD_W, CARD_H = 0.10, 0.065   # white price card clipped into a bread tier's price rail (2026 photo: ≈ 0.10 × 0.06)
+CARD_MAT, CARD_INK = "preiskarte", "preisschrift"   # own tokens: the card is not part of the product's slot box
 
 
 def _mods():
@@ -156,9 +160,50 @@ def place(sc: Scene, fill: dict, slots_doc: dict, products_doc: dict, anchors: d
             tk = add_parts(node, S.transform(parts, np.eye(3), local), M, pose, S)
             tris += tk
             worst = max(worst, tk)
+        card = getattr(sc, "price_cards", {}).get(sid)
+        price = prods[it["id"]].get("price_eur") if it["kind"] == "product" else None
+        if card is not None and price is not None:
+            tris += price_card(node, card, prods[it["id"]]["name_de"], float(price))
         out[sid] = {"item": it["id"], "kind": it["kind"], "count": n, "triangles": tris, "max_piece": worst,
                     "shape": it["shape"], "low": mode == "heap"}
     return out
+
+
+def price_label(eur: float) -> str:
+    """German price text: 4.4 -> '4,40 €'. Pure."""
+    if not (isinstance(eur, (int, float)) and math.isfinite(eur) and eur >= 0):
+        raise ValueError(f"bad price {eur!r}")
+    return f"{eur:.2f}".replace(".", ",") + " €"
+
+
+def price_card(node: geom.Node, frame: np.ndarray, name_de: str, eur: float) -> int:
+    """A white card (CARD_W × CARD_H, hanging down from frame's origin) with the product name and its price in black,
+    facing the frame's `front` (rows of `frame`: origin, right, up, front; zone frame). Returns the triangle count."""
+    from . import lettering  # noqa: PLC0415  (matplotlib only when a card is drawn)
+    o, r, u, f = (np.asarray(x, np.float64) for x in frame)
+
+    def to3d(v2, w):
+        return o + v2[:, :1] * r + v2[:, 1:2] * u + w * f
+
+    tris = 0
+    card = geom.rect(-CARD_W / 2, -CARD_H, CARD_W / 2, 0.0)
+    lines = [(name_de, 0.0075, -0.024, 0.0005, {"family": "DejaVu Sans"}), (price_label(eur), 0.014, -0.053, 0.0006, None)]
+    for shape, mat, w in [(card, CARD_MAT, 0.0)] + [(_fit(lettering.text_polys(t, h, font, tol), CARD_W - 0.012, base), CARD_INK, 0.0008)
+                                                         for t, h, base, tol, font in lines]:
+        for v2, t in geom.triangulate(shape):
+            v3 = to3d(v2, w)
+            t = geom.wind(v3, t, f)
+            node.add(mat, v3, t, f)
+            tris += len(t)
+    return tris
+
+
+def _fit(shape, width: float, base: float):
+    """Scale a text outline (baseline y = 0, centred) down to `width` if wider, then move its baseline to `base`."""
+    from shapely import affinity  # noqa: PLC0415
+    x0, _, x1, _ = shape.bounds
+    k = min(1.0, width / max(x1 - x0, 1e-9))
+    return affinity.translate(affinity.scale(shape, k, k, origin=(0, 0)), 0.0, base)
 
 
 def _hang(node, parts, s: dict, anchors: dict, k: int, S) -> int:

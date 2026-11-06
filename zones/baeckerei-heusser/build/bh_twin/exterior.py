@@ -1,6 +1,7 @@
 """Exterior: the bakery's LoD2 envelope (walls with the shop windows, the porch arch and the side opening to the
 passage cut out, sandstone plinth, roof), window reveals + glazing, the porch (arch soffit, reveals, ceiling,
-corner pillar faces, 5 granite steps), the covered passage up to the shop door, the neighbours as LoD2 blocks. Round 3b: the facade details from the plan's
+corner pillar faces, 5 granite steps, the lowest two running on under the pillar), the covered passage up to the
+privacy line (ADR 0047; cabinet, niche and paving: site.py / ground.py), the neighbours as LoD2 blocks. Round 3b: the facade details from the plan's
 `site.facade` block (facade.py): slip plinth, glass blocks, window surrounds and keystones, gable (instead of the LoD2
 hip) with the mural, slate front roof, windows, gutter, downpipes, sign, handrail; flat porch lintel (video).
 """
@@ -14,9 +15,9 @@ import numpy as np
 from shapely import union_all
 from shapely.geometry import Point, Polygon
 
-from . import geom
+from . import geom, site
 from .context import newell, stable_pick
-from .facade import Facade, gable_roof_regions, make_gable, slate_roof
+from .facade import Facade, gable_roof_regions, make_gable, slate_roof, v
 from .plan import ARCH_SPRING, GLASS_WALL, PASSAGE_HEAD, PORCH_REVEAL, Plan
 from .scene import Scene
 
@@ -82,7 +83,27 @@ def bakery_cutters(p: Plan) -> list[Cutter]:
     if p.raw["site"].get("facade"):
         for x0, x1, y0, y1, z0, z1, _ in Facade(p, p.raw["site"]["facade"]).openings():
             cs.append(Cutter(x0, x1, y0, y1, z0, z1))
+        nb = site.niche(p.raw["site"]["facade"])
+        if nb is not None:                                    # Backstube entrance niche (ADR 0047)
+            cs.append(Cutter(*site.niche_cutter_box(nb)))
+    # the lowest porch treads run on under the corner pillar to the building edge (E3): the walls stop on them
+    for ya, yb, xe, z in pillar_treads(p):
+        cs.append(Cutter(pf["x1"], xe + 0.3, ya - (0.3 if ya == 0.0 else 0.0), yb, -5.0, z))
     return cs
+
+
+def pillar_treads(p: Plan) -> list[tuple[float, float, float, float]]:
+    """(y0, y1, x_end, top z) of the porch tread parts under the corner pillar (`vorbau.stufen_unter_pfeiler` lowest
+    treads, plan 2026-11-06): from the pillar's inner face to the building's NNE edge, y < the side opening."""
+    k = int(((p.raw["site"].get("facade") or {}).get("vorbau") or {}).get("stufen_unter_pfeiler") or 0)
+    pf = porch_frame(p)
+    st = p.stairs
+    out = []
+    for i in range(min(k, int(st["risers"]))):
+        ya, yb = st["tread_v"] * i, min(st["tread_v"] * (i + 1), pf["y5a"])
+        if yb - ya > 0.005:
+            out.append((ya, yb, p.north_outer_x(ya), step_height(p, (ya + st["tread_v"] * (i + 1)) / 2)))
+    return out
 
 
 def passage_cutter(p: Plan) -> Cutter:
@@ -176,9 +197,17 @@ def build_bakery(sc: Scene, p: Plan, bld: dict, lettering: bool = False) -> None
         if made:
             walls_b, roofs_b, gable = made
 
+    band = ((fac_doc or {}).get("durchgang") or {}).get("sockelband")
+
     def street_plinth(node, p0, p1, lo, nh):
         street = nh[1] < -0.99 and abs(float(np.mean([p0[1], p1[1]]))) < 0.05      # L5 (and the L4 stub)
         gable_end = nh[0] < -0.99 and float(np.mean([p0[0], p1[0]])) < 0.2         # L6/L7 (SSW gable)
+        passage_side = nh[0] > 0.99 and float(np.mean([p0[0], p1[0]])) > 20.0      # L3 (north wall, in the passage)
+        if passage_side and band:                                                  # brown plinth band (photo)
+            top = v(band["top"])
+            sc.vface(node, "sockel-braun", p0, p1, lo.intersection(geom.rect(-1e4, -1e4, 1e4, top)), True)
+            sc.vface(node, "fassade", p0, p1, lo.difference(geom.rect(-1e4, -1e4, 1e4, top)), True)
+            return True
         if fac is None or not (street or gable_end):
             return False
         fac.plinth(sc, node, p0, p1, lo)
@@ -215,7 +244,8 @@ def build_bakery(sc: Scene, p: Plan, bld: dict, lettering: bool = False) -> None
     _porch(sc, p)
     _steps(sc, p)
     if fac is not None:
-        fac.build(sc, gable, porch_frame(p))
+        fac.build(sc, gable, {**porch_frame(p), "pillar_treads": pillar_treads(p)})
+        site.build_backstube_entrance(sc, fac_doc)
 
 
 def _clip_x_min(ring: np.ndarray, x_min: float) -> np.ndarray:
@@ -303,28 +333,40 @@ def _steps(sc: Scene, p: Plan) -> None:
     C = p.room["C"]
     k = int(st["risers"])
     edges = [st["tread_v"] * i for i in range(k)] + [float(C[1])]
+    under = {round(ya, 4): xe for ya, _, xe, _ in pillar_treads(p)}                 # E3: on under the pillar
     for i in range(k):
         ya, yb = edges[i], edges[i + 1]
         z = step_height(p, (ya + yb) / 2)
-        for sa, sb, xe in ((ya, min(yb, pf["y5a"]), x1), (max(ya, pf["y5a"]), yb, p.north_outer_x(max(ya, pf["y5a"])))):
+        for sa, sb, xe in ((ya, min(yb, pf["y5a"]), under.get(round(ya, 4), x1)),
+                           (max(ya, pf["y5a"]), yb, p.north_outer_x(max(ya, pf["y5a"])))):
             if sb - sa < 0.005:
                 continue
             sc.box(n, "granit", (x0, sa), 0, xe - x0, sb - sa, z + 1.2, -1.2, 0.008)
 
 
 def build_passage(sc: Scene, p: Plan, ground_h: Callable[[np.ndarray], np.ndarray]) -> None:
-    """Covered passage beside the shop, public up to the shop's side opening; then a plain end wall (privacy)."""
+    """Covered passage beside the shop, public up to the privacy line just behind the pickup cabinet (ADR 0047); then a
+    plain end wall. Brown plinth band on the far wall (the shop's side: `build_bakery`), paving in ground.py."""
     n = sc.node("umgebung/durchgang", "ext", source="mesh", sigma=0.33)
     head = p.H(PASSAGE_HEAD)
     xw, xf, yp = p.north_outer_x(0.0), p.passage_far_x, p.passage_public_y
     y_front = _neighbour_front_y(p, xf)
     bot = float(np.min(ground_h(np.array([[xw, 0.0], [xf, yp]])))) - 0.6
     sc.vrect(n, "nachbar-1", (xf, y_front), (xf, yp), bot, head, left=True)           # far wall faces -x
-    sc.hface(n, "fassade", Polygon([(xw, 0.0), (xf, y_front), (xf, yp), (p.north_outer_x(yp), yp)]), head, False)
+    band = (((p.raw["site"].get("facade") or {}).get("durchgang") or {}).get("sockelband"))
+    if band:
+        sc.vrect(n, "sockel-braun", (xf - 0.008, y_front), (xf - 0.008, yp), bot, v(band["top"]), left=True)
+    sc.hface(n, "fassade", passage_floor_b(p), head, False)
     # end wall faces -y: a plain light wall in the passage's shade (darker at the floor), so it reads as a wall, not a hole
     shade = lambda v2: 0.58 + 0.2 * np.clip((v2[:, 1] - bot) / (head - bot), 0, 1)  # noqa: E731
     sc.vrect(n, "nachbar-2", (p.north_outer_x(yp), yp), (xf, yp), bot, head, left=False, ao=shade)
     # the bakery's own north wall face in the passage mouth is the LoD2 wall (with the side opening cut out)
+
+
+def passage_floor_b(p: Plan) -> Polygon:
+    """Public passage floor (= its ceiling outline), frame B: from the street faces to the privacy line."""
+    xw, xf, yp = p.north_outer_x(0.0), p.passage_far_x, p.passage_public_y
+    return Polygon([(xw, 0.0), (xf, _neighbour_front_y(p, xf)), (xf, yp), (p.north_outer_x(yp), yp)])
 
 
 def _neighbour_front_y(p: Plan, x: float) -> float:

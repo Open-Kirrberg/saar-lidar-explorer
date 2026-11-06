@@ -19,6 +19,7 @@ from . import geom
 from .context import ROAD_WIDTH, Dgm, circle
 from .plan import E0, N0, Plan
 from .scene import Scene, smooth
+from .site import herringbone
 
 PATCH_R = 38.0        # ground patch radius around the shop (m)
 NAV_R = 24.0          # walkable street area around the shop entrance (m)
@@ -41,6 +42,14 @@ def b_to_en(p: Plan, geom_b):
     return affinity.affine_transform(geom_b, [a, b, d, e, F.oE, F.oN])
 
 
+def b_from_en(p: Plan, geom_en):
+    """Shapely geometry E/N -> frame B (inverse of b_to_en)."""
+    F = p.frame
+    m = np.linalg.inv(np.array([[F.xa[0], F.ya[0]], [F.xa[1], F.ya[1]]]))
+    return affinity.affine_transform(geom_en, [m[0, 0], m[0, 1], m[1, 0], m[1, 1],
+                                               -(m[0, 0] * F.oE + m[0, 1] * F.oN), -(m[1, 0] * F.oE + m[1, 1] * F.oN)])
+
+
 def passage_mouth_b(p: Plan) -> Polygon:
     yp, xf = p.passage_public_y, p.passage_far_x
     return Polygon([(p.north_outer_x(-0.6), -0.6), (xf, -0.6), (xf, yp), (p.north_outer_x(yp), yp)])
@@ -54,9 +63,11 @@ class Classes:
     ground: object
     buildings: object
     centre: np.ndarray
+    paved: object = None          # herringbone paving of the public passage (E/N), drawn by build_ground
+    paved_b: object = None        # … the same in frame B (the bond is laid out along the passage)
 
 
-def classes(p: Plan, blds: list[dict], ways: list[dict]) -> Classes:
+def classes(p: Plan, blds: list[dict], ways: list[dict], paved_b: Polygon | None = None) -> Classes:
     c = p.frame.en(np.array([21.0, 1.0]))
     circ = Polygon(circle(c[0], c[1], PATCH_R, 256))
     roads, sides, foot = [], [], []
@@ -74,7 +85,11 @@ def classes(p: Plan, blds: list[dict], ways: list[dict]) -> Classes:
     road = union_all(roads).intersection(circ).difference(bfp) if roads else Polygon()
     pav = union_all(sides + foot + [mouth]).intersection(circ).difference(road).difference(bfp)
     ground = circ.difference(bfp).difference(road).difference(pav)
-    return Classes(circ, road, pav, ground, bfp, c)
+    paved = None
+    if paved_b is not None:                    # the passage floor is paved, whatever OSM buffer reaches into it
+        paved = b_to_en(p, paved_b).intersection(pav.union(road))
+        pav, road = pav.difference(paved), road.difference(paved)
+    return Classes(circ, road, pav, ground, bfp, c, paved, paved_b)
 
 
 def drape_parts(geom_en, dgm: Dgm, offset: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
@@ -139,6 +154,46 @@ def build_ground(sc: Scene, p: Plan, cls: Classes, dgm: Dgm) -> None:
     s.add_mesh("asphalt", V, T, ao)
     V, T = drape_parts(cls.pavement, dgm)
     s.add_mesh("gehweg", V, T, ao)
+    if cls.paved is not None and not cls.paved.is_empty:
+        build_paving(sc, p, cls, dgm, ao)
+
+
+PAVER_MATS = ("pflaster-rot", "pflaster-rot-dunkel")
+
+
+def build_paving(sc: Scene, p: Plan, cls: Classes, dgm: Dgm, ao) -> None:
+    """Red-brown concrete pavers in herringbone bond in the public passage (photo, video): joint colour draped as the
+    base, the pavers 4 mm above it in two tones."""
+    fac = (p.raw["site"].get("facade") or {}).get("durchgang") or {}
+    bel = fac.get("belag") or {}
+    L = float((bel.get("stein_l") or {}).get("v", 0.20))
+    W = float((bel.get("stein_b") or {}).get("v", 0.10))
+    n = sc.node("umgebung/durchgang/pflaster", "ext", "umgebung/durchgang", source="photo", sigma=0.2)
+    # small pieces with heights at their own corners: a 1 m DGM cell triangulated as one piece departs from the
+    # bilinear surface by centimetres and would swallow the pavers
+    origin = (p.north_outer_x(0.0), 0.0)
+    joints = [b_to_en(p, q) for q in geom.grid_split(cls.paved_b.intersection(b_from_en(p, cls.paved)), 0.25, 0.25, origin)]
+    _drape_small(n, "sockel-fuge", joints, dgm, 0.0, ao)
+    pavers = herringbone(cls.paved_b, L, W, 0.008, origin)
+    for tone, mat in enumerate(PAVER_MATS):
+        _drape_small(n, mat, [b_to_en(p, q) for q, k in pavers if k == tone], dgm, 0.004, ao)
+
+
+def _drape_small(n, mat: str, parts_en: list, dgm: Dgm, offset: float, ao) -> None:
+    """Pieces (E/N) a few dm across, each triangulated with DGM heights at its own vertices (+ offset), facing up."""
+    Vs, Ts, nv = [], [], 0
+    for q in parts_en:
+        for v2, t in geom.triangulate(q):
+            Vs.append(to_zone(v2, dgm(v2[:, 0], v2[:, 1]) + offset))
+            Ts.append(t + nv)
+            nv += len(v2)
+    if not Vs:
+        return
+    V, T = np.concatenate(Vs), np.concatenate(Ts)
+    a_, b_, c_ = V[T[:, 0]], V[T[:, 1]], V[T[:, 2]]
+    flip = np.cross(b_ - a_, c_ - a_)[:, 1] < 0
+    T[flip] = T[flip][:, [0, 2, 1]]
+    n.add_mesh(mat, V, T, ao)
 
 
 # ----------------------------------------------------------------------------------------------- nav
@@ -150,7 +205,9 @@ class NavPiece:
 
 
 def nav_pieces(p: Plan, cls: Classes, dgm: Dgm, obstacles_b: list, step_height: Callable[[Plan, float], float],
-               door: dict, porch: dict) -> list[NavPiece]:
+               door: dict, porch: dict, site_obstacles_b: list = (), site_treads: list = ()) -> list[NavPiece]:
+    """Walkable floor pieces. `site_obstacles_b` (frame B polygons, e.g. the pickup cabinet) are cut out of the street
+    and passage floor; `site_treads` [(polygon frame B, height above ±0.00)] add level pieces (Backstube steps)."""
     F = p.frame
     z0 = F.z0
     R = Polygon([p.room[k] for k in p.room_order])
@@ -188,10 +245,20 @@ def nav_pieces(p: Plan, cls: Classes, dgm: Dgm, obstacles_b: list, step_height: 
     if "wandmalerei" in fac:
         view = F.en(np.array([-GABLE_VIEW, float(fac["wandmalerei"]["y"]["v"])]))
         area = area.union(Point(view).buffer(GABLE_VIEW_R, 64).intersection(cls.circle.buffer(-2.0)))
-    street = cls.road.union(cls.pavement).intersection(area)
+    street = union_all([cls.road, cls.pavement] + ([cls.paved] if cls.paved is not None else [])).intersection(area)
     porch_en = b_to_en(p, geom.rect(x0, 0.0, x1 + 0.3, float(C[1])))
-    pieces.append(NavPiece(street.difference(porch_en), dgm))
+    # the passage ends PASSAGE_END_GAP before the plain end wall at the privacy line; fixtures in it are fenced off
+    yp = p.passage_public_y
+    end = geom.rect(p.north_outer_x(yp) - 1.0, yp - PASSAGE_END_GAP, p.passage_far_x + 1.0, yp + 20.0)
+    blocked = union_all([end] + [o.buffer(SITE_MARGIN, join_style="mitre") for o in site_obstacles_b])
+    pieces.append(NavPiece(street.difference(porch_en).difference(b_to_en(p, blocked)), dgm))
+    for poly, z in site_treads:
+        pieces.append(NavPiece(b_to_en(p, poly), z0 + z))
     return pieces
+
+
+PASSAGE_END_GAP = 0.15   # walkable floor stops this short of the passage end wall
+SITE_MARGIN = 0.15       # around standing site fixtures (as fixtures.obstacles)
 
 
 def nav_height(pieces: list[NavPiece], en: np.ndarray, dgm: Dgm) -> np.ndarray:

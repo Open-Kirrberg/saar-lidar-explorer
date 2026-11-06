@@ -14,8 +14,8 @@ Colours are taken from the real shop and then simplified. Values are sRGB, and t
 | `messing` | `#C29A4B` | Brass door handles (the shop's rod tiers and rails are the paler `champagner`) |
 | `granit` | `#7E7F80` | Counter ledge, steps (one darker speckle tone `#6A6B6C`, no texture) |
 | `fliese` | `#F1EEE8` | Tall marble-look wall panels ≈ 0.75 wide (joints `#DCD6CC`, a faint grey vein at most) |
-| `holz` | `#B07A4A` | Wood-faced ceiling soffit, crates |
-| `decke` | `#E8D6BA` | Cream plank ceiling, ≈ 0.28 wide planks with staggered joints (`decke-raster` `#CDBB9F`) |
+| `holz` | `#B07A4A` | The vertical wood fascia of the soffit over the counter (between two red lines; its underside is white planks), crates |
+| `decke` | `#EEEAE0` | Near-white plank ceiling and soffit underside, ≈ 0.28 wide planks with staggered joints (`decke-raster` `#D5D0C6`). Wave B, was a warm cream |
 | `kruste-hell` / `kruste` / `kruste-dunkel` | `#E3B776` / `#C68642` / `#8A5228` | Rolls, light bread / mixed bread / dark rye and crust shadows |
 | `korb` | `#C9A063` | Wicker baskets, pretzel basket |
 | `tuch-rosa` | `#C0587E` | Basket cloths (raspberry pink in the video; was `#E9A9B6`) |
@@ -23,7 +23,7 @@ Colours are taken from the real shop and then simplified. Values are sRGB, and t
 | `glas` | `#CFE6EA` at 25–35 % opacity | Display glass, fridge door, shop window (no reflections) |
 | `fassade` / `sockel` | `#E6D6CB` / `#A27468` | Exterior render (rosy beige, was `#E7DFD2`) / muted pinkish-red plinth slips (round 4, was `#8C5A4A`) |
 
-Generator-only tokens (same family): `granit-dunkel` `#6A6B6C`, `fliese-fuge` `#DCD6CC`, `decke-raster` `#CDBB9F`, `lampe` `#FFE2BF` (the lit diffuser of the pendant lamps).
+Generator-only tokens (same family): `granit-dunkel` `#6A6B6C`, `fliese-fuge` `#DCD6CC`, `decke-raster` `#D5D0C6`, `lampe` `#FFE2BF` (the lit diffuser of the pendant lamps).
 
 Shop interior tokens (round 3, sampled from the walkthrough video, white-referenced and simplified):
 
@@ -37,8 +37,10 @@ Shop interior tokens (round 3, sampled from the walkthrough video, white-referen
 | `holz-dunkel` / `holz-hell` | `#3A2A1E` / `#C49A6C` | Café tables, chairs, jar shelf / work table, pretzel stand |
 | `kissen` | `#504C53` | Chair cushions, mats, stool seat |
 | `regal-weiss` / `putz-weiss` | `#F3F3F0` / `#EEEAE2` | White shelves, fridge, cove / window wall render (piers, reveals, lintel) |
-| `boden-fliese` / `boden-fuge` | `#E6D6C6` / `#BDB1A4` | Warm cream floor tiles / grout |
-| `sepia` | `#A38D6E` | Neutral fill of the old photo frames (no faces, no content) |
+| `boden-fliese` / `boden-fuge` | `#E8E4DD` / `#B8B2AA` | Light grey-white floor tiles laid at 45° to the facade (parallel to the counter) / grey grout (wave B, was warm cream) |
+| `alu-weiss` | `#EEEFEB` | White aluminium frames of the glass front, its sliding leaves and door operator, and the glazed side wall (wave B, was black) |
+| `preiskarte` / `preisschrift` | `#F7F6F2` / `#232323` | White price cards on the two lower bread tiers (white price rails in `regal-weiss`) / their name and price (from `products.json`, ADR 0044) |
+| `sepia` / `sepia-hell` / `sepia-dunkel` | `#A38D6E` / `#DCCFB6` / `#5E4C3A` | The old pictures as simple drawn vignettes on a white mat: mid tone / paper / line work. Neutral motifs only (wheat, the old house, a brick oven): no faces, no people, no copies of the historic photos |
 | `bild-rot`, `filz-gruen`, `terrakotta`, `blatt`, `blume` | `#792E35`, `#9DB35E`, `#B5653F`, `#4F7A3A`, `#E08A3A` | Coffee picture, window-sill felt, plant pot, leaves, garland flowers and pumpkins |
 | `glow` | `#FFD9A0` at 28 % | Soft halo under the pendant lamps |
 
@@ -53,6 +55,9 @@ Shop interior tokens (round 3, sampled from the walkthrough video, white-referen
 | `fallrohr` / `verzinkt` | `#3A3636` / `#9A9E9C` | Gutter and downpipes / porch handrail |
 | `schiefer` / `schiefer-fuge` | `#6B7178` / `#50555B` | Slate diamonds on the front roof left of the pilaster |
 | `wandbild-grund`, `ziegel`, `ofen`, `kruste`, `kruste-dunkel`, `schrift` | `#EDE5D5`, `#A5503A`, `#3A2A22`, `#C68642`, `#8A5228`, `#4A4644` | Gable mural and sign graphic (oven arch, mouth, loaf); `schrift` = the shop's lettering (default on, `--no-lettering` leaves it out) |
+| `terrazzo` / `alu` / `riffelglas` | `#C9C3BB` / `#D9DCDA` / `#8E9A9C` | Backstube entrance (wave A): terrazzo steps / aluminium door, frame and bars / ribbed glass (ribs in `rollladen-fuge`); corner post `edelstahl`, round-bar rail `lack-schwarz` |
+| `abholschrank` / `abholschrank-rahmen` / `abholschrank-fuge` / `schild-lachs` | `#C8CBC6` / `#D7D9D5` / `#AEB2AD` / `#F2C1A0` | Pickup cabinet: light cool grey body / door frames / louvre joints (handle band `lack-schwarz`) / the salmon sign „Abholstation“ |
+| `pflaster-rot` / `pflaster-rot-dunkel` / `sockel-braun` | `#8F5E52` / `#7E4E44` / `#8C6A55` | Passage: red-brown pavers in herringbone (joints `sockel-fuge`) / brown painted plinth band on both passage walls |
 
 **Context** (around the shop, sampled from the orthophoto and then simplified; `../build/bh_twin/shade.py`):
 
@@ -76,7 +81,7 @@ Use a new colour only after sampling it from a reference photo, then add it here
 ## Light and shading
 
 - **Warm and inviting.** The key light is warm white (≈ 3200 K, `#FFE2BF`). Add a soft sky or hemisphere fill (cool `#DDE6F0` above, warm `#E8D8C4` below), and give the pendant lamps a small warm glow.
-- **Shading:** flat or soft Lambert, or a 3-step toon ramp. *Round 2 (generator):* unlit materials (`KHR_materials_unlit`, base colour = token) × baked light in `COLOR_0` (soft Lambert from the warm key + hemisphere fill, times vertex AO); `NORMAL` stays in the file so a later renderer can relight. Use no PBR texture maps and no glossy specular (keep at most a small, soft highlight on glass and brass). Baked or vertex AO grounds objects in corners and under the shelves. *Round 3:* warm light pools under the four pendant lamps (downward cone, soft falloff), daylight from the shop windows fading with the depth into the room, analytic vertex AO under boards and ledges, around feet and bases and in room corners (`shade.AO`).
+- **Shading:** flat or soft Lambert, or a 3-step toon ramp. *Round 2 (generator):* unlit materials (`KHR_materials_unlit`, base colour = token) × baked light in `COLOR_0` (soft Lambert from the warm key + hemisphere fill, times vertex AO); `NORMAL` stays in the file so a later renderer can relight. Use no PBR texture maps and no glossy specular (keep at most a small, soft highlight on glass and brass). Baked or vertex AO grounds objects in corners and under the shelves. *Round 3:* warm light pools under the four pendant lamps (downward cone, soft falloff), daylight from the shop windows fading with the depth into the room, analytic vertex AO under boards and ledges, around feet and bases and in room corners (`shade.AO`). *Wave B:* faces that look down (ceiling planks, bulkhead and soffit undersides) only see the warm floor bounce, which turned the near-white ceiling peach; they get a neutral lift (`interior.CEILING_LIFT`, the light from the white floor, walls and lamps), so the ceiling reads warm white like in the shop.
 - **Shadows:** soft and short. One shadow-casting light at most on the phone. Use blob or baked contact shadows for products.
 - **Tone mapping:** neutral, slightly lifted shadows. The scene should read as daytime, open shop.
 - **No photo textures** in the visible scene. Allowed are small procedural or hand-made patterns: tile grout, panel grid, wicker weave as a normal-free colour pattern, crust scoring as geometry or a decal.

@@ -1,7 +1,9 @@
-"""Verkaufsraum shell: tiled floor, tall white marble-look wall panels (window wall: white render), cream plank
-ceiling with the bulkhead over the shop windows, red ceiling trim under a white cove, wood soffit with red edge over
-the counter, glazed side wall, glass front with the automatic sliding door (standing open), the rear corridor with
-its closed door. All from the Raumplan (frame B, scaled by plan.f); look from the walkthrough video (round 3).
+"""Verkaufsraum shell: tiled floor (laid diagonally, parallel to the counter), tall white marble-look wall panels
+(window wall: white render), near-white plank ceiling with the bulkhead over the shop windows, red ceiling trim under
+a white cove, the soffit over the counter (wood fascia between two red lines, white plank underside), glazed side wall
+and glass front with the automatic sliding door (standing open) in white aluminium frames, the rear corridor with its
+closed door. All from the Raumplan (frame B, scaled by plan.f); look from the walkthrough video (round 3) and the 2026
+photo of the counter (wave B).
 """
 from __future__ import annotations
 
@@ -14,14 +16,21 @@ from .plan import (BACKDOOR_HEAD, DOOR_HEAD, GLASS_WALL, Plan)
 from .scene import Scene, smooth
 
 FLOOR_TILE = 0.30
+FLOOR_ROT = 45.0           # tiles laid diagonally to the facade, parallel to the counter and the bread wall (video)
 WALL_PANEL = 0.75          # tall marble-look wall panels ≈ 0.6–0.9 wide, room high (video)
 PLANK_W = 0.28             # ceiling planks ≈ 0.25–0.30 wide, staggered joints (video)
 PLANK_L = (2.4, 1.8, 3.0)
 AO_GRID = 0.45             # extra vertices on big faces so the vertex AO / baked light has resolution
 COVE = 0.14                # white cove (sloped frieze) at the wall top ...
 TRIM_H = 0.04              # ... with the red trim line under it
-BEAM_H = 0.10              # soffit beam over the counter: wood underside, red edges (video)
+FASCIA_RED = 0.015         # soffit over the counter: wood fascia (plan F10 h) between two red lines, white underside
 FRAME = 0.05  # glazing bar width
+GLAZING = "alu-weiss"      # white aluminium frames of the glass front and the glazed side wall (video, inside view)
+LEAF_FRAME = 0.04          # narrow white frame round each sliding leaf
+# Downward faces (ceiling planks, bulkhead and soffit undersides) only see the rig's warm floor bounce, which turned the
+# near-white ceiling peach. The real ceiling is lit by the white floor, walls and lamps: lift those faces to a warm
+# white (≈ 0.88 / 0.85 / 0.80 light instead of 0.70 × the bounce tint). Per channel, scaled by how far a face looks down.
+CEILING_LIFT = (1.26, 1.43, 1.67)
 SLIDE_LEAF = 0.60          # automatic sliding door: 4 equal fields in the 2.48 glass front (2 fixed side panes, 2 leaves,
                            # video); clear opening 2 × 0.60 (the plan leaves the clear width open: O4 note)
 
@@ -67,9 +76,9 @@ def build(sc: Scene, p: Plan) -> None:
     # concave room corners (vertical edges) for the vertex AO
     sc.ao.corner([p.room[k] for k in ("A", "D", "E", "I", "K")], 0.14, 0.45)
 
-    # ---- floor (warm cream tiles, grid parallel to the facade)
+    # ---- floor (light grey-white tiles, laid at 45° to the facade)
     n = sc.node("verkaufsraum/boden", "int", source=src, sigma=sig)
-    t, g = geom.tiles(floor, FLOOR_TILE, FLOOR_TILE, 0.008, origin=tuple(p.room["A"]))
+    t, g = rotated_tiles(floor, FLOOR_TILE, 0.008, tuple(p.room["A"]), FLOOR_ROT)
     sc.hface(n, "boden-fliese", _multi(t), 0.0, True, floor_ao)
     sc.hface(n, "boden-fuge", _multi(g), 0.0, True, floor_ao)
 
@@ -93,7 +102,7 @@ def build(sc: Scene, p: Plan) -> None:
         sc.vface(n, "fliese", a, b, parts, True, wall_ao)
         sc.vface(n, "fliese-fuge", a, b, _multi(gr), True, wall_ao)
 
-    # ---- ceiling: cream planks, bulkhead over the shop windows, wood soffit with red edge over the counter
+    # ---- ceiling: near-white planks, bulkhead over the shop windows, the soffit over the counter
     S = soffit_polygon(p, R)
     A, B = p.room["A"], p.room["B"]
     bulk = geom.rect(A[0], A[1], B[0], p.bulkhead_y)
@@ -108,17 +117,25 @@ def build(sc: Scene, p: Plan) -> None:
         # the bulkhead's room-side face looks away from the window (+y)
         sc.vrect(n, "decke", a, b, p.bulkhead_h, ceil, left=_left_points_out(a, b, bulk))
     n = sc.node("verkaufsraum/deckenblende", "int", source="photo", sigma=p.fixtures["F10"].sigma)
-    zs = p.H(p.fixtures["F10"].raw["underside"]["v"])
-    zt = zs + BEAM_H
-    # hanging beam: wood underside, red edges, white cover on top, thin white hangers to the ceiling
-    sc.hface(n, "holz", S, zs, False)
-    for a, b in _free_edges(S, R):
-        sc.vrect(n, "heusser-rot", a, b, zs, zt, left=_left_points_out(a, b, S))
-    sc.prism(n, "regal-weiss", S.buffer(0.015, join_style="mitre"), zt, zt + 0.02, top=True, bottom=True)
     f10 = p.fixtures["F10"]
+    zs = p.H(f10.raw["underside"]["v"])
+    zt = zs + soffit_height(p)
+    # hanging beam (2026 photo, video): white plank underside (the pendants hang from it), the wood only on the
+    # vertical fascia between two red lines, white cover on top, thin white hangers to the ceiling
+    under, joints = soffit_underside(p, S)
+    sc.hface(n, "decke", under, zs, False)
+    sc.hface(n, "decke-raster", joints, zs - 0.0005, False)
+    for a, b in _free_edges(S, R):
+        out = _left_points_out(a, b, S)
+        for mat, z0, z1 in fascia_bands(zs, zt):
+            sc.vrect(n, mat, a, b, z0, z1, left=out)
+    sc.prism(n, "regal-weiss", S.buffer(0.015, join_style="mitre"), zt, zt + 0.02, top=True, bottom=True)
     for t in (0.08, 0.5, 0.92):
         c = f10.xy + t * f10.l * f10.ux + 0.5 * f10.d * f10.uy
         sc.cylinder(n, "regal-weiss", c, 0.008, zt + 0.02, ceil, 6)
+
+    for name in ("verkaufsraum/rasterdecke", "verkaufsraum/deckenblende"):
+        lift_downward(sc.nodes[name], CEILING_LIFT)
 
     _ceiling_trim(sc, p, bulk)
 
@@ -126,6 +143,50 @@ def build(sc: Scene, p: Plan) -> None:
     _glass_side_wall(sc, p)
     _glass_front(sc, p)
     _back_door(sc, p)
+
+
+def lift_downward(node, lift) -> None:
+    """Multiply the baked light of `node`'s downward-facing vertices by `lift` (per channel, weighted by −n_y)."""
+    k = np.asarray(lift, np.float64) - 1.0
+    for pr in node.prims.values():
+        for i, (c, nrm) in enumerate(zip(pr.col, pr.nrm)):
+            down = np.clip(-nrm[:, 1], 0.0, 1.0)[:, None]
+            pr.col[i] = np.clip(c * (1.0 + k * down), 0.0, 1.0)
+
+
+def rotated_tiles(poly, tile: float, grout: float, origin, rot_deg: float) -> tuple[list, list]:
+    """`geom.tiles` on a grid turned by `rot_deg` about `origin` (tiles, grout; coplanar, non-overlapping). Pure."""
+    from shapely import affinity
+    flat = affinity.rotate(poly, -rot_deg, origin=origin)
+    t, g = geom.tiles(flat, tile, tile, grout, origin=origin)
+    back = lambda q: affinity.rotate(q, rot_deg, origin=origin)  # noqa: E731
+    return [back(q) for q in t], [back(q) for q in g]
+
+
+def soffit_height(p: Plan) -> float:
+    """Height of the soffit's fascia (plan F10 `h`, scaled)."""
+    return float(p.fixtures["F10"].h)
+
+
+def fascia_bands(zs: float, zt: float) -> list[tuple[str, float, float]]:
+    """The soffit fascia from its lower edge `zs` to `zt`: red line, wood, red line (2026 photo). Pure."""
+    r = min(FASCIA_RED, (zt - zs) / 4)
+    return [("heusser-rot", zs, zs + r), ("holz", zs + r, zt - r), ("heusser-rot", zt - r, zt)]
+
+
+def soffit_underside(p: Plan, S: Polygon) -> tuple[list, list]:
+    """White plank underside of the soffit: planks ≈ PLANK_W wide along the beam, thin joints between them."""
+    f10 = p.fixtures["F10"]
+    n = max(1, round(f10.d / PLANK_W))
+    joints = []
+    for k in range(1, n):
+        y = f10.d * k / n
+        c = [f10.xy + t * f10.l * f10.ux + (y + e) * f10.uy for t, e in ((0, -0.003), (1, -0.003), (1, 0.003), (0, 0.003))]
+        j = Polygon(c).intersection(S)
+        if not j.is_empty:
+            joints += geom.polys(j)
+    under = S.difference(shapely.union_all(joints)) if joints else S
+    return geom.grid_split(under, AO_GRID * 2, AO_GRID), joints
 
 
 def _multi(ps) -> list:
@@ -159,11 +220,11 @@ def _glass_side_wall(sc: Scene, p: Plan) -> None:
     B, C = p.room["B"], p.room["C"]
     x0, x1 = B[0], B[0] + GLASS_WALL
     ceil = p.ceiling
-    # frame: posts at both ends, bottom + top rails (black), pane in the middle plane
+    # frame: posts at both ends, bottom + top rails (white aluminium), pane in the middle plane
     for y0, y1 in ((B[1], B[1] + FRAME), (C[1] - FRAME, C[1])):
-        sc.box(n, "lack-schwarz", (x0, y0), 0, x1 - x0, y1 - y0, ceil, 0.0, 0.004)
-    sc.box(n, "lack-schwarz", (x0, B[1]), 0, x1 - x0, C[1] - B[1], 0.06, 0.0, 0.004)
-    sc.box(n, "lack-schwarz", (x0, B[1]), 0, x1 - x0, C[1] - B[1], 0.05, ceil - 0.05, 0.004)
+        sc.box(n, GLAZING, (x0, y0), 0, x1 - x0, y1 - y0, ceil, 0.0, 0.004)
+    sc.box(n, GLAZING, (x0, B[1]), 0, x1 - x0, C[1] - B[1], 0.06, 0.0, 0.004)
+    sc.box(n, GLAZING, (x0, B[1]), 0, x1 - x0, C[1] - B[1], 0.05, ceil - 0.05, 0.004)
     xm = (x0 + x1) / 2
     sc.vrect(n, "glas", (xm, B[1] + FRAME), (xm, C[1] - FRAME), 0.06, ceil - 0.05, left=False)
 
@@ -201,26 +262,27 @@ def _glass_front(sc: Scene, p: Plan) -> None:
     ceil = p.ceiling
     head = g["head"]
     for xc in (g["x0"], g["xl"] - FRAME, g["xr"], g["x1"] - FRAME):
-        sc.box(n, "lack-schwarz", (xc, y0), 0, FRAME, GLASS_WALL, ceil, 0.0, 0.004)
+        sc.box(n, GLAZING, (xc, y0), 0, FRAME, GLASS_WALL, ceil, 0.0, 0.004)
     # fixed side panes (with a bottom rail), transom over the door, top rail
     for xa, xb in ((g["x0"] + FRAME, g["xl"] - FRAME), (g["xr"] + FRAME, g["x1"] - FRAME)):
-        sc.box(n, "lack-schwarz", (xa, y0), 0, xb - xa, GLASS_WALL, 0.10, 0.0, 0.004)
+        sc.box(n, GLAZING, (xa, y0), 0, xb - xa, GLASS_WALL, 0.10, 0.0, 0.004)
         sc.vrect(n, "glas", (xa, (y0 + y1) / 2), (xb, (y0 + y1) / 2), 0.10, ceil - 0.05, left=False)
-    sc.box(n, "lack-schwarz", (g["xl"] - FRAME, y0), 0, g["xr"] - g["xl"] + 2 * FRAME, GLASS_WALL, 0.06, head, 0.004)
+    sc.box(n, GLAZING, (g["xl"] - FRAME, y0), 0, g["xr"] - g["xl"] + 2 * FRAME, GLASS_WALL, 0.06, head, 0.004)
     sc.vrect(n, "glas", (g["xl"], (y0 + y1) / 2), (g["xr"], (y0 + y1) / 2), head + 0.06, ceil - 0.05, left=False)
-    sc.box(n, "lack-schwarz", (g["x0"], y0), 0, g["x1"] - g["x0"], GLASS_WALL, 0.05, ceil - 0.05, 0.004)
-    # two sliding leaves (frameless glass, alu rails top and bottom), parked open behind the side panes
+    sc.box(n, GLAZING, (g["x0"], y0), 0, g["x1"] - g["x0"], GLASS_WALL, 0.05, ceil - 0.05, 0.004)
+    # two sliding leaves (glass in a narrow white frame), parked open behind the side panes
+    lf = LEAF_FRAME
     for q in _parked_leaves(p):
         x0, ya, x1, yb = q.bounds
-        sc.box(n, "chrom", (x0, ya), 0, x1 - x0, yb - ya, 0.08, 0.005, 0.004)                     # bottom rail
-        sc.box(n, "chrom", (x0, ya), 0, x1 - x0, yb - ya, 0.10, head - 0.11, 0.004)               # top rail
-        for xe in (x0, x1 - 0.02):
-            sc.box(n, "chrom", (xe, ya), 0, 0.02, yb - ya, head - 0.20, 0.085, 0.003)             # edge profiles
+        sc.box(n, GLAZING, (x0, ya), 0, x1 - x0, yb - ya, 0.08, 0.005, 0.004)                     # bottom rail
+        sc.box(n, GLAZING, (x0, ya), 0, x1 - x0, yb - ya, 0.10, head - 0.11, 0.004)               # top rail
+        for xe in (x0, x1 - lf):
+            sc.box(n, GLAZING, (xe, ya), 0, lf, yb - ya, head - 0.20, 0.085, 0.003)               # stiles
         ym = (ya + yb) / 2
-        sc.vrect(n, "glas", (x0 + 0.02, ym), (x1 - 0.02, ym), 0.085, head - 0.11, left=True)
-    # door operator over the opening (alu box) with the motion sensor
+        sc.vrect(n, "glas", (x0 + lf, ym), (x1 - lf, ym), 0.085, head - 0.11, left=True)
+    # door operator over the opening (white box) with the motion sensor
     xa, xb = _parked_leaves(p)[0].bounds[0] - 0.05, _parked_leaves(p)[1].bounds[2] + 0.05
-    sc.box(n, "chrom", (xa, y1 + 0.005), 0, xb - xa, 0.14, ceil - head - 0.02, head, 0.006)
+    sc.box(n, GLAZING, (xa, y1 + 0.005), 0, xb - xa, 0.14, ceil - head - 0.02, head, 0.006)
     sc.box(n, "lack-schwarz", ((g["xl"] + g["xr"]) / 2 - 0.08, y1 + 0.14), 0, 0.16, 0.012, 0.05, head + 0.02, 0.004)
 
 

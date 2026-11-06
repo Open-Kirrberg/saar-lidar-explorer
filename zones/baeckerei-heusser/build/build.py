@@ -31,7 +31,7 @@ sys.path[:0] = [str(HERE), str(REPO / "pipeline"), str(HERE.parent / "products")
 import numpy as np  # noqa: E402
 from shapely.geometry import Point, Polygon  # noqa: E402
 
-from bh_twin import auslage, exterior, fixtures, ground, interior  # noqa: E402
+from bh_twin import auslage, exterior, fixtures, ground, interior, site  # noqa: E402
 from bh_twin.context import Dgm, circle, lod2_buildings, osm_ways  # noqa: E402
 from bh_twin.glb import write_glb  # noqa: E402
 from bh_twin.plan import E0, N0, Plan, load_plan, toml_scale_factor  # noqa: E402
@@ -164,15 +164,21 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
         return dgm(en[:, 0], en[:, 1]) - F.z0
 
     exterior.build_passage(sc, p, ground_h_b)
+    cab = site.cabinet(p.raw)                     # the pickup cabinet in the public part of the passage (ADR 0047)
+    if cab is not None:
+        site.build_cabinet(sc, cab, ground_h_b, lettering)
     exterior.build_neighbours(sc, p, blds, {bakery["id"]})
-    cls = ground.classes(p, blds, ways)
+    cls = ground.classes(p, blds, ways, exterior.passage_floor_b(p))
     ground.build_ground(sc, p, cls, dgm)
 
     twin_nodes = [n for k, n in sc.nodes.items() if not k.startswith("nav/")]
     # ---- nav (separate asset)
     nav_sc = Scene(F, {"flat": flat_rig()})
     door = interior.door_geometry(p)
-    pieces = ground.nav_pieces(p, cls, dgm, fixtures.obstacles(p) + interior.door_leaf_obstacles(p), exterior.step_height, door, exterior.porch_frame(p))
+    nb = site.niche(p.raw["site"].get("facade"))
+    pieces = ground.nav_pieces(p, cls, dgm, fixtures.obstacles(p) + interior.door_leaf_obstacles(p), exterior.step_height, door,
+                               exterior.porch_frame(p), site_obstacles_b=[site.cabinet_footprint(cab)] if cab else [],
+                               site_treads=site.niche_nav_polys(nb) if nb else [])
     nav_union = ground.build_nav(nav_sc, pieces, dgm)
     nav_nodes = list(nav_sc.nodes.values())
 
@@ -509,6 +515,9 @@ def _node_points_b(nodes, F) -> np.ndarray:
     return np.concatenate(pts) if pts else np.zeros((0, 3))
 
 
+SITE_FRONT = {"fassade/abholschrank": (1.0, 0.0)}   # frame-B direction its doors face (into the passage)
+
+
 def update_catalogue_rows(doc: dict, nodes, p: Plan, styled_nodes: set[str] = frozenset()) -> None:
     """status / dims / placement of every row that has geometry now (rows and their descendants' nodes). Rows with a
     styled model (round 3: `Scene.styled`) or of type structure become `built`, other geometry `blockout`; a
@@ -527,6 +536,9 @@ def update_catalogue_rows(doc: dict, nodes, p: Plan, styled_nodes: set[str] = fr
             fx = p.fixtures[fid]
             ux, uy = fx.ux, fx.uy
             front = -uy
+        elif oid in SITE_FRONT:                      # site fixtures facing another way than the street
+            front = np.array(SITE_FRONT[oid], np.float64)
+            ux, uy = np.array([-front[1], front[0]]), -front
         else:
             ux, uy = np.array([1.0, 0.0]), np.array([0.0, 1.0])
             front = np.array([0.0, -1.0])

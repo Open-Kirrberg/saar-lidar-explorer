@@ -42,7 +42,7 @@ def test_morning_fill_is_plausible():
     cats = {BY_ID[e["product"]]["category"] for e in f["slots"].values() if "product" in e}
     assert cats == set(PRODS["categories"]), "every product category is in the morning fill"
     tiers = [k for k in f["slots"] if k.startswith("brotregal/ebene-")]
-    assert len(tiers) == sum(1 for s in SLOTS["slots"] if s["fixture"].startswith("brotregal/ebene-")), "all three tiers full"
+    assert len(tiers) == sum(1 for s in SLOTS["slots"] if s["fixture"].startswith("brotregal/ebene-")), "every bread tier full"
     baskets = [e for k, e in f["slots"].items() if "/koerbe/" in k]
     assert len(baskets) == 6 and all(BY_ID[e["product"]]["category"] in ("broetchen", "snacks") and e["count"] >= 15 for e in baskets)
     assert all(e == {"product": "brezel", "count": 1} for k, e in f["slots"].items() if k.startswith("theke/brezelstaender/"))

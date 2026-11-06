@@ -1,6 +1,6 @@
 # 0043 · 🧩 Built twin package: reference role, twin block, walking on the nav floor
 
-- **Status:** Accepted · 2026-11-05
+- **Status:** Accepted · 2026-11-05 · passage privacy line and the pickup cabinet (row 9) superseded by [0047](0047-baeckerei-heusser-abholschrank-backstube-entrance.md)
 - **Origin:** Bäckerei Heusser round 2 (first built package) · resolves the open point of [0042](0042-baeckerei-heusser-built-twin.md) · extends [0016](0016-zone-kinds-zone-contract.md), [0041](0041-gltf-zone-runtime-walk-on-mesh.md) · contract: [`docs/zone-contract.md`](../zone-contract.md) (`twin`)
 
 ## Context

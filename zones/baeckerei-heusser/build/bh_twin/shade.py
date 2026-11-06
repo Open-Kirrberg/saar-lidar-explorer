@@ -21,8 +21,8 @@ PALETTE = {
     "fliese": "#F1EEE8",
     "fliese-fuge": "#DCD6CC",
     "holz": "#B07A4A",
-    "decke": "#EDE4D2",           # cream plank ceiling (video #E8D6BA, lifted: the warm light tints it; was #E9E6DF)
-    "decke-raster": "#D2C4AC",    # plank joints
+    "decke": "#EEEAE0",           # near-white plank ceiling (wave B: 2026 photo + video, white-referenced; was #EDE4D2)
+    "decke-raster": "#D5D0C6",    # plank joints (was #D2C4AC)
     "kruste-hell": "#E3B776",
     "korb": "#C9A063",
     "tuch-rosa": "#C0587E",       # raspberry pink basket cloth (video, white-referenced; was #E9A9B6)
@@ -44,9 +44,14 @@ PALETTE = {
     "kissen": "#504C53",
     "regal-weiss": "#F3F3F0",
     "putz-weiss": "#EEEAE2",      # white render: window piers, reveals, lintel
-    "boden-fliese": "#E6D6C6",    # warm cream floor tiles ...
-    "boden-fuge": "#BDB1A4",      # ... grey grout
-    "sepia": "#A38D6E",           # neutral fill of the old photo frames (no faces)
+    "boden-fliese": "#E8E4DD",    # light grey-white floor tiles (wave B; was warm cream #E6D6C6) ...
+    "boden-fuge": "#B8B2AA",      # ... grey grout (was #BDB1A4)
+    "alu-weiss": "#EEEFEB",       # white aluminium frames of the glass front and the glazed side wall (wave B)
+    "preiskarte": "#F7F6F2",      # white price cards on the bread tiers (wave B, 2026 photo) ...
+    "preisschrift": "#232323",    # ... their black name and price
+    "sepia": "#A38D6E",           # old pictures: drawn vignettes, mid tone (no faces, no copies of the photos) ...
+    "sepia-hell": "#DCCFB6",      # ... their paper ...
+    "sepia-dunkel": "#5E4C3A",    # ... and their line work
     "bild-rot": "#792E35",        # coffee picture background
     "filz-gruen": "#9DB35E",      # window-sill felt
     "terrakotta": "#B5653F",
@@ -79,6 +84,17 @@ PALETTE = {
     "kruste": "#C68642",
     "kruste-dunkel": "#8A5228",
     "schrift": "#4A4644",         # shop lettering (only with the build flag --lettering)
+    # wave A (2026-11-06): Backstube entrance, pickup cabinet, passage (photo + video, white-referenced; style.md "Facade")
+    "terrazzo": "#C9C3BB",        # Backstube entrance steps
+    "alu": "#D9DCDA",             # its aluminium door, frame and bars ...
+    "riffelglas": "#8E9A9C",      # ... with ribbed glass (ribs in rollladen-fuge)
+    "abholschrank": "#C8CBC6",    # pickup cabinet body (light cool grey) ...
+    "abholschrank-rahmen": "#D7D9D5",  # ... door frames ...
+    "abholschrank-fuge": "#AEB2AD",    # ... louvre joints (handle band: lack-schwarz)
+    "schild-lachs": "#F2C1A0",    # the salmon sign „Abholstation“
+    "pflaster-rot": "#8F5E52",    # passage pavers (herringbone, joints sockel-fuge) ...
+    "pflaster-rot-dunkel": "#7E4E44",
+    "sockel-braun": "#8C6A55",    # brown painted plinth band on the passage walls
     # context (orthophoto samples, simplified; style.md "Context")
     "dach": "#A0675A",
     "asphalt": "#8E8C8D",

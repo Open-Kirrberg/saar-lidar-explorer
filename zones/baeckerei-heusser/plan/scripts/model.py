@@ -101,8 +101,12 @@ M = dict(
     pier2_ne_u=21.83,         # entrance reveal (450 faces, spread 0.02)
     glass_side_u=21.76,       # glazed side wall shop|porch, room face (25 faces, spread 0.02; frames 3105-3147 show glass)
     pier2_sw_u=21.23,
-    pier1_ne_u=19.12,
-    pier1_sw_u=18.55,
+    # pier 1 between the shop windows: equal widths per SV, user 2026-11-06. Street View shows both windows the same
+    # width (glass ratio 691 : 192 : 715 after perspective, +-5 %); the mesh gave O1 1.70 / O2 2.11 because the O1 SW
+    # reveal is soft. Outer reveals (16.85 / 21.23) and the 0.57 pier stay, the pier moves: O1 = O2 = 1.905 +-0.15.
+    # Mesh faces of the pier were at 18.55 / 19.12 (measure.py); the photo ratio wins over them here.
+    pier1_ne_u=19.325,
+    pier1_sw_u=18.755,
     win1_sw_u=16.85,          # soft: glass reflections, +-0.15
     pillar_sw_u=24.40,        # corner pillar inner face (185 faces)
     pillar_v=0.45,            # pillar depth (slice), soft

@@ -2,63 +2,63 @@
  "format": "bh-fill-v1",
  "id": "morgens",
  "name_de": "Morgens",
- "info_de": "Kurz nach dem Öffnen: Brote auf den Stangenböden, Brötchen in den Körben, Brezeln am Ständer, Kuchen, Torten und Teilchen in der Vitrine.",
+ "info_de": "Kurz nach dem Öffnen: Brote dicht an dicht auf den vier Stangenböden, Brötchen in den Körben, Brezeln am Ständer, Kuchen, Torten und Teilchen in der Vitrine.",
  "slots": {
   "brotregal/ebene-1/platz-01": {
-   "product": "haferflocken-750g",
-   "count": 1
-  },
-  "brotregal/ebene-1/platz-02": {
-   "product": "haferflocken-500g",
-   "count": 1
-  },
-  "brotregal/ebene-1/platz-03": {
-   "product": "voll-gut-750g",
-   "count": 1
-  },
-  "brotregal/ebene-1/platz-04": {
-   "product": "voll-gut-500g",
-   "count": 1
-  },
-  "brotregal/ebene-1/platz-05": {
-   "product": "schwabenkorn-1000g",
-   "count": 1
-  },
-  "brotregal/ebene-1/platz-06": {
-   "product": "schwabenkornt-500g",
-   "count": 1
-  },
-  "brotregal/ebene-1/platz-07": {
-   "product": "feel-happy-500g",
-   "count": 1
-  },
-  "brotregal/ebene-1/platz-08": {
    "product": "kornbrot-1000g",
    "count": 1
   },
-  "brotregal/ebene-1/platz-09": {
+  "brotregal/ebene-1/platz-02": {
    "product": "kornbrot-500g",
-   "count": 1
+   "count": 2
   },
-  "brotregal/ebene-1/platz-10": {
+  "brotregal/ebene-1/platz-03": {
    "product": "mischbrot-1000g",
    "count": 1
   },
-  "brotregal/ebene-1/platz-11": {
+  "brotregal/ebene-1/platz-04": {
    "product": "mischbrot-500g",
-   "count": 1
+   "count": 2
   },
-  "brotregal/ebene-1/platz-12": {
+  "brotregal/ebene-1/platz-05": {
    "product": "hildegard-von-bingen-750g",
    "count": 1
   },
-  "brotregal/ebene-1/platz-13": {
+  "brotregal/ebene-1/platz-06": {
    "product": "hildegard-von-bingen-500g",
+   "count": 2
+  },
+  "brotregal/ebene-1/platz-07": {
+   "product": "schwabenkorn-1000g",
    "count": 1
   },
+  "brotregal/ebene-1/platz-08": {
+   "product": "schwabenkornt-500g",
+   "count": 3
+  },
+  "brotregal/ebene-1/platz-09": {
+   "product": "haferflocken-750g",
+   "count": 3
+  },
+  "brotregal/ebene-1/platz-10": {
+   "product": "haferflocken-500g",
+   "count": 3
+  },
+  "brotregal/ebene-1/platz-11": {
+   "product": "voll-gut-750g",
+   "count": 3
+  },
+  "brotregal/ebene-1/platz-12": {
+   "product": "voll-gut-500g",
+   "count": 3
+  },
+  "brotregal/ebene-1/platz-13": {
+   "product": "feel-happy-500g",
+   "count": 3
+  },
   "brotregal/ebene-1/platz-14": {
-   "product": "mischbrot-1000g",
-   "count": 1
+   "product": "kasten-weissbrot",
+   "count": 2
   },
   "brotregal/ebene-2/platz-01": {
    "product": "holzluken-750g",
@@ -66,7 +66,7 @@
   },
   "brotregal/ebene-2/platz-02": {
    "product": "holzluken-500g",
-   "count": 1
+   "count": 2
   },
   "brotregal/ebene-2/platz-03": {
    "product": "bergsteiger-750g",
@@ -74,7 +74,7 @@
   },
   "brotregal/ebene-2/platz-04": {
    "product": "bergsteiger-500g",
-   "count": 1
+   "count": 2
   },
   "brotregal/ebene-2/platz-05": {
    "product": "sommerkorn-750g",
@@ -82,7 +82,7 @@
   },
   "brotregal/ebene-2/platz-06": {
    "product": "sommerkorn-500g",
-   "count": 1
+   "count": 2
   },
   "brotregal/ebene-2/platz-07": {
    "product": "biker-750g",
@@ -90,7 +90,7 @@
   },
   "brotregal/ebene-2/platz-08": {
    "product": "biker-500g",
-   "count": 1
+   "count": 2
   },
   "brotregal/ebene-2/platz-09": {
    "product": "kerbricher-750g",
@@ -98,7 +98,7 @@
   },
   "brotregal/ebene-2/platz-10": {
    "product": "kerbricher-500g",
-   "count": 1
+   "count": 2
   },
   "brotregal/ebene-2/platz-11": {
    "product": "koenig-ludwig-750g",
@@ -106,79 +106,131 @@
   },
   "brotregal/ebene-2/platz-12": {
    "product": "koenig-ludwig-500g",
-   "count": 1
+   "count": 2
   },
   "brotregal/ebene-2/platz-13": {
-   "product": "holzluken-750g",
-   "count": 1
+   "product": "roggenflit-klein",
+   "count": 3
   },
   "brotregal/ebene-2/platz-14": {
-   "product": "bergsteiger-750g",
-   "count": 1
-  },
-  "brotregal/ebene-2/platz-15": {
-   "product": "sommerkorn-750g",
-   "count": 1
+   "product": "baguette-klein",
+   "count": 3
   },
   "brotregal/ebene-3/platz-01": {
    "product": "baguette-klein",
-   "count": 2
+   "count": 3
   },
   "brotregal/ebene-3/platz-02": {
    "product": "baguette-klein",
-   "count": 2
+   "count": 3
   },
   "brotregal/ebene-3/platz-03": {
    "product": "roggenflit-klein",
-   "count": 2
+   "count": 3
   },
   "brotregal/ebene-3/platz-04": {
-   "product": "roggenflit-gross",
-   "count": 1
+   "product": "kornbrot-500g",
+   "count": 2
   },
   "brotregal/ebene-3/platz-05": {
-   "product": "kasten-weissbrot",
-   "count": 1
+   "product": "mischbrot-500g",
+   "count": 2
   },
   "brotregal/ebene-3/platz-06": {
-   "product": "kasten-weissbrot",
-   "count": 1
-  },
-  "brotregal/ebene-3/platz-07": {
    "product": "kornbrot-1000g",
    "count": 1
   },
-  "brotregal/ebene-3/platz-08": {
+  "brotregal/ebene-3/platz-07": {
    "product": "mischbrot-1000g",
    "count": 1
   },
+  "brotregal/ebene-3/platz-08": {
+   "product": "haferflocken-750g",
+   "count": 3
+  },
   "brotregal/ebene-3/platz-09": {
-   "product": "koenig-ludwig-750g",
-   "count": 1
+   "product": "voll-gut-750g",
+   "count": 3
   },
   "brotregal/ebene-3/platz-10": {
-   "product": "kerbricher-750g",
-   "count": 1
+   "product": "kasten-weissbrot",
+   "count": 2
   },
   "brotregal/ebene-3/platz-11": {
-   "product": "biker-750g",
-   "count": 1
+   "product": "hildegard-von-bingen-500g",
+   "count": 2
   },
   "brotregal/ebene-3/platz-12": {
-   "product": "holzluken-750g",
-   "count": 1
+   "product": "schwabenkornt-500g",
+   "count": 3
   },
   "brotregal/ebene-3/platz-13": {
    "product": "roggenflit-klein",
-   "count": 2
+   "count": 3
   },
   "brotregal/ebene-3/platz-14": {
    "product": "baguette-klein",
+   "count": 3
+  },
+  "brotregal/ebene-4/platz-01": {
+   "product": "baguette-klein",
+   "count": 3
+  },
+  "brotregal/ebene-4/platz-02": {
+   "product": "roggenflit-gross",
    "count": 2
+  },
+  "brotregal/ebene-4/platz-03": {
+   "product": "koenig-ludwig-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-04": {
+   "product": "kerbricher-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-05": {
+   "product": "biker-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-06": {
+   "product": "holzluken-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-07": {
+   "product": "bergsteiger-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-08": {
+   "product": "sommerkorn-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-09": {
+   "product": "koenig-ludwig-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-10": {
+   "product": "holzluken-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-11": {
+   "product": "kerbricher-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-12": {
+   "product": "bergsteiger-750g",
+   "count": 2
+  },
+  "brotregal/ebene-4/platz-13": {
+   "product": "mischbrot-500g",
+   "count": 3
+  },
+  "brotregal/ebene-4/platz-14": {
+   "product": "kornbrot-500g",
+   "count": 3
   },
   "brotregal/koerbe/korb-1/platz-01": {
    "product": "doppelweck",
-   "count": 16
+   "count": 17
   },
   "brotregal/koerbe/korb-2/platz-01": {
    "product": "sternweck",
@@ -190,7 +242,7 @@
   },
   "brotregal/koerbe/korb-4/platz-01": {
    "product": "laugenbroetchen",
-   "count": 22
+   "count": 26
   },
   "brotregal/koerbe/korb-5/platz-01": {
    "product": "roggenweck",
@@ -198,7 +250,7 @@
   },
   "brotregal/koerbe/korb-6/platz-01": {
    "product": "samstagsweck",
-   "count": 18
+   "count": 20
   },
   "dosenregal/platz-01": {
    "ware": "dose",

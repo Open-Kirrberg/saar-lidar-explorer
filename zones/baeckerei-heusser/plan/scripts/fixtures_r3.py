@@ -55,8 +55,22 @@ def _dist(room, a, b):
     return math.dist(room[a], room[b])
 
 
-def apply(fixtures: list[dict], room: dict) -> list[dict]:
-    """Return the fixture list with the round-3 corrections merged into F1–F9 and the new fixtures F11+ appended."""
+def window_spans(openings: list[dict]) -> dict[str, tuple[float, float]]:
+    """Shop windows O1/O2 as (x0, x1) along the facade, from the plan's openings (one source of truth: model.py)."""
+    out = {}
+    for o in openings:
+        if o.get("id") in ("O1", "O2"):
+            a, b = float(o["from"][0]), float(o["to"][0])
+            out[o["id"]] = (min(a, b), max(a, b))
+    if set(out) != {"O1", "O2"}:
+        raise ValueError("fixtures_r3: the plan needs the shop windows O1 and O2")
+    return out
+
+
+def apply(fixtures: list[dict], room: dict, windows: dict[str, tuple[float, float]]) -> list[dict]:
+    """Return the fixture list with the round-3 corrections merged into F1–F9 and the new fixtures F11+ appended.
+    `windows` = the shop windows {O1: (x0, x1), O2: (x0, x1)} (`window_spans`): track lights and sill decoration
+    follow them."""
     room = {k: (tuple(v["xy"]) if isinstance(v, dict) else (float(v[0]), float(v[1]))) for k, v in room.items()}
     by = {f["id"]: dict(f) for f in fixtures}
     order = [f["id"] for f in fixtures]
@@ -81,7 +95,10 @@ def apply(fixtures: list[dict], room: dict) -> list[dict]:
         ],
     })
 
-    # ---- F2 bread shelf: 3 bays, 3 rod tiers + basket level + low board (video); length from the 6 baskets
+    # ---- F2 bread shelf: 3 bays, 4 rod tiers + basket level + low board; length from the 6 baskets. Tiers from the
+    # 2026 photo of the counter (Ist-Stand: 4 levels, the two lower ones with white price rails full of cards) over the
+    # 2019 video (3 tiers, a gap above the baskets). Spacing 0.24 from 1.12 to 1.84 (Messliste F: ≈ 0.95 … 1.85): the
+    # lowest tier's price cards stay clear of the heaped rolls in the baskets at 0.80
     f2 = by["F2"]
     l2 = 3.60
     f2["size"] = dict(f2["size"], l=l2)
@@ -92,11 +109,15 @@ def apply(fixtures: list[dict], room: dict) -> list[dict]:
     f2["slots"] = [
         {"id": "unterboden", "z": 0.15, "d": 0.40, "neigung_deg": 0, "sigma_m": 0.1, "source": "video", "note_de": "Vorrat, keine Verkaufsware"},
         {"id": "koerbe", "z": 0.80, "d": 0.40, "neigung_deg": 10, "sigma_m": 0.1, "source": "video", "note_de": "6 Körbe mit rosa Tüchern"},
-        {"id": "ebene-1", "z": 1.20, "d": 0.40, "neigung_deg": 25, "stangen": 7, "sigma_m": 0.1, "source": "video", "note_de": "Stangenboden mit Preisschiene"},
-        {"id": "ebene-2", "z": 1.50, "d": 0.40, "neigung_deg": 25, "stangen": 7, "sigma_m": 0.1, "source": "video", "note_de": "Stangenboden mit Preisschiene"},
-        {"id": "ebene-3", "z": 1.80, "d": 0.50, "neigung_deg": 25, "stangen": 11, "sigma_m": 0.1, "source": "video", "note_de": "oben, rote Vorderkante"},
+        {"id": "ebene-1", "z": 1.12, "d": 0.40, "neigung_deg": 25, "stangen": 7, "preisschiene": True, "sigma_m": 0.1, "source": "photo",
+         "note_de": "Stangenboden mit weißer Preisschiene und Preiskärtchen"},
+        {"id": "ebene-2", "z": 1.36, "d": 0.40, "neigung_deg": 25, "stangen": 7, "preisschiene": True, "sigma_m": 0.1, "source": "photo",
+         "note_de": "Stangenboden mit weißer Preisschiene und Preiskärtchen"},
+        {"id": "ebene-3", "z": 1.60, "d": 0.40, "neigung_deg": 25, "stangen": 7, "sigma_m": 0.1, "source": "photo", "note_de": "Stangenboden"},
+        {"id": "ebene-4", "z": 1.84, "d": 0.50, "neigung_deg": 25, "stangen": 11, "sigma_m": 0.1, "source": "photo", "note_de": "oben, rote Vorderkante"},
     ]
-    f2["note_de"] = "Wandseitig, gegenüber der Theke; 3 Felder à ≈ 1,2 m, Vorderkante der Böden = z"
+    f2["note_de"] = ("Wandseitig, gegenüber der Theke; 3 Felder à ≈ 1,2 m, Vorderkante der Böden = z. Stand 2026 (Foto): "
+                     "4 Stangenböden + Korbebene; im Video 2019 waren es 3")
 
     # ---- F3 grid shelf: chrome, ≈ 0.90 wide, 5 wire shelves (video)
     f3 = by["F3"]
@@ -207,9 +228,12 @@ def apply(fixtures: list[dict], room: dict) -> list[dict]:
     new.append(_fx("F17", "geraet", "Brotschneidemaschine", (room["A"][0] + 1.105, room["A"][1] + 1.03), 90.0,
                    {"l": 0.60, "d": 0.65, "h": 1.30}, 0.5, note_de="auf Rollen, Arbeitsseite zum Gang"))
     # ---- ceiling: track lights over the shop windows (on the bulkhead) and in the café, downlights
-    o1w, o2w = (16.85, 18.55), (19.12, 21.23)
-    new.append(_fx("F31", "strahler", "Strahlerschiene", (o1w[0] + 0.10, 0.80), 0.0, {"l": 1.50, "d": 0.06, "h": 0.15}, 0.4, z_mount="Sturz", spots=2))
-    new.append(_fx("F32", "strahler", "Strahlerschiene", (o2w[0] + 0.15, 0.80), 0.0, {"l": 1.80, "d": 0.06, "h": 0.15}, 0.4, z_mount="Sturz", spots=3))
+    o1w, o2w = windows["O1"], windows["O2"]          # from the plan (equal widths since 2026-11-06)
+
+    def centred(w, l):                                # a rail of length l centred over the window w
+        return w[0] + (w[1] - w[0] - l) / 2
+    new.append(_fx("F31", "strahler", "Strahlerschiene", (centred(o1w, 1.50), 0.80), 0.0, {"l": 1.50, "d": 0.06, "h": 0.15}, 0.4, z_mount="Sturz", spots=2))
+    new.append(_fx("F32", "strahler", "Strahlerschiene", (centred(o2w, 1.80), 0.80), 0.0, {"l": 1.80, "d": 0.06, "h": 0.15}, 0.4, z_mount="Sturz", spots=3))
     new.append(_fx("F33", "strahler", "Strahlerschiene", (room["D"][0] - 1.21, room["D"][1] + 0.55), 90.0, {"l": 1.80, "d": 0.06, "h": 0.15}, 0.4,
                    z_mount="Decke", spots=3))
     new.append(_fx("F34", "einbauleuchten", "Einbauleuchten", (room["D"][0] - 1.64, room["D"][1] + 0.58), 0.0, {"l": 0.08, "d": 0.08, "h": 0.01}, 0.5,
@@ -218,7 +242,8 @@ def apply(fixtures: list[dict], room: dict) -> list[dict]:
     new.append(_fx("F28", "matte", "Fußmatte (Eingang)", (room["C"][0] + 0.49, room["C"][1] + 0.04), 0.0, {"l": 1.50, "d": 0.60, "h": 0.012}, 0.4))
     new.append(_fx("F29", "matte", "Läufer vor der Theke", _local(f1, 1.20, -1.05), f1["pose"]["rot_deg"], {"l": 3.00, "d": 0.80, "h": 0.012}, 0.4))
     new.append(_fx("F35", "deko", "Schaufensterbank mit Deko (Schaufenster 2)", (o2w[1] - 0.08, room["A"][1] + 0.30), 180.0,
-                   {"l": 1.95, "d": 0.30, "h": 0.40}, 0.4, note_de="Filz, Kürbisse, Sonnenblumen; Girlande am Sturz"))
+                   {"l": o2w[1] - o2w[0] - 0.16, "d": 0.30, "h": 0.40}, 0.4, note_de="Filz, Kürbisse, Sonnenblumen; Girlande am Sturz; "
+                   "8 cm Abstand zu beiden Laibungen"))
     new.append(_fx("F36", "deko", "Schaufenster-Deko (Schaufenster 1)", (o1w[1] - 0.05, room["A"][1] + 0.28), 180.0,
                    {"l": 0.42, "d": 0.28, "h": 0.30}, 0.4, note_de="zwischen Arbeitstisch und Pfeiler; Girlande am Sturz"))
 
@@ -236,7 +261,7 @@ def main(argv: list[str]) -> int:
     path = Path(argv[0]) if argv else Path(__file__).resolve().parents[1] / "raumplan-v0.json"
     doc = json.loads(path.read_text(encoding="utf-8"))
     r1 = next(r for r in doc["levels"][0]["rooms"] if r["id"] == "R1")
-    r1["fixtures"] = apply(r1["fixtures"], r1["points"])
+    r1["fixtures"] = apply(r1["fixtures"], r1["points"], window_spans(r1["openings"]))
     doc["fixture_frame"] = ("Fixture-Ursprung = vordere Ecke am Anfang der Länge (Zugangsseite: Kunde bzw. Gang), x entlang l, "
                             "y von der Vorderkante in die Tiefe d, z nach oben ab pose.z; rot_deg = Winkel von x_fixture gegen x_B "
                             "(gegen den Uhrzeigersinn). Tische und runde Objekte (form): Ursprung = Mitte.")

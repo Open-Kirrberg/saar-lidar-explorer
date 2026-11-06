@@ -24,14 +24,14 @@
    "name_de": "Fassade",
    "info_de": "Das Haus der Bäckerei Heusser in der Eckstraße in Kirrberg. Die Bäckerei gibt es seit 1933.",
    "dims": {
-    "w": 24.99,
+    "w": 25.31,
     "d": 16.75,
     "h": 12.05
    },
    "placement": {
     "plan": {
-     "x": -3.94,
-     "z": 2.75,
+     "x": -3.87,
+     "z": 2.61,
      "base_m": -2.02,
      "rot_deg": 115.7
     }
@@ -208,7 +208,7 @@
      "rot_deg": 115.7
     }
    },
-   "where_de": "vor der Ladentür",
+   "where_de": "vor der Ladentür; die zwei untersten Stufen laufen unter dem Eckpfeiler bis zur Hauskante durch",
    "source": "mesh",
    "sigma_m": 0.15,
    "refs": [
@@ -218,21 +218,67 @@
    "clickable": false
   },
   {
+   "id": "fassade/backstube-eingang",
+   "type": "structure",
+   "area": "aussen",
+   "name_de": "Eingang zur Backstube",
+   "info_de": "Links an der Fassade führen Terrazzostufen in einer Nische hinauf zu einer Aluminiumtür mit Riffelglas. Dahinter liegt die Backstube, in der gebacken wird – die Tür bleibt für dich zu.",
+   "dims": {
+    "w": 1.46,
+    "d": 1.42,
+    "h": 4.7
+   },
+   "placement": {
+    "plan": {
+     "x": -2.09,
+     "z": 15.17,
+     "base_m": -1.4,
+     "rot_deg": 115.7
+    }
+   },
+   "where_de": "SSW-Ende der Straßenfassade, Nische rechts neben den Eckquadern; nur außen dargestellt",
+   "source": "photo",
+   "sigma_m": 0.25,
+   "refs": [
+    "Handvideo Straße bis Laden (privat, Standbilder)",
+    "Street View (angesehen, nicht gespeichert)",
+    "Nutzerangabe 2026-11-06"
+   ],
+   "status": "built",
+   "clickable": true,
+   "discover": true
+  },
+  {
    "id": "fassade/abholschrank",
    "type": "fixture",
    "area": "aussen",
    "name_de": "Abholschrank",
-   "info_de": "Ein Schrank an der Fassade, aus dem man Bestellungen abholen kann.",
-   "dims": null,
-   "placement": null,
-   "where_de": "steht im privaten Teil des Durchgangs: Lage nur im privaten Plan, daher nicht dargestellt",
+   "info_de": "Gleich um die Ecke vom Eingang steht im Durchgang die Abholstation: ein grauer Schrank mit Lamellentüren und schwarzem Griffband. Hier kannst du dir Backwaren zurücklegen lassen und sie auch nach Ladenschluss abholen.",
+   "dims": {
+    "w": 0.92,
+    "d": 0.43,
+    "h": 1.82
+   },
+   "placement": {
+    "plan": {
+     "x": 5.21,
+     "z": -6.83,
+     "base_m": -0.9,
+     "rot_deg": 25.7
+    }
+   },
+   "where_de": "im überdachten Durchgang an der Nordwand der Bäckerei, Türen zum Durchgang; Schild nur „Abholstation“",
    "source": "photo",
-   "sigma_m": 0.5,
+   "sigma_m": 0.3,
    "refs": [
-    "Street View (angesehen, nicht gespeichert)"
+    "Foto der Abholstation (nur Referenz)",
+    "Handvideo Straße bis Laden (privat, Standbilder)",
+    "Capture 2026-11-04 (Referenz-Mesh)",
+    "Nutzerangabe 2026-11-06"
    ],
-   "status": "planned",
-   "clickable": true
+   "status": "built",
+   "clickable": true,
+   "discover": true
   },
   {
    "id": "fassade/wandmalerei",
@@ -298,19 +344,19 @@
    "name_de": "Schlussstein mit Brezel",
    "info_de": "Schau mal nach oben: Über dem Schaufenster ist eine Brezel in den Sandstein gehauen, das alte Zeichen der Bäcker.",
    "dims": {
-    "w": 0.42,
+    "w": 0.48,
     "d": 0.07,
     "h": 0.44
    },
    "placement": {
     "plan": {
-     "x": 5.4,
-     "z": 1.31,
+     "x": 5.45,
+     "z": 1.22,
      "base_m": 1.88,
      "rot_deg": 115.7
     }
    },
-   "where_de": "Scheitel eines Schaufensters; Brezel als Relief",
+   "where_de": "Scheitel eines Schaufensters; trapezförmig, Brezel als Relief",
    "source": "photo",
    "sigma_m": 0.5,
    "refs": [
@@ -324,22 +370,22 @@
    "id": "fassade/schlussstein-2",
    "type": "decor",
    "area": "aussen",
-   "name_de": "Schlussstein",
-   "info_de": "Auf diesem Schlussstein steht „H.H. 1933“, so wie „Heinrich Heusser“ und „seit 1933“ auf dem Wandbild am Giebel.",
+   "name_de": "Schlussstein mit Inschrift",
+   "info_de": "Auf diesem Schlussstein steht in Frakturschrift „H.H.“ und darunter „AD 1933“, so wie „Heinrich Heusser“ und „seit 1933“ auf dem Wandbild am Giebel.",
    "dims": {
-    "w": 0.42,
+    "w": 0.48,
     "d": 0.06,
     "h": 0.44
    },
    "placement": {
     "plan": {
-     "x": 6.47,
-     "z": -0.92,
+     "x": 6.52,
+     "z": -1.01,
      "base_m": 1.88,
      "rot_deg": 115.7
     }
    },
-   "where_de": "Scheitel des anderen Schaufensters; Inschrift nur mit Build-Flag nach Zustimmung der Inhaber, sonst glatter Stein",
+   "where_de": "Scheitel des anderen Schaufensters; trapezförmig, Inschrift „H.H.“ über „AD 1933“ in Fraktur (Zustimmung der Inhaber, ADR 0044)",
    "source": "photo",
    "sigma_m": 0.5,
    "refs": [
@@ -571,10 +617,12 @@
    "sigma_m": 0.3,
    "refs": [
     "Capture 2026-11-04 (Referenz-Mesh)",
-    "Raumplan v0 (öffentliche Fassung)"
+    "Raumplan v0 (öffentliche Fassung)",
+    "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": false
+   "clickable": false,
+   "where_de": "hellgraue Fliesen ≈ 0,30, diagonal (45°) zur Fassade verlegt, parallel zur Theke und zum Brotregal"
   },
   {
    "id": "verkaufsraum/wandfliesen",
@@ -623,11 +671,12 @@
      "rot_deg": 115.7
     }
    },
-   "where_de": "abgehängte Plattendecke",
+   "where_de": "abgehängte Paneeldecke, fast weiß (≈ 0,28 breite Paneele)",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
-    "Referenzfoto Verkaufstheke von vorne (privat)"
+    "Referenzfoto Verkaufstheke von vorne (privat)",
+    "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
    "clickable": false
@@ -651,11 +700,12 @@
      "rot_deg": 70.7
     }
    },
-   "where_de": "holzverkleidete Deckenblende mit roter Kante über der Theke",
+   "where_de": "Holz nur an der senkrechten Blende zwischen zwei roten Linien, Unterseite weiße Paneele, an denen die Pendelleuchten hängen",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
-    "Referenzfoto Verkaufstheke von vorne (privat)"
+    "Referenzfoto Verkaufstheke von vorne (privat)",
+    "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
    "clickable": false
@@ -683,10 +733,12 @@
    "sigma_m": 0.3,
    "refs": [
     "Capture 2026-11-04 (Referenz-Mesh)",
-    "Raumplan v0 (öffentliche Fassung)"
+    "Raumplan v0 (öffentliche Fassung)",
+    "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": false
+   "clickable": false,
+   "where_de": "Glaswand zum Vorbau in weißen Alu-Rahmen"
   },
   {
    "id": "verkaufsraum/ladentuer",
@@ -711,10 +763,12 @@
    "sigma_m": 0.3,
    "refs": [
     "Capture 2026-11-04 (Referenz-Mesh)",
-    "Raumplan v0 (öffentliche Fassung)"
+    "Raumplan v0 (öffentliche Fassung)",
+    "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
-   "clickable": true
+   "clickable": true,
+   "where_de": "Glasfront mit automatischer Schiebetür, weiße Alu-Rahmen, schmale weiße Rahmen um die Flügel"
   },
   {
    "id": "verkaufsraum/hintertuer",
@@ -1172,11 +1226,11 @@
    "type": "fixture",
    "area": "verkaufsraum",
    "name_de": "Brotregal",
-   "info_de": "Das Brotregal hinter der Theke: oben drei schräge Stangenböden für die Brote, darunter sechs Körbe für die Brötchen.",
+   "info_de": "Das Brotregal hinter der Theke: oben vier schräge Stangenböden für die Brote, darunter sechs Körbe für die Brötchen. An den unteren Böden stecken die Preiskärtchen.",
    "dims": {
     "w": 3.6,
     "d": 0.6,
-    "h": 2.03
+    "h": 2.07
    },
    "placement": {
     "plan": {
@@ -1186,7 +1240,7 @@
      "rot_deg": 70.7
     }
    },
-   "where_de": "an der Rückwand hinter der Theke; Schrägböden aus Messing-Rundstäben, Ebenen zählen und als brotregal/ebene-1 … anlegen",
+   "where_de": "an der Rückwand hinter der Theke; 4 Schrägböden aus Messing-Rundstäben (Stand 2026, Foto; im Video 2019 waren es 3) über der Korbebene",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
@@ -1206,20 +1260,21 @@
    "dims": {
     "w": 3.49,
     "d": 0.02,
-    "h": 0.33
+    "h": 0.27
    },
    "placement": {
     "plan": {
      "x": 2.37,
      "z": -1.19,
-     "base_m": 1.15,
+     "base_m": 1.06,
      "rot_deg": 70.7
     }
    },
-   "where_de": "an den Vorderkanten der Böden; Schienen ja, Preise nur mit Zustimmung der Inhaber",
+   "where_de": "weiße Preisschienen an den Vorderkanten der beiden unteren Böden; je Brot ein weißes Kärtchen mit Name und Preis aus der Produktliste (Inhaber-OK, ADR 0044)",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)",
     "Referenzfoto Brotregal (Website der Bäckerei, privat)"
    ],
    "status": "built",
@@ -1436,16 +1491,16 @@
     "plan": {
      "x": 2.21,
      "z": -1.13,
-     "base_m": 1.18,
+     "base_m": 1.1,
      "rot_deg": 70.7
     }
    },
-   "where_de": "Vorderkante ≈ 1,20, ≈ 7 Stangen, Neigung ≈ 25°, Preisschiene; im Video 3 Stangenböden (Raumplan v0: 4)",
+   "where_de": "Vorderkante ≈ 1,12, ≈ 7 Stangen, Neigung ≈ 25°, weiße Preisschiene mit Kärtchen (Foto 2026)",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
-    "Handvideo Straße bis Laden (privat, Standbilder)",
-    "Referenzfoto Verkaufstheke von vorne (privat)"
+    "Referenzfoto Verkaufstheke von vorne (privat)",
+    "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
    "clickable": false
@@ -1454,7 +1509,7 @@
    "id": "brotregal/ebene-2",
    "type": "fixture",
    "area": "verkaufsraum",
-   "name_de": "Stangenboden Mitte",
+   "name_de": "Stangenboden, zweiter von unten",
    "info_de": "",
    "dims": {
     "w": 3.52,
@@ -1465,22 +1520,51 @@
     "plan": {
      "x": 2.21,
      "z": -1.13,
-     "base_m": 1.48,
+     "base_m": 1.34,
      "rot_deg": 70.7
     }
    },
-   "where_de": "Vorderkante ≈ 1,50, ≈ 7 Stangen, Neigung ≈ 25°, Preisschiene",
+   "where_de": "Vorderkante ≈ 1,36, ≈ 7 Stangen, Neigung ≈ 25°, weiße Preisschiene mit Kärtchen (Foto 2026)",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
-    "Handvideo Straße bis Laden (privat, Standbilder)",
-    "Referenzfoto Verkaufstheke von vorne (privat)"
+    "Referenzfoto Verkaufstheke von vorne (privat)",
+    "Handvideo Straße bis Laden (privat, Standbilder)"
    ],
    "status": "built",
    "clickable": false
   },
   {
    "id": "brotregal/ebene-3",
+   "type": "fixture",
+   "area": "verkaufsraum",
+   "name_de": "Stangenboden, zweiter von oben",
+   "info_de": "",
+   "dims": {
+    "w": 3.52,
+    "d": 0.4,
+    "h": 0.2
+   },
+   "placement": {
+    "plan": {
+     "x": 2.21,
+     "z": -1.13,
+     "base_m": 1.58,
+     "rot_deg": 70.7
+    }
+   },
+   "where_de": "Vorderkante ≈ 1,60, ≈ 7 Stangen, Neigung ≈ 25°",
+   "source": "photo",
+   "sigma_m": 0.3,
+   "refs": [
+    "Referenzfoto Verkaufstheke von vorne (privat)",
+    "Handvideo Straße bis Laden (privat, Standbilder)"
+   ],
+   "status": "built",
+   "clickable": false
+  },
+  {
+   "id": "brotregal/ebene-4",
    "type": "fixture",
    "area": "verkaufsraum",
    "name_de": "Stangenboden oben",
@@ -1494,16 +1578,16 @@
     "plan": {
      "x": 2.25,
      "z": -1.15,
-     "base_m": 1.78,
+     "base_m": 1.82,
      "rot_deg": 70.7
     }
    },
-   "where_de": "Vorderkante ≈ 1,80, ≈ 10–11 Stangen, rote Vorderkante statt Preisschiene",
+   "where_de": "Vorderkante ≈ 1,84, ≈ 10–11 Stangen, rote Vorderkante statt Preisschiene",
    "source": "photo",
    "sigma_m": 0.3,
    "refs": [
-    "Handvideo Straße bis Laden (privat, Standbilder)",
-    "Referenzfoto Verkaufstheke von vorne (privat)"
+    "Referenzfoto Verkaufstheke von vorne (privat)",
+    "Referenzfoto Brotregal (Website der Bäckerei, privat)"
    ],
    "status": "built",
    "clickable": false
@@ -1883,7 +1967,7 @@
      "rot_deg": 115.7
     }
    },
-   "where_de": "schwarze Pendelleuchte über der Theke",
+   "where_de": "schwarze Pendelleuchte in Eiform über der Theke",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
@@ -1911,7 +1995,7 @@
      "rot_deg": 115.7
     }
    },
-   "where_de": "zweite schwarze Pendelleuchte über der Theke",
+   "where_de": "zweite schwarze Pendelleuchte in Eiform über der Theke",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
@@ -1939,11 +2023,12 @@
      "rot_deg": 115.7
     }
    },
-   "where_de": "an der Holzblende über der Theke; im Video 4 Pendel im Abstand ≈ 1,1 m",
+   "where_de": "an der Holzblende über der Theke; im Video 4 Pendel im Abstand ≈ 1,1 m; schwarzer Schirm in Eiform",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
-    "Handvideo Straße bis Laden (privat, Standbilder)"
+    "Handvideo Straße bis Laden (privat, Standbilder)",
+    "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
    "status": "built",
    "clickable": false
@@ -1967,11 +2052,12 @@
      "rot_deg": 115.7
     }
    },
-   "where_de": "an der Holzblende über der Theke; im Video 4 Pendel im Abstand ≈ 1,1 m",
+   "where_de": "an der Holzblende über der Theke; im Video 4 Pendel im Abstand ≈ 1,1 m; schwarzer Schirm in Eiform",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
-    "Handvideo Straße bis Laden (privat, Standbilder)"
+    "Handvideo Straße bis Laden (privat, Standbilder)",
+    "Referenzfoto Verkaufstheke von vorne (privat)"
    ],
    "status": "built",
    "clickable": false
@@ -1989,8 +2075,8 @@
    },
    "placement": {
     "plan": {
-     "x": 4.65,
-     "z": 0.95,
+     "x": 4.69,
+     "z": 0.85,
      "base_m": 1.88,
      "rot_deg": 115.7
     }
@@ -2017,8 +2103,8 @@
    },
    "placement": {
     "plan": {
-     "x": 5.72,
-     "z": -1.28,
+     "x": 5.77,
+     "z": -1.37,
      "base_m": 1.88,
      "rot_deg": 115.7
     }
@@ -2504,14 +2590,14 @@
    "name_de": "Schaufenster-Deko",
    "info_de": "Kürbisse auf grünem Filz und eine Blumengirlande: die Herbstdeko im Schaufenster.",
    "dims": {
-    "w": 1.67,
+    "w": 1.87,
     "d": 0.3,
     "h": 1.88
    },
    "placement": {
     "plan": {
-     "x": 4.68,
-     "z": 0.97,
+     "x": 4.73,
+     "z": 0.87,
      "base_m": 0.0,
      "rot_deg": 295.7
     }
@@ -2532,14 +2618,14 @@
    "name_de": "Schaufenster-Deko",
    "info_de": "Sonnenblumen und Kürbisse auf grünem Filz, darüber eine Blumengirlande: die Herbstdeko im Schaufenster.",
    "dims": {
-    "w": 2.08,
+    "w": 1.87,
     "d": 0.32,
     "h": 1.88
    },
    "placement": {
     "plan": {
-     "x": 5.75,
-     "z": -1.27,
+     "x": 5.79,
+     "z": -1.36,
      "base_m": 0.0,
      "rot_deg": 295.7
     }
@@ -2558,7 +2644,7 @@
    "type": "decor",
    "area": "verkaufsraum",
    "name_de": "Alte Bilder",
-   "info_de": "Alte Fotos und Zeichnungen aus der Geschichte der Bäckerei, darunter ein Gruppenfoto von 1946. Hier siehst du sie nur als Rahmen.",
+   "info_de": "Alte Fotos und Zeichnungen aus der Geschichte der Bäckerei seit 1933, darunter ein Gruppenfoto von 1946. Im Nachbau sind sie als einfache Zeichnungen angedeutet: Weizenähren, das alte Haus und ein Backofen.",
    "dims": {
     "w": 0.65,
     "d": 0.02,
@@ -2572,7 +2658,7 @@
      "rot_deg": 160.7
     }
    },
-   "where_de": "Wand rechts neben dem hinteren Durchgang; Bildinhalte nur als neutrale Sepiaflächen, keine Gesichter",
+   "where_de": "Wand rechts neben dem hinteren Durchgang; statt der Fotos einfache Sepia-Zeichnungen mit neutralen Motiven (keine Gesichter, keine Kopien der Fotos)",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
@@ -2601,7 +2687,7 @@
      "rot_deg": 160.7
     }
    },
-   "where_de": "Hochformat ≈ 0,30 × 0,38, Sepiafläche",
+   "where_de": "Hochformat ≈ 0,30 × 0,38, silberner Rahmen, weißes Passepartout, gezeichnete Sepia-Vignette: Weizenähren",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
@@ -2624,12 +2710,12 @@
    "placement": {
     "plan": {
      "x": 3.4,
-     "z": -4.39,
+     "z": -4.38,
      "base_m": 1.43,
      "rot_deg": 160.7
     }
    },
-   "where_de": "Hochformat ≈ 0,30 × 0,45, Sepiafläche",
+   "where_de": "Hochformat ≈ 0,30 × 0,45, silberner Rahmen, weißes Passepartout, gezeichnete Sepia-Vignette: das alte Haus mit zwei Schaufenstern",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
@@ -2657,7 +2743,7 @@
      "rot_deg": 160.7
     }
    },
-   "where_de": "Querformat ≈ 0,55 × 0,40, Sepiafläche",
+   "where_de": "Querformat ≈ 0,55 × 0,40, silberner Rahmen, weißes Passepartout, gezeichnete Sepia-Vignette: ein gemauerter Backofen mit Broten und Schieber",
    "source": "photo",
    "sigma_m": 0.4,
    "refs": [
@@ -2887,22 +2973,22 @@
    "id": "umgebung/durchgang",
    "type": "structure",
    "area": "aussen",
-   "name_de": "Durchgang (Anfang)",
+   "name_de": "Durchgang (vorderer Teil)",
    "info_de": "",
    "dims": {
     "w": 2.96,
-    "d": 1.6,
-    "h": 3.29
+    "d": 4.35,
+    "h": 3.44
    },
    "placement": {
     "plan": {
-     "x": 8.31,
-     "z": -6.65,
-     "base_m": -1.29,
+     "x": 7.07,
+     "z": -7.25,
+     "base_m": -1.44,
      "rot_deg": 115.7
     }
    },
-   "where_de": "überbauter Durchgang neben dem Laden, nur bis zur Ladentür",
+   "where_de": "überbauter Durchgang neben dem Laden, bis kurz hinter den Abholschrank; Pflaster im Fischgrätverband",
    "source": "mesh",
    "sigma_m": 0.35,
    "refs": [
