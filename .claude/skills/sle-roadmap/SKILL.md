@@ -41,7 +41,7 @@ Write a short plan (in chat, 5–15 lines): files/modules touched, contract chan
 Do the work in subagents (the user asked for this), each with a narrow scope and explicit ownership:
 
 - **Ownership by directory.** Typical split: pipeline agent → `pipeline/` + generated `app/public/data/**`; renderer agent → `app/src/terrain/`, new `app/src/<feature>/`; UI/map agent → `app/src/map/`, `app/src/markers/`, `app/src/ui/<feature>*`. Run agents in parallel only when their directories are disjoint.
-- **Shared files** (`app/src/main.ts`, `app/src/ui/features.ts`, `app/src/data/manifest.ts`, `app/index.html`, `docs/data-contract.md`, `PRD.md`, `docs/adr/`, `CHANGELOG.md`): you (the lead) own them, or an agent edits them minimally and additively and re-reads the file right before each edit. Contract changes are made by the lead *before* spawning agents, so both sides build against the same spec.
+- **Shared files** (`app/src/main.ts`, `app/src/shell/Shell.ts`, `app/src/data/manifest.ts`, `app/index.html`, `docs/data-contract.md`, `PRD.md`, `docs/adr/`, `CHANGELOG.md`): you (the lead) own them, or an agent edits them minimally and additively and re-reads the file right before each edit. Contract changes are made by the lead *before* spawning agents, so both sides build against the same spec.
 - **Brief like a peer.** Each brief states: goal + acceptance criteria (copy from the roadmap), files to read first (relevant ADRs, contract, READMEs, research file), ownership boundaries, project conventions (below), verification it must run, and the report format (<300 words: what changed, test/build results, what was verified vs. not, known gaps). Ask agents not to commit.
 - Don't duplicate an agent's work while it runs; use the time for docs upkeep or the next plan.
 
@@ -60,7 +60,7 @@ plus a browser check of the new feature (use `window.sle.step()` — Chrome ofte
 - **PRD.md:** touch only if vision, goals, tiers, roadmap status or open questions changed (answered question → remove the row, or turn it into an ADR). Keep it ≤ 150 lines.
 - Update `app/README.md` / `pipeline/README.md` / `docs/data-contract.md` where behaviour changed.
 - Update `references/roadmap.md` in this skill: tick the item, add newly discovered issues to "Known issues".
-- **Commit** once per roadmap item (local git; data stays ignored). Message: `V2.3: CHM trees in the overworld` style, ending with the attribution trailer the session provides.
+- **Commit** once per roadmap item after verification; push to origin only after review; generated/raw data stays out of git. Message: `V2.3: CHM trees in the overworld` style, ending with the attribution trailer the session provides.
 
 Then give the user a short update: what shipped, how to try it (`http://localhost:<port>/`, keys), what's next.
 
@@ -71,7 +71,7 @@ Then give the user a short update: what shipped, how to try it (`http://localhos
 - **Grid:** DGM is PixelIsArea; cell centres at +0.5 m. 500 m chunks, height textures 502² with 1-cell apron, layers 500². Half-pixel and axis-flip errors are the most common bug class here — test them numerically.
 - **UI:** German labels, English code/docs. Global shortcuts must ignore text fields via `isTyping()` from `app/src/ui/keys.ts`. Panels go into `#panel` via `createPanelSection` (`app/src/ui/panelSection.ts`); store writes carry a source tag (in use: `'camera'`, `'hash'`, `'gui'`; add a new tag per writer, e.g. `'map'`) to avoid feedback loops. Reserved/planned keys: `O` OSM ways, `L` measuring, `N`/`P` candidate navigation — check `app/README.md` before claiming a key.
 - **Data stays out of git**; generated data lives in `app/public/data/<aoi>/` and is not copied into `dist/`. Reproducibility comes from `pipeline/run.sh <aoi>`.
-- **Attribution** (`© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0`, RLP, OSM/ODbL) must cover any new source. The footer shows `manifest.attribution` plus strings hard-coded in `app/src/ui/features.ts` (`buildAttribution()`, already includes OSM and Flurstücke) — add new sources to the manifest from the pipeline.
+- **Attribution** (`© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0`, RLP, OSM/ODbL) must cover any new source. The footer shows `manifest.attribution` plus app rows hard-coded in `app/src/shell/attribution.ts` (`APP_ROWS`, merged by `sourceRows()`; already includes OSM tiles, POI sources and software) — add new sources to the manifest from the pipeline.
 - **Heritage law / ethics:** the app shows hypotheses, never digging or detector guidance; user markers, reviews and location stay local (ADR 0009); crater/UXO data never public (ADR 0010); quests virtual only, no "go there" (ADR 0021); keep the "Schauen, nicht graben" disclaimer intact.
 - Pinned dependency versions; Vite 8 / TS 7 / three r187 / Leaflet 1.9.4 / Python 3.12 via uv.
 

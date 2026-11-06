@@ -4,7 +4,7 @@ Guidance for Claude Code working in this repository. Product intent lives in [PR
 
 ## Project overview
 
-Saar LiDAR Explorer is a public, local-first browser app (v1.4 live on GitHub Pages; v2 turns it into a game-like explorer for the Kirrberg public, see [PRD.md](PRD.md)) to fly or walk over the 2025 Saarland LiDAR terrain (LVGL ALS 2025 open data, plus Rheinland-Pfalz fill) and discover relicts under the forest — walls, moats, pits, bunkers, hollow ways — around Schloss Karlsberg, Homburg and Kirrberg. A Python pipeline turns the raw GeoTIFFs into static chunks; a Vite/TypeScript/three.js app renders them with relief shading, synced to a Leaflet/OSM minimap.
+Saar LiDAR Explorer is a public, local-first browser app (v2 live on GitHub Pages: a game-like explorer for the Kirrberg public with the castle and Bäckerei Heusser zones, see [PRD.md](PRD.md)) to fly or walk over the 2025 Saarland LiDAR terrain (LVGL ALS 2025 open data, plus Rheinland-Pfalz fill) and discover relicts under the forest — walls, moats, pits, bunkers, hollow ways — around Schloss Karlsberg, Homburg and Kirrberg. A Python pipeline turns the raw GeoTIFFs into static chunks; a Vite/TypeScript/three.js app renders them with relief shading, synced to a Leaflet/OSM minimap.
 
 ## Layout
 
@@ -69,4 +69,4 @@ Use `pnpm run <script>` (pnpm 12 rejects `pnpm -s`). Check a port isn't owned by
   - Shipped item = **one line** in `CHANGELOG.md`; numbers and details go into the commit message and module READMEs.
   - Implementation details (thresholds, formats) belong in module READMEs or `docs/data-contract.md`, not in ADRs.
   - `docs/` ships publicly: no private locations (craters, user finds) in ADRs.
-- Local git only; generated/raw data stays out of git. Commit messages: `F10: OSM paths draped in 3D` style.
+- Commit after verified rounds; push to origin only after review; generated/raw data stays out of git. Commit messages: `F10: OSM paths draped in 3D` style.

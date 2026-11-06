@@ -190,7 +190,7 @@ Further `hist_<year>` keys may follow the same pattern; the app must take labels
 **Attribution entries** (merged into the top-level `attribution`, no `;` inside):
 - DOP Saarland: `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0 (DOP20)`
 - DOP Rheinland-Pfalz (only if RLP imagery is used): `© GeoBasis-DE/LVermGeoRP (2026), dl-de/by-2-0, www.lvermgeo.rlp.de, Daten bearbeitet (DOP20)`
-- Historic maps: `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (Historische Karten)` (licensor wording `© GeoBasis DE/LVGL-SL (Jahr)`, WMS id 2597 metadata, see `research/04-cadastre-historic-maps.md` §5)
+- Historic maps: `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (Historische Karten)` (licensor wording `© GeoBasis DE/LVGL-SL (Jahr)`, WMS id 2597 metadata, see `docs/research/04-cadastre-historic-maps.md` §5)
 
 ## Building mask (`layers.bldg`, optional, R0.7/F11)
 

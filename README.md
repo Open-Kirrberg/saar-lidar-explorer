@@ -12,14 +12,18 @@ Explore the **real** Kirrberg, Homburg and Schloss Karlsberg like a game. Fly or
 
 ## 🧭 Where it is going
 
-| | Today: v1.4 ([live](https://open-kirrberg.github.io/saar-lidar-explorer/)) | Next: v2 "game shell" |
+| | Before: v1.x | Today: v2 "game shell" ([live](https://open-kirrberg.github.io/saar-lidar-explorer/)) |
 |---|---|---|
 | Look | Analytic relief shading, many panels | Game look: aerial-photo ground, one real tree per LiDAR crown, houses, sky |
 | Relicts | Relief lab with 10 modes, candidate review | *Relikt-Blick* lens: the trees fade, the relief shows, candidates glow |
-| Places | Castle viewer as a separate app | Zones behind portals: the castle (1789) and a bakery in Kirrberg captured from video |
+| Places | Castle viewer as a separate app | Zones behind portals: the castle (1789) and the Bäckerei Heusser in Kirrberg, a built stylised twin ([ADR 0042](docs/adr/0042-baeckerei-heusser-built-twin.md)) |
 | UI | Dozens of switches | About 8 controls; *Entdecker* and *Labor* modes for more |
 
-Later: quests and professions (v3), exploring together with friends (v4), more places and the whole Saarland (v5). Details: [PRD.md](PRD.md) · decisions: [docs/adr/](docs/adr/README.md) · history: [CHANGELOG.md](CHANGELOG.md).
+Next: quests and professions (v3), exploring together with friends (v4), more places and the whole Saarland (v5). Details: [PRD.md](PRD.md) · decisions: [docs/adr/](docs/adr/README.md) · history: [CHANGELOG.md](CHANGELOG.md).
+
+### 📜 History: why v2
+
+v1 was the first, local-only explorer: terrain flight, relief shading, relict candidates and a minimap, published as v1.x through a fresh-history export. v2 rebuilt the shell as a game-like explorer with zones (the castle as zone #1, the bakery twin as zone #2) and is developed directly in this public repository. 3D printing (F21) moved to a separate private repository, crater detection (F22) stays private. The frozen v1 PRD: [docs/history/prd-v1.md](docs/history/prd-v1.md).
 
 ## 🚀 Quickstart
 
@@ -28,7 +32,7 @@ Needs [uv](https://docs.astral.sh/uv/) (installs Python 3.12), Node 24 + pnpm 12
 ```bash
 cd pipeline && uv sync && ./run.sh overall     # open data → app/public/data/overall/ (≈ 1.4 GB; ./run.sh karlsberg = small 3 × 3 km)
 cd ../app && pnpm install && pnpm dev          # without pipeline data it opens the synthetic ?aoi=fixture
-.claude/skills/sle-roadmap/scripts/verify.sh   # all gates: app tests + build, docs, pipeline tests
+.claude/skills/sle-roadmap/scripts/verify.sh   # all gates: app, castle, docs, twin, pipeline
 ```
 
 Serving a build, other data dirs, phone over HTTPS, controls: [app/README.md](app/README.md). Pipeline steps and sources: [pipeline/README.md](pipeline/README.md). Castle viewer: [zones/schloss-karlsberg/README.md](zones/schloss-karlsberg/README.md).
@@ -59,6 +63,9 @@ The exact attribution strings are written into each dataset's `manifest.json` by
 | [pipeline/](pipeline/README.md) | Python 3.12 (uv): open data → static chunks, layers, candidates |
 | [app/](app/README.md) | Vite + TypeScript + three.js + Leaflet explorer (German UI) |
 | [zones/schloss-karlsberg/](zones/schloss-karlsberg/README.md) | Researched 3D reconstruction of the palace, 1789 |
+| [zones/baeckerei-heusser/](zones/baeckerei-heusser/README.md) | Bäckerei Heusser: built, stylised digital twin of the Kirrberg bakery (catalogue, plan, generator) |
+| [tools/capture/](tools/capture/README.md) | Video → captured zone package (method for future captured zones) |
+| [docs/zone-contract.md](docs/zone-contract.md) | Binding zone package format (`sle-zone-v1`) |
 | `docs/research/` | Source research: data, tech stack, archaeology/legal, cadastre/historic maps |
 | `docs/history/` | Frozen v1 PRD and roadmap |
 

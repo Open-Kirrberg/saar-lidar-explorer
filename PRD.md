@@ -1,6 +1,6 @@
 # 🎮 Saar LiDAR Explorer — PRD
 
-> **Status:** v1.4 public ([live](https://open-kirrberg.github.io/saar-lidar-explorer/)) · v1.5 on `main` (F22 private) · **next: v2 "game shell"** · Updated 2026-11-04
+> **Status:** v2 live on GitHub Pages ([live](https://open-kirrberg.github.io/saar-lidar-explorer/)): game shell, castle zone, Bäckerei Heusser twin · F22 private · Updated 2026-11-06
 > **Rules:** ≤ 150 lines. *Why* lives in [ADRs](docs/adr/README.md), *what shipped* in [CHANGELOG.md](CHANGELOG.md), *how* in the module READMEs. Pre-v2 history: [docs/history/prd-v1.md](docs/history/prd-v1.md).
 
 ## 🌍 Vision
@@ -73,7 +73,7 @@ Item-level backlog: [`.claude/skills/sle-roadmap/references/roadmap.md`](.claude
 
 ## ❓ Open questions
 
-Decisions with options → `Proposed` ADRs (none open). Still open:
+Decisions with options → `Proposed` ADRs (none open). Answered: Q-37 (bakery twin `kind`/`evidence` → [0043](docs/adr/0043-built-twin-package-reference-nav.md); prices with the owners' yes → [0044](docs/adr/0044-baeckerei-heusser-owner-consent.md)). Still open:
 
 | Q | Question | Blocks | Lean |
 |---|---|---|---|
@@ -81,7 +81,6 @@ Decisions with options → `Proposed` ADRs (none open). Still open:
 | Q-34 | ☁️ v5 hosting: ≈ 22 000 km² ≈ 650 GB, beyond GitHub Pages | v5 | Contracts must not assume one small AOI |
 | Q-35 | 🏷️ Product name for the public | — | Rename later |
 | Q-15 | 🔍 F15 precision unknown (recall 8/18 at 30 m on `overall`) | Glow quality in the lens | Review a few hundred candidates in Labor, then tune |
-| Q-37 | 🥖 Bäckerei Heusser twin ([ADR 0042](docs/adr/0042-baeckerei-heusser-built-twin.md)): zone `kind`/`evidence` for a built, measured twin; may prices be shown? | First built twin package | Additive contract change; prices only with the owners' yes |
 
 🧊 Parked v1 questions (Q-6 … Q-31): [PRD v1 §8](docs/history/prd-v1.md#8-open-questions).
 

@@ -14,7 +14,7 @@ A Vite 8 + TypeScript 7 + three.js r187 (WebGLRenderer, GLSL3) app with a small 
 - **Shading is per pixel** from the full-res height texture (12-texel bilinear + gradient in `heightSample.glsl`), so detail never depends on mesh density. Display = base channel + optional overlay channel, each `source → physical value → stretch/gamma → colormap`, blended in display space (`relief.ts` holds the pure logic).
 - **Exaggeration:** `y = hRef + (h − hRef) · uExag` — the single source of truth for vertical scale. Every object you add to 3D (lines, labels, buildings, points, measurement geometry, markers) must use the same formula, ideally in its vertex shader with the *true* height as attribute, so changing the slider never detaches it from the ground. CPU side: `terrain.surfaceY(x, z)` (displayed) vs `terrain.heightAt(x, z)` (true).
 - **State:** `Store<AppState>` in `state.ts` with keyed subscriptions and a source tag on every write (in use: `'camera'`, `'hash'`, `'gui'`, `'terrain'`) to prevent feedback loops; URL hash is derived from it. Overlay key/opacity and forest mode are mirrored between `Terrain` and the store by `ui/displayState.ts` (R0.6); blend/stretch/colormap still live only in `Terrain`.
-- **AppContext** (`window.sle`): `manifest, store, terrain, controller, camera, scene, renderer, flyTo, pickAt, step`. Features are wired in `ui/features.ts` (`initFeatures(ctx)`), panels via `createPanelSection` into `#panel`.
+- **AppContext** (`window.sle`): `manifest, store, terrain, controller, camera, scene, renderer, flyTo, pickAt, step`. Features register in `app/src/main.ts` (`register*(ctx)`, e.g. `registerZones`, `registerLens`), the shell (HUD, panels, tiers) is `app/src/shell/Shell.ts`; panels via `createPanelSection` into `#panel`.
 
 ## Rules of thumb
 
@@ -32,7 +32,7 @@ A Vite 8 + TypeScript 7 + three.js r187 (WebGLRenderer, GLSL3) app with a small 
 
 1. Read the roadmap item (acceptance criteria) and the relevant recipe in `references/recipes.md`.
 2. Check the data you need exists in the manifest; if not, the pipeline must produce it first (`sle-pipeline`) — agree on the contract shape before writing loaders.
-3. Implement in a new module directory (`app/src/<feature>/`) with a small public API; wire it in `ui/features.ts` / `main.ts` with minimal additive edits (re-read shared files right before editing — other agents may be working in parallel).
+3. Implement in a new module directory (`app/src/<feature>/`) with a small public API; register it in `app/src/main.ts` (`registerX(ctx)`) with minimal additive edits (re-read shared files right before editing — other agents may be working in parallel).
 4. Tests for pure logic; `pnpm run test`, `pnpm run build`.
-5. Browser check with `window.sle.step()` (automated tabs are often hidden → rAF paused; `step()` fires `sle:step` for rAF-driven overlays like `Labels3D` — new overlays with their own loop must listen to it), screenshots at exaggeration 1× and 3×+, console errors, a perf measurement. Save screenshots to `docs/screenshots/`.
+5. Browser check with `window.sle.step()` (automated tabs are often hidden → rAF paused; `step()` fires `sle:step` for rAF-driven overlays like `Labels3D` — new overlays with their own loop must listen to it), screenshots at exaggeration 1× and 3×+, console errors, a perf measurement. Save screenshots to the git-ignored `docs/shots/`; commit a shot only if a README or ADR links it.
 6. Update `app/README.md` (architecture list, controls, known gaps) and report what was verified vs. not (live flight feel needs the user).

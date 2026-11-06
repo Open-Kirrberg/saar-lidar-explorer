@@ -34,7 +34,7 @@ s.step(120);                     // 120 frames à 1/60 s: controller, LOD, rende
 
 If `flyTo` with a duration doesn't resolve, start it without awaiting, then `s.step(n)`. `step()` also fires a `sle:step` event so rAF-driven overlays (CSS2D labels in `Labels3D`) refresh; if you add another overlay with its own rAF loop, make it listen to `sle:step` too.
 
-Then screenshot (`computer` → screenshot) and **look at the image** — check the feature is visible, aligned with terrain at exaggeration 1× and 3×, no console errors (`read_console_messages` with `onlyErrors`). Save shots to the git-ignored `docs/shots/<feature>-*.jpg`; commit one to `docs/screenshots/` only if a README or ADR links it.
+Then screenshot (`computer` → screenshot) and **look at the image** — check the feature is visible, aligned with terrain at exaggeration 1× and 3×, no console errors (`read_console_messages` with `onlyErrors`). Save shots to the git-ignored `docs/shots/<feature>-*.jpg`; commit a shot only if a README or ADR links it (CLAUDE.md, Images).
 
 Close the tabs you opened when done.
 

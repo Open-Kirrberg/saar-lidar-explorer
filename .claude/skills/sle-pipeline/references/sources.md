@@ -1,6 +1,6 @@
 # Source cheat sheet (verified 2026-11-01)
 
-Full research: `docs/research/01-data-sources.md` (LiDAR, ortho, RLP), `docs/research/04-cadastre-historic-maps.md` (ALKIS, historic maps), `research/03-…` (POIs). Re-verify a URL before relying on it if something fails — services move.
+Full research: `docs/research/01-data-sources.md` (LiDAR, ortho, RLP), `docs/research/04-cadastre-historic-maps.md` (ALKIS, historic maps), `docs/research/03-archaeology-visualization.md` (POIs). Re-verify a URL before relying on it if something fails — services move.
 
 ## LVGL Saarland open data (ALS 2025, released Jan 2026) — dl-de/by-2-0
 
@@ -20,7 +20,7 @@ Tiles: 1 km, named by lower-left corner in km (EPSG:25832). Karlsberg ALS flown 
 Attribution: `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet`.
 
 ### Geoportal Saarland OGC services (CORS `*`)
-- WMS DGM / shaded relief 2025, TrueDOP: see research/01 §3c for exact URLs + layer names (`sl_dop20_rgb`, `sl_shaded_relief_2025`, …). Use EPSG:25832 GetMap with chunk-aligned bboxes for pipeline downloads.
+- WMS DGM / shaded relief 2025, TrueDOP: see `docs/research/01-data-sources.md` §3c for exact URLs + layer names (`sl_dop20_rgb`, `sl_shaded_relief_2025`, …). Use EPSG:25832 GetMap with chunk-aligned bboxes for pipeline downloads.
 
 ## Rheinland-Pfalz open data — dl-de/by-2-0, CORS `*`, Range OK
 

@@ -5,18 +5,24 @@ GitHub repositories in the org **Open-Kirrberg**, all served by GitHub Pages und
 
 | Repository | Pages | Content | Built by |
 |---|---|---|---|
-| `saar-lidar-explorer` (public, **fresh history**, MIT) | GitHub Actions (`.github/workflows/pages.yml`) → `/saar-lidar-explorer/` + castle viewer `/saar-lidar-explorer/castle/` | code (committed files only) + `LICENSE`, `NOTICE.md` | `export-code.sh` |
+| `saar-lidar-explorer` (public, MIT; **this repository**, developed here directly) | GitHub Actions (`.github/workflows/pages.yml`) → `/saar-lidar-explorer/` + castle viewer `/saar-lidar-explorer/castle/` | code + `LICENSE`, `NOTICE.md` | `git push origin main` |
 | `saar-lidar-data` | branch deploy (`main`, `/`), `.nojekyll` | AOI `overall` without Leaflet tiles, `pois.geojson`, `shared/` (reconstruction 1789), `castle-viewer/terrain/`, `zones/` (cleared zone packages) | `export-data.sh` |
 | `saar-lidar-data-2` | branch deploy (`main`, `/`), `.nojekyll` | Leaflet XYZ tiles (≤ z17), 3D-print series (3MF only) | `export-data.sh` |
 
-Why two data repositories: a GitHub Pages site may be at most **1 GB** (every file < 100 MB). Measured 2026-11-02:
-AOI `overall` = 1.47 GB (xyz 740 MB, of which z18 = 409 MB), print 3MF ≈ 0.4 GB, castle terrain 47 MB. Trimming the
-tiles to z17 still leaves ≈ 1.5 GB, so the tiles and the print files moved to `saar-lidar-data-2` (the manifest
-references the tiles by absolute URL; contract "Public release" in `docs/data-contract.md`). Both sites stay
-under the 900 MB aim; the export fails (exit 2) when a hard limit is exceeded.
+**Why two data repos.** GitHub Pages publishes at most **≈ 1 GB per repository** (every file < 100 MB).
+`saar-lidar-data` holds ≈ 825 MB (AOI `overall` layers, point clouds, castle terrain, zone packages),
+`saar-lidar-data-2` ≈ 330 MB of Leaflet XYZ minimap tiles (≤ z17) plus ≈ 105 MB of legacy 3D-print series
+(`print/`). Together that is ≈ 1.26 GB, so they cannot be merged into one site without cutting content. The
+manifest references the tiles by absolute URL (contract "Public release" in `docs/data-contract.md`). What happens
+to the legacy `print/` part (print work now lives in a separate private repository) is a **decision pending**.
+The export fails (exit 2) when a hard limit is exceeded.
 
-Everything is configured in `release.env` (org, host, repo names, AOI, `XYZ_MAX_ZOOM`, limits, staging dir
-`../_release`, i.e. next to the checkout — never inside it).
+**Identity.** Commits in this repository and in the data staging clones are made as the GitHub **noreply**
+identity, never a personal address: set `git config user.name` / `git config user.email` repo-locally in each
+clone (`git config user.email <id>+<login>@users.noreply.github.com`) and check it before committing.
+
+Everything for the data export is configured in `release.env` (org, host, repo names, AOI, `XYZ_MAX_ZOOM`,
+limits, staging dir `../_release`, i.e. next to the checkout — never inside it).
 
 ## 1. App configuration (already in the code)
 
@@ -91,28 +97,25 @@ Size report: `../_release/data-size-report.txt`. What it does:
 - Both: `.nojekyll`, `README.md` (contents, licences, the **candidates are unverified hypotheses** note,
   „Schauen, nicht graben“), `ATTRIBUTION`, `index.html` landing page linking to the app.
 
-## 3. Export the code
+## 3. Release the code
+
+The code is released by pushing this repository; there is no separate code export any more.
 
 ```bash
-git status                                # commit first: only committed files are exported
-scripts/release/export-code.sh            # → ../_release/saar-lidar-explorer (1st run: fresh repo, 1 commit;
-                                          #   later runs keep its .git/ and add 1 update commit → fast-forward push)
-RELEASE_MESSAGE="Fix: …" scripts/release/export-code.sh   # custom subject for the update commit
-scripts/release/export-code.sh --fresh    # discard the staged history (needs a force push — avoid)
-scripts/release/export-code.sh --worktree # dry run from the working tree (tracked + untracked, not ignored)
+.claude/skills/sle-roadmap/scripts/verify.sh   # all gates must pass
+git status                                     # clean; only reviewed commits
+git push origin main                           # → .github/workflows/pages.yml builds and deploys
 ```
 
-- `git archive HEAD`, minus `code-excludes.txt` (defensive list: local settings, `.env`, keys, data dirs,
-  copyrighted video/sources dirs — all git-ignored today).
-- Adds `LICENSE` (MIT, „Copyright (c) 2026 Open-Kirrberg“), `NOTICE.md` (licences of non-code content: screenshots
-  with dl-de/by-2-0 data, CC BY-SA 2.0 DE Lageplan derivatives, public-domain 1805 map, HMS numbers only),
-  `.github/workflows/pages.yml` (Node/pnpm = the versions on this machine unless `NODE_VERSION`/`PNPM_VERSION`
-  are set; actions pinned by tag), and a „Live“ block under the README title.
-- `secret_scan.py`: neutralises absolute local paths (repo root, `$HOME`, Claude scratch dirs) and scans for
-  tokens, private keys, credential assignments, `.env`/key files, `.claude/settings.local.json` (HIGH → abort, no
-  commit) and lists e-mail addresses / home paths for review (`../_release/secret-scan.md`).
-- First run: `git init -b main` + one commit; later runs: one update commit on the kept `.git/` (no changes → no commit). Local identity (override: `RELEASE_GIT_NAME`, `RELEASE_GIT_EMAIL`, e.g. a
-  GitHub noreply address). Never pushes.
+- **Data first:** when the code depends on new or changed data, export and push the data repos (§2, §4) before
+  pushing the code, so the deployed site never points at data that are not live yet.
+- **Leak scan (recommended before a push):** run `secret_scan.py` on a copy of the committed tree, never on the
+  checkout itself (it rewrites the files it scans):
+  `T=$(mktemp -d) && git archive HEAD | tar -x -C "$T" && python3 -I scripts/release/secret_scan.py "$T" --repo-root "$PWD"`.
+  "Neutralised local paths" and HIGH must both be *none*; review the INFO list (e-mails, home paths).
+- Why no export any more: in v1 the local history contained candidate coordinates and private work, so the public
+  repository was a fresh-history export (`export-code.sh` → `../_release/saar-lidar-explorer`). v2 is developed
+  directly in the public repository, so the script, its exclude list and its templates were removed (2026-11-06).
 
 The workflow builds the explorer (`pnpm install --frozen-lockfile`, tests, `SLE_PUBLIC=1` build), then the castle
 viewer into `app/dist/castle/`: textures via `scripts/fetch-textures.sh` (Poly Haven CC0, md5-checked, cached by
@@ -120,17 +123,16 @@ viewer into `app/dist/castle/`: textures via `scripts/fetch-textures.sh` (Poly H
 explorer is rebuilt with `VITE_VIEWER_URL=off` (no handover) so the site still deploys. Repository variables
 `SLE_DATA_URL`, `SLE_AOIS`, `SLE_IMPRESSUM_URL` override the defaults without a code change.
 
-## 4. Publish (the lead / the user — not the scripts)
+## 4. Publish the data (the lead / the user — not the scripts)
 
 ```bash
-# data repos (create them empty in the org first; public)
+# first time only (create the repos empty in the org first; public; set the noreply identity, see "Identity")
 cd ../_release/saar-lidar-data   && git init -b main && git add -A && git commit -m "Data: overall AOI" \
   && git remote add origin git@github.com:Open-Kirrberg/saar-lidar-data.git && git push -u origin main
 cd ../saar-lidar-data-2          && git init -b main && git add -A && git commit -m "Data: tiles + 3D print" \
   && git remote add origin git@github.com:Open-Kirrberg/saar-lidar-data-2.git && git push -u origin main
 # Settings → Pages → "Deploy from a branch", main, / (root)   (both data repos)
-cd ../saar-lidar-explorer && git remote add origin git@github.com:Open-Kirrberg/saar-lidar-explorer.git && git push -u origin main
-# Settings → Pages → Source "GitHub Actions"
+# code repo (this repository): Settings → Pages → Source "GitHub Actions"
 ```
 
 Order: data repos first (the workflow downloads `castle-viewer/terrain/` from repo 1). Each data push is < 1 GB
@@ -141,7 +143,7 @@ large refreshes, prefer a fresh orphan commit (`git checkout --orphan new && git
 ## 5. Checks before publishing
 
 - `.claude/skills/sle-roadmap/scripts/verify.sh` passes; `pnpm run test` in `app/` and `zones/schloss-karlsberg/`.
-- `../_release/data-size-report.txt`: no FAIL; `../_release/secret-scan.md`: HIGH none, INFO reviewed.
+- `../_release/data-size-report.txt`: no FAIL; leak scan (§3): neutralised paths and HIGH none, INFO reviewed.
 - Zones: `bh-datenschutz` checklist (`zones/baeckerei-heusser/.claude/skills/bh-datenschutz/SKILL.md`) on the staged
   `zones/` files; in the smoke test enter the bakery and open a product card.
 - `../_release/AUDIT.md`: licence + heritage audit.

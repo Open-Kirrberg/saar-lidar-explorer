@@ -4,7 +4,7 @@ Detailed places behind portals in the overworld ([ADR 0015](../docs/adr/0015-ove
 
 | Zone | Kind | Source | Status |
 |---|---|---|---|
-| [`schloss-karlsberg/`](schloss-karlsberg/README.md) | 🏛️ reconstructed (1789) | generator + authoring viewer, own pnpm package | zone packaging in V2.7 |
-| [`baeckerei-heusser/`](baeckerei-heusser/README.md) | 🥖 built digital twin ([ADR 0042](../docs/adr/0042-baeckerei-heusser-built-twin.md)); the 🎥 capture from `tools/capture/` is the reference (footage stays in the git-ignored `data/`) | catalogue, style, plan, skills in the folder | capture live since V2.8 (id was `bakery`); twin round 1 = foundation |
+| [`schloss-karlsberg/`](schloss-karlsberg/README.md) | 🏛️ reconstructed (1789) | generator + authoring viewer, own pnpm package | ✅ zone #1 (V2.7), waves 0–11 |
+| [`baeckerei-heusser/`](baeckerei-heusser/README.md) | 🥖 built digital twin ([ADR 0042](../docs/adr/0042-baeckerei-heusser-built-twin.md)); the 🎥 capture from `tools/capture/` is the reference (footage stays in the git-ignored `data/`) | catalogue, style, plan, skills in the folder | ✅ zone #2, built twin: rounds 1–6 + waves A/B, public since 2026-11-06 |
 
 Generated packages go to the git-ignored `app/public/data/zones/<id>/`, never into this folder.
