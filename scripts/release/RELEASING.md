@@ -6,7 +6,7 @@ GitHub repositories in the org **Open-Kirrberg**, all served by GitHub Pages und
 | Repository | Pages | Content | Built by |
 |---|---|---|---|
 | `saar-lidar-explorer` (public, **fresh history**, MIT) | GitHub Actions (`.github/workflows/pages.yml`) → `/saar-lidar-explorer/` + castle viewer `/saar-lidar-explorer/castle/` | code (committed files only) + `LICENSE`, `NOTICE.md` | `export-code.sh` |
-| `saar-lidar-data` | branch deploy (`main`, `/`), `.nojekyll` | AOI `overall` without Leaflet tiles, `pois.geojson`, `shared/` (reconstruction 1789), `castle-viewer/terrain/` | `export-data.sh` |
+| `saar-lidar-data` | branch deploy (`main`, `/`), `.nojekyll` | AOI `overall` without Leaflet tiles, `pois.geojson`, `shared/` (reconstruction 1789), `castle-viewer/terrain/`, `zones/` (cleared zone packages) | `export-data.sh` |
 | `saar-lidar-data-2` | branch deploy (`main`, `/`), `.nojekyll` | Leaflet XYZ tiles (≤ z17), 3D-print series (3MF only) | `export-data.sh` |
 
 Why two data repositories: a GitHub Pages site may be at most **1 GB** (every file < 100 MB). Measured 2026-11-02:
@@ -42,7 +42,14 @@ ever get absolute URLs) work.
 cd pipeline && ./run.sh overall          # if the data are not current
 # print series (F21) now come from the separate sle-print repo, if any
 scripts/release/export-data.sh           # → ../_release/saar-lidar-data, ../_release/saar-lidar-data-2
+scripts/release/export-data.sh --dry-run     # list what would be written/deleted in both repos, change nothing
+scripts/release/export-data.sh --zones-only  # stage only saar-lidar-data/zones/ (nothing else read, written or deleted)
 ```
+
+Run `--dry-run` first when the staging repos hold changes you do not want to publish: a full run rewrites
+them from `app/public/data`. Note that `os.walk` does not follow symlinked directories, so a data dir whose
+AOI subfolders are symlinks (e.g. a checkout that links the data of another one) plans them as absent and a
+full run would **delete** them from the staging repos; point `SLE_DATA_DIR` at the real data dir instead.
 
 Idempotent (copies only changed files, deletes files that are no longer planned, never touches `.git/`).
 Size report: `../_release/data-size-report.txt`. What it does:
@@ -60,10 +67,17 @@ Size report: `../_release/data-size-report.txt`. What it does:
   Of `candidates/` only the manifest's GeoJSON and mask chunks are staged; saar-lidar-detect side files in the AOI dir
   (`run.json`, `report*.html`, `eval*`, `fachbericht*`, `manifest.json.bak-*`, `*.sld-new/`) are never staged, and the
   export **aborts** if a staged AOI text file still contains `crater`/`Bombentrichter`/`Trichterfeld`.
-- **Zone packages** (`app/public/data/zones/`) are not staged yet. When they are: for `baeckerei-heusser` stage only
-  `zone.json` and `built/` (the built twin + nav floor), drop every asset with `role: "reference"` from `zone.json`
-  and never stage `scene/` (the photogrammetry capture is local-only, [ADR 0043](../../docs/adr/0043-built-twin-package-reference-nav.md));
-  run the `bh-datenschutz` checklist first.
+- **Zone packages** (`app/public/data/zones/` → repo 1 `zones/`): only the zones in `RELEASE_ZONES` (release.env,
+  default `baeckerei-heusser`) **and** cleared in `PUBLIC_ZONE_POLICY` (export_data.py; the castle is public through
+  its own viewer, not as a zone package). Per zone: `zone.json` plus only the files its assets and `twin.catalogue`
+  reference under the cleared prefixes (bakery: `built/` = twin, nav floor, visitor catalogue). Assets with
+  `role: "reference"` are dropped from `zone.json` (with `twin.referenceScale`; `budget.totalBytes` recounted),
+  `scene/` and any other local file are never staged (the photogrammetry capture is local-only,
+  [ADR 0043](../../docs/adr/0043-built-twin-package-reference-nav.md)). `zones/index.json` lists only the staged
+  zones. The export validates the public `zone.json` and catalogue (`pipeline/zones.py`) and **aborts** when a
+  staged zone file names a local path (`/Users/…`), the private material folder or an e-mail address (GLBs:
+  their JSON chunk incl. node names and extras) or a GLB embeds images where the policy forbids them (bakery:
+  no textures, ADR 0042). Run the `bh-datenschutz` checklist first and tick it in the release notes.
 - Both: `.nojekyll`, `README.md` (contents, licences, the **candidates are unverified hypotheses** note,
   „Schauen, nicht graben“), `ATTRIBUTION`, `index.html` landing page linking to the app.
 
@@ -118,6 +132,8 @@ large refreshes, prefer a fresh orphan commit (`git checkout --orphan new && git
 
 - `.claude/skills/sle-roadmap/scripts/verify.sh` passes; `pnpm run test` in `app/` and `zones/schloss-karlsberg/`.
 - `../_release/data-size-report.txt`: no FAIL; `../_release/secret-scan.md`: HIGH none, INFO reviewed.
+- Zones: `bh-datenschutz` checklist (`zones/baeckerei-heusser/.claude/skills/bh-datenschutz/SKILL.md`) on the staged
+  `zones/` files; in the smoke test enter the bakery and open a product card.
 - `../_release/AUDIT.md`: licence + heritage audit.
 - Local smoke test of the public build against the staged data: build with
   `SLE_PUBLIC=1 VITE_DATA_URL=http://127.0.0.1:5271/saar-lidar-data/`,

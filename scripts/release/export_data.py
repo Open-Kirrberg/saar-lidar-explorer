@@ -16,8 +16,17 @@ GeoJSON and mask chunks are staged; saar-lidar-detect side files in the AOI dir 
 eval.*, fachbericht/, manifest backups, staging dirs) never are, and the export aborts when a staged
 AOI text file still names a UXO class.
 
+Zone packages (`<src>/zones/`, docs/zone-contract.md) go to <out1>/zones/ only when listed in --zones
+AND cleared in PUBLIC_ZONE_POLICY (`plan_zones`): per zone only zone.json plus the files its manifest
+references under the cleared prefixes (bakery: `built/`); assets with role "reference" (the capture,
+ADR 0043) are dropped from zone.json, `scene/` and every other file stay local; a staged file that names
+a local path, the private material folder or an e-mail address, or a GLB with embedded images where the
+policy forbids them, aborts the export. zones/index.json lists only the staged zones.
+
 Idempotent: files are copied only when size/mtime differ, generated files only when their content
 changes, and files no longer planned are deleted (a `.git/` directory is never touched).
+--zones-only stages just <out1>/zones/ (nothing else in either repo is read, written or deleted);
+--dry-run lists what would change and writes nothing.
 Exit code 2 when a GitHub Pages hard limit is exceeded.
 """
 from __future__ import annotations
@@ -33,13 +42,29 @@ import struct
 import sys
 import zlib
 from pathlib import Path
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 Source = Union[Path, bytes]
 Plan = Dict[str, Source]
 
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "templates"
+ZONE_VALIDATOR = HERE.parents[1] / "pipeline" / "zones.py"  # stdlib-only producer validator (docs/zone-contract.md)
+
+# Zone packages cleared for the public data repo, and what of each may be staged (RELEASING.md §2).
+# `prefixes`: package paths the manifest may reference publicly; `images`: may a GLB embed images.
+# A zone not listed here is never staged, whatever --zones says. Everything else of a package
+# (`scene/` = the photogrammetry capture, `reference` assets, work files) stays local (ADR 0043).
+PUBLIC_ZONE_POLICY: Dict[str, dict] = {
+    # Bäckerei Heusser built twin: zone.json + built/ (twin, nav floor, visitor catalogue), no textures
+    # (ADR 0042/0043); bh-datenschutz checklist before every release (ADR 0044 consent scope).
+    "baeckerei-heusser": {"prefixes": ("built/",), "images": False},
+}
+ZONE_INDEX_FORMAT = "sle-zones-v1"
+# Staged zone files must not name local paths, the private material folder or an e-mail address.
+ZONE_LEAK_MARKERS = re.compile(
+    r"(?i)/Users/|/home/|/private/(?:tmp|var)/|[A-Z]:\\\\|heusser-privat|\bprivat/|[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}"
+)
 
 # F22: UXO indicator classes (bomb craters, crater fields) — private, never part of a public export.
 PRIVATE_CANDIDATE_CLASSES = ("crater", "crater_field")
@@ -351,6 +376,132 @@ def plan_castle_terrain(terrain: Path, plan1: Plan) -> bool:
     return True
 
 
+def _load_zone_validator():
+    """pipeline/zones.py (stdlib only), loaded by path; the export refuses to stage zones without it."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("sle_zone_validator", ZONE_VALIDATOR)
+    if spec is None or spec.loader is None or not ZONE_VALIDATOR.is_file():
+        sys.exit(f"[export-data] zone validator missing: {ZONE_VALIDATOR}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def glb_json(data: bytes) -> dict:
+    """The JSON chunk of a glTF 2.0 binary (ValueError otherwise)."""
+    if len(data) < 20 or data[:4] != b"glTF" or struct.unpack("<I", data[4:8])[0] != 2:
+        raise ValueError("not a glTF 2.0 binary")
+    n, kind = struct.unpack("<I4s", data[12:20])
+    if kind != b"JSON":
+        raise ValueError("first chunk is not JSON")
+    return json.loads(data[20 : 20 + n])
+
+
+def zone_file_problems(rel: str, data: bytes, allow_images: bool) -> List[str]:
+    """Privacy guard for one staged zone file: no local paths / private folder / e-mail addresses in its
+    text (for a GLB: its JSON chunk incl. names and extras), no embedded images unless allowed."""
+    if rel.endswith(".glb"):
+        try:
+            doc = glb_json(data)
+        except (ValueError, struct.error) as e:
+            return [f"{rel}: {e}"]
+        text = json.dumps(doc, ensure_ascii=False)
+        out = [] if allow_images or not (doc.get("images") or doc.get("textures")) else [
+            f"{rel}: {len(doc.get('images') or [])} embedded image(s) / {len(doc.get('textures') or [])} texture(s)"]
+    else:
+        try:
+            text = json.dumps(json.loads(data), ensure_ascii=False)  # decoded: \u escapes cannot hide a marker
+        except ValueError:
+            text = data.decode("utf-8", "replace")
+        out = []
+    m = ZONE_LEAK_MARKERS.search(text)
+    if m:
+        out.append(f"{rel}: names a local path, the private folder or an e-mail address ({m.group(0)!r})")
+    return out
+
+
+def plan_zones(zsrc: Path, ids: List[str], plan1: Plan) -> List[dict]:
+    """Stage the cleared zone packages under `zones/` of repo 1 (see PUBLIC_ZONE_POLICY): zone.json with
+    every `reference` asset dropped (+ `twin.referenceScale`, `budget.totalBytes` recounted), the files its
+    remaining assets and `twin.catalogue` reference (only under the policy's prefixes), and a
+    zones/index.json with just these zones. Exits (no export) on anything it cannot publish safely."""
+    if not ids:
+        return []
+    zv = _load_zone_validator()
+    try:
+        src_index = json.loads((zsrc / "index.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        sys.exit(f"[export-data] zones/index.json not readable: {e}")
+    entries = {z.get("id"): z for z in src_index.get("zones") or [] if isinstance(z, dict)}
+    staged: List[dict] = []
+    for zid in ids:
+        policy = PUBLIC_ZONE_POLICY.get(zid)
+        if policy is None:
+            sys.exit(f"[export-data] zone {zid} is not cleared for publishing (PUBLIC_ZONE_POLICY in export_data.py)")
+        if zid not in entries:
+            sys.exit(f"[export-data] zone {zid} is not in {zsrc / 'index.json'}")
+        zdir = zsrc / zid
+        try:
+            m = json.loads((zdir / "zone.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            sys.exit(f"[export-data] zone {zid}: zone.json not readable: {e}")
+        if not isinstance(m, dict) or m.get("id") != zid:
+            sys.exit(f"[export-data] zone {zid}: zone.json id does not match its folder")
+        assets = m.get("assets") if isinstance(m.get("assets"), list) else []
+        kept = [a for a in assets if not (isinstance(a, dict) and a.get("role") == "reference")]
+        dropped = len(assets) - len(kept)
+        files: Dict[str, Path] = {}
+
+        def take(path, what: str) -> None:
+            if not (zv.safe_path(path) and path.startswith(tuple(policy["prefixes"]))):
+                sys.exit(f"[export-data] zone {zid}: {what} {path!r} is outside the public prefixes {policy['prefixes']}")
+            f = zdir / path
+            if not f.is_file():
+                sys.exit(f"[export-data] zone {zid}: {what} {path} is missing")
+            files[path] = f
+
+        for a in kept:
+            for lod in (a.get("lods") if isinstance(a, dict) and isinstance(a.get("lods"), list) else []):
+                take(lod.get("path") if isinstance(lod, dict) else None, f"asset {a.get('id')}")
+                if isinstance(lod.get("bytes"), int) and lod["bytes"] != files[lod["path"]].stat().st_size:
+                    sys.exit(f"[export-data] zone {zid}: {lod['path']} size differs from zone.json (re-package the zone)")
+        tw = m.get("twin")
+        if isinstance(tw, dict) and isinstance(tw.get("catalogue"), str) and tw["catalogue"].endswith(".json"):
+            take(tw["catalogue"], "twin.catalogue")
+        if dropped:
+            m["assets"] = kept
+            if isinstance(tw, dict):
+                tw.pop("referenceScale", None)
+            if isinstance(m.get("budget"), dict):
+                m["budget"]["totalBytes"] = sum(f.stat().st_size for f in files.values())
+            zone_src: Source = (json.dumps(m, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
+        else:
+            zone_src = zdir / "zone.json"  # unchanged: staged byte-identical
+        errs = zv.validate_manifest(m)
+        if isinstance(tw, dict) and "catalogue" in tw and tw["catalogue"] in files:
+            errs += zv.validate_catalogue(json.loads(files[tw["catalogue"]].read_text(encoding="utf-8")))
+        problems = zone_file_problems("zone.json", zone_src if isinstance(zone_src, bytes) else zone_src.read_bytes(), True)
+        for rel, f in files.items():
+            problems += zone_file_problems(rel, f.read_bytes(), bool(policy.get("images")))
+        if errs or problems:
+            sys.exit(f"[export-data] refusing to stage zone {zid}: " + "; ".join(errs + problems))
+        plan1[f"zones/{zid}/zone.json"] = zone_src
+        for rel, f in files.items():
+            plan1[f"zones/{zid}/{rel}"] = f
+        local = sorted(f.relative_to(zdir).as_posix() for f in walk_files(zdir)) if zdir.is_dir() else []
+        skipped = [r for r in local if r != "zone.json" and r not in files]
+        staged.append({"id": zid, "files": 1 + len(files), "referenceDropped": dropped, "skipped": skipped,
+                       "bytes": sum(f.stat().st_size for f in files.values())})
+        print(f"[export-data] zone {zid}: zone.json + {len(files)} file(s) staged, {dropped} reference asset(s) dropped, "
+              f"{len(skipped)} local file(s) not staged{' (' + ', '.join(skipped[:5]) + ')' if skipped else ''}")
+    order = [z.get("id") for z in src_index.get("zones") or [] if isinstance(z, dict)]
+    index = {"format": ZONE_INDEX_FORMAT,
+             "zones": [{"id": zid, "bboxEN": entries[zid]["bboxEN"]} for zid in order if zid in ids]}
+    plan1["zones/index.json"] = (json.dumps(index, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    return staged
+
+
 def attribution_entries(*strings: str) -> List[str]:
     seen: List[str] = []
     for s in strings:
@@ -368,19 +519,30 @@ def render(name: str, values: dict) -> bytes:
     return text.encode("utf-8")
 
 
-def sync(plan: Plan, out: Path) -> Tuple[int, int, int]:
-    """Make `out` contain exactly `plan` (except .git/). Returns (copied, unchanged, deleted)."""
-    out.mkdir(parents=True, exist_ok=True)
+def sync(plan: Plan, out: Path, scope: Optional[str] = None, dry_run: bool = False,
+         changes: Optional[List[str]] = None) -> Tuple[int, int, int]:
+    """Make `out` contain exactly `plan` (except .git/). Returns (copied, unchanged, deleted).
+    `scope` (e.g. "zones/"): only plan entries and files under that prefix are written or deleted, the
+    rest of `out` is not touched. `dry_run`: write nothing, only count. `changes` collects
+    "W <path>" / "D <path>" lines."""
+    inside = (lambda rel: rel.startswith(scope)) if scope else (lambda rel: True)
+    log = changes.append if changes is not None else (lambda _l: None)
+    if not dry_run:
+        out.mkdir(parents=True, exist_ok=True)
     copied = unchanged = deleted = 0
     for rel, srcv in plan.items():
+        if not inside(rel):
+            continue
         dst = out / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
         if isinstance(srcv, bytes):
             if dst.is_file() and dst.read_bytes() == srcv:
                 unchanged += 1
                 continue
-            dst.write_bytes(srcv)
+            if not dry_run:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_bytes(srcv)
             copied += 1
+            log(f"W {rel}")
             continue
         st = srcv.stat()
         if dst.is_file():
@@ -388,8 +550,11 @@ def sync(plan: Plan, out: Path) -> Tuple[int, int, int]:
             if dt.st_size == st.st_size and int(dt.st_mtime) == int(st.st_mtime):
                 unchanged += 1
                 continue
-        shutil.copy2(srcv, dst)
+        if not dry_run:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(srcv, dst)
         copied += 1
+        log(f"W {rel}")
     planned = set(plan)
     for dirpath, dirnames, filenames in os.walk(out, topdown=True):
         if ".git" in dirnames:
@@ -397,13 +562,17 @@ def sync(plan: Plan, out: Path) -> Tuple[int, int, int]:
         for f in filenames:
             p = Path(dirpath) / f
             rel = p.relative_to(out).as_posix()
-            if rel not in planned:
-                p.unlink()
+            if rel not in planned and inside(rel):
+                if not dry_run:
+                    p.unlink()
                 deleted += 1
-    for dirpath, dirnames, filenames in os.walk(out, topdown=False):
-        p = Path(dirpath)
-        if p != out and ".git" not in p.parts and not any(p.iterdir()):
-            p.rmdir()
+                log(f"D {rel}")
+    if not dry_run and out.is_dir():
+        for dirpath, dirnames, filenames in os.walk(out, topdown=False):
+            p = Path(dirpath)
+            rel = p.relative_to(out).as_posix() + "/"
+            if p != out and ".git" not in p.parts and inside(rel) and not any(p.iterdir()):
+                p.rmdir()
     return copied, unchanged, deleted
 
 
@@ -460,11 +629,31 @@ def main() -> int:
     ap.add_argument("--site-aim-mb", type=float, default=900)
     ap.add_argument("--file-hard-mb", type=float, default=100)
     ap.add_argument("--file-aim-mb", type=float, default=50)
+    ap.add_argument("--zones", default="", help="comma list of zone packages to publish (each must be in PUBLIC_ZONE_POLICY)")
+    ap.add_argument("--zones-only", action="store_true", help="stage only <out1>/zones/; nothing else is read, written or deleted")
+    ap.add_argument("--dry-run", action="store_true", help="list what would be written/deleted, change nothing")
     a = ap.parse_args()
     src = a.src.resolve()
     for o in (a.out1, a.out2):
         if str(o.resolve()).startswith(str(Path(__file__).resolve().parents[2]) + os.sep):
             sys.exit(f"[export-data] refusing to write inside the code repository: {o}")
+    zone_ids = [z.strip() for z in a.zones.split(",") if z.strip()]
+
+    if a.zones_only:
+        plan_z: Plan = {}
+        zones = plan_zones(src / "zones", zone_ids, plan_z)
+        changes: List[str] = []
+        c, u, d = sync(plan_z, a.out1.resolve(), scope="zones/", dry_run=a.dry_run, changes=changes)
+        print(f"[export-data] saar-lidar-data zones/ only{' (dry run)' if a.dry_run else ''}: "
+              f"{c} written, {u} unchanged, {d} deleted; zones: {', '.join(z['id'] for z in zones) or '(none)'}")
+        for line in changes:
+            print(f"  {line}")
+        if a.dry_run:
+            return 0
+        limits = {"site_hard": a.site_hard_mb, "site_aim": a.site_aim_mb, "file_hard": a.file_hard_mb, "file_aim": a.file_aim_mb}
+        lines, ok = size_report("saar-lidar-data", a.out1.resolve(), limits)
+        print("\n".join(lines))
+        return 0 if ok else 2
 
     plan1: Plan = {}
     plan2: Plan = {}
@@ -486,6 +675,7 @@ def main() -> int:
                     viewer["url"] = a.app_url.rstrip("/") + "/castle/"
                     plan1[rel] = (json.dumps(idx, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
     has_castle = plan_castle_terrain(a.castle_terrain.resolve(), plan1)
+    zones = plan_zones(src / "zones", zone_ids, plan1)
     prints = plan_print(src, plan2)
 
     pois_attr = ""
@@ -519,6 +709,14 @@ def main() -> int:
     limits = {"site_hard": a.site_hard_mb, "site_aim": a.site_aim_mb, "file_hard": a.file_hard_mb, "file_aim": a.file_aim_mb}
     report: List[str] = []
     ok_all = True
+    if a.dry_run:
+        for name, plan, out in (("saar-lidar-data", plan1, a.out1), ("saar-lidar-data-2", plan2, a.out2)):
+            changes = []
+            c, u, d = sync(plan, out.resolve(), dry_run=True, changes=changes)
+            print(f"[export-data] {name} (dry run): {c} would be written, {u} unchanged, {d} would be deleted")
+            for line in changes:
+                print(f"  {line}")
+        return 0
     for name, plan, out in (("saar-lidar-data", plan1, a.out1), ("saar-lidar-data-2", plan2, a.out2)):
         c, u, d = sync(plan, out.resolve())
         print(f"[export-data] {name}: {c} written, {u} unchanged, {d} deleted")
@@ -528,6 +726,9 @@ def main() -> int:
     xyz_lines = [f"  xyz.{k}: {v['tiles']} tiles, {v['bytes'] / 1e6:.1f} MB (<= z{a.xyz_max_zoom})" for k, v in aoi_info["xyz"].items()]
     report += ["## xyz (moved to saar-lidar-data-2)", *xyz_lines, f"  tiles above z{a.xyz_max_zoom} dropped: {aoi_info['skippedTiles']}", ""]
     report += ["## print", *[f"  {p['series']}: {p['files3mf']} 3MF, {p['tiles']} tiles in index" for p in prints], ""]
+    zone_lines = [f"  {z['id']}: {z['files']} files, {z['bytes'] / 1e6:.1f} MB + zone.json, {z['referenceDropped']} reference "
+                  f"asset(s) dropped, {len(z['skipped'])} local file(s) not staged" for z in zones]
+    report += ["## zones (saar-lidar-data/zones/)", *(zone_lines or ["  (none)"]), ""]
     text = "\n".join(report)
     print(text)
     if a.report:
