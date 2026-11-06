@@ -56,6 +56,11 @@ scripts/release/export-data.sh --allow-deletes  # accept removing > RELEASE_MAX_
 Run `--dry-run` first when the staging repos hold changes you do not want to publish: a full run rewrites
 them from `app/public/data`.
 
+`--zones-only` never ships new **AOI layers**. When a code release starts using a new manifest key (e.g.
+V2.4 `trees`), compare the local and the published `overall/manifest.json` keys and publish that layer too —
+the V2.4 trees were missing on the live site until 2026-11-06 (data 8bf08d7: `overall/trees/` + only the
+`trees` key added to the published manifest, pending candidate changes left untouched).
+
 - **Symlinked inputs** (the v2 checkout links `overall/*`, `shared/`, `pois.geojson` from the
   `saar-lidar-explorer` checkout) are followed when they resolve inside the repo, `--src`, the castle terrain
   or `RELEASE_LINK_ROOTS` (release.env; default: the sibling `saar-lidar-explorer/app/public/data`). A link
