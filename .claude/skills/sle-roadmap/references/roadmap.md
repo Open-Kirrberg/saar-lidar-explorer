@@ -62,7 +62,8 @@ Status: `[ ]` open · `[~]` partial · `[x]` done · ⏳ blocked
 - **Acceptance:** a new user reaches the castle without help (hallway test with 2 people).
 
 ## V2.10 — Release v2 🚀
-- [x] Reference-phone pass, `scripts/release/` + review, CHANGELOG line, PRD status. v2 public since 2026-11-04 (GitHub Pages), Bäckerei Heusser twin since 2026-11-06; code is released by `git push origin main` (RELEASING.md §3).
+- [ ] Reference-phone pass on a real device (not done yet; all checks so far are headless).
+- [x] `scripts/release/` + review, CHANGELOG line, PRD status. v2 public since 2026-11-04 (GitHub Pages), Bäckerei Heusser twin since 2026-11-06; code is released by `git push origin main` (RELEASING.md §3).
 
 ---
 
