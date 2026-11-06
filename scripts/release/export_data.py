@@ -28,6 +28,12 @@ changes, and files no longer planned are deleted (a `.git/` directory is never t
 --zones-only stages just <out1>/zones/ (nothing else in either repo is read, written or deleted);
 --dry-run lists what would change and writes nothing.
 Exit code 2 when a GitHub Pages hard limit is exceeded.
+
+Symlinks in the inputs (files and directories) are followed when they resolve inside the link roots: the
+code repository, the resolved --src and --castle-terrain, and every --link-root. A link outside them, a
+dangling link or a loop aborts the export. Delete guard: when a sync would remove more than
+--max-deletes (default 20) already-staged files from one repo, nothing is written and the exit code is 3
+(a source dir was probably skipped or is missing); --allow-deletes lifts it. --dry-run reports the same.
 """
 from __future__ import annotations
 
@@ -42,7 +48,7 @@ import struct
 import sys
 import zlib
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 Source = Union[Path, bytes]
 Plan = Dict[str, Source]
@@ -50,6 +56,13 @@ Plan = Dict[str, Source]
 HERE = Path(__file__).resolve().parent
 TEMPLATES = HERE / "templates"
 ZONE_VALIDATOR = HERE.parents[1] / "pipeline" / "zones.py"  # stdlib-only producer validator (docs/zone-contract.md)
+
+# Symlinks in the inputs are followed only when they resolve inside one of these (resolved) roots: the code
+# repository, the resolved --src / --castle-terrain, and every --link-root (main() fills the rest).
+LINK_ROOTS: List[Path] = [HERE.parents[1]]
+# Refuse a sync that would delete more already-staged files than this from one repo (--allow-deletes).
+DEFAULT_MAX_DELETES = 20
+EXIT_DELETE_GUARD = 3
 
 # Zone packages cleared for the public data repo, and what of each may be staged (RELEASING.md §2).
 # `prefixes`: package paths the manifest may reference publicly; `images`: may a GLB embed images.
@@ -211,13 +224,55 @@ def strip_private_candidates(aoi_dir: Path, aoi: str, manifest: dict, plan1: Pla
     return stats
 
 
-def walk_files(root: Path):
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames.sort()
-        for f in sorted(filenames):
-            if f.startswith(".") or f.endswith((".part", ".tmp")):
-                continue
-            yield Path(dirpath) / f
+def _inside(real: Path, roots: Sequence[Path]) -> bool:
+    return any(real == r or r in real.parents for r in roots)
+
+
+def allowed_source(p: Path, roots: Optional[Sequence[Path]] = None) -> Path:
+    """`p` itself; exits (no export) when it goes through a symlink and resolves outside the link roots,
+    or dangles. A path without links is the caller's explicit input and is not restricted."""
+    roots = [Path(os.path.realpath(r)) for r in (LINK_ROOTS if roots is None else roots)]
+    real = Path(os.path.realpath(p))
+    if real == Path(os.path.abspath(p)) and real.exists():
+        return p
+    if not real.exists():
+        sys.exit(f"[export-data] refusing to export: {p} is a dangling symlink (-> {real})")
+    if not _inside(real, roots):
+        sys.exit(f"[export-data] refusing to follow {p} -> {real}: outside the allowed link roots "
+                 f"({', '.join(map(str, roots)) or 'none'}); add one with --link-root / RELEASE_LINK_ROOTS")
+    return p
+
+
+def walk_files(root: Path, link_roots: Optional[Sequence[Path]] = None):
+    """Files under `root` (sorted; dot files, *.part, *.tmp skipped), yielded by their path below `root`.
+    Symlinked files and directories are followed when they resolve inside `link_roots` (default:
+    LINK_ROOTS); a link outside them, a dangling link or a loop aborts the export instead of silently
+    planning the files as absent (which a full sync would then delete from the staging repos)."""
+    roots = [Path(os.path.realpath(r)) for r in (LINK_ROOTS if link_roots is None else link_roots)]
+
+    def walk(d: Path, stack: frozenset):
+        real = Path(os.path.realpath(d))
+        if real in stack:
+            sys.exit(f"[export-data] refusing to export: symlink loop at {d} (-> {real})")
+        stack = stack | {real}
+        with os.scandir(d) as it:
+            entries = sorted(it, key=lambda e: e.name)
+        subdirs = []
+        for e in entries:
+            p = d / e.name
+            if e.is_symlink():
+                allowed_source(p, roots)
+            if e.is_dir():  # follows the (checked) link
+                subdirs.append(p)
+            elif e.is_file() and not (e.name.startswith(".") or e.name.endswith((".part", ".tmp"))):
+                yield p
+        for p in subdirs:
+            yield from walk(p, stack)
+
+    if root.is_symlink():
+        allowed_source(root, roots)
+    if root.is_dir():
+        yield from walk(root, frozenset())
 
 
 def tile_zoom_dir(template: str) -> Tuple[str, bool]:
@@ -233,6 +288,7 @@ def plan_aoi(src: Path, aoi: str, xyz_max_zoom: int, data2_url: str, plan1: Plan
     mpath = aoi_dir / "manifest.json"
     if not mpath.is_file():
         sys.exit(f"[export-data] no manifest: {mpath}")
+    allowed_source(mpath)
     manifest = json.loads(mpath.read_text(encoding="utf-8"))
     xyz = manifest.get("xyz") or {}
     xyz_dirs: Dict[str, Tuple[str, int]] = {}  # tile dir prefix (relative to aoi) -> (key, maxZoom)
@@ -329,13 +385,13 @@ def plan_print(src: Path, plan2: Plan) -> List[dict]:
     if not pdir.is_dir():
         return out
     for f in sorted(pdir.glob("*.json")):  # e.g. series.json (list of series for the app)
-        plan2[f"print/{f.name}"] = f
+        plan2[f"print/{f.name}"] = allowed_source(f)
     for series in sorted(p for p in pdir.iterdir() if p.is_dir()):
         idx_path = series / "index.json"
         if not idx_path.is_file():
             print(f"[export-data] print/{series.name}: no index.json, skipped")
             continue
-        idx = json.loads(idx_path.read_text(encoding="utf-8"))
+        idx = json.loads(allowed_source(idx_path).read_text(encoding="utf-8"))
         n3mf = 0
         for t in idx.get("tiles", []):
             files = t.get("files") or {}
@@ -459,7 +515,7 @@ def plan_zones(zsrc: Path, ids: List[str], plan1: Plan) -> List[dict]:
             f = zdir / path
             if not f.is_file():
                 sys.exit(f"[export-data] zone {zid}: {what} {path} is missing")
-            files[path] = f
+            files[path] = allowed_source(f)
 
         for a in kept:
             for lod in (a.get("lods") if isinstance(a, dict) and isinstance(a.get("lods"), list) else []):
@@ -519,6 +575,43 @@ def render(name: str, values: dict) -> bytes:
     return text.encode("utf-8")
 
 
+def pending_deletes(plan: Plan, out: Path, scope: Optional[str] = None) -> List[str]:
+    """Files in `out` (relative, sorted; `.git/` excluded, only under `scope` if given) that are not in
+    `plan`, i.e. what `sync` would delete. Reads only."""
+    planned = set(plan)
+    out_list: List[str] = []
+    for dirpath, dirnames, filenames in os.walk(out, topdown=True):
+        if ".git" in dirnames:
+            dirnames.remove(".git")
+        dirnames.sort()
+        for f in sorted(filenames):
+            rel = (Path(dirpath) / f).relative_to(out).as_posix()
+            if rel not in planned and (not scope or rel.startswith(scope)):
+                out_list.append(rel)
+    return out_list
+
+
+def delete_guard(targets: Sequence[Tuple[str, Plan, Path, Optional[str]]], max_deletes: int) -> List[str]:
+    """Refusal lines when a sync would delete more than `max_deletes` already-staged files from one repo
+    (a source dir that was skipped or is missing, e.g. a symlink not followed, wipes the public site);
+    empty when every target is within the limit. Reads only."""
+    lines: List[str] = []
+    for name, plan, out, scope in targets:
+        dels = pending_deletes(plan, out, scope)
+        if len(dels) <= max_deletes:
+            continue
+        per_top: Dict[str, int] = {}
+        for rel in dels:
+            top = "/".join(rel.split("/")[:2]) if "/" in rel else rel
+            per_top[top] = per_top.get(top, 0) + 1
+        lines.append(f"[export-data] refusing: {name} would lose {len(dels)} already-staged file(s) (limit {max_deletes}):")
+        lines += [f"  {n:7d}  {top}" for top, n in sorted(per_top.items(), key=lambda kv: -kv[1])[:12]]
+    if lines:
+        lines.append("[export-data] A source dir is probably missing or was not read (unlinked data, a print/ dir that lives "
+                     "elsewhere). Check with --dry-run; if the deletions are intended, re-run with --allow-deletes. Nothing was written.")
+    return lines
+
+
 def sync(plan: Plan, out: Path, scope: Optional[str] = None, dry_run: bool = False,
          changes: Optional[List[str]] = None) -> Tuple[int, int, int]:
     """Make `out` contain exactly `plan` (except .git/). Returns (copied, unchanged, deleted).
@@ -555,18 +648,11 @@ def sync(plan: Plan, out: Path, scope: Optional[str] = None, dry_run: bool = Fal
             shutil.copy2(srcv, dst)
         copied += 1
         log(f"W {rel}")
-    planned = set(plan)
-    for dirpath, dirnames, filenames in os.walk(out, topdown=True):
-        if ".git" in dirnames:
-            dirnames.remove(".git")
-        for f in filenames:
-            p = Path(dirpath) / f
-            rel = p.relative_to(out).as_posix()
-            if rel not in planned and inside(rel):
-                if not dry_run:
-                    p.unlink()
-                deleted += 1
-                log(f"D {rel}")
+    for rel in pending_deletes(plan, out, scope):
+        if not dry_run:
+            (out / rel).unlink()
+        deleted += 1
+        log(f"D {rel}")
     if not dry_run and out.is_dir():
         for dirpath, dirnames, filenames in os.walk(out, topdown=False):
             p = Path(dirpath)
@@ -612,7 +698,7 @@ def size_report(name: str, out: Path, limits: dict) -> Tuple[List[str], bool]:
     return lines, ok
 
 
-def main() -> int:
+def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--src", required=True, type=Path, help="app data dir (app/public/data)")
     ap.add_argument("--castle-terrain", required=True, type=Path)
@@ -632,8 +718,17 @@ def main() -> int:
     ap.add_argument("--zones", default="", help="comma list of zone packages to publish (each must be in PUBLIC_ZONE_POLICY)")
     ap.add_argument("--zones-only", action="store_true", help="stage only <out1>/zones/; nothing else is read, written or deleted")
     ap.add_argument("--dry-run", action="store_true", help="list what would be written/deleted, change nothing")
-    a = ap.parse_args()
+    ap.add_argument("--link-root", action="append", type=Path, default=[],
+                    help="also follow input symlinks that resolve inside this dir (repeatable; the repo, --src and "
+                         "--castle-terrain always count)")
+    ap.add_argument("--max-deletes", type=int, default=DEFAULT_MAX_DELETES,
+                    help=f"refuse (exit {EXIT_DELETE_GUARD}, nothing written) when a repo would lose more staged files than this "
+                         f"(default {DEFAULT_MAX_DELETES})")
+    ap.add_argument("--allow-deletes", action="store_true", help="lift the --max-deletes guard (intended removals)")
+    a = ap.parse_args(argv)
     src = a.src.resolve()
+    LINK_ROOTS[:] = [HERE.parents[1], src, a.castle_terrain.resolve(), *(r.resolve() for r in a.link_root)]
+    max_deletes = None if a.allow_deletes else max(0, a.max_deletes)
     for o in (a.out1, a.out2):
         if str(o.resolve()).startswith(str(Path(__file__).resolve().parents[2]) + os.sep):
             sys.exit(f"[export-data] refusing to write inside the code repository: {o}")
@@ -642,6 +737,10 @@ def main() -> int:
     if a.zones_only:
         plan_z: Plan = {}
         zones = plan_zones(src / "zones", zone_ids, plan_z)
+        refusal = [] if max_deletes is None else delete_guard([("saar-lidar-data zones/", plan_z, a.out1.resolve(), "zones/")], max_deletes)
+        if refusal and not a.dry_run:
+            print("\n".join(refusal), file=sys.stderr)
+            return EXIT_DELETE_GUARD
         changes: List[str] = []
         c, u, d = sync(plan_z, a.out1.resolve(), scope="zones/", dry_run=a.dry_run, changes=changes)
         print(f"[export-data] saar-lidar-data zones/ only{' (dry run)' if a.dry_run else ''}: "
@@ -649,7 +748,9 @@ def main() -> int:
         for line in changes:
             print(f"  {line}")
         if a.dry_run:
-            return 0
+            if refusal:
+                print("\n".join(refusal), file=sys.stderr)
+            return EXIT_DELETE_GUARD if refusal else 0
         limits = {"site_hard": a.site_hard_mb, "site_aim": a.site_aim_mb, "file_hard": a.file_hard_mb, "file_aim": a.file_aim_mb}
         lines, ok = size_report("saar-lidar-data", a.out1.resolve(), limits)
         print("\n".join(lines))
@@ -660,7 +761,7 @@ def main() -> int:
     aoi_info = plan_aoi(src, a.aoi, a.xyz_max_zoom, a.data2_url, plan1, plan2)
     m = aoi_info["manifest"]
     if (src / "pois.geojson").is_file():
-        plan1["pois.geojson"] = src / "pois.geojson"
+        plan1["pois.geojson"] = allowed_source(src / "pois.geojson")
     shared_attr = []
     if (src / "shared").is_dir():
         for f in walk_files(src / "shared"):
@@ -709,6 +810,11 @@ def main() -> int:
     limits = {"site_hard": a.site_hard_mb, "site_aim": a.site_aim_mb, "file_hard": a.file_hard_mb, "file_aim": a.file_aim_mb}
     report: List[str] = []
     ok_all = True
+    targets = [("saar-lidar-data", plan1, a.out1.resolve(), None), ("saar-lidar-data-2", plan2, a.out2.resolve(), None)]
+    refusal = [] if max_deletes is None else delete_guard(targets, max_deletes)
+    if refusal and not a.dry_run:
+        print("\n".join(refusal), file=sys.stderr)
+        return EXIT_DELETE_GUARD
     if a.dry_run:
         for name, plan, out in (("saar-lidar-data", plan1, a.out1), ("saar-lidar-data-2", plan2, a.out2)):
             changes = []
@@ -716,7 +822,9 @@ def main() -> int:
             print(f"[export-data] {name} (dry run): {c} would be written, {u} unchanged, {d} would be deleted")
             for line in changes:
                 print(f"  {line}")
-        return 0
+        if refusal:
+            print("\n".join(refusal), file=sys.stderr)
+        return EXIT_DELETE_GUARD if refusal else 0
     for name, plan, out in (("saar-lidar-data", plan1, a.out1), ("saar-lidar-data-2", plan2, a.out2)):
         c, u, d = sync(plan, out.resolve())
         print(f"[export-data] {name}: {c} written, {u} unchanged, {d} deleted")

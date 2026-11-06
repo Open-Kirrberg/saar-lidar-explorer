@@ -44,12 +44,22 @@ cd pipeline && ./run.sh overall          # if the data are not current
 scripts/release/export-data.sh           # → ../_release/saar-lidar-data, ../_release/saar-lidar-data-2
 scripts/release/export-data.sh --dry-run     # list what would be written/deleted in both repos, change nothing
 scripts/release/export-data.sh --zones-only  # stage only saar-lidar-data/zones/ (nothing else read, written or deleted)
+scripts/release/export-data.sh --allow-deletes  # accept removing > RELEASE_MAX_DELETES staged files (default: refuse, exit 3)
 ```
 
 Run `--dry-run` first when the staging repos hold changes you do not want to publish: a full run rewrites
-them from `app/public/data`. Note that `os.walk` does not follow symlinked directories, so a data dir whose
-AOI subfolders are symlinks (e.g. a checkout that links the data of another one) plans them as absent and a
-full run would **delete** them from the staging repos; point `SLE_DATA_DIR` at the real data dir instead.
+them from `app/public/data`.
+
+- **Symlinked inputs** (the v2 checkout links `overall/*`, `shared/`, `pois.geojson` from the
+  `saar-lidar-explorer` checkout) are followed when they resolve inside the repo, `--src`, the castle terrain
+  or `RELEASE_LINK_ROOTS` (release.env; default: the sibling `saar-lidar-explorer/app/public/data`). A link
+  outside them, a dangling link or a loop **aborts** the export. (Before 2026-11-06 linked dirs were skipped
+  and a full run would have deleted them from the staging repos.)
+- **Delete guard**: when a run would remove more than `RELEASE_MAX_DELETES` (default 20) already-staged files
+  from one repo, it writes nothing and exits **3**, listing the affected folders (`--dry-run` reports the same
+  and also exits 3). Find the missing source first; pass `--allow-deletes` only when the removals are intended
+  (`--max-deletes N` sets the limit for one run). Example from the v2 checkout: it has no `print/`
+  (print series now come from the sle-print repo), so a full run would remove `print/` from `saar-lidar-data-2`.
 
 Idempotent (copies only changed files, deletes files that are no longer planned, never touches `.git/`).
 Size report: `../_release/data-size-report.txt`. What it does:
