@@ -40,7 +40,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0034](0034-tree-lod-rank-prefix-dither.md) | Tree LOD: rank prefixes, dithered cross-fade, cones far | Accepted | 2026-11-04 | |
 | [0026](0026-collapsed-attribution.md) | Collapsed attribution behind „© Quellen“ | Accepted | 2026-11-04 | 0013 (footer rule) |
 | [0027](0027-captured-zone-method.md) | Captured zones: photogrammetry mesh first, splats later | Accepted | 2026-11-04 | |
-| [0029](0029-zones-same-bundle-folder-layout.md) | Zones run in the explorer bundle; zone sources in `zones/<id>/` | Accepted | 2026-11-04 | (ends: castle as separate app + URL handover) |
+| [0029](0029-zones-same-bundle-folder-layout.md) | Zones run in the explorer bundle; zone sources in `zones/<id>/` | Accepted (`/castle/` retirement deferred by [0048](0048-castle-zone-public.md)) | 2026-11-04 | (ends: castle as separate app + URL handover) |
 | [0032](0032-shell-layout-tier-registry.md) | Shell layout and tier-gated feature registry | Accepted | 2026-11-04 | v1 Einfach layout, intro overlay |
 | [0035](0035-relikt-blick-lens-channel.md) | *Relikt-Blick* as a third terrain channel; the game look leaves the relief lab alone | Accepted | 2026-11-04 | |
 | [0036](0036-game-minimap.md) | Game minimap: round dial, heading-up by default, CSS rotation | Accepted | 2026-11-04 | v1 minimap header (folgen/klein/groß/Vollbild) |
@@ -56,6 +56,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0045](0045-baeckerei-heusser-fills-visitor-catalogue.md) | Bäckerei Heusser: product fills as checked data, `produkt/<slot>` nodes, visitor catalogue file `built/catalogue.json` | Accepted | 2026-11-05 | 0042, 0044 |
 | [0046](0046-built-twin-tour-fills-routes.md) | Built twins: fill toggle + guided tour as optional catalogue data, pick proxies never through walls, tour glides routed through the door | Accepted | 2026-11-06 | |
 | [0047](0047-baeckerei-heusser-abholschrank-backstube-entrance.md) | Bäckerei Heusser: Abholschrank and Backstube entrance in scope, passage privacy line 1.60 → 4.35, equal shop windows | Accepted | 2026-11-06 | 0043 (passage line), 0044 (cabinet unbuilt) |
+| [0048](0048-castle-zone-public.md) | Castle zone goes public: zone package in the release export, portal replaces the handover (`/castle/` stays as fallback) | Accepted | 2026-11-06 | 0029 (`/castle/` retirement deferred), 0033 row 8 (size estimate) |
 | **📚 Meta** | | | | |
 | [0025](0025-adrs-and-short-prd.md) | ADRs + short PRD instead of one living PRD | Accepted | 2026-11-04 | v1 living PRD |
 

@@ -8,6 +8,8 @@
  * The dataset is optional and AOI-independent: 404 / invalid → no UI at all (logged once). Its
  * strings are untrusted (textContent / escaped only), its viewer URL is validated (local http(s));
  * a build-time `VITE_VIEWER_URL` (public build: `castle/`, same origin) replaces it, `off` hides the handover.
+ * ADR 0048: while the zone index offers the castle zone (its portal), the handover is hidden too — the
+ * portal is the one way in; the handover stays only as the fallback when the zone is absent.
  * The layer is updated from `scene.onBeforeRender` (so `window.sle.step()` drives it too).
  */
 import L from 'leaflet';
@@ -21,7 +23,9 @@ import type { Minimap } from '../map/Minimap';
 import { shareUrl } from '../state';
 import { isTyping } from '../ui/keys';
 import { createPanelSection, openPanelSection } from '../ui/panelSection';
+import { onZonePortals } from '../zones/runtime/feature';
 import {
+  CASTLE_ZONE_ID,
   CONF_COLORS,
   CONF_LABELS_DE,
   KARLSBERG_RECON_PATH,
@@ -33,6 +37,7 @@ import {
   buildViewerUrl,
   footprintCentre,
   footprintShownOnAoi,
+  handoverHidden,
   parseFootprints,
   parseReconIndex,
   parseReconPrefs,
@@ -190,7 +195,10 @@ function setup(
   /** Build without the castle viewer (`VITE_VIEWER_URL=off`): no "Schloss betreten" at all. */
   const handoverOff = viewerOverride === 'off';
   const viewerUrl = viewerOverride && viewerOverride !== 'off' ? viewerOverride : index.viewer.url;
-  if (handoverOff) panelEnter.hidden = panelWalk.hidden = true;
+  /** Zone portals of this AOI (V2.6b); the castle zone's portal replaces the handover (ADR 0048). */
+  let portals: readonly { zoneId: string }[] = [];
+  const castleZone = () => portals.some((p) => p.zoneId === CASTLE_ZONE_ID);
+  const hidden = () => handoverHidden(handoverOff, portals);
   q('[data-k=attr]').textContent = `${index.name_de}. Quellen: ${attributionEntries(index.attribution).join(' · ') || '–'}`;
   sec.root.hidden = false;
 
@@ -292,18 +300,21 @@ function setup(
     const n = on && withinEnterRadius(E, N, index.anchor);
     if (n !== near || force) {
       near = n;
-      tb.hidden = !near || handoverOff;
+      tb.hidden = !near || hidden();
+      panelEnter.hidden = panelWalk.hidden = hidden();
       panelEnter.disabled = !near;
       panelWalk.disabled = !near;
     }
     if (hintActive) return;
     // Distance in 10 m steps: the text (and the DOM) changes rarely while flying.
     const d = Math.round(anchorDistance(E, N, index.anchor) / 10) * 10;
-    const text = !on
-      ? 'Zum Betreten die Ebene einschalten.'
-      : near
-        ? 'Öffnet den Schloss-Viewer an Ihrer Position und Blickrichtung (gleiches Fenster; dort „Zurück zur Karte“).'
-        : `Betreten ist im Umkreis von ${radiusTxt} um das Schloss möglich (jetzt ≈ ${d.toLocaleString('de-DE')} m entfernt).`;
+    const text = castleZone()
+      ? 'Das Schloss betreten Sie über das Portal „Schloss betreten“ westlich des Ehrenhofs (dort Taste E).'
+      : !on
+        ? 'Zum Betreten die Ebene einschalten.'
+        : near
+          ? 'Öffnet den Schloss-Viewer an Ihrer Position und Blickrichtung (gleiches Fenster; dort „Zurück zur Karte“).'
+          : `Betreten ist im Umkreis von ${radiusTxt} um das Schloss möglich (jetzt ≈ ${d.toLocaleString('de-DE')} m entfernt).`;
     if (rangeHint.textContent !== text) rangeHint.textContent = text;
   };
 
@@ -400,7 +411,11 @@ function setup(
   };
 
   const enter = (mode: HandoverMode): boolean => {
-    if (handoverOff) return false;
+    if (hidden()) {
+      // T outside a zone points at the portal; inside a zone (the castle has its own keys) it does nothing.
+      if (castleZone() && (ctx.zones?.state() ?? 'overworld') === 'overworld') flashHint('Das Schloss betreten Sie jetzt über das Portal am Ehrenhof (Taste E).');
+      return false;
+    }
     if (!on) {
       flashHint('Erst die Ebene „Rekonstruktion“ einschalten (Taste R).');
       return false;
@@ -522,6 +537,10 @@ function setup(
   };
 
   setOn(prefs.on);
+  onZonePortals((list) => {
+    portals = list;
+    syncNear(true);
+  });
 
   const api: ReconApi = {
     index,

@@ -64,7 +64,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: 'Ebenen',
     keys: ['T'],
-    label: 'Schloss betreten (Schloss-Viewer, nahe am Schloss) · Umschalt+T zu Fuß',
+    label: 'Schloss betreten (Schloss-Viewer, nahe am Schloss; nur ohne Schloss-Portal) · Umschalt+T zu Fuß',
     short: 'Schloss betreten',
     codes: ['KeyT'],
     requires: 'reconstruction',

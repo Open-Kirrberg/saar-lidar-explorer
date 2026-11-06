@@ -14,7 +14,7 @@ const PUBLIC_DATA_DIR = join(PUBLIC_DIR, 'data');
 const SHARED_DATA_DIR = join(PUBLIC_DATA_DIR, 'shared');
 /** Leftover F21 3D-print exports (moved to the sle-print repo; STL/3MF/PNG, GBs) — never part of dist. */
 const PRINT_DATA_DIR = join(PUBLIC_DATA_DIR, 'print');
-/** Generated zone packages (`pnpm run export:zone`, zone contract; the castle alone ≈ 19 MB). */
+/** Generated zone packages (`pnpm run export:zone`, zone contract; the castle ≈ 8 MB, ADR 0048). */
 const ZONES_DATA_DIR = join(PUBLIC_DATA_DIR, 'zones');
 /** Data dirs under public/data that stay out of dist besides the AOI datasets. */
 const NON_DIST_DATA_DIRS = new Set([SHARED_DATA_DIR, PRINT_DATA_DIR, ZONES_DATA_DIR]);

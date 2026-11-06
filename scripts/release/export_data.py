@@ -5,7 +5,7 @@ Run through export-data.sh (it sources release.env). Two outputs, both plain sta
 
   <out1> = saar-lidar-data     AOI dataset without the Leaflet tiles (manifest rewritten), pois.geojson,
                                shared/ (F19 reconstruction), castle-viewer/terrain/ (fetched by the Pages
-                               workflow to build the castle viewer)
+                               workflow to build the castle viewer), zones/ (cleared zone packages)
   <out2> = saar-lidar-data-2   Leaflet XYZ tiles up to --xyz-max-zoom, 3D-print series (3MF + previews,
                                no tile STL)
 
@@ -18,7 +18,8 @@ AOI text file still names a UXO class.
 
 Zone packages (`<src>/zones/`, docs/zone-contract.md) go to <out1>/zones/ only when listed in --zones
 AND cleared in PUBLIC_ZONE_POLICY (`plan_zones`): per zone only zone.json plus the files its manifest
-references under the cleared prefixes (bakery: `built/`); assets with role "reference" (the capture,
+references under the cleared prefixes (bakery: `built/`) or, for a module zone, the exact files its module
+fetches (castle: terrain/ + the CC0 texture JPEGs, metadata checked); assets with role "reference" (the capture,
 ADR 0043) are dropped from zone.json, `scene/` and every other file stay local; a staged file that names
 a local path, the private material folder or an e-mail address, or a GLB with embedded images where the
 policy forbids them, aborts the export. zones/index.json lists only the staged zones.
@@ -65,14 +66,30 @@ DEFAULT_MAX_DELETES = 20
 EXIT_DELETE_GUARD = 3
 
 # Zone packages cleared for the public data repo, and what of each may be staged (RELEASING.md §2).
-# `prefixes`: package paths the manifest may reference publicly; `images`: may a GLB embed images.
+# `prefixes`: package paths that may be published; `images`: may the package carry images (embedded in a
+# GLB or as image files); `moduleFiles` (module runtime only): the exact files the zone module fetches by
+# convention below its base URL (zone.json lists no assets for them); every one must exist.
 # A zone not listed here is never staged, whatever --zones says. Everything else of a package
 # (`scene/` = the photogrammetry capture, `reference` assets, work files) stays local (ADR 0043).
+# Castle texture sets (zones/schloss-karlsberg/viewer/textures.json, all Poly Haven CC0; a test pins the match).
+CASTLE_TEXTURE_SETS = ("lime_plaster", "slate_roof", "clay_tile_roof", "sandstone_ashlar", "sandstone_flags",
+                       "parquet", "gravel", "grass")
 PUBLIC_ZONE_POLICY: Dict[str, dict] = {
     # Bäckerei Heusser built twin: zone.json + built/ (twin, nav floor, visitor catalogue), no textures
     # (ADR 0042/0043); bh-datenschutz checklist before every release (ADR 0044 consent scope).
     "baeckerei-heusser": {"prefixes": ("built/",), "images": False},
+    # Schloss Karlsberg 1789 module zone (ADR 0033, 0048): the 1789 terrain (dl-de/by-2-0, processed) and the
+    # downscaled Poly Haven CC0 texture sets; images = these JPEGs only (no GLBs in the package).
+    "schloss-karlsberg": {
+        "prefixes": ("terrain/", "textures/"),
+        "images": True,
+        "moduleFiles": ("terrain/meta.json", "terrain/dtm1789.u16.deflate", "terrain/ground.u8.deflate",
+                        *(f"textures/{s}/{m}.jpg" for s in CASTLE_TEXTURE_SETS for m in ("diff", "nor_gl", "arm"))),
+    },
 }
+IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".ktx2", ".avif", ".gif")
+# Opaque binary grids (deflated numeric rasters): no text to scan.
+BINARY_ZONE_SUFFIXES = (".deflate",)
 ZONE_INDEX_FORMAT = "sle-zones-v1"
 # Staged zone files must not name local paths, the private material folder or an e-mail address.
 ZONE_LEAK_MARKERS = re.compile(
@@ -454,9 +471,42 @@ def glb_json(data: bytes) -> dict:
     return json.loads(data[20 : 20 + n])
 
 
+def jpeg_metadata(data: bytes) -> bytes:
+    """The metadata segments (APPn, COM) of a baseline/progressive JPEG up to the scan (ValueError otherwise)."""
+    if data[:2] != b"\xff\xd8":
+        raise ValueError("not a JPEG")
+    i, out = 2, []
+    while i + 4 <= len(data):
+        if data[i] != 0xFF:
+            raise ValueError(f"bad JPEG marker at {i}")
+        m = data[i + 1]
+        if m == 0xDA:  # start of scan: entropy-coded data follows
+            return b"".join(out)
+        n = struct.unpack(">H", data[i + 2 : i + 4])[0]
+        if 0xE0 <= m <= 0xEF or m == 0xFE:
+            out.append(data[i + 4 : i + 2 + n])
+        i += 2 + n
+    raise ValueError("JPEG without a scan")
+
+
 def zone_file_problems(rel: str, data: bytes, allow_images: bool) -> List[str]:
     """Privacy guard for one staged zone file: no local paths / private folder / e-mail addresses in its
-    text (for a GLB: its JSON chunk incl. names and extras), no embedded images unless allowed."""
+    text (for a GLB: its JSON chunk incl. names and extras; for a JPEG: its metadata segments), no images
+    (embedded or as files) unless allowed. Deflated binary grids carry no text and are not scanned."""
+    low = rel.lower()
+    if low.endswith(BINARY_ZONE_SUFFIXES):
+        return []
+    if low.endswith(IMAGE_SUFFIXES):
+        if not allow_images:
+            return [f"{rel}: image file where the zone policy allows no images"]
+        if not low.endswith((".jpg", ".jpeg")):
+            return [f"{rel}: only JPEG images can be checked for metadata"]
+        try:
+            text = jpeg_metadata(data).decode("latin-1")
+        except (ValueError, struct.error) as e:
+            return [f"{rel}: {e}"]
+        m = ZONE_LEAK_MARKERS.search(text)
+        return [f"{rel}: JPEG metadata names a local path, the private folder or an e-mail address ({m.group(0)!r})"] if m else []
     if rel.endswith(".glb"):
         try:
             doc = glb_json(data)
@@ -525,6 +575,13 @@ def plan_zones(zsrc: Path, ids: List[str], plan1: Plan) -> List[dict]:
         tw = m.get("twin")
         if isinstance(tw, dict) and isinstance(tw.get("catalogue"), str) and tw["catalogue"].endswith(".json"):
             take(tw["catalogue"], "twin.catalogue")
+        module_files = tuple(policy.get("moduleFiles") or ())
+        if module_files:
+            rt = m.get("runtime") if isinstance(m.get("runtime"), dict) else {}
+            if rt.get("kind") != "module" or rt.get("module") != zid:
+                sys.exit(f"[export-data] zone {zid}: moduleFiles are cleared for runtime module {zid!r} only")
+            for path in module_files:
+                take(path, "module file")
         if dropped:
             m["assets"] = kept
             if isinstance(tw, dict):

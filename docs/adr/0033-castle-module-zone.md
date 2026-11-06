@@ -1,6 +1,6 @@
 # 0033 · 🏰 Castle as module zone #1: own HUD, shared trees, triangle waiver
 
-- **Status:** Accepted · 2026-11-04 · row 7 (triangle waiver) superseded by [0040](0040-castle-triangles-phone-viewport.md)
+- **Status:** Accepted · 2026-11-04 · row 7 (triangle waiver) superseded by [0040](0040-castle-triangles-phone-viewport.md) · row 8 size estimate replaced by [0048](0048-castle-zone-public.md) (≈ 8.4 MB measured)
 - **Origin:** V2.7 (builds [0016](0016-zone-kinds-zone-contract.md), [0017](0017-real-trees-from-chm.md), [0019](0019-feature-tiers.md), [0020](0020-remove-move-out-freeze.md), [0028](0028-phone-proxy-headroom.md), [0029](0029-zones-same-bundle-folder-layout.md), [0037](0037-zone-runtime-host.md))
 
 ## Context

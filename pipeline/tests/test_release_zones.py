@@ -1,8 +1,10 @@
 """Release export of zone packages (scripts/release/export_data.py, RELEASING.md §2, ADR 0043).
 
 Only cleared zones are staged, only zone.json + the files its manifest references under the cleared
-prefixes (bakery: built/); `reference` assets (the capture) are dropped, scene/ never staged, and the
-public zones/index.json lists only staged zones. Synthetic packages in tmp dirs; nothing is exported.
+prefixes (bakery: built/) or, for the castle module zone, exactly the files its module fetches (terrain/ +
+the Poly Haven CC0 texture JPEGs, ADR 0048); `reference` assets (the capture) are dropped, scene/ never
+staged, and the public zones/index.json lists only staged zones. Synthetic packages in tmp dirs; nothing
+is exported.
 """
 from __future__ import annotations
 
@@ -133,7 +135,7 @@ def test_no_zones_plans_nothing(tmp_path):
 
 def test_refuses_uncleared_zone(tmp_path):
     with pytest.raises(SystemExit, match="not cleared"):
-        export_data.plan_zones(_src(tmp_path), ["schloss-karlsberg"], {})
+        export_data.plan_zones(_src(tmp_path), ["testraum"], {})
 
 
 def test_refuses_public_asset_outside_built(tmp_path):
@@ -188,3 +190,104 @@ def test_scoped_sync_touches_only_zones(tmp_path):
         f"zones/{ZID}/built/catalogue.json", f"zones/{ZID}/built/nav.glb", f"zones/{ZID}/built/twin.glb",
         f"zones/{ZID}/zone.json", "zones/index.json"]
     assert export_data.sync(plan, out, scope="zones/") == (0, 5, 0)  # idempotent
+
+
+# ---------------------------------------------------------------- castle module zone (ADR 0033, 0048)
+CID = "schloss-karlsberg"
+CASTLE_SOURCE = ROOT / "zones" / CID / "zone.json"  # committed source of the package's zone.json
+CASTLE_FILES = export_data.PUBLIC_ZONE_POLICY[CID]["moduleFiles"]
+
+
+def _jpeg(comment: bytes = b"") -> bytes:
+    app0 = b"JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+    out = b"\xff\xd8" + b"\xff\xe0" + struct.pack(">H", len(app0) + 2) + app0
+    if comment:
+        out += b"\xff\xfe" + struct.pack(">H", len(comment) + 2) + comment
+    return out + b"\xff\xda" + struct.pack(">H", 2) + b"\x12\x34/Users/x@y.de random scan bytes\xff\xd9"
+
+
+def _castle(tmp_path: Path, drop: str | None = None, comment: bytes = b"", manifest: dict | None = None) -> Path:
+    zsrc = _src(tmp_path)
+    cdir = zsrc / CID
+    for rel in (*CASTLE_FILES, "terrain/dtm2025.f32.deflate", "textures/extra/diff.png", "notes.md"):
+        if rel == drop:
+            continue
+        f = cdir / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        if rel.endswith(".jpg"):
+            f.write_bytes(_jpeg(comment))
+        elif rel.endswith(".json"):
+            f.write_text(json.dumps({"files": {"dtm1789": "dtm1789.u16.deflate"}, "attribution": "Gelände: dl-de/by-2-0"}))
+        else:
+            f.write_bytes(b"x\x9c" + bytes(range(256)) * 4)  # opaque binary (may contain anything)
+    m = manifest or json.loads(CASTLE_SOURCE.read_text(encoding="utf-8"))
+    (cdir / "zone.json").write_text(json.dumps(m, ensure_ascii=False, indent=1), encoding="utf-8")
+    return zsrc
+
+
+def test_castle_policy_lists_the_cc0_texture_sets_of_the_viewer():
+    tex = json.loads((ROOT / "zones" / CID / "viewer" / "textures.json").read_text(encoding="utf-8"))
+    assert sorted(s["name"] for s in tex["sets"]) == sorted(export_data.CASTLE_TEXTURE_SETS)
+    assert all(s["licence"] == "CC0" for s in tex["sets"]) and tex["licence"].startswith("CC0")
+    assert len(CASTLE_FILES) == 3 + 3 * len(export_data.CASTLE_TEXTURE_SETS)
+    assert all(f.startswith(export_data.PUBLIC_ZONE_POLICY[CID]["prefixes"]) for f in CASTLE_FILES)
+
+
+def test_stages_castle_module_files_only(tmp_path):
+    zsrc = _castle(tmp_path)
+    plan: dict = {}
+    staged = export_data.plan_zones(zsrc, [CID, ZID], plan)
+    castle = sorted(k for k in plan if k.startswith(f"zones/{CID}/"))
+    assert castle == sorted([f"zones/{CID}/zone.json", *(f"zones/{CID}/{f}" for f in CASTLE_FILES)])
+    assert plan[f"zones/{CID}/zone.json"] == zsrc / CID / "zone.json"  # no reference assets: byte-identical
+    assert set(staged[0]["skipped"]) == {"terrain/dtm2025.f32.deflate", "textures/extra/diff.png", "notes.md"}
+    idx = json.loads(plan["zones/index.json"])
+    assert [z["id"] for z in idx["zones"]] == [CID, ZID]  # source index order
+
+
+def test_refuses_castle_with_a_missing_module_file(tmp_path):
+    with pytest.raises(SystemExit, match="textures/grass/arm.jpg is missing"):
+        export_data.plan_zones(_castle(tmp_path, drop="textures/grass/arm.jpg"), [CID], {})
+
+
+@pytest.mark.parametrize("comment", [b"/Users/someone/Pictures/raw.jpg", b"shot by kontakt@example.org"])
+def test_refuses_castle_texture_with_private_jpeg_metadata(tmp_path, comment):
+    with pytest.raises(SystemExit, match="JPEG metadata"):
+        export_data.plan_zones(_castle(tmp_path, comment=comment), [CID], {})
+
+
+def test_jpeg_scan_data_is_not_mistaken_for_metadata(tmp_path):
+    assert export_data.zone_file_problems("textures/a/diff.jpg", _jpeg(), True) == []
+    assert export_data.zone_file_problems("textures/a/diff.jpg", b"GIF89a", True) == ["textures/a/diff.jpg: not a JPEG"]
+
+
+def test_refuses_castle_leak_in_zone_json(tmp_path):
+    m = json.loads(CASTLE_SOURCE.read_text(encoding="utf-8"))
+    m["attribution"].append("Fotos: /Users/someone/karlsberg")
+    with pytest.raises(SystemExit, match="refusing to stage"):
+        export_data.plan_zones(_castle(tmp_path, manifest=m), [CID], {})
+
+
+def test_refuses_module_files_for_another_runtime(tmp_path):
+    m = json.loads(CASTLE_SOURCE.read_text(encoding="utf-8"))
+    m["runtime"] = {"kind": "module", "module": "testraum"}
+    with pytest.raises(SystemExit, match="moduleFiles are cleared"):
+        export_data.plan_zones(_castle(tmp_path, manifest=m), [CID], {})
+
+
+def test_image_files_need_an_image_policy():
+    assert export_data.zone_file_problems("built/foto.jpg", _jpeg(), False) == [
+        "built/foto.jpg: image file where the zone policy allows no images"]
+    assert export_data.zone_file_problems("built/atlas.png", b"\x89PNG", True) == [
+        "built/atlas.png: only JPEG images can be checked for metadata"]
+
+
+REAL_ZONES = ROOT / "app" / "public" / "data" / "zones"
+
+
+@pytest.mark.skipif(not (REAL_ZONES / CID / "zone.json").is_file(), reason="no generated castle zone package")
+def test_real_castle_package_stages_cleanly():
+    """The generated package (pnpm run export:zone) passes the policy as it is: no leaks, all files present."""
+    plan: dict = {}
+    staged = export_data.plan_zones(REAL_ZONES, [CID], plan)
+    assert len(plan) == 1 + len(CASTLE_FILES) + 1 and staged[0]["files"] == 1 + len(CASTLE_FILES)

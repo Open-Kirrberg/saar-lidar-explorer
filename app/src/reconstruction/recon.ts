@@ -311,6 +311,19 @@ export function withinEnterRadius(E: number, N: number, anchor: ReconIndex['anch
   return Number.isFinite(E) && Number.isFinite(N) && anchorDistance(E, N, anchor) <= anchor.enterRadius_m;
 }
 
+/** Zone id of the castle zone (ADR 0033): while its portal is offered, it replaces the viewer handover. */
+export const CASTLE_ZONE_ID = 'schloss-karlsberg';
+
+/**
+ * ADR 0048: the URL handover to the standalone castle viewer must not compete with the castle zone's
+ * portal. It is hidden when the build turned it off (`VITE_VIEWER_URL=off`) or when the zone index offers the castle zone
+ * (portal + loading bar + Rundflug in the explorer itself). Without the zone (no index, zone absent,
+ * zone portals not mounted) the handover stays as the fallback.
+ */
+export function handoverHidden(handoverOff: boolean, portals: readonly { zoneId: string }[], castleZone = CASTLE_ZONE_ID): boolean {
+  return handoverOff || portals.some((p) => p.zoneId === castleZone);
+}
+
 /** Confidence from a `_CONF` value (rounded, clamped). */
 export function confFromCode(v: number): ReconConfidence {
   const c = Math.round(v);

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { BufferAttribute, BufferGeometry, Matrix4, Ray, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import {
+  CASTLE_ZONE_ID,
   CONF_COLORS,
   DEFAULT_EXPLORER_URL,
   DEFAULT_RECON_PREFS,
@@ -14,6 +15,7 @@ import {
   aoiExtentInModel,
   footprintCentre,
   footprintShownOnAoi,
+  handoverHidden,
   isLocalHttpUrl,
   isSafeRelativePath,
   modelOffset,
@@ -207,6 +209,16 @@ describe('F19 camera handover', () => {
     expect(new URL(backTargetUrl('http://localhost:5240/', { E: 1, N: 2, h: 3, heading: 4, pitch: 5 })).hash).toBe('#1,2,3,4,5');
     expect(backTargetUrl('https://evil.example/#1,2,3,4,5', { E: 1, N: 2, h: 3, heading: 4, pitch: 5 })).toBe(`${DEFAULT_EXPLORER_URL}#1,2,3,4,5`);
     expect(backTargetUrl(null, { E: 1, N: 2, h: 3, heading: 4, pitch: 5 })).toBe(`${DEFAULT_EXPLORER_URL}#1,2,3,4,5`);
+  });
+
+  it('ADR 0048: the castle zone portal replaces the handover; without it the handover is the fallback', () => {
+    const bakery = { zoneId: 'baeckerei-heusser' };
+    const castle = { zoneId: CASTLE_ZONE_ID };
+    expect(CASTLE_ZONE_ID).toBe('schloss-karlsberg');
+    expect(handoverHidden(false, [])).toBe(false); // no zone index / zone absent → handover stays
+    expect(handoverHidden(false, [bakery])).toBe(false); // other zones do not matter
+    expect(handoverHidden(false, [bakery, castle])).toBe(true); // castle zone offered → portal only
+    expect(handoverHidden(true, [])).toBe(true); // VITE_VIEWER_URL=off
   });
 });
 

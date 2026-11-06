@@ -12,6 +12,7 @@ Static data for the [Saar LiDAR Explorer]({{APP_URL}}) (code: https://github.com
 | `pois.geojson` | Known sites („Bekannte Orte“), WGS84. |
 | `shared/karlsberg1789/` | Hypothetical reconstruction of Schloss Karlsberg, summer 1789 (light model for the explorer). |
 | `castle-viewer/terrain/` | 1 m terrain crops (2025 DTM and the 1789 terrain hypothesis) used to build the castle viewer; `SHA256SUMS`. |
+| `zones/` | Zone packages the explorer enters through a portal (`index.json`, format `docs/zone-contract.md`): `schloss-karlsberg/` (reconstruction 1789: zone manifest, 1789 terrain, texture sets) and `baeckerei-heusser/` (built twin of the bakery, shown with the owners' permission). |
 
 ## Relict candidates (`{{AOI}}/candidates/`)
 
@@ -25,6 +26,7 @@ The code is MIT-licensed (see the code repository). **The data keep their own li
 - OpenStreetMap data (ways, most POI coordinates): **ODbL 1.0** (https://opendatacommons.org/licenses/odbl/), © OpenStreetMap-Mitwirkende.
 - Reconstruction 1789 (`shared/karlsberg1789/`): own work (hypothesis); building footprints partly derived from the Lageplan 2006 by schloss-carlsberg.de („Mannlich“), **CC BY-SA 2.0 DE** — these derived geometries are shared under CC BY-SA 2.0 DE.
 - Relief visualisations, candidates, levels and encodings: derived from the data above (same licences).
+- Castle zone textures (`zones/schloss-karlsberg/textures/`): Poly Haven (https://polyhaven.com), **CC0 1.0**, downscaled. Bäckerei Heusser (`zones/baeckerei-heusser/`): the bakery's name, lettering, product texts and prices are shown with the owners' permission and are not licensed for reuse.
 
 Attribution entries (also in `ATTRIBUTION`):
 

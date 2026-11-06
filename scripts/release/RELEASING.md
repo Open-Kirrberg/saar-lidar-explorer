@@ -5,8 +5,8 @@ GitHub repositories in the org **Open-Kirrberg**, all served by GitHub Pages und
 
 | Repository | Pages | Content | Built by |
 |---|---|---|---|
-| `saar-lidar-explorer` (public, MIT; **this repository**, developed here directly) | GitHub Actions (`.github/workflows/pages.yml`) → `/saar-lidar-explorer/` + castle viewer `/saar-lidar-explorer/castle/` | code + `LICENSE`, `NOTICE.md` | `git push origin main` |
-| `saar-lidar-data` | branch deploy (`main`, `/`), `.nojekyll` | AOI `overall` without Leaflet tiles, `pois.geojson`, `shared/` (reconstruction 1789), `castle-viewer/terrain/`, `zones/` (cleared zone packages) | `export-data.sh` |
+| `saar-lidar-explorer` (public, MIT; **this repository**, developed here directly) | GitHub Actions (`.github/workflows/pages.yml`) → `/saar-lidar-explorer/` + standalone castle viewer `/saar-lidar-explorer/castle/` (fallback, [ADR 0048](../../docs/adr/0048-castle-zone-public.md)) | code + `LICENSE`, `NOTICE.md` | `git push origin main` |
+| `saar-lidar-data` | branch deploy (`main`, `/`), `.nojekyll` | AOI `overall` without Leaflet tiles, `pois.geojson`, `shared/` (reconstruction 1789), `castle-viewer/terrain/`, `zones/` (cleared zone packages: castle, bakery) | `export-data.sh` |
 | `saar-lidar-data-2` | branch deploy (`main`, `/`), `.nojekyll` | Leaflet XYZ tiles (≤ z17), 3D-print series (3MF only) | `export-data.sh` |
 
 **Why two data repos.** GitHub Pages publishes at most **≈ 1 GB per repository** (every file < 100 MB).
@@ -33,7 +33,7 @@ limits, staging dir `../_release`, i.e. next to the checkout — never inside it
 | `SLE_PUBLIC=1` | – | absolute base `SLE_BASE` (default `/saar-lidar-explorer/`), fills the `VITE_*` defaults below, copies **no** `public/data` into `dist/` |
 | `VITE_DATA_URL` | `https://open-kirrberg.github.io/saar-lidar-data/` | manifest, chunks (decode worker), vectors (vector worker), pois, `shared/`, point clouds |
 | `VITE_AOIS` | `overall` | AOIs this deployment has: no probes for others, AOI switcher hidden, `?aoi=` outside → `overall` |
-| `VITE_VIEWER_URL` | `/saar-lidar-explorer/castle/` | castle viewer handover target (same origin is trusted); `off` hides „Schloss betreten“ |
+| `VITE_VIEWER_URL` | `/saar-lidar-explorer/castle/` | castle viewer handover target (same origin is trusted); `off` hides „Schloss betreten“. Hidden anyway while the zone index offers the castle zone (its portal is the way in, ADR 0048); the handover is only the fallback when the zone is absent |
 | `VITE_IMPRESSUM_URL` | – (unset) | optional http(s) link „Impressum“ in *Über & Datenschutz*; set the repo variable `SLE_IMPRESSUM_URL` |
 
 Castle viewer (`zones/schloss-karlsberg/`): `VITE_EXPLORER_URL=/saar-lidar-explorer/` (default return target) and
@@ -84,9 +84,12 @@ Size report: `../_release/data-size-report.txt`. What it does:
   (`run.json`, `report*.html`, `eval*`, `fachbericht*`, `manifest.json.bak-*`, `*.sld-new/`) are never staged, and the
   export **aborts** if a staged AOI text file still contains `crater`/`Bombentrichter`/`Trichterfeld`.
 - **Zone packages** (`app/public/data/zones/` → repo 1 `zones/`): only the zones in `RELEASE_ZONES` (release.env,
-  default `baeckerei-heusser`) **and** cleared in `PUBLIC_ZONE_POLICY` (export_data.py; the castle is public through
-  its own viewer, not as a zone package). Per zone: `zone.json` plus only the files its assets and `twin.catalogue`
-  reference under the cleared prefixes (bakery: `built/` = twin, nav floor, visitor catalogue). Assets with
+  default `schloss-karlsberg,baeckerei-heusser`) **and** cleared in `PUBLIC_ZONE_POLICY` (export_data.py). Per zone:
+  `zone.json` plus only the files its assets and `twin.catalogue` reference under the cleared prefixes (bakery:
+  `built/` = twin, nav floor, visitor catalogue) or, for a module zone, the exact `moduleFiles` its code fetches
+  (castle, [ADR 0048](../../docs/adr/0048-castle-zone-public.md): `terrain/` 1789 grids + `meta.json`, the 8 Poly Haven
+  CC0 texture sets as `textures/<set>/{diff,nor_gl,arm}.jpg`; ≈ 8 MB; all must exist, other files stay local).
+  Image files are staged only where the policy allows images (castle JPEGs; their APPn/COM metadata is scanned). Assets with
   `role: "reference"` are dropped from `zone.json` (with `twin.referenceScale`; `budget.totalBytes` recounted),
   `scene/` and any other local file are never staged (the photogrammetry capture is local-only,
   [ADR 0043](../../docs/adr/0043-built-twin-package-reference-nav.md)). `zones/index.json` lists only the staged
@@ -117,8 +120,9 @@ git push origin main                           # → .github/workflows/pages.yml
   repository was a fresh-history export (`export-code.sh` → `../_release/saar-lidar-explorer`). v2 is developed
   directly in the public repository, so the script, its exclude list and its templates were removed (2026-11-06).
 
-The workflow builds the explorer (`pnpm install --frozen-lockfile`, tests, `SLE_PUBLIC=1` build), then the castle
-viewer into `app/dist/castle/`: textures via `scripts/fetch-textures.sh` (Poly Haven CC0, md5-checked, cached by
+The workflow builds the explorer (`pnpm install --frozen-lockfile`, tests, `SLE_PUBLIC=1` build), then the standalone
+castle viewer into `app/dist/castle/` (kept as the handover fallback and for direct links; the explorer enters the
+castle as a zone, ADR 0048): textures via `scripts/fetch-textures.sh` (Poly Haven CC0, md5-checked, cached by
 `actions/cache`), terrain from `<VITE_DATA_URL>castle-viewer/terrain/` (sha256-checked). If that step fails, the
 explorer is rebuilt with `VITE_VIEWER_URL=off` (no handover) so the site still deploys. Repository variables
 `SLE_DATA_URL`, `SLE_AOIS`, `SLE_IMPRESSUM_URL` override the defaults without a code change.
@@ -145,7 +149,9 @@ large refreshes, prefer a fresh orphan commit (`git checkout --orphan new && git
 - `.claude/skills/sle-roadmap/scripts/verify.sh` passes; `pnpm run test` in `app/` and `zones/schloss-karlsberg/`.
 - `../_release/data-size-report.txt`: no FAIL; leak scan (§3): neutralised paths and HIGH none, INFO reviewed.
 - Zones: `bh-datenschutz` checklist (`zones/baeckerei-heusser/.claude/skills/bh-datenschutz/SKILL.md`) on the staged
-  `zones/` files; in the smoke test enter the bakery and open a product card.
+  `zones/` files; in the smoke test enter the bakery and open a product card, enter the castle through its portal
+  (loading bar → Rundflug → *Verlassen* restores the overworld) and check that „Schloss betreten“ (T, handover) is
+  not offered next to the portal.
 - `../_release/AUDIT.md`: licence + heritage audit.
 - Local smoke test of the public build against the staged data: build with
   `SLE_PUBLIC=1 VITE_DATA_URL=http://127.0.0.1:5271/saar-lidar-data/`,

@@ -1,6 +1,6 @@
 # 🎮 Saar LiDAR Explorer — PRD
 
-> **Status:** v2 live on GitHub Pages ([live](https://open-kirrberg.github.io/saar-lidar-explorer/)): game shell, castle zone, Bäckerei Heusser twin · F22 private · Updated 2026-11-06
+> **Status:** v2 live on GitHub Pages ([live](https://open-kirrberg.github.io/saar-lidar-explorer/)): game shell, Bäckerei Heusser twin; castle zone released with the next data push ([0048](docs/adr/0048-castle-zone-public.md), until then `/castle/` handover) · F22 private · Updated 2026-11-06
 > **Rules:** ≤ 150 lines. *Why* lives in [ADRs](docs/adr/README.md), *what shipped* in [CHANGELOG.md](CHANGELOG.md), *how* in the module READMEs. Pre-v2 history: [docs/history/prd-v1.md](docs/history/prd-v1.md).
 
 ## 🌍 Vision
