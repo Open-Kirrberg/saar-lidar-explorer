@@ -11,8 +11,10 @@ import type { WebGLRenderer } from 'three';
 import {
   cardFor,
   categoryDe,
+  discoverableIn,
   DiscoveryStore,
   discoveryStorageKey,
+  fillShows,
   firstSentences,
   formatPriceEur,
   groupTarget,
@@ -74,6 +76,75 @@ describe('zone catalogue: parse', () => {
     const t = parseZoneCatalogue(j)!.objects.get('theke')!.name_de;
     expect(t.length).toBeLessThanOrEqual(80);
     expect(t.startsWith('<b>x</b> a')).toBe(true); // shown via textContent, never as HTML
+  });
+});
+
+describe('zone catalogue: fills (Morgens / Feierabend)', () => {
+  const withFills = (fills: unknown) => ({ ...raw(), fills });
+  const both = {
+    default: 'feierabend',
+    states: [
+      { id: 'morgens', name_de: 'Morgens', info_de: 'Kurz nach dem Öffnen.', products: ['testbrot', 'testweck', 'unbekannt'] },
+      { id: 'feierabend', name_de: 'Feierabend', info_de: 'Leer.', products: [] },
+    ],
+  };
+
+  it('parses ≥ 2 valid states, drops unknown products, falls back to the first state', () => {
+    const f = parseZoneCatalogue(withFills(both))!.fills!;
+    expect(f.default).toBe('feierabend');
+    expect(f.states.map((s) => s.id)).toEqual(['morgens', 'feierabend']);
+    expect([...f.states[0]!.products]).toEqual(['testbrot', 'testweck']);
+    expect(parseZoneCatalogue(withFills({ ...both, default: 'mittags' }))!.fills!.default).toBe('morgens');
+  });
+
+  it('no fills, < 2 valid states, bad ids or duplicates → null (no toggle)', () => {
+    expect(cat().fills).toBeNull();
+    const warns: string[] = [];
+    const one = { states: [both.states[0], { ...both.states[1], id: 'Böse Id' }, { ...both.states[0], name_de: 'Doppelt' }, { id: 'ohne-name' }] };
+    expect(parseZoneCatalogue(withFills(one), (w) => warns.push(w))!.fills).toBeNull();
+    expect(warns.join()).toMatch(/fills/);
+    expect(parseZoneCatalogue(withFills('kaputt'))!.fills).toBeNull();
+  });
+
+  it('nodes: products show only in their states, everything else always', () => {
+    expect(fillShows(['morgens'], 'morgens')).toBe(true);
+    expect(fillShows(['morgens'], 'feierabend')).toBe(false);
+    expect(fillShows(undefined, 'feierabend')).toBe(true);
+    expect(fillShows(['morgens'], null)).toBe(true);
+    expect(fillShows('morgens', 'feierabend')).toBe(true); // not a list: not a fill node
+  });
+
+  it('„entdeckt x / y“ counts the objects plus the products of the current state', () => {
+    const c = parseZoneCatalogue(withFills(both))!;
+    expect(discoverableIn(c, 'morgens')).toEqual(['testbrot', 'testweck', 'theke', 'regal']);
+    expect(discoverableIn(c, 'feierabend')).toEqual(['theke', 'regal']);
+    expect(discoverableIn(c, null)).toEqual(c.discoverable);
+    expect(discoverableIn(cat(), 'morgens')).toEqual(cat().discoverable);
+    // found products stay stored and count again in their state
+    const kv = new MemKV();
+    const s = new DiscoveryStore(kv, 'z', discoverableIn(c, 'morgens'));
+    s.mark('testbrot');
+    s.mark('theke');
+    expect([s.found, s.total]).toEqual([2, 4]);
+    s.setDiscoverable(discoverableIn(c, 'feierabend'));
+    expect([s.found, s.total]).toEqual([1, 2]);
+    expect(s.mark('testweck')).toBe(false);
+    s.setDiscoverable(discoverableIn(c, 'morgens'));
+    expect([s.found, s.total]).toEqual([2, 4]);
+  });
+
+  it('hidden fill nodes are neither targets nor occluders', () => {
+    const { root, brot } = scene();
+    brot.userData.fills = ['morgens'];
+    const c = parseZoneCatalogue(withFills(both))!;
+    const t = new TwinTargets(c);
+    t.index(root);
+    expect(t.keys()).toContain('regal/korb-1/platz-01');
+    brot.visible = fillShows(brot.userData.fills, 'feierabend');
+    t.index(root);
+    expect(t.keys()).not.toContain('regal/korb-1/platz-01');
+    expect(t.missing(discoverableIn(c, 'feierabend'))).not.toContain('testbrot');
+    expect(t.missing()).toContain('testbrot');
   });
 });
 

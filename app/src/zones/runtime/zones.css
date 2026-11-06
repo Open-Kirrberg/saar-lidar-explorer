@@ -83,6 +83,8 @@
 @media (pointer: coarse) {
   .sle-zone-active .sle-overlay-slot:has(.sle-zone-gltf-ui) .sle-zone-foot { right: calc(124px + var(--safe-r, 0px)); bottom: calc(8px + var(--safe-b, 0px)); }
   .sle-zone-hint { top: calc(120px + var(--safe-t, 0px)); bottom: auto; white-space: normal; text-align: center; max-width: calc(100vw - 32px); }
+  /* a twin's fill toggle (twinUi.ts) sits where the hint was */
+  .sle-zone-gltf-ui:has(.sle-twin-fills) .sle-zone-hint { top: calc(160px + var(--safe-t, 0px)); }
 }
 
 /* Built twins with an info-card catalogue (twinUi.ts, docs/style.md „Interaction look“): light card, counter,
@@ -119,8 +121,64 @@
   background: #e9f0dc; color: #3f6630;
 }
 .sle-twin-fresh::before { content: '✓ '; }
-.sle-twin-counter {
+.sle-twin-hud {
   position: absolute; top: calc(64px + var(--safe-t, 0px)); left: calc(12px + var(--safe-l, 0px));
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px; pointer-events: none;
+}
+.sle-twin-hud > * { pointer-events: auto; }
+/* Fill toggle (Morgens / Feierabend): one pill, the current state filled in brass; buttons ≥ 44 px high. */
+.sle-twin-fills {
+  display: flex; border-radius: 999px; background: rgba(251, 247, 239, 0.94);
+  box-shadow: 0 2px 10px rgba(40, 25, 10, 0.25);
+}
+.sle-twin-fill {
+  min-height: 44px; min-width: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: none;
+  color: #6b5d52; font: 600 13px var(--ui-font); cursor: pointer;
+}
+.sle-twin-fill:hover { color: #3a2a22; }
+.sle-twin-fill[aria-pressed='true'] { background: #c29a4b; color: #fffaf0; cursor: default; }
+.sle-twin-fill:focus-visible { outline: 2px solid #3a2a22; outline-offset: 1px; }
+.sle-twin-hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; pointer-events: none; }
+.sle-twin-hud-row:empty { display: none; }
+.sle-twin-hud-row > * { pointer-events: auto; }
+/* Guided tour: the start button next to the fill toggle, and the tour panel where the card sits. */
+.sle-twin-tour-btn {
+  min-height: 44px; min-width: 44px; padding: 0 16px; border: 0; border-radius: 999px;
+  background: rgba(251, 247, 239, 0.94); color: #3a2a22; font: 600 13px var(--ui-font); cursor: pointer;
+  box-shadow: 0 2px 10px rgba(40, 25, 10, 0.25);
+}
+.sle-twin-tour-btn::before { content: '▶ '; color: #c29a4b; font-size: 11px; }
+.sle-twin-tour-btn:hover { background: #f0e1bd; }
+.sle-twin-tour-btn:focus-visible, .sle-twin-tour button:focus-visible { outline: 2px solid #3a2a22; outline-offset: 1px; }
+.sle-twin-tour {
+  position: absolute; left: calc(12px + var(--safe-l, 0px)); bottom: calc(44px + var(--safe-b, 0px));
+  width: min(380px, calc(100vw - 24px)); box-sizing: border-box; padding: 6px 12px 12px 16px;
+  background: #fbf7ef; color: #3a2a22; border: 1px solid rgba(194, 154, 75, 0.5); border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(40, 25, 10, 0.35); font-family: var(--ui-font); z-index: 2;
+}
+.sle-twin-tour-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-right: -6px; }
+.sle-twin-tour-count {
+  padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  background: rgba(194, 154, 75, 0.18); color: #7a5a1f; border: 1px solid rgba(194, 154, 75, 0.55);
+}
+.sle-twin-tour-end {
+  min-height: 44px; padding: 0 10px; border: 0; border-radius: 12px; background: none;
+  color: #6b5d52; font: 600 13px var(--ui-font); cursor: pointer;
+}
+.sle-twin-tour-end:hover { background: rgba(194, 154, 75, 0.16); color: #3a2a22; }
+.sle-twin-tour-title { margin: 2px 0 6px; font-size: 19px; line-height: 1.25; font-weight: 650; color: #3a2a22; }
+.sle-twin-tour-text { margin: 0; font-size: 14.5px; line-height: 1.45; color: #4a3f38; }
+.sle-twin-tour-nav { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.sle-twin-tour-nav button {
+  min-height: 44px; min-width: 44px; padding: 0 16px; border-radius: 999px; font: 600 14px var(--ui-font); cursor: pointer;
+}
+.sle-twin-tour-back { border: 1px solid rgba(194, 154, 75, 0.6); background: none; color: #3a2a22; }
+.sle-twin-tour-back:disabled { opacity: 0.4; cursor: default; }
+.sle-twin-tour-next { border: 0; background: #c29a4b; color: #fffaf0; }
+.sle-twin-tour-next:hover { background: #a9843c; }
+/* a card opened during the tour takes the panel's place until it closes */
+.sle-twin-card-open .sle-twin-tour { display: none; }
+.sle-twin-counter {
   display: flex; align-items: center; gap: 2px; min-height: 36px; padding: 0 4px 0 12px; border-radius: 999px;
   background: rgba(251, 247, 239, 0.94); color: #3a2a22; font: 600 13px var(--ui-font);
   box-shadow: 0 2px 10px rgba(40, 25, 10, 0.25); font-variant-numeric: tabular-nums;
@@ -160,9 +218,10 @@
 .sle-twin-cross-on::before { left: -10px; top: -10px; width: 16px; height: 16px; border-color: #d4b881; box-shadow: 0 0 8px rgba(212, 184, 129, 0.8); }
 @media (max-width: 600px) {
   .sle-twin-card { left: calc(8px + var(--safe-l, 0px)); right: calc(8px + var(--safe-r, 0px)); width: auto; bottom: calc(8px + var(--safe-b, 0px)); border-radius: 18px; }
-  .sle-twin-counter { top: calc(56px + var(--safe-t, 0px)); }
-  .sle-twin-toast { top: calc(112px + var(--safe-t, 0px)); font-size: 13px; }
+  .sle-twin-tour { left: calc(8px + var(--safe-l, 0px)); right: calc(8px + var(--safe-r, 0px)); width: auto; bottom: calc(8px + var(--safe-b, 0px)); border-radius: 18px; }
+  .sle-twin-hud { top: calc(56px + var(--safe-t, 0px)); }
+  .sle-twin-toast { top: calc(152px + var(--safe-t, 0px)); font-size: 13px; }
 }
 /* the phone card sits where the walk pad is: the pad steps aside while a card is open */
-.sle-twin-card-open .sle-zone-walkpad { visibility: hidden; }
+.sle-twin-card-open .sle-zone-walkpad, .sle-twin-tour-open .sle-zone-walkpad { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .sle-twin-pop, .sle-twin-bump { animation: none; } .sle-twin-toast { transition: none; } }

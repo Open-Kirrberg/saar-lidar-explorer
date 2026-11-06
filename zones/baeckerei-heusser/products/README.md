@@ -12,7 +12,7 @@ basket, and its `product` reference names an id from this file.
 | `shapes.py` | Parametric recipes: `build(product, idx)` → parts, `add_to_node(node, parts, origin, rot)` |
 | `gallery.py` | Every product on a tray per category, true sizes, baked light → `out/gallery.glb` + `out/gallery.json` |
 | `fill.py` | Fills (`bh-fill-v1`): which product or generic good lies in which slot, how many. `layout()` (shared with the generator) and `check_fill()` (category allowed, count ≤ 3 × slot capacity, the pieces fit the slot); `python3 -I products/fill.py` checks all fills. Stdlib only |
-| `fill/morgens.json`, `fill/feierabend.json` | Morning (shortly after opening: ≈ 490 pieces in 105 slots, every category) and closing time (empty, like the walkthrough video) |
+| `fill/morgens.json`, `fill/feierabend.json` | Morning (shortly after opening: ≈ 490 pieces in 105 slots, every category) and closing time (empty, like the walkthrough video). Both are packed; visitors switch with the *Morgens* / *Feierabend* toggle (`name_de` = its label, `info_de` = its tooltip) |
 | `waren.py` | Generic shop goods without a product card (jar, can, bottle, cup, coffee pack, bread in a paper bag, pastry bag; no brands, no text, 56–126 triangles) and low-triangle rolls for heaped baskets (`low()`, ≤ 120 triangles, same silhouette, colours and painted signature detail) |
 | `tests/` | pytest on a **synthetic** fixture folder (the real hq files are never read by tests); `test_fill.py` checks the committed fills, the shared layout, budgets and determinism |
 | `out/` | Generated, git-ignored |

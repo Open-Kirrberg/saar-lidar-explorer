@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Group, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
+import { discoverableIn, parseZoneCatalogue } from '../src/zones/catalogue';
 import { parseTwin, parseZoneManifest, validateZoneStrict, zoneBadge_de } from '../src/zones/contract';
 import type { ZoneManifest } from '../src/zones/contract';
 import { colliderPlan, fadeAt, referenceAssets, referenceMode, sceneAssets, twinFade, walkHoles } from '../src/zones/runtime/gltfPlan';
@@ -92,6 +93,18 @@ describe('zone contract: built twin', () => {
     expect(validateZoneStrict(j)).toEqual([]);
     expect(zoneBadge_de(r.value!)).toBe('Nachbau');
     expect(walkHoles(r.value!)).toBe('block');
+  });
+  const catFile = join(import.meta.dirname, '../public/data/zones/baeckerei-heusser/built/catalogue.json');
+  it.skipIf(!existsSync(catFile))('the generated bakery catalogue offers Morgens / Feierabend', () => {
+    const warns: string[] = [];
+    const c = parseZoneCatalogue(JSON.parse(readFileSync(catFile, 'utf8')), (w) => warns.push(w))!;
+    expect(warns).toEqual([]);
+    expect(c.fills!.states.map((s) => s.name_de)).toEqual(['Morgens', 'Feierabend']);
+    const morning = discoverableIn(c, 'morgens');
+    const evening = discoverableIn(c, 'feierabend');
+    expect(morning.length).toBe(c.discoverable.length);
+    expect(evening.every((id) => c.objects.has(id))).toBe(true);
+    expect(evening.length).toBeGreaterThan(10);
   });
 });
 

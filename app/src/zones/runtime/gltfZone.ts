@@ -24,7 +24,9 @@ import type { ZoneCatalogue } from '../catalogue';
 import type { ZoneAsset, ZoneCaptureScale } from '../contract';
 import type { ZoneHandle, ZoneModule, ZoneMountContext, ZonePose, ZoneQuality, ZoneTier } from './api';
 import { localToEN } from './collide';
-import { colliderPlan, firstViewWeights, LodSwitcher, referenceAssets, referenceMode, sceneAssets, spawnLocal, twinFade, walkHoles, wantedLod } from './gltfPlan';
+import { glideAt, lookAngles, makeGlide } from '../tour';
+import type { Glide, TourStop, XZ } from '../tour';
+import { colliderPlan, firstViewWeights, LodSwitcher, referenceAssets, referenceMode, scaleAbout, sceneAssets, spawnLocal, twinFade, walkHoles, wantedLod } from './gltfPlan';
 import type { LodAction, TwinFade } from './gltfPlan';
 import { TwinInteraction } from './twinInteract';
 import { buildCollider, EYE_M, Walker } from './walk';
@@ -171,6 +173,8 @@ class GltfZone implements ZoneHandle {
   private readonly fade: (FadeUniforms & { spec: TwinFade }) | null;
   /** Built twin with an info-card catalogue: hover / tap, cards, „entdeckt x / y“ (twinInteract.ts). */
   readonly twin: TwinInteraction | null;
+  /** Tour glide in progress: the camera follows it instead of the controls and the walker. */
+  private glide: { g: Glide; t: number } | null = null;
 
   constructor(
     private readonly ctx: ZoneMountContext,
@@ -216,6 +220,7 @@ class GltfZone implements ZoneHandle {
           root: scaleTransform,
           storage: browserStorage(),
           walking: () => this.walking,
+          glideTo: (stop, via) => this.glideTo(stop, via),
         })
       : null;
     if (referenceMode(location.search, this.refSlots.length > 0) === 'shown') this.setReference(true);
@@ -283,6 +288,31 @@ class GltfZone implements ZoneHandle {
     if (on) for (const s of this.refSlots) if (s.sw.shown === null) this.apply(s, s.sw.want(s.asset.lods.length - 1));
   }
 
+  /**
+   * Glide the camera to a tour stop (zone frame, `capture.scale` applied like spawns): walking, onto the floor under
+   * the stop's eye at eye height; floating, to the eye as given. Heading and pitch look at the stop's `look`.
+   */
+  glideTo(stop: TourStop, via: readonly XZ[]): void {
+    const c = this.controls;
+    if (!c) return;
+    const s = this.ctx.manifest.capture?.scale;
+    const [x, ey, z] = scaleAbout(stop.eye, s);
+    const look = scaleAbout(stop.look, s);
+    const y = this.walking && this.walker ? this.walker.settle(x, z, ey) + EYE_M : ey;
+    const to = { x, y, z, ...lookAngles([x, y, z], look) };
+    const pts = via.map(([vx, vz]): XZ => {
+      const q = scaleAbout([vx, 0, vz], s);
+      return [q[0], q[2]];
+    });
+    this.hold.fwd = 0;
+    this.glide = { g: makeGlide(c.getPose(), to, pts), t: 0 };
+  }
+
+  /** A tour glide is running (debug / headless checks). */
+  get gliding(): boolean {
+    return this.glide !== null;
+  }
+
   setWalking(on: boolean): void {
     if (!this.walker) on = false;
     if (on === this.walking) return;
@@ -348,6 +378,29 @@ class GltfZone implements ZoneHandle {
     const p = this.camera.position;
     const x0 = p.x;
     const z0 = p.z;
+    if (this.glide) {
+      // tour: the glide owns the camera (no controls, no walker: it may pass through the glass front)
+      const gl = this.glide;
+      gl.t += Math.min(dt, 0.1);
+      const q = glideAt(gl.g, gl.t);
+      c.setPose(q);
+      if (gl.t >= gl.g.duration) {
+        this.glide = null;
+        if (this.walking && this.walker) this.walker.settle(q.x, q.z, q.y);
+      }
+    } else {
+      this.move(c, dt, x0, z0);
+    }
+    this.lodClock += dt;
+    if (this.lodClock >= LOD_TICK_S) this.tickLods(false);
+    this.twin?.frame(dt);
+    if (this.sky) this.sky.position.copy(p);
+    this.ctx.renderer.render(this.scene, this.camera);
+  }
+
+  /** Controls + walk pad + walker for one frame (not during a tour glide). */
+  private move(c: DroneController, dt: number, x0: number, z0: number): void {
+    const p = this.camera.position;
     c.update(dt);
     if (this.hold.fwd) {
       const hr = (c.heading * Math.PI) / 180;
@@ -364,11 +417,6 @@ class GltfZone implements ZoneHandle {
       p.y += (target - p.y) * (1 - Math.exp(-14 * Math.min(dt, 0.1)));
       if (Math.abs(target - p.y) > 1) p.y = target;
     }
-    this.lodClock += dt;
-    if (this.lodClock >= LOD_TICK_S) this.tickLods(false);
-    this.twin?.frame(dt);
-    if (this.sky) this.sky.position.copy(p);
-    this.ctx.renderer.render(this.scene, this.camera);
   }
 
   /** Esc: closes an open info card first (the host leaves only when this returns false). */
@@ -377,6 +425,7 @@ class GltfZone implements ZoneHandle {
   }
 
   exit(): ZonePose {
+    this.glide = null;
     const pose = this.pose();
     this.twin?.detach();
     this.controls?.dispose();

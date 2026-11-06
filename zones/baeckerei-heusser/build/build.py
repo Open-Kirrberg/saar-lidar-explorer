@@ -20,6 +20,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -42,6 +43,7 @@ PLAN = ZONE / "plan" / "raumplan-v0.json"
 PLAN_VERSION = PLAN.stem.split("-")[-1]   # raumplan-v0 -> v0
 CATALOGUE = ZONE / "catalogue" / "objects.json"
 SLOTS = ZONE / "catalogue" / "slots.json"
+TOUR = ZONE / "catalogue" / "tour.json"     # the guided tour (optional), packed into catalogue.json
 PRODUCTS = ZONE / "products" / "products.json"
 FILLS = ZONE / "products" / "fill"
 DEFAULT_FILL = "morgens"
@@ -93,8 +95,9 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
     """`factor` overrides the one scale factor (tests only: skips the plan == TOML check). `debug_slots` adds magenta
     slot markers (`verkaufsraum/slot-marker`, never for a release). `lettering` adds the shop's own lettering on the
     facade (gable mural text, keystone inscription, sign name): on by default since the owners agreed (2026-11-05,
-    ADR 0044); `lettering=False` shows the neutral graphics only. `fill` = a fill in products/fill/ (`morgens`: the
-    shop in the morning; `feierabend`: empty like the walkthrough video)."""
+    ADR 0044); `lettering=False` shows the neutral graphics only. `fill` = the fill state a visit starts in
+    (products/fill/<fill>.json; `morgens`: the shop in the morning; `feierabend`: empty like the walkthrough video).
+    Every fill in products/fill/ is packed (the visitor switches between them, docs/zone-contract.md „Fills“)."""
     f = toml_scale_factor(TOML) if factor is None else float(factor)
     raw = json.loads(PLAN.read_text(encoding="utf-8"))
     if factor is None and abs(float(raw["scale"]["factor"]) - f) > 1e-9:
@@ -134,12 +137,23 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
     import fill as FL  # noqa: PLC0415  (products/fill.py, stdlib)
     import shapes as S  # noqa: PLC0415
     products_doc = json.loads(PRODUCTS.read_text(encoding="utf-8"))
-    fill_doc = json.loads((FILLS / f"{fill}.json").read_text(encoding="utf-8"))
-    slots_doc = json.loads(slots_json(sc, p, cat_doc))       # this build's slots (the fill must fit them)
-    ferr = FL.check_fill(fill_doc, slots_doc, products_doc)
-    if ferr:
-        raise SystemExit(f"build: fill {fill!r} does not fit the slots:\n  - " + "\n  - ".join(ferr))
-    placed = auslage.place(sc, fill_doc, slots_doc, products_doc, sc.anchors)
+    fills = load_fills(fill)                                  # every fill, the start state first
+    slots_doc = json.loads(slots_json(sc, p, cat_doc))       # this build's slots (each fill must fit them)
+    for fid, fdoc in fills:
+        ferr = FL.check_fill(fdoc, slots_doc, products_doc)
+        if ferr:
+            raise SystemExit(f"build: fill {fid!r} does not fit the slots:\n  - " + "\n  - ".join(ferr))
+    placed_by_fill: dict[str, dict] = {fid: {} for fid, _ in fills}
+    placed_nodes: dict[str, dict] = {}                        # node name -> placement stats (budgets)
+    for rec in plan_fill_nodes(fills):
+        sid = rec["slot"]
+        st = auslage.place(sc, {"slots": {sid: rec["entry"]}}, slots_doc, products_doc, sc.anchors,
+                           names={sid: rec["name"]})[sid]
+        sc.nodes[rec["name"]].extras["fills"] = list(rec["fills"])
+        placed_nodes[rec["name"]] = st
+        for fid in rec["fills"]:
+            placed_by_fill[fid][sid] = st
+    placed = placed_by_fill[fill]
     sc.bake_ao("int")
     if debug_slots:
         fixtures.slot_markers(sc, p)
@@ -167,7 +181,8 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
     slot_ids = {s["id"] for s in sc.slots}
     for n in twin_nodes:
         if n.name.startswith(PRODUCT_NODE):
-            if n.name[len(PRODUCT_NODE):] not in slot_ids or n.extras["id"] != n.name[len(PRODUCT_NODE):]:
+            sid = product_slot(n.name)
+            if sid not in slot_ids or n.extras["id"] != sid:
                 missing.append(n.name)
             continue
         cid = resolve_id(n.name, cat)
@@ -213,11 +228,11 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
         lim = CLASS_BUDGET.get(cat[obj]["type"])
         if lim is not None and t > lim:
             over.append(f"{obj}: {t} > {lim} ({cat[obj]['type']})")
-    for sid, st in placed.items():
+    for name, st in placed_nodes.items():
         kind = "ware" if st["kind"] == "ware" else "low" if st["low"] else \
             "large" if st["shape"] in S.LARGE else "small"
         if st["max_piece"] > PRODUCT_BUDGET[kind]:
-            over.append(f"produkt/{sid}: {st['max_piece']} > {PRODUCT_BUDGET[kind]} per piece ({kind})")
+            over.append(f"{name}: {st['max_piece']} > {PRODUCT_BUDGET[kind]} per piece ({kind})")
     by_class["product"] = product_tris
     for name, t in tris.items():
         if name.startswith(PRODUCT_NODE):
@@ -245,6 +260,8 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
         "fill": {"id": fill, "slots": len(placed), "pieces": sum(v["count"] for v in placed.values()),
                  "products": sorted({v["item"] for v in placed.values() if v["kind"] == "product"}),
                  "triangles": product_tris},
+        "fills": {fid: {"slots": len(pl), "pieces": sum(v["count"] for v in pl.values())}
+                  for fid, pl in placed_by_fill.items()},
         "bbox_twin": bbox(twin_nodes),
         "bbox_nav": bbox(nav_nodes),
         "nav_area_m2": round(float(nav_union.area), 1),
@@ -268,8 +285,8 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
     (out / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     (out / "slots.json").write_text(slots_json(sc, p, cat_doc), encoding="utf-8")
     (out / "package.json").write_text(json.dumps(frag, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-    (out / "catalogue.json").write_text(json.dumps(catalogue_json(cat_doc, products_doc, placed), indent=1,
-                                                   ensure_ascii=False) + "\n", encoding="utf-8")
+    (out / "catalogue.json").write_text(json.dumps(catalogue_json(cat_doc, products_doc, placed_by_fill, dict(fills), load_tour()),
+                                                   indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     if update_catalogue:
         update_catalogue_rows(cat_doc, [n for n in twin_nodes if not n.name.startswith(PRODUCT_NODE)], p, sc.styled)
         CATALOGUE.write_text(json.dumps(cat_doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -281,16 +298,66 @@ def build(out: Path, update_catalogue: bool = False, factor: float | None = None
     return report
 
 
+# ----------------------------------------------------------------------------------------------- fills
+
+FILL_ID_MAX = 40
+
+
+def load_fills(default: str) -> list[tuple[str, dict]]:
+    """Every fill in products/fill/ as (id, doc), the start state `default` first, the others by id."""
+    ids = sorted(q.stem for q in FILLS.glob("*.json"))
+    if default not in ids:
+        raise SystemExit(f"build: no fill {default!r} in {FILLS} ({', '.join(ids)})")
+    out = []
+    for fid in [default] + [i for i in ids if i != default]:
+        doc = json.loads((FILLS / f"{fid}.json").read_text(encoding="utf-8"))
+        if not (0 < len(fid) <= FILL_ID_MAX and fid.replace("-", "").isalnum() and fid == fid.lower() and fid.isascii()
+                and doc.get("id", fid) == fid and (doc.get("name_de") or "").strip()):
+            raise SystemExit(f"build: fill {fid!r}: id a-z0-9- (= the file name) and name_de required")
+        out.append((fid, doc))
+    return out
+
+
+def plan_fill_nodes(fills: list[tuple[str, dict]]) -> list[dict]:
+    """The product nodes of all fills (docs/zone-contract.md „Fills“): [{name, slot, entry, fills}] in fill order.
+    An entry that is the same in several fills is one node listing them all; a different entry for a slot that
+    already has a node becomes `produkt/<slot id>@<fill id>`. Pure."""
+    by_key: dict[tuple[str, str], dict] = {}
+    used: set[str] = set()
+    out: list[dict] = []
+    for fid, doc in fills:
+        for sid, e in sorted((doc.get("slots") or {}).items()):
+            key = (sid, json.dumps(e, sort_keys=True))
+            rec = by_key.get(key)
+            if rec is None:
+                rec = {"name": PRODUCT_NODE + sid + (f"@{fid}" if sid in used else ""), "slot": sid, "entry": e, "fills": []}
+                by_key[key] = rec
+                used.add(sid)
+                out.append(rec)
+            if fid not in rec["fills"]:
+                rec["fills"].append(fid)
+    return out
+
+
+def product_slot(name: str) -> str:
+    """`produkt/<slot id>[@<fill id>]` -> the slot id."""
+    return name[len(PRODUCT_NODE):].split("@", 1)[0]
+
+
 # ----------------------------------------------------------------------------------------------- catalogue
 
 CATALOGUE_PATH = "built/catalogue.json"
 PRODUCT_KEYS = ("name_de", "short_de", "info_de", "category", "price_eur", "sale_unit")
 
 
-def catalogue_json(cat_doc: dict, products_doc: dict, placed: dict) -> dict:
+def catalogue_json(cat_doc: dict, products_doc: dict, placed_by_fill: dict[str, dict],
+                   fill_docs: dict[str, dict] | None = None, tour_doc: dict | None = None) -> dict:
     """The visitor's catalogue (`sle-zone-catalogue-v1`, docs/zone-contract.md): objects = built clickable rows with a
     card text (group = the nearest ancestor that has a card too), all products (prices only with the owners' consent),
-    discoverable = every placed product + the rows marked `discover` in catalogue/objects.json."""
+    discoverable = every product placed in any fill + the rows marked `discover` in catalogue/objects.json.
+    `placed_by_fill` = {fill id: {slot id: placement}} in state order (the first is the default); with ≥ 2 fills
+    (`fill_docs` gives their texts) the file gets `fills` for the visitor's toggle. `tour_doc` (catalogue/tour.json)
+    becomes the optional `tour` block (checked by `tour_block` against the card objects)."""
     prices = (cat_doc.get("consent") or {}).get("prices") is True
     # rows with `clickable: false` (the facade, the room shell: enclosing boxes, docs/zone-contract.md) never get a
     # card; grouping a facade detail under them made it unreachable from the floor (the group wins beyond 2.5 m)
@@ -312,14 +379,99 @@ def catalogue_json(cat_doc: dict, products_doc: dict, placed: dict) -> dict:
         if not prices:
             e["price_eur"] = None
         products[q["id"]] = e
+    def placed_products(placed: dict) -> list[str]:
+        out: list[str] = []
+        for sid in sorted(placed):
+            v = placed[sid]
+            if v["kind"] == "product" and v["item"] not in out:
+                out.append(v["item"])
+        return out
+
     seen: list[str] = []
-    for sid in sorted(placed):
-        v = placed[sid]
-        if v["kind"] == "product" and v["item"] not in seen:
-            seen.append(v["item"])
+    for placed in placed_by_fill.values():
+        seen += [q for q in placed_products(placed) if q not in seen]
     disc = seen + [o["id"] for o in rows if o.get("discover")]
-    return {"schema": CATALOGUE_FORMAT, "consent": {"prices": prices}, "objects": objects, "products": products,
-            "discoverable": disc}
+    doc = {"schema": CATALOGUE_FORMAT, "consent": {"prices": prices}, "objects": objects, "products": products,
+           "discoverable": disc}
+    if len(placed_by_fill) >= 2:
+        fd = fill_docs or {}
+        doc["fills"] = {"default": next(iter(placed_by_fill)), "states": [
+            {"id": fid, "name_de": (fd.get(fid) or {}).get("name_de", fid).strip(),
+             "info_de": ((fd.get(fid) or {}).get("info_de") or "").strip(), "products": placed_products(pl)}
+            for fid, pl in placed_by_fill.items()]}
+    if tour_doc is not None:
+        doc["tour"] = tour_block(tour_doc, set(objects))
+    return doc
+
+
+# ----------------------------------------------------------------------------------------------- tour
+
+TOUR_FORMAT = "bh-tour-v1"
+TOUR_STOP_ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
+TOUR_MAX_STOPS = 12
+TOUR_MAX_VIA = 4
+TOUR_MAX_XZ = 5000.0          # zone frame metres: never raw UTM
+TOUR_WORDS_NOT = re.compile(r"gesund|heil|allerg|ballaststoff", re.I)   # no health claims in the tour (CLAUDE.md)
+
+
+def _sentences(t: str) -> int:
+    return len([x for x in re.split(r"(?<=[.!?])\s+", t.strip()) if x])
+
+
+def tour_block(doc: dict, object_ids: set[str]) -> dict:
+    """catalogue/tour.json -> the catalogue's `tour` block (docs/zone-contract.md „Tour“). Strict: any broken rule
+    raises (the generator fails), so the app's tolerant parser never has to drop a stop of ours."""
+    errs: list[str] = []
+    if doc.get("format") != TOUR_FORMAT:
+        errs.append(f"format must be {TOUR_FORMAT!r}")
+    name = (doc.get("name_de") or "").strip()
+    if not name or len(name) > 40:
+        errs.append("name_de: 1–40 chars")
+    stops_in = doc.get("stops") or []
+    if not 2 <= len(stops_in) <= TOUR_MAX_STOPS:
+        errs.append(f"stops: 2–{TOUR_MAX_STOPS}")
+
+    def xyz(v) -> bool:
+        return (isinstance(v, list) and len(v) == 3 and all(isinstance(c, (int, float)) and not isinstance(c, bool)
+                and math.isfinite(c) for c in v) and abs(v[0]) <= TOUR_MAX_XZ and abs(v[2]) <= TOUR_MAX_XZ)
+
+    stops, seen = [], set()
+    for i, st in enumerate(stops_in):
+        sid = st.get("id")
+        where = f"stop {i} ({sid})"
+        if not isinstance(sid, str) or not TOUR_STOP_ID.match(sid) or sid in seen:
+            errs.append(f"{where}: id a-z0-9- (≤ 40), unique")
+        seen.add(sid)
+        title, text = (st.get("title_de") or "").strip(), (st.get("text_de") or "").strip()
+        if not title or len(title) > 60:
+            errs.append(f"{where}: title_de 1–60 chars")
+        if not text or len(text) > 300 or not 1 <= _sentences(text) <= 3:
+            errs.append(f"{where}: text_de 1–3 sentences, ≤ 300 chars")
+        if TOUR_WORDS_NOT.search(title + " " + text):
+            errs.append(f"{where}: no health claims")
+        tgt = st.get("target")
+        if tgt is not None and tgt not in object_ids:
+            errs.append(f"{where}: target {tgt!r} is not a card object")
+        eye, look = st.get("eye"), st.get("look")
+        if not xyz(eye) or not xyz(look) or eye == look:
+            errs.append(f"{where}: eye and look = [x, y, z] in the zone frame, different")
+        via = st.get("via") or []
+        if len(via) > TOUR_MAX_VIA or not all(isinstance(q, list) and len(q) == 2 and xyz([q[0], 0.0, q[1]]) for q in via):
+            errs.append(f"{where}: via = ≤ {TOUR_MAX_VIA} [x, z] points")
+        out = {"id": sid, "title_de": title, "text_de": text}
+        if tgt is not None:
+            out["target"] = tgt
+        out["eye"], out["look"] = eye, look
+        if via:
+            out["via"] = via
+        stops.append(out)
+    if errs:
+        raise SystemExit("tour.json: " + "; ".join(errs))
+    return {"name_de": name, "stops": stops}
+
+
+def load_tour(path: Path = TOUR) -> dict | None:
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
 FIXTURE_OF = {"theke": "F1", "brotregal": "F2", "gitterregal": "F3", "zeitungsaufsteller": "F4", "bistrotisch-1": "F5",
@@ -399,7 +551,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-lettering", dest="lettering", action="store_false",
                     help="leave out the shop's lettering on the facade (gable text, keystone inscription, sign name)")
     ap.add_argument("--fill", default=DEFAULT_FILL, choices=sorted(q.stem for q in FILLS.glob("*.json")),
-                    help="products in the slots: morgens (default) or feierabend (empty, like the video)")
+                    help="the fill state a visit starts in: morgens (default) or feierabend (empty, like the video); "
+                         "every fill is packed")
     a = ap.parse_args(argv)
     build(a.out.resolve(), a.update_catalogue, debug_slots=a.debug_slots, lettering=a.lettering, fill=a.fill)
     return 0

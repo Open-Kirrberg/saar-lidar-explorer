@@ -8,7 +8,12 @@
  *   object by node ancestors and id prefixes), grouped while the visitor is far away.
  * - `formatPriceEur`, `saleUnitDe`, `categoryDe`, `firstSentences`: card text.
  * - `DiscoveryStore`: „entdeckt x / y“, stored on this device only (ADR 0022), every storage access guarded.
+ * - Fills (zone contract „Fills“): switchable shop states (*Morgens* / *Feierabend*): `fillShows` (which nodes are
+ *   drawn in a state) and `discoverableIn` (what counts there).
+ * - Tour (zone contract „Tour“): the optional guided tour, parsed by `tour.ts` `parseTour`.
  */
+import { parseTour } from './tour';
+import type { ZoneTour } from './tour';
 
 export const CATALOGUE_FORMAT = 'sle-zone-catalogue-v1';
 
@@ -29,12 +34,27 @@ export interface CatalogueProduct {
   sale_unit: string | null;
 }
 
+/** One switchable shop state (a product fill). */
+export interface ZoneFill {
+  id: string;
+  /** Toggle label. */
+  name_de: string;
+  /** Tooltip ('' = none). */
+  info_de: string;
+  /** Known product ids placed in this state. */
+  products: ReadonlySet<string>;
+}
+
 export interface ZoneCatalogue {
   consent: { prices: boolean };
   objects: Map<string, CatalogueObject>;
   products: Map<string, CatalogueProduct>;
-  /** What counts for „entdeckt x / y“: catalogue object ids and product ids (deduplicated, all known). */
+  /** What counts for „entdeckt x / y“: catalogue object ids and product ids (deduplicated, all known; all fills). */
   discoverable: string[];
+  /** Switchable fills (≥ 2 valid states), else null: no toggle, every node drawn. */
+  fills: { default: string; states: ZoneFill[] } | null;
+  /** The guided tour (≥ 2 valid stops), else null / missing: no tour button. */
+  tour?: ZoneTour | null;
 }
 
 /** Catalogue / slot id: lower-case segments joined by `/` (catalogue README). */
@@ -108,7 +128,48 @@ export function parseZoneCatalogue(raw: unknown, warn: (m: string) => void = () 
       discoverable.push(id);
     }
   }
-  return { consent: { prices }, objects, products, discoverable };
+  return { consent: { prices }, objects, products, discoverable, fills: parseFills(raw.fills, products, warn), tour: parseTour(raw.tour, objects, warn) };
+}
+
+const FILL_ID_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/** `fills` of the catalogue: ≥ 2 valid, unique states, else null. Unknown products are dropped. */
+function parseFills(raw: unknown, products: ReadonlyMap<string, CatalogueProduct>, warn: (m: string) => void): ZoneCatalogue['fills'] {
+  if (raw === undefined || raw === null) return null;
+  const states: ZoneFill[] = [];
+  if (isObj(raw) && Array.isArray(raw.states)) {
+    for (const r of raw.states) {
+      const id = isObj(r) && typeof r.id === 'string' && FILL_ID_RE.test(r.id) ? r.id : '';
+      const name_de = isObj(r) ? text(r.name_de, 40) : '';
+      if (!id || !name_de || states.some((s) => s.id === id)) continue;
+      const list = isObj(r) && Array.isArray(r.products) ? r.products : [];
+      const ps = new Set<string>();
+      for (const p of list) if (typeof p === 'string' && products.has(p)) ps.add(p);
+      states.push({ id, name_de, info_de: isObj(r) ? text(r.info_de, 300) : '', products: ps });
+    }
+  }
+  if (states.length < 2) {
+    warn('catalogue: fills need at least 2 valid states, no toggle');
+    return null;
+  }
+  const d = isObj(raw) ? raw.default : undefined;
+  return { default: states.some((s) => s.id === d) ? (d as string) : states[0]!.id, states };
+}
+
+/**
+ * Is a node with these extras drawn in fill state `fill`? Nodes without a `fills` list (everything but the
+ * products) are always drawn; so is everything when the catalogue has no fills (`fill` null).
+ */
+export function fillShows(fills: unknown, fill: string | null): boolean {
+  if (fill === null || !Array.isArray(fills)) return true;
+  return fills.includes(fill);
+}
+
+/** What counts for „entdeckt x / y“ in fill state `fill`: the objects + the products placed in that state. */
+export function discoverableIn(cat: Pick<ZoneCatalogue, 'discoverable' | 'fills' | 'products'>, fill: string | null): string[] {
+  const st = fill === null ? undefined : cat.fills?.states.find((s) => s.id === fill);
+  if (!st) return cat.discoverable;
+  return cat.discoverable.filter((id) => !cat.products.has(id) || st.products.has(id));
 }
 
 // ---- picking ---------------------------------------------------------------------------------------------
@@ -259,7 +320,7 @@ export const discoveryStorageKey = (zoneId: string): string => `${DISCOVERY_KEY_
 
 export class DiscoveryStore {
   private readonly ids = new Set<string>();
-  private readonly wanted: ReadonlySet<string>;
+  private wanted: ReadonlySet<string>;
   private readonly key: string;
 
   constructor(
@@ -281,6 +342,11 @@ export class DiscoveryStore {
 
   get total(): number {
     return this.wanted.size;
+  }
+
+  /** What counts from now on (a fill switch); found ids are kept and count again once they are wanted. */
+  setDiscoverable(discoverable: readonly string[]): void {
+    this.wanted = new Set(discoverable);
   }
 
   /** Found ids that still count (ids no longer discoverable stay stored but do not count). */

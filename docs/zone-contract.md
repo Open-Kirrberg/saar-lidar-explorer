@@ -167,6 +167,7 @@ A captured zone whose visible scene is **built** (generated from a measured plan
 | Evidence | `evidence.kind` stays `capture`; `perPart: "extras"` with node extras `{ id, source, sigma_m, confidence }` (`id` = catalogue row, `sigma_m` = 1-σ of position/size in metres) |
 | Node names | `<catalogue id>/<part>[/<detail>]` (the first segment and `extras.id` are catalogue ids, e.g. `theke/vitrine`, `brotregal/korpus` → `brotregal`); the collider asset uses `nav/floor`, `nav/edge` |
 | Products | one node per filled product slot, named `produkt/<slot id>`, extras `{ "id": "<slot id>", "product": "<product id>", "count": n }` (a slot or basket is one tap target). Generic shop goods (jars, cans, bottles, bags: no product card) carry `"ware": "<good id>"` instead of `product`; they are clickable through their slot's fixture id (`dosenregal/platz-03` → `dosenregal`) |
+| Fills | optional, with the catalogue's `fills` (below): product nodes carry `"fills": ["morgens"]`, the fill states that show them (a node without `fills` is always shown). All fills are packed into the one scene asset: a node that is the same in two fills is one node listing both. When two fills put different things into the same slot, the later fill's node is named `produkt/<slot id>@<fill id>` (`extras.id` stays the slot id) |
 
 #### 🏷️ `twin.catalogue` file: info cards (`sle-zone-catalogue-v1`, round 5)
 
@@ -184,7 +185,25 @@ When `twin.catalogue` is a plain relative path ending in `.json`, the runtime lo
     "kornbrot-500g": { "name_de": "Kornbrot 500g", "short_de": "…", "info_de": "…", "category": "brot",
                        "price_eur": 2.5, "sale_unit": "Laib" }     // sale_unit may be null
   },
-  "discoverable": ["kornbrot-500g", "theke", "…"]                    // what counts for „entdeckt x / y“
+  "discoverable": ["kornbrot-500g", "theke", "…"],                   // what counts for „entdeckt x / y“ (all fills)
+  "fills": {                                 // optional: switchable shop states (the bakery's Morgens / Feierabend)
+    "default": "morgens",                    // the state a visit starts in
+    "states": [
+      { "id": "morgens", "name_de": "Morgens", "info_de": "Kurz nach dem Öffnen: …",
+        "products": ["kornbrot-500g", "…"] },                       // products placed in this state
+      { "id": "feierabend", "name_de": "Feierabend", "info_de": "Nach Ladenschluss: …", "products": [] }
+    ]
+  },
+  "tour": {                                  // optional: a short guided tour (the bakery's „Kleine Führung“)
+    "name_de": "Kleine Führung",
+    "stops": [
+      { "id": "giebel", "title_de": "Das Wandbild am Giebel", "text_de": "Am Giebel hängt ein Wandbild: …",
+        "target": "fassade/wandmalerei",     // optional: an id of `objects`, highlighted at this stop
+        "eye": [-8.6, 245.0, 25.0],          // zone frame (package, unscaled): standing point; y = eye height when floating
+        "look": [-4.39, 249.4, 16.23],       // the point the camera looks at (heading and pitch follow from eye → look)
+        "via": [[-1.3, 20.9]] }              // optional: [x, z] waypoints of the glide from the previous stop
+    ]
+  }
 }
 ```
 
@@ -196,7 +215,9 @@ When `twin.catalogue` is a plain relative path ending in `.json`, the runtime lo
 | Enclosing | a target whose box is wider than 3 m both ways and taller than 1.5 m, or longer than 12 m (a room, a facade, the terrain), is never a target; its meshes still block picks. Producers should leave such rows out of `objects` anyway |
 | Glass | transparent materials neither block nor get picked (products behind display glass stay clickable) |
 | Discovery | `discoverable` ids (products by product id, objects by object id) unknown to `objects`/`products` are dropped; progress is stored on the device only (`localStorage` `sle.zones.entdeckt.v1.<zone id>`, ADR 0022), never in the package |
-| Producer | the file ships under `built/` and is listed in the built fragment's `files` (`{ "raw": "catalogue.json", "path": "built/catalogue.json" }`); the capture stage `twin` copies only relative `built/…` JSON that parses and carries the schema. `pipeline/zones.py` validates it with the package: schema, `info_de` ≤ 300, `group` = an ancestor id that is itself in `objects`, `price_eur` only with `consent.prices`, `discoverable` unique and known. The bakery's generator writes objects = built/verified public rows with `info_de` that are not `clickable: false` (the facade and the room shell are enclosing and never cards or groups: a detail grouped under them could only be picked as the facade from the floor), all products, discoverable = the placed products of the fill + rows marked `discover` (≈ 20) |
+| Producer | the file ships under `built/` and is listed in the built fragment's `files` (`{ "raw": "catalogue.json", "path": "built/catalogue.json" }`); the capture stage `twin` copies only relative `built/…` JSON that parses and carries the schema. `pipeline/zones.py` validates it with the package: schema, `info_de` ≤ 300, `group` = an ancestor id that is itself in `objects`, `price_eur` only with `consent.prices`, `discoverable` unique and known. The bakery's generator writes objects = built/verified public rows with `info_de` that are not `clickable: false` (the facade and the room shell are enclosing and never cards or groups: a detail grouped under them could only be picked as the facade from the floor), all products, discoverable = the placed products of every fill + rows marked `discover` (≈ 20), `fills` = every `products/fill/*.json` (the `--fill` one first and default), `tour` = `catalogue/tour.json` when it exists (checked by the generator: a stop with an unknown target or a broken rule fails the build) |
+| Fills | optional. A state needs an id (`a-z0-9-`, ≤ 40), `name_de` (≤ 40, the toggle's label) and `info_de` (≤ 300, the button's tooltip); `products` unknown to `products` are dropped, and so are duplicate states. With ≥ 2 valid states the runtime shows a small toggle (one button per state, German labels) and starts in `default` (else the first state); fewer → no toggle, every node shown. Switching hides every node whose `extras.fills` does not name the state (hidden nodes are not pickable, an open product card closes) without reloading the zone. *entdeckt x / y* counts, per state, the discoverable objects plus the discoverable products in that state's `products`; products found in another state stay stored and count again there. The state is not stored. Apps without fill support show the union of all fills: producers keep `discoverable` the union, and the bakery's other fill (*Feierabend*) is empty, so its union is the morning shop |
+| Tour | optional. `name_de` ≤ 40 (the start button's tooltip); 2–12 `stops`, each with a unique `id` (`a-z0-9-`, ≤ 40), `title_de` ≤ 60 and `text_de` ≤ 300 (German, *du*, 1–3 sentences), `eye` and `look` = three finite numbers in the zone frame (`|x|, |z|` ≤ 5000, never raw UTM), `eye` ≠ `look`; `target` (optional) an id of `objects`; `via` (optional, ≤ 4) `[x, z]` points the camera passes on its way in from the previous stop (and, reversed, on the way back). A stop that breaks a rule is dropped; fewer than 2 stops → no tour. The runtime shows a *Führung* button; each stop glides the camera (≈ 1–3 s) to `eye` looking at `look` — walking: `eye` x/z on the walkable floor at eye height, floating: `eye` as given — highlights `target` and shows title, text, *Zurück* / *Weiter* and *Tour beenden*. The tour never marks anything as discovered and is not stored. Apps without tour support ignore the block |
 | Card | title `name_de`; objects ≤ 3 sentences of `info_de`; products `short_de` + one sentence of `info_de`, category chip, price `1,20 €` + unit (`pro Laib`, `pro Viertel`, `ganze Torte`) |
 
 ## 🧱 Assets

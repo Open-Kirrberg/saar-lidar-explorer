@@ -42,6 +42,10 @@ cd pipeline && uv run python -I -m pytest -q ../zones/baeckerei-heusser/catalogu
 
 **3D naming:** a built object is one glTF node named by its id (`brotregal/ebene-2/brot-03`, same convention as the zone contract's node names). Picking uses that name to open the card.
 
+## Guided tour (`bh-tour-v1`)
+
+[`tour.json`](tour.json) is the visitor's *Kleine Führung*: 2–12 stops (6 today), each with an `id`, a `title_de` (≤ 60), a `text_de` (1–3 sentences in the *du* form, ≤ 300; facts only from this catalogue, the README and the products, no health claims, no people), an optional `target` (a clickable object with a card), `eye` and `look` (`[x, y, z]` in the zone frame: where the camera stands, eye height included, and what it looks at) and optional `via` (`[x, z]` waypoints of the glide in from the previous stop, e.g. around the house corner). The generator checks it (`build/build.py` `tour_block`, `build/test_tour.py`) and packs it as the catalogue's `tour` (docs/zone-contract.md „Tour“). To find a good `eye`, walk there in the app and read `sle.zones.flow.handle().debug().pose` (convert E/N to x/z).
+
 ## Product slots (`bh-slots-v1`)
 
 [`slots.json`](slots.json) lists the places where products can go (round 4). The generator writes it from the same fixture parameters it builds the geometry from (`build/run.sh --update-catalogue`; every build also writes `build/out/slots.json`). Do not edit it by hand. `check.py` validates it next to `objects.json`.

@@ -82,8 +82,10 @@ def _pretzel_hole(parts, S) -> tuple[float, float, float]:
     return float(c.x), float(z0), float(x1 - x0) / 2
 
 
-def place(sc: Scene, fill: dict, slots_doc: dict, products_doc: dict, anchors: dict | None = None) -> dict:
-    """Build every filled slot as a node `produkt/<slot id>`; returns {slot id: {item, count, triangles, max_piece}}."""
+def place(sc: Scene, fill: dict, slots_doc: dict, products_doc: dict, anchors: dict | None = None,
+          names: dict[str, str] | None = None) -> dict:
+    """Build every filled slot as a node `produkt/<slot id>` (or `names[slot id]`: a fill variant of the same slot,
+    `produkt/<slot id>@<fill>`); returns {slot id: {item, count, triangles, max_piece}}."""
     FL, S, W = _mods()
     F = sc.F
     anchors = anchors or {}
@@ -100,7 +102,7 @@ def place(sc: Scene, fill: dict, slots_doc: dict, products_doc: dict, anchors: d
         pos, cell = FL.layout(sl, it["size_m"], n, mode)
         M = slot_basis(s)
         pose = np.array([s["pose"]["x"], s["pose"]["y"], s["pose"]["z"]])
-        node = sc.node(f"produkt/{sid}", "int", sid, source="plan", sigma=0.1)
+        node = sc.node((names or {}).get(sid, f"produkt/{sid}"), "int", sid, source="plan", sigma=0.1)
         node.extras.update({"product": it["id"]} if it["kind"] == "product" else {"ware": it["id"]})
         node.extras["count"] = n
         rng = random.Random(_slot_seed(sid) * 7919 + 17)

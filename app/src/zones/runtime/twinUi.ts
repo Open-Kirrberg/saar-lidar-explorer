@@ -1,9 +1,12 @@
 /**
  * Built twins (ADR 0042): the zone HUD for clickable objects — info card, „entdeckt x / y“ counter, the small
- * „Neu entdeckt“ confirmation, a name tip next to the pointer and the crosshair under pointer lock.
+ * „Neu entdeckt“ confirmation, a name tip next to the pointer, the crosshair under pointer lock and, when the
+ * catalogue has fills, the state toggle (*Morgens* / *Feierabend*) below the counter; when it has a tour, the
+ * *Führung* button next to it and the tour panel (title, text, *Zurück* / *Weiter*, *Tour beenden*).
  * German UI (du-form), plain DOM, text only (`textContent`, never HTML from the package). Styles: zones.css.
  */
 import type { CardData } from '../catalogue';
+import type { TourAction } from '../tour';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
@@ -12,9 +15,23 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: s
   return e;
 };
 
+export interface TwinUiFill {
+  id: string;
+  name_de: string;
+  info_de: string;
+}
+
 export interface TwinUiOptions {
   /** Show the counter (the catalogue has discoverable things). */
   counter: boolean;
+  /** Fill states: a toggle with one button each when there are ≥ 2. */
+  fills?: readonly TwinUiFill[];
+  /** The state shown first. */
+  fill?: string | null;
+  onFill?(id: string): void;
+  /** The tour's name (the start button's tooltip); undefined = no tour, no button. */
+  tour?: string;
+  onTour?(action: TourAction): void;
   onClose(): void;
   onReset(): void;
 }
@@ -31,8 +48,17 @@ export class TwinUi {
   private readonly fresh: HTMLElement;
   private readonly counterBox: HTMLElement;
   private readonly counterText: HTMLElement;
+  private readonly fillBtns = new Map<string, HTMLButtonElement>();
   private readonly resetBtn: HTMLButtonElement;
   private readonly toastBox: HTMLElement;
+  private readonly tourBtn: HTMLButtonElement | null = null;
+  private readonly tourBox: HTMLElement;
+  private readonly tourCount: HTMLElement;
+  private readonly tourTitle: HTMLElement;
+  private readonly tourText: HTMLElement;
+  private readonly tourBack: HTMLButtonElement;
+  private readonly tourNext: HTMLButtonElement;
+  private tourOn = false;
   private readonly tip: HTMLElement;
   private readonly cross: HTMLElement;
   private readonly crossLabel: HTMLElement;
@@ -76,6 +102,60 @@ export class TwinUi {
     this.resetBtn.title = 'Entdeckt zurücksetzen (nur auf diesem Gerät gespeichert)';
     this.resetBtn.addEventListener('click', () => this.onResetClick());
     this.counterBox.append(this.counterText, this.resetBtn);
+    // counter, then a row with the fill toggle and the tour button, in the upper left
+    const hud = el('div', 'sle-twin-hud');
+    const row = el('div', 'sle-twin-hud-row');
+    hud.append(this.counterBox, row);
+    const fills = opts.fills ?? [];
+    if (fills.length >= 2) {
+      const box = el('div', 'sle-twin-fills');
+      box.setAttribute('role', 'group');
+      box.setAttribute('aria-label', 'Tageszeit im Laden');
+      for (const f of fills) {
+        const b = el('button', 'sle-twin-fill', f.name_de);
+        b.type = 'button';
+        b.dataset.fill = f.id;
+        if (f.info_de) b.title = f.info_de;
+        b.addEventListener('click', () => this.opts.onFill?.(f.id));
+        this.fillBtns.set(f.id, b);
+        box.append(b);
+      }
+      row.append(box);
+    }
+    if (opts.tour !== undefined) {
+      const b = el('button', 'sle-twin-tour-btn', 'Führung');
+      b.type = 'button';
+      b.title = `${opts.tour}: in ein paar Schritten durch den Laden`;
+      b.addEventListener('click', () => this.opts.onTour?.('start'));
+      this.tourBtn = b;
+      row.append(b);
+    }
+    // tour panel (bottom left; on phones a bottom sheet like the card)
+    this.tourBox = el('section', 'sle-twin-tour');
+    this.tourBox.hidden = true;
+    this.tourBox.setAttribute('role', 'region');
+    this.tourBox.setAttribute('aria-label', opts.tour ?? 'Führung');
+    this.tourCount = el('span', 'sle-twin-tour-count');
+    const end = el('button', 'sle-twin-tour-end', 'Tour beenden');
+    end.type = 'button';
+    end.title = 'Tour beenden (Esc)';
+    end.addEventListener('click', () => this.opts.onTour?.('end'));
+    const tourHead = el('div', 'sle-twin-tour-head');
+    tourHead.append(this.tourCount, end);
+    const body = el('div', 'sle-twin-tour-body');
+    body.setAttribute('aria-live', 'polite');
+    this.tourTitle = el('h2', 'sle-twin-tour-title');
+    this.tourText = el('p', 'sle-twin-tour-text');
+    body.append(this.tourTitle, this.tourText);
+    this.tourBack = el('button', 'sle-twin-tour-back', '‹ Zurück');
+    this.tourBack.type = 'button';
+    this.tourBack.addEventListener('click', () => this.opts.onTour?.('back'));
+    this.tourNext = el('button', 'sle-twin-tour-next', 'Weiter ›');
+    this.tourNext.type = 'button';
+    this.tourNext.addEventListener('click', () => this.opts.onTour?.('next'));
+    const nav = el('div', 'sle-twin-tour-nav');
+    nav.append(this.tourBack, this.tourNext);
+    this.tourBox.append(tourHead, body, nav);
     // toast, tip, crosshair
     this.toastBox = el('div', 'sle-twin-toast');
     this.toastBox.setAttribute('role', 'status');
@@ -87,8 +167,41 @@ export class TwinUi {
     this.crossLabel = el('span', 'sle-twin-cross-label');
     this.crossLabel.hidden = true;
     this.cross.append(this.crossLabel);
-    this.root.append(this.counterBox, this.cross, this.tip, this.toastBox, this.card);
+    this.root.append(hud, this.cross, this.tip, this.toastBox, this.tourBox, this.card);
     container.appendChild(this.root);
+    this.setFill(opts.fill ?? null);
+  }
+
+  /** Mark the current fill state's button. */
+  setFill(id: string | null): void {
+    for (const [k, b] of this.fillBtns) b.setAttribute('aria-pressed', String(k === id));
+  }
+
+  /** Show one tour stop (`counter` „2 / 6“; `back` enabled; `next` label „Weiter“ or „Fertig“). */
+  showTour(stop: { title: string; text: string; counter: string; back: boolean; next: string }): void {
+    this.tourCount.textContent = `Führung · ${stop.counter}`;
+    this.tourTitle.textContent = stop.title;
+    this.tourText.textContent = stop.text;
+    this.tourBack.disabled = !stop.back;
+    this.tourNext.textContent = stop.next === 'Fertig' ? 'Fertig ✓' : `${stop.next} ›`;
+    this.tourBox.hidden = false;
+    if (this.tourBtn) this.tourBtn.hidden = true;
+    // the first-time walk hint has done its job (on phones it sits over the view)
+    this.root.parentElement?.querySelector('.sle-zone-hint')?.classList.add('sle-zone-hint-off');
+    this.root.parentElement?.classList.add('sle-twin-tour-open');
+    if (!this.tourOn) {
+      this.tourBox.classList.remove('sle-twin-pop');
+      void this.tourBox.offsetWidth;
+      this.tourBox.classList.add('sle-twin-pop');
+    }
+    this.tourOn = true;
+  }
+
+  hideTour(): void {
+    this.tourOn = false;
+    this.tourBox.hidden = true;
+    if (this.tourBtn) this.tourBtn.hidden = false;
+    this.root.parentElement?.classList.remove('sle-twin-tour-open');
   }
 
   get cardKey(): string | null {

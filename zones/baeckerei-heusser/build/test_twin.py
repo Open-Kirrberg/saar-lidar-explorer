@@ -278,6 +278,7 @@ def test_products_in_the_shop(built):
         sid = name[len(B.PRODUCT_NODE):]
         e, ex = fill["slots"][sid], n["extras"]
         assert ex["id"] == sid and ex["count"] == e["count"]
+        assert ex["fills"] == [B.DEFAULT_FILL]                       # feierabend is empty: morning nodes only
         assert ("product" in ex) != ("ware" in ex)
         assert ex.get("product", ex.get("ware")) == e.get("product", e.get("ware"))
         if "product" in ex:
@@ -295,7 +296,7 @@ def test_products_rest_on_their_slots(built):
     for name, items in built["twin"].items():
         if not name.startswith(B.PRODUCT_NODE):
             continue
-        s = slots[name[len(B.PRODUCT_NODE):]]
+        s = slots[B.product_slot(name)]
         pts = np.concatenate([p.reshape(-1, 3) for _, p, _ in items])
         h, t = math.radians(s["pose"]["heading_deg"]), math.radians(s.get("tilt_deg", 0.0))
         f = np.array([math.sin(h), 0.0, -math.cos(h)])
@@ -346,9 +347,26 @@ def test_visitor_catalogue_file(built):
     assert {"raw": "catalogue.json", "path": B.CATALOGUE_PATH} in frag["files"]
 
 
-def test_fill_feierabend_is_empty(tmp_path):
+def test_catalogue_fills(built):
+    """Both fills are packed: the catalogue names the states (morgens first and default), each with its products;
+    discoverable stays the union (apps without the toggle)."""
+    cat = json.loads((built["out"] / "catalogue.json").read_text(encoding="utf-8"))
+    fills = cat["fills"]
+    assert fills["default"] == B.DEFAULT_FILL
+    states = {s["id"]: s for s in fills["states"]}
+    assert [s["id"] for s in fills["states"]][0] == B.DEFAULT_FILL and set(states) == {"morgens", "feierabend"}
+    assert states["morgens"]["name_de"] == "Morgens" and states["feierabend"]["name_de"] == "Feierabend"
+    assert states["feierabend"]["products"] == [] and all(s["info_de"] for s in states.values())
+    disc_products = [d for d in cat["discoverable"] if d in cat["products"]]
+    assert states["morgens"]["products"] == disc_products
+    assert built["report"]["fills"]["feierabend"] == {"slots": 0, "pieces": 0}
+
+
+def test_fill_feierabend_first(tmp_path):
+    """`--fill feierabend` starts the visit in the empty shop; the morning products are still packed (toggle)."""
     B.build(tmp_path, fill="feierabend")
     doc, _ = read_glb((tmp_path / "twin.glb").read_bytes())
-    assert not [n for n in doc["nodes"] if n["name"].startswith(B.PRODUCT_NODE)]
+    prods = [n for n in doc["nodes"] if n["name"].startswith(B.PRODUCT_NODE)]
+    assert prods and all(n["extras"]["fills"] == ["morgens"] for n in prods)
     cat = json.loads((tmp_path / "catalogue.json").read_text(encoding="utf-8"))
-    assert not [d for d in cat["discoverable"] if d in cat["products"]]
+    assert cat["fills"]["default"] == "feierabend" and [s["id"] for s in cat["fills"]["states"]] == ["feierabend", "morgens"]

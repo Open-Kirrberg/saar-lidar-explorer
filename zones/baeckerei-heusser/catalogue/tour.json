@@ -1,0 +1,55 @@
+{
+ "format": "bh-tour-v1",
+ "name_de": "Kleine Führung",
+ "stops": [
+  {
+   "id": "giebel",
+   "title_de": "Das Wandbild am Giebel",
+   "text_de": "Das ist das Haus der Bäckerei Heusser in der Eckstraße in Kirrberg. Am Giebel hängt ein Wandbild: ein Backofen mit Brot und zwei Brotschiebern, darunter steht „Bäckerei Heinrich Heusser seit 1933“.",
+   "target": "fassade/wandmalerei",
+   "eye": [-8.6, 245.0, 25.0],
+   "look": [-4.39, 249.4, 16.23]
+  },
+  {
+   "id": "eingang",
+   "title_de": "Schaufenster und Schlusssteine",
+   "text_de": "Über den Schaufenstern sitzen zwei Schlusssteine aus Sandstein: einer mit einer Brezel, dem alten Zeichen der Bäcker, und einer mit „H.H. 1933“. Durch die Schaufenster schaust du schon von der Straße in den Laden.",
+   "target": "fassade/schlussstein-2",
+   "eye": [11.6, 245.2, 1.5],
+   "look": [6.4, 246.0, -0.9],
+   "via": [[-1.3, 20.9]]
+  },
+  {
+   "id": "theke",
+   "title_de": "Die Verkaufstheke",
+   "text_de": "Hinter dem Glas der Theke liegen Kuchen und Teilchen, oben hängen die Brezeln am Holzständer. Hier an der Kasse bezahlst du deinen Einkauf.",
+   "target": "theke",
+   "eye": [6.0, 245.9, -0.6],
+   "look": [3.9, 245.0, -1.8]
+  },
+  {
+   "id": "brotregal",
+   "title_de": "Das Brotregal",
+   "text_de": "Hinter der Theke liegen morgens die Brote auf drei schrägen Stangenböden und die Brötchen in sechs Weidenkörben. Tippe ein Brot an: Die Karte zeigt dir Namen und Preis.",
+   "target": "brotregal",
+   "eye": [5.6, 245.9, -1.0],
+   "look": [2.3, 245.7, -1.1]
+  },
+  {
+   "id": "cafe",
+   "title_de": "Die Café-Ecke",
+   "text_de": "Am Schaufenster und in der Café-Ecke stehen zwei Bistrotische mit Stühlen, für einen Kaffee zwischendurch. Den macht der Vollautomat hinter der Theke: Er mahlt die Bohnen für jede Tasse frisch.",
+   "target": "bistrotisch-2",
+   "eye": [5.6, 245.9, -0.6],
+   "look": [5.0, 244.7, -4.6]
+  },
+  {
+   "id": "bilder",
+   "title_de": "Alte Bilder",
+   "text_de": "An der Wand hängen alte Fotos und Zeichnungen aus der Geschichte der Bäckerei, darunter ein Gruppenfoto von 1946. Im Nachbau siehst du sie nur als Rahmen. Jetzt bist du dran: Was entdeckst du noch?",
+   "target": "bilderwand",
+   "eye": [5.3, 245.9, -3.5],
+   "look": [3.23, 245.67, -4.33]
+  }
+ ]
+}
