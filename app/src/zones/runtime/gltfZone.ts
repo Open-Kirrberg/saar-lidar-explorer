@@ -24,8 +24,8 @@ import type { ZoneCatalogue } from '../catalogue';
 import type { ZoneAsset, ZoneCaptureScale } from '../contract';
 import type { ZoneHandle, ZoneModule, ZoneMountContext, ZonePose, ZoneQuality, ZoneTier } from './api';
 import { localToEN } from './collide';
-import { glideAt, lookAngles, makeGlide } from '../tour';
-import type { Glide, TourStop, XZ } from '../tour';
+import { glideAt, lookAngles, makeGlide, routeGlide, routePool, ROUTE_STEP_M } from '../tour';
+import type { Glide, PoolPoint, RouteFloor, TourStop, XZ } from '../tour';
 import { colliderPlan, firstViewWeights, LodSwitcher, referenceAssets, referenceMode, scaleAbout, sceneAssets, spawnLocal, twinFade, walkHoles, wantedLod } from './gltfPlan';
 import type { LodAction, TwinFade } from './gltfPlan';
 import { TwinInteraction } from './twinInteract';
@@ -175,6 +175,9 @@ class GltfZone implements ZoneHandle {
   readonly twin: TwinInteraction | null;
   /** Tour glide in progress: the camera follows it instead of the controls and the walker. */
   private glide: { g: Glide; t: number } | null = null;
+  /** Tour points a glide may route over (stop eyes + `via`, scaled like spawns), and checked legs. */
+  private readonly tourPool: PoolPoint[];
+  private readonly legCache = new Map<string, boolean>();
 
   constructor(
     private readonly ctx: ZoneMountContext,
@@ -210,6 +213,11 @@ class GltfZone implements ZoneHandle {
     this.refGroup.visible = false;
     this.root.add(this.refGroup);
     this.ui = this.buildUi();
+    const sc = m.capture?.scale;
+    this.tourPool = routePool(catalogue?.tour?.stops ?? []).map((p) => {
+      const q = scaleAbout([p.x, p.eyeY, p.z], sc);
+      return { ...p, x: q[0], eyeY: q[1], z: q[2] };
+    });
     this.twin = catalogue
       ? new TwinInteraction({
           renderer: ctx.renderer,
@@ -291,6 +299,8 @@ class GltfZone implements ZoneHandle {
   /**
    * Glide the camera to a tour stop (zone frame, `capture.scale` applied like spawns): walking, onto the floor under
    * the stop's eye at eye height; floating, to the eye as given. Heading and pitch look at the stop's `look`.
+   * With a walk floor the path keeps off the shell (`tour.ts` `routeGlide`): a leg through a wall — from inside the
+   * shop to the gable, from the street through the shop window — goes over the tour's points (the door) instead.
    */
   glideTo(stop: TourStop, via: readonly XZ[]): void {
     const c = this.controls;
@@ -298,14 +308,30 @@ class GltfZone implements ZoneHandle {
     const s = this.ctx.manifest.capture?.scale;
     const [x, ey, z] = scaleAbout(stop.eye, s);
     const look = scaleAbout(stop.look, s);
-    const y = this.walking && this.walker ? this.walker.settle(x, z, ey) + EYE_M : ey;
-    const to = { x, y, z, ...lookAngles([x, y, z], look) };
-    const pts = via.map(([vx, vz]): XZ => {
+    const from = c.getPose();
+    let pts = via.map(([vx, vz]): XZ => {
       const q = scaleAbout([vx, 0, vz], s);
       return [q[0], q[2]];
     });
+    const w = this.walker;
+    if (w) {
+      const floor: RouteFloor = {
+        near: (px, pz, feet) => (Number.isFinite(feet) ? w.groundAt(px, pz, feet + ROUTE_STEP_M + 0.05, ROUTE_STEP_M + 1.25) : NaN),
+        under: (px, pz, eyeY) => w.groundAt(px, pz, eyeY + 1, 6 + EYE_M),
+      };
+      const g0 = this.walking ? w.groundY : floor.under(from.x, from.z, from.y);
+      const start = { x: from.x, z: from.z, feet: Number.isFinite(g0) ? g0 : from.y - EYE_M };
+      pts = routeGlide(start, { x, z, eyeY: ey }, pts, this.tourPool, floor, EYE_M, this.legCache);
+    }
+    const y = this.walking && w ? w.settle(x, z, ey) + EYE_M : ey;
+    const to = { x, y, z, ...lookAngles([x, y, z], look) };
     this.hold.fwd = 0;
-    this.glide = { g: makeGlide(c.getPose(), to, pts), t: 0 };
+    this.glide = { g: makeGlide(from, to, pts), t: 0 };
+  }
+
+  /** Waypoints of the running glide, x / z (debug / headless checks). */
+  get glidePath(): XZ[] {
+    return this.glide ? this.glide.g.points.map((p): XZ => [p[0], p[2]]) : [];
   }
 
   /** A tour glide is running (debug / headless checks). */

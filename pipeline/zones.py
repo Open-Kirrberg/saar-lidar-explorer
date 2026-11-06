@@ -364,6 +364,75 @@ def validate_catalogue(doc) -> list[str]:
             errs.append(f"catalogue: product {k}: price_eur only with consent.prices (a number ≥ 0) or null")
     if len(set(map(str, disc))) != len(disc) or not all(isinstance(d, str) and (d in objs or d in prods) for d in disc):
         errs.append("catalogue: discoverable must list unique ids from objects or products")
+    if "fills" in doc:
+        errs += _validate_fills(doc["fills"], prods)
+    if "tour" in doc:
+        errs += _validate_tour(doc["tour"], objs)
+    return errs
+
+
+CAT_STATE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")   # fill states and tour stops
+TOUR_MAX_STOPS, TOUR_MAX_VIA, TOUR_MAX_XZ = 12, 4, 5000.0
+
+
+def _text(v, n: int) -> bool:
+    return isinstance(v, str) and 0 < len(v.strip()) and len(v) <= n
+
+
+def _validate_fills(f, prods: dict) -> list[str]:
+    """Optional `fills` (docs/zone-contract.md „Fills“): ≥ 2 unique states, `default` one of them, known products."""
+    if not isinstance(f, dict) or not isinstance(f.get("states"), list) or len(f["states"]) < 2:
+        return ["catalogue: fills needs ≥ 2 states"]
+    errs, ids = [], []
+    for i, st in enumerate(f["states"]):
+        sid = st.get("id") if isinstance(st, dict) else None
+        if not (isinstance(sid, str) and CAT_STATE_ID_RE.match(sid)) or sid in ids:
+            errs.append(f"catalogue: fills state {i}: id a-z0-9- (≤ 40), unique")
+        ids.append(sid)
+        if not isinstance(st, dict):
+            continue
+        if not _text(st.get("name_de"), 40) or not isinstance(st.get("info_de", ""), str) or len(st.get("info_de", "")) > 300:
+            errs.append(f"catalogue: fills state {sid}: name_de 1–40, info_de ≤ 300 chars")
+        ps = st.get("products")
+        if not isinstance(ps, list) or not all(isinstance(q, str) and q in prods for q in ps) or len(set(ps)) != len(ps):
+            errs.append(f"catalogue: fills state {sid}: products = unique ids from products")
+    if f.get("default") not in ids:
+        errs.append("catalogue: fills.default must name a state")
+    return errs
+
+
+def _validate_tour(t, objs: dict) -> list[str]:
+    """Optional `tour` (docs/zone-contract.md „Tour“): 2–12 stops, zone-frame eye ≠ look, known targets, ≤ 4 via."""
+    if not isinstance(t, dict) or not isinstance(t.get("stops"), list) or not 2 <= len(t["stops"]) <= TOUR_MAX_STOPS:
+        return [f"catalogue: tour needs 2–{TOUR_MAX_STOPS} stops"]
+    errs, ids = [], set()
+    if not _text(t.get("name_de"), 40):
+        errs.append("catalogue: tour.name_de 1–40 chars")
+
+    def xyz(v) -> bool:
+        return (isinstance(v, list) and len(v) == 3 and all(_num(c) for c in v)
+                and abs(v[0]) <= TOUR_MAX_XZ and abs(v[2]) <= TOUR_MAX_XZ and abs(v[1]) <= 10_000)
+
+    for i, st in enumerate(t["stops"]):
+        if not isinstance(st, dict):
+            errs.append(f"catalogue: tour stop {i}: an object")
+            continue
+        sid = st.get("id")
+        w = f"catalogue: tour stop {i} ({sid})"
+        if not (isinstance(sid, str) and CAT_STATE_ID_RE.match(sid)) or sid in ids:
+            errs.append(f"{w}: id a-z0-9- (≤ 40), unique")
+        ids.add(sid)
+        if not _text(st.get("title_de"), 60) or not _text(st.get("text_de"), 300):
+            errs.append(f"{w}: title_de 1–60, text_de 1–300 chars")
+        eye, look = st.get("eye"), st.get("look")
+        if not xyz(eye) or not xyz(look) or math.dist(eye, look) < 1e-3:
+            errs.append(f"{w}: eye and look = [x, y, z] in the zone frame (|x|, |z| ≤ 5000), different")
+        if st.get("target") is not None and st["target"] not in objs:
+            errs.append(f"{w}: target must be an id in objects")
+        via = st.get("via", [])
+        if not isinstance(via, list) or len(via) > TOUR_MAX_VIA or not all(
+                isinstance(q, list) and len(q) == 2 and xyz([q[0], 0.0, q[1]]) for q in via):
+            errs.append(f"{w}: via = ≤ {TOUR_MAX_VIA} [x, z] points in the zone frame")
     return errs
 
 

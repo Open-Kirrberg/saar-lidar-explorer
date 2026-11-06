@@ -4,6 +4,10 @@
  * - `parseTour`: tolerant parse of the catalogue's `tour` block (a broken stop is dropped; < 2 stops → no tour).
  * - `tourMove` / `tourNav`: step sequencing (start, next, back, end) and what the panel shows.
  * - `lookAngles`, `glideVia`, `makeGlide`, `glideAt`: the camera glide from wherever the visitor is to a stop.
+ * - `legClear`, `planRoute`, `routePool`: keep the glide off the shell — a leg that would cross a wall (a floor
+ *   step the visitor could not walk, or a long stretch without floor) is replaced by a route over the tour's own
+ *   points (stop eyes and `via` points, e.g. the shop door), found by a shortest path over the clear legs.
+ * - `tourFill`: the fill a stop needs (a product stop in an empty fill switches back to the default fill).
  *
  * Stop texts are package data (the bakery's `catalogue/tour.json`), never UI code. The runtime wiring is
  * `runtime/twinInteract.ts` (state, highlight), `runtime/twinUi.ts` (panel) and `runtime/gltfZone.ts` (glide).
@@ -206,4 +210,176 @@ export function glideAt(g: Glide, t: number): GlidePose {
     heading,
     pitch: g.from.pitch + (g.to.pitch - g.from.pitch) * e,
   };
+}
+
+// ---- route: keep the glide off the shell -------------------------------------------------------------------
+
+/** A route point: x / z in the zone frame and the feet height there (NaN = unknown: the first floor found). */
+export interface RoutePoint {
+  x: number;
+  z: number;
+  feet: number;
+}
+
+/** Floor height near `feet` at (x, z), or NaN (no floor: a wall, furniture, the world's edge). */
+export type FloorAt = (x: number, z: number, feet: number) => number;
+
+/** Sample spacing along a leg (m). */
+export const ROUTE_SAMPLE_M = 0.1;
+/** Largest floor step along a leg (m; the walker's step up): the shop floor 0.7 m above the street is a wall. */
+export const ROUTE_STEP_M = 0.45;
+/** Longest stretch without floor along a leg (m): furniture and a stop in front of a window are fine, a house is not. */
+export const ROUTE_GAP_M = 3;
+/** At most this many waypoints in a planned route. */
+export const ROUTE_MAX_POINTS = 8;
+
+/**
+ * Could the visitor walk the straight leg a → b? Samples every `ROUTE_SAMPLE_M`: each floor found must be within
+ * `ROUTE_STEP_M` of the last one (from `a.feet`), stretches without floor are tolerated up to `ROUTE_GAP_M`, and the
+ * last floor must match `b.feet` (when known). Pure: `floorAt` is the walker's floor probe.
+ */
+export function legClear(a: RoutePoint, b: RoutePoint, floorAt: FloorAt, step = ROUTE_STEP_M, gapMax = ROUTE_GAP_M): boolean {
+  const len = Math.hypot(b.x - a.x, b.z - a.z);
+  const n = Math.max(1, Math.ceil(len / ROUTE_SAMPLE_M));
+  const ds = len / n;
+  let feet = a.feet;
+  let gap = 0;
+  for (let i = 1; i < n; i++) {
+    const f = i / n;
+    const g = floorAt(a.x + (b.x - a.x) * f, a.z + (b.z - a.z) * f, Number.isFinite(feet) ? feet : b.feet);
+    if (!Number.isFinite(g)) {
+      gap += ds;
+      if (gap > gapMax) return false;
+      continue;
+    }
+    if (Number.isFinite(feet) && Math.abs(g - feet) > step) return false;
+    feet = g;
+    gap = 0;
+  }
+  if (gap + ds > gapMax && n > 1) return false;
+  return !(Number.isFinite(feet) && Number.isFinite(b.feet) && Math.abs(b.feet - feet) > step);
+}
+
+/**
+ * Waypoints of a glide from `start` to `goal` that stays off the shell. The authored waypoints (`preferred`, the
+ * stop's `via`) win when every leg of start → preferred → goal is `clear`; else the shortest chain of clear legs
+ * over `pool` (the tour's own points) — e.g. from inside the shop out through the door; if there is none, the
+ * preferred waypoints as before (a straight glide at worst). Pure: `clear` is `legClear` with the floor probe.
+ */
+export function planRoute(
+  start: RoutePoint,
+  goal: RoutePoint,
+  preferred: readonly RoutePoint[],
+  pool: readonly RoutePoint[],
+  clear: (a: RoutePoint, b: RoutePoint) => boolean,
+): RoutePoint[] {
+  const chain = [start, ...preferred, goal];
+  let ok = true;
+  for (let i = 1; i < chain.length && ok; i++) ok = clear(chain[i - 1]!, chain[i]!);
+  if (ok) return [...preferred];
+  // Dijkstra over start, goal and the pool (same spot twice = one node), legs checked lazily
+  const nodes: RoutePoint[] = [start, goal];
+  for (const p of [...pool, ...preferred]) {
+    if (!nodes.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 0.05)) nodes.push(p);
+  }
+  const n = nodes.length;
+  const dist = new Array<number>(n).fill(Infinity);
+  const prev = new Array<number>(n).fill(-1);
+  const done = new Array<boolean>(n).fill(false);
+  dist[0] = 0;
+  for (;;) {
+    let u = -1;
+    for (let i = 0; i < n; i++) if (!done[i] && dist[i]! < Infinity && (u < 0 || dist[i]! < dist[u]!)) u = i;
+    if (u < 0 || u === 1) break;
+    done[u] = true;
+    for (let v = 0; v < n; v++) {
+      if (done[v] || v === u) continue;
+      const d = dist[u]! + Math.hypot(nodes[v]!.x - nodes[u]!.x, nodes[v]!.z - nodes[u]!.z);
+      if (d < dist[v]! && clear(nodes[u]!, nodes[v]!)) {
+        dist[v] = d;
+        prev[v] = u;
+      }
+    }
+  }
+  if (!(dist[1]! < Infinity)) return [...preferred];
+  const path: RoutePoint[] = [];
+  for (let v = prev[1]!; v > 0; v = prev[v]!) path.unshift(nodes[v]!);
+  return path.length <= ROUTE_MAX_POINTS ? path : [...preferred];
+}
+
+/** A point a route may pass: x / z, the eye height of its stop, and whether it is the stop's eye (else a `via`). */
+export interface PoolPoint {
+  x: number;
+  z: number;
+  eyeY: number;
+  eye: boolean;
+}
+
+/** The tour's own points a route may use: every stop's eye and `via` points. */
+export function routePool(stops: readonly Pick<TourStop, 'eye' | 'via'>[]): PoolPoint[] {
+  const out: PoolPoint[] = [];
+  for (const s of stops) {
+    out.push({ x: s.eye[0], z: s.eye[2], eyeY: s.eye[1], eye: true });
+    for (const [x, z] of s.via) out.push({ x, z, eyeY: s.eye[1], eye: false });
+  }
+  return out;
+}
+
+/** The walkable floor, as the runtime's walker sees it. */
+export interface RouteFloor {
+  /** Floor within about a step of `feet` at (x, z), NaN = none. */
+  near(x: number, z: number, feet: number): number;
+  /** Floor under an eye at `eyeY` (like a spawn settles), NaN = none. */
+  under(x: number, z: number, eyeY: number): number;
+}
+
+/**
+ * The glide's waypoints from the visitor (`start`, feet known) to a stop (`goal`, its eye) given the authored `via`:
+ * `planRoute` over the tour's `pool` with `legClear` on `floor`. Stops without floor under them (in front of a
+ * window) stand at `eyeY − eyeM`. `cache` keeps leg results between calls (the floor does not change).
+ */
+export function routeGlide(
+  start: RoutePoint,
+  goal: { x: number; z: number; eyeY: number },
+  via: readonly XZ[],
+  pool: readonly PoolPoint[],
+  floor: RouteFloor,
+  eyeM: number,
+  cache?: Map<string, boolean>,
+): XZ[] {
+  const at = (x: number, z: number, eyeY: number, eye: boolean): RoutePoint => {
+    const g = floor.under(x, z, eyeY);
+    return { x, z, feet: Number.isFinite(g) ? g : eye ? eyeY - eyeM : NaN };
+  };
+  const end = at(goal.x, goal.z, goal.eyeY, true);
+  const pre = via.map(([x, z]) => at(x, z, goal.eyeY, false));
+  const pts = pool.map((p) => at(p.x, p.z, p.eyeY, p.eye));
+  const key = (p: RoutePoint) => `${p.x.toFixed(2)},${p.z.toFixed(2)},${p.feet.toFixed(2)}`;
+  const clear = (a: RoutePoint, b: RoutePoint): boolean => {
+    if (!cache || a === start || b === start) return legClear(a, b, floor.near);
+    const k = `${key(a)}>${key(b)}`;
+    let v = cache.get(k);
+    if (v === undefined) cache.set(k, (v = legClear(a, b, floor.near)));
+    return v;
+  };
+  return planRoute(start, end, pre, pts, clear).map((p): XZ => [p.x, p.z]);
+}
+
+// ---- fills ------------------------------------------------------------------------------------------------
+
+/**
+ * The fill to switch to when the tour reaches a stop (null: stay). A *product stop* — its `target` holds product
+ * slots (`slots`: the fill nodes, slot id + the fills that show it) — shown in a fill where none of them is placed
+ * (the empty *Feierabend* shop) switches to `def`, the default fill, so „Brot anklicken“ can be followed.
+ */
+export function tourFill(
+  target: string | null,
+  slots: readonly { id: string; fills: readonly string[] }[],
+  current: string | null,
+  def: string | null,
+): string | null {
+  if (!target || current === null || def === null || current === def) return null;
+  const mine = slots.filter((s) => s.id === target || s.id.startsWith(`${target}/`));
+  if (!mine.length || mine.some((s) => s.fills.includes(current))) return null;
+  return mine.some((s) => s.fills.includes(def)) ? def : null;
 }

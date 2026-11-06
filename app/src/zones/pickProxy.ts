@@ -5,7 +5,9 @@
  * A small product (box ≤ `PROXY_SMALL_M`) gets a proxy box grown, per axis, to at least the pick radius at its
  * distance (`radius px` → an angle → metres), capped at `PROXY_MAX_HALF_M`. When the exact ray hits nothing, an
  * occluder or a larger target (the bread wall's frame), the proxy the ray passes through closest to its centre
- * wins, as long as it is not behind that first surface by more than `PROXY_DEPTH_SLACK_M` (no picks through walls).
+ * wins, as long as it is not behind that first surface. Only when that surface is a clickable target itself (the
+ * bread wall's frame, a shelf bar a loaf rests on) may the proxy lie up to `PROXY_DEPTH_SLACK_M` behind it; behind
+ * an occluder (a wall, the floor, the facade) there is no slack, so a thin wall never lets a pick through.
  * An exact hit on a small product always wins.
  */
 
@@ -18,8 +20,11 @@ export const PROXY_PX_MOUSE = 8;
 export const PROXY_SMALL_M = 0.45;
 /** A proxy never grows beyond this half size (m): neighbours on a shelf stay apart. */
 export const PROXY_MAX_HALF_M = 0.16;
-/** How far behind the first surface a proxy may still be hit (m): a product resting on or behind a shelf bar. */
+/** How far behind the first surface a proxy may still be hit (m) when that surface is a target: a product resting on or behind a shelf bar. */
 export const PROXY_DEPTH_SLACK_M = 0.3;
+
+/** Depth slack behind the first real surface: only a clickable target (index ≥ 0) gets any; an occluder (−1) or nothing gets none. */
+export const proxySlack = (firstHitTarget: number): number => (firstHitTarget >= 0 ? PROXY_DEPTH_SLACK_M : 0);
 
 export const isSmallBox = (size: V3): boolean => Math.max(size[0], size[1], size[2]) <= PROXY_SMALL_M;
 
@@ -62,15 +67,23 @@ export interface ProxyBox {
 
 /**
  * The proxy picked by the ray (origin `o`, unit direction `d`), or −1. `limit` = distance of the first real surface
- * (Infinity: none) — proxies entered farther than `limit + PROXY_DEPTH_SLACK_M` or than `far` are ignored. Among
- * the proxies hit, the one whose centre lies closest to the ray (by angle) wins.
+ * (Infinity: none) — proxies entered farther than `limit + slack` or than `far` are ignored (`slack`: `proxySlack`,
+ * 0 behind an occluder). Among the proxies hit, the one whose centre lies closest to the ray (by angle) wins.
  */
-export function chooseProxy(o: V3, d: V3, boxes: readonly ProxyBox[], angle: number, limit: number, far: number): { index: number; distance: number } {
+export function chooseProxy(
+  o: V3,
+  d: V3,
+  boxes: readonly ProxyBox[],
+  angle: number,
+  limit: number,
+  far: number,
+  slack = PROXY_DEPTH_SLACK_M,
+): { index: number; distance: number } {
   let best = -1;
   let bestScore = Infinity;
   let bestT = 0;
   if (!(angle > 0)) return { index: -1, distance: 0 };
-  const maxT = Math.min(far, limit + PROXY_DEPTH_SLACK_M);
+  const maxT = Math.min(far, limit + Math.max(0, slack));
   for (let i = 0; i < boxes.length; i++) {
     const { c, h } = boxes[i]!;
     const vx = c[0] - o[0];

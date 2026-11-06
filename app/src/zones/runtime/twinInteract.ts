@@ -15,7 +15,9 @@
  *
  * Tour (catalogue `tour`): *Führung* starts a short guided tour. Each stop asks the host to glide the camera there
  * (`glideTo`), highlights the stop's object and shows its text; *Zurück* / *Weiter* / *Tour beenden*, Esc ends it.
- * Walking and tapping stay possible during the tour; nothing is marked as discovered by the tour itself.
+ * Walking and tapping stay possible during the tour; nothing is marked as discovered by the tour itself. A stop at
+ * products (the bread wall, the counter) reached in an empty fill (*Feierabend*) switches back to the default fill
+ * first, with the usual toast, so its „klick oder tipp ein Brot an“ can be followed (`tourFill`).
  *
  * Small products have pick proxies (`../pickProxy.ts`): ≈ 44 px on touch, a little help for the mouse.
  */
@@ -27,7 +29,7 @@ import { modalOpen } from '../../ui/modalKeys';
 import { cardFor, discoverableIn, DiscoveryStore, fillShows } from '../catalogue';
 import type { CardData, DiscoveryKV, PickTarget, ZoneCatalogue } from '../catalogue';
 import { pickAngle, PROXY_PX_MOUSE, PROXY_PX_TOUCH } from '../pickProxy';
-import { glideVia, tourMove, tourNav } from '../tour';
+import { glideVia, tourFill, tourMove, tourNav } from '../tour';
 import type { TourAction, TourStop, XZ } from '../tour';
 import { TwinHighlight, TwinTargets } from './twinPick';
 import type { PickHit } from './twinPick';
@@ -74,6 +76,8 @@ export class TwinInteraction {
   private fillId: string | null;
   /** Current tour stop (null: no tour running). */
   private tourIdx: number | null = null;
+  /** Product slots of the drawn twin and the fills that show them (`tourFill`), collected on first use. */
+  private fillSlots: { id: string; fills: string[] }[] | null = null;
 
   constructor(private readonly o: TwinInteractionOptions) {
     this.fillId = o.catalogue.fills?.default ?? null;
@@ -135,6 +139,9 @@ export class TwinInteraction {
       const st = stops[to]!;
       const nav = tourNav(to, stops.length);
       if (this.ui.cardKey) this.close();
+      // a product stop in the empty shop: back to the default fill (toast „Jetzt im Laden: …“)
+      const fill = tourFill(st.target, this.slots(), this.fillId, this.o.catalogue.fills?.default ?? null);
+      if (fill) this.setFill(fill);
       this.ui.showTour({ title: st.title_de, text: st.text_de, counter: nav.counter, back: nav.back, next: nav.next });
       if (to !== from) this.o.glideTo?.(st, glideVia(from, to, stops));
     }
@@ -299,6 +306,21 @@ export class TwinInteraction {
       const fills = (n.userData as { fills?: unknown }).fills;
       if (fills !== undefined) n.visible = fillShows(fills, f);
     });
+  }
+
+  /** Every fill node under the root (also hidden ones): slot id + the fills that show it. */
+  private slots(): { id: string; fills: string[] }[] {
+    if (!this.fillSlots) {
+      const out: { id: string; fills: string[] }[] = [];
+      this.o.root.traverse((n) => {
+        const u = n.userData as { id?: unknown; fills?: unknown };
+        if (typeof u.id === 'string' && Array.isArray(u.fills)) out.push({ id: u.id, fills: u.fills.filter((f): f is string => typeof f === 'string') });
+      });
+      // LOD switches add nodes later: only keep the list once it found something
+      if (!out.length) return out;
+      this.fillSlots = out;
+    }
+    return this.fillSlots;
   }
 
   /** Pick through `ndc` with a pick radius of `px` CSS px (small products' proxies, 0 = exact only). */

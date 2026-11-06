@@ -333,6 +333,30 @@ describe('twin picking (merged BVH)', () => {
     expect(t.pick(rayTo(new Vector3(1.5, 1.6, 0), new Vector3(1.5, 0, -1)))).toBeNull();
     expect(t.pick(rayTo(new Vector3(0, 1.6, 0), new Vector3(0, 0.5, -2.7)), 1)).toBeNull();
   });
+  it('pick proxies: never through a thin wall, but behind a shelf bar the loaf a little deeper still counts', () => {
+    // a 10 cm wall (no catalogue id: an occluder) 15 cm in front of a small loaf; a near miss of the loaf with a
+    // finger radius must not pick it through the wall
+    const build = (bar: boolean) => {
+      const root = new Group();
+      const add = (id: Record<string, unknown>, w: number, h: number, d: number, x: number, y: number, z: number) => {
+        const m = new Mesh(new BoxGeometry(w, h, d), new MeshBasicMaterial());
+        m.position.set(x, y, z);
+        m.userData = id;
+        root.add(m);
+      };
+      add(bar ? { id: 'regal/korb-1' } : { id: 'zwischenwand' }, 0.6, 0.6, 0.1, 0, 1.2, -2.6);
+      add({ id: 'regal/korb-1/platz-01', product: 'testbrot', count: 1 }, 0.2, 0.15, 0.2, 0, 1.2, -2.9);
+      root.updateMatrixWorld(true);
+      const tt = new TwinTargets(cat());
+      tt.index(root);
+      return tt;
+    };
+    const ray = rayTo(new Vector3(0, 1.2, 0), new Vector3(0.12, 1.2, -2.9)); // misses the loaf, hits the wall
+    const angle = (3 * Math.PI) / 180;
+    expect(build(false).pick(ray, 30, angle)).toBeNull();
+    expect(build(true).pick(ray, 30, angle)!.target.key).toBe('regal/korb-1/platz-01');
+  });
+
   it('look(): a group highlights all its members', () => {
     expect(t.look({ kind: 'object', key: 'theke' })!.meshes).toContain(s.sockel);
     expect(t.look({ kind: 'object', key: 'theke/vitrine' })!.meshes).toEqual([s.vitMesh]);

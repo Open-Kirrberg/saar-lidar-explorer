@@ -10,7 +10,7 @@ Explore your home area like a game: fly or walk over the **real** Kirrberg, Homb
 | Layer | What | ADR |
 |---|---|---|
 | 🌍 **Overworld** | The land today (2025): streamed LiDAR terrain, aerial-photo ground, one real tree per CHM crown, LoD2 houses, OSM paths; game minimap with the player and view cone | [0015](docs/adr/0015-overworld-zones-portals.md) [0017](docs/adr/0017-real-trees-from-chm.md) |
-| 🏰 **Zones** | Detailed places behind a portal and a loading screen: Schloss Karlsberg **1789** (reconstructed), Bäckerei Heusser (captured from video) | [0016](docs/adr/0016-zone-kinds-zone-contract.md) |
+| 🏰 **Zones** | Detailed places behind a portal and a loading screen: Schloss Karlsberg **1789** (reconstructed), Bäckerei Heusser (built twin: clickable shop and products, *Morgens* / *Feierabend*, a short guided tour) | [0016](docs/adr/0016-zone-kinds-zone-contract.md) [0042](docs/adr/0042-baeckerei-heusser-built-twin.md) [0046](docs/adr/0046-built-twin-tour-fills-routes.md) |
 | 🔍 **Relikt-Blick** | A lens that fades the trees, shows the relief and makes candidates glow | [0018](docs/adr/0018-game-look-relikt-blick-lens.md) |
 
 **Focus area** (no expansion before v5, [0014](docs/adr/0014-audience-scope-devices.md)): Schloss Karlsberg (≈ 49.335 N, 7.379 E, straddles SL/RLP) · Kirrberg incl. Merburg · Homburg incl. Schlossberg.

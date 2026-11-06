@@ -15,10 +15,25 @@ import {
   PROXY_MAX_HALF_M,
   PROXY_PX_TOUCH,
   proxyHalf,
+  proxySlack,
   rayBoxEnter,
 } from '../src/zones/pickProxy';
-import { glideAt, glideVia, headingDelta, lookAngles, makeGlide, parseTour, tourMove, tourNav } from '../src/zones/tour';
-import type { GlidePose } from '../src/zones/tour';
+import {
+  glideAt,
+  glideVia,
+  headingDelta,
+  legClear,
+  lookAngles,
+  makeGlide,
+  parseTour,
+  planRoute,
+  routeGlide,
+  routePool,
+  tourFill,
+  tourMove,
+  tourNav,
+} from '../src/zones/tour';
+import type { FloorAt, GlidePose, RouteFloor, RoutePoint } from '../src/zones/tour';
 
 const objects = new Set(['fassade/wandmalerei', 'theke', 'brotregal']);
 const stop = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -239,9 +254,120 @@ describe('pick proxies', () => {
     expect(chooseProxy([0, 0, 0], dir(0.12, 0), loaves, a, 3.7 - 0.11 - PROXY_DEPTH_SLACK_M + 0.05, 30).index).toBe(1);
   });
 
+  it('behind an occluder no depth slack: a loaf 15 cm behind a thin wall is not picked through it', () => {
+    expect(proxySlack(-1)).toBe(0);
+    expect(proxySlack(3)).toBe(PROXY_DEPTH_SLACK_M);
+    // the wall's face 0.2 m in front of the loaf's front face (inside the 0.3 m slack)
+    const wall = 3.7 - 0.11 - 0.2;
+    expect(chooseProxy([0, 0, 0], dir(0.12, 0), loaves, a, wall, 30).index).toBe(1); // default: behind a shelf bar
+    expect(chooseProxy([0, 0, 0], dir(0.12, 0), loaves, a, wall, 30, proxySlack(-1)).index).toBe(-1);
+    expect(chooseProxy([0, 0, 0], dir(0.12, 0), loaves, a, wall, 30, proxySlack(0)).index).toBe(1);
+    // in front of the wall the proxy still wins without slack
+    expect(chooseProxy([0, 0, 0], dir(0.12, 0), loaves, a, 3.9, 30, proxySlack(-1)).index).toBe(1);
+  });
+
   it('between two proxies the closer centre wins', () => {
     expect(chooseProxy([0, 0, 0], dir(0.01, 0), loaves, a, Infinity, 30).index).toBe(1);
     expect(chooseProxy([0, 0, 0], dir(-0.01, 0), loaves, a, Infinity, 30).index).toBe(0);
+  });
+});
+
+/**
+ * A synthetic shop: floor 0.75 m above the street (x 0…3.7, z −4…0), walls 0.3 m thick without floor on the street
+ * front (x 3.7…4) and the south side (z 0…0.3), a door in the front at z −2.5…−1.5 with a 1 m ramp of steps down
+ * to the street (x 4…5), a house without floor at z 3…8 on the street.
+ */
+const shopFloor: FloorAt = (x, z) => {
+  const door = z >= -2.5 && z <= -1.5;
+  if (x < 3.7 && z >= -4 && z < 0 && x >= 0) return 0.75;
+  if (x >= 3.7 && x < 4 && z <= 0.3) return door ? 0.75 : NaN;
+  if (x < 4 && z >= 0 && z <= 0.3) return NaN;
+  if (x >= 4 && x <= 5 && door) return Math.round(4 * 0.75 * (5 - x)) / 4; // 4 risers ≤ 0.19 m
+  if (z >= 3 && z <= 8) return NaN;
+  if (x < 0) return NaN;
+  return 0;
+};
+const rp = (x: number, z: number, feet: number): RoutePoint => ({ x, z, feet });
+const clearOn = (a: RoutePoint, b: RoutePoint) => legClear(a, b, shopFloor);
+
+describe('tour: routes keep off the shell', () => {
+  it('a leg is clear on one floor, over steps and short gaps; not through a wall or a house', () => {
+    expect(clearOn(rp(1, -1, 0.75), rp(3, -3, 0.75))).toBe(true);
+    expect(clearOn(rp(2, -2, 0.75), rp(6, -2, 0))).toBe(true); // through the door, down the steps
+    expect(clearOn(rp(2, -1, 0.75), rp(6, -1, 0))).toBe(false); // through the shop front
+    expect(clearOn(rp(6, -1, 0), rp(2, -1, 0.75))).toBe(false); // and back in
+    expect(clearOn(rp(6, 1, 0), rp(6, 10, 0))).toBe(false); // 5 m without floor: a house
+    expect(clearOn(rp(6, 1, 0), rp(6, 2.9, 0))).toBe(true);
+    // a stop in front of the window (no floor under it, feet from its eye) is reached from inside, not from outside
+    expect(clearOn(rp(2, -0.5, 0.75), rp(3.8, -0.5, 0.75))).toBe(true);
+    expect(clearOn(rp(6, -0.5, 0), rp(3.8, -0.5, 0.75))).toBe(false);
+  });
+
+  const doorIn = rp(3.4, -2, 0.75);
+  const doorOut = rp(5.5, -2, 0);
+  const inside = rp(1, -3.8, 0.75); // the straight line to the foot of the steps would clip the wall beside the door
+  const street = rp(7, 2, 0);
+
+  it('from inside to the street: through the door (pool), not through the wall', () => {
+    expect(planRoute(inside, street, [], [rp(2, -1, 0.75), doorOut, doorIn, rp(9, 9, 0)], clearOn)).toEqual([doorIn, doorOut]);
+    // and the way in again
+    expect(planRoute(street, inside, [], [doorIn, doorOut], clearOn)).toEqual([doorOut, doorIn]);
+  });
+
+  it('authored via wins when it is clear; a clear straight leg needs no detour', () => {
+    const via = [rp(6, -2, 0), rp(3, -2, 0.75)];
+    expect(planRoute(street, inside, via, [doorIn, doorOut], clearOn)).toEqual(via);
+    expect(planRoute(rp(1, -1, 0.75), inside, [], [doorIn, doorOut], clearOn)).toEqual([]);
+  });
+
+  it('no clear route: the authored via as before (a straight glide at worst)', () => {
+    expect(planRoute(inside, street, [], [rp(2, -1, 0.75)], clearOn)).toEqual([]);
+    const via = [rp(6, 1, 0)];
+    expect(planRoute(inside, street, via, [], clearOn)).toEqual(via);
+  });
+
+  it('routeGlide: feet from the floor, stops without floor stand at eye height − 1.6 m, legs cached', () => {
+    const floor: RouteFloor = { near: shopFloor, under: (x, z) => shopFloor(x, z, 0) };
+    const stops = [
+      { eye: [7, 1.6, 2] as const, via: [] },
+      { eye: [2, 2.35, -1] as const, via: [[5.5, -2], [3.4, -2]] as [number, number][] },
+      { eye: [3.8, 2.35, -0.5] as const, via: [] }, // in front of the window, in the wall band
+    ];
+    const pool = routePool(stops);
+    expect(pool.map((p) => p.eye)).toEqual([true, true, false, false, true]);
+    const cache = new Map<string, boolean>();
+    // from inside to the street stop: out through the door
+    expect(routeGlide(inside, { x: 7, z: 2, eyeY: 1.6 }, [], pool, floor, 1.6, cache)).toEqual([
+      [3.4, -2],
+      [5.5, -2],
+    ]);
+    expect(cache.size).toBeGreaterThan(0);
+    // from the street to the window stop: in through the door and the shop, not through the glass
+    const r = routeGlide(street, { x: 3.8, z: -0.5, eyeY: 2.35 }, [], pool, floor, 1.6, cache);
+    expect(r.slice(0, 2)).toEqual([
+      [5.5, -2],
+      [3.4, -2],
+    ]);
+  });
+});
+
+describe('tour: a product stop needs a filled shop', () => {
+  const slots = [
+    { id: 'brotregal/ebene-1/platz-01', fills: ['morgens'] },
+    { id: 'theke/auslage/platz-02', fills: ['morgens'] },
+    { id: 'theke/auslage/platz-02', fills: ['abends'] },
+  ];
+  it('the bread wall in the empty Feierabend shop switches to the default fill', () => {
+    expect(tourFill('brotregal', slots, 'feierabend', 'morgens')).toBe('morgens');
+    expect(tourFill('brotregal', slots, 'morgens', 'morgens')).toBeNull();
+  });
+  it('stays: no products at the stop, some placed now, no target, no fills', () => {
+    expect(tourFill('bilderwand', slots, 'feierabend', 'morgens')).toBeNull();
+    expect(tourFill('theke', slots, 'abends', 'morgens')).toBeNull();
+    expect(tourFill('brot', slots, 'feierabend', 'morgens')).toBeNull(); // a prefix of an id is not its parent
+    expect(tourFill(null, slots, 'feierabend', 'morgens')).toBeNull();
+    expect(tourFill('brotregal', slots, null, null)).toBeNull();
+    expect(tourFill('brotregal', [{ id: 'brotregal/x', fills: ['abends'] }], 'feierabend', 'morgens')).toBeNull();
   });
 });
 
@@ -256,5 +382,49 @@ describe.skipIf(!existsSync(pkg))('the bakery tour (local package)', () => {
     expect(c.tour.stops[0]!.target).toBe('fassade/wandmalerei');
     expect(c.tour.stops.at(-1)!.target).toBe('bilderwand');
     for (const s of c.tour.stops) expect(s.target && c.objects.has(s.target)).toBeTruthy();
+  });
+});
+
+// The bakery's nav floor (built package) + the tour source: from inside the shop the glide leaves through the door.
+const base = join(import.meta.dirname, '../public/data/zones/baeckerei-heusser/');
+const tourSrc = join(import.meta.dirname, '../../zones/baeckerei-heusser/catalogue/tour.json');
+describe.skipIf(!existsSync(join(base, 'built/nav.glb')) || !existsSync(tourSrc))('the bakery tour route (local package)', () => {
+  it('inside → gable mural through the door; street → counter through the door, never the shop window', async () => {
+    const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+    const { MeshoptDecoder } = await import('three/examples/jsm/libs/meshopt_decoder.module.js');
+    const { buildCollider, EYE_M, Walker } = await import('../src/zones/runtime/walk');
+    const buf = readFileSync(join(base, 'built/nav.glb'));
+    const g = await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, '');
+    g.scene.updateMatrixWorld(true);
+    const w = new Walker(buildCollider(g.scene)!, 0, undefined, 'block');
+    const floor: RouteFloor = {
+      near: (x, z, feet) => (Number.isFinite(feet) ? w.groundAt(x, z, feet + 0.5, 1.7) : NaN),
+      under: (x, z, eyeY) => w.groundAt(x, z, eyeY + 1, 6 + EYE_M),
+    };
+    const tour = parseTour(JSON.parse(readFileSync(tourSrc, 'utf8')), { has: () => true })!;
+    const pool = routePool(tour.stops);
+    const stop = (id: string) => tour.stops.find((s) => s.id === id)!;
+    const clear = (a: RoutePoint, b: RoutePoint) => legClear(a, b, floor.near);
+    const pt = (x: number, z: number, eyeY: number): RoutePoint => ({ x, z, feet: Number.isFinite(floor.under(x, z, eyeY)) ? floor.under(x, z, eyeY) : eyeY - EYE_M });
+    // standing at the old pictures (inside, shop floor ≈ 244.25), Führung → the gable: straight is through the wall
+    const pics = stop('bilder');
+    const start = pt(pics.eye[0], pics.eye[2], pics.eye[1]);
+    expect(start.feet).toBeGreaterThan(244);
+    const gable = stop('giebel');
+    expect(clear(start, pt(gable.eye[0], gable.eye[2], gable.eye[1]))).toBe(false);
+    const r = routeGlide(start, { x: gable.eye[0], z: gable.eye[2], eyeY: gable.eye[1] }, [], pool, floor, EYE_M);
+    expect(r.length).toBeGreaterThanOrEqual(2);
+    // out through the door: the first waypoint is the foot of the steps (the counter stop's via, outside)
+    const theke = stop('theke');
+    expect(r[0]).toEqual(theke.via[0]);
+    // every leg of the route is walkable
+    const chain = [start, ...r.map(([x, z]) => pt(x, z, start.feet + EYE_M)), pt(gable.eye[0], gable.eye[2], gable.eye[1])];
+    for (let i = 1; i < chain.length; i++) expect(clear(chain[i - 1]!, chain[i]!)).toBe(true);
+    // stop 2 → 3 (street → counter): the authored door via is clear, the straight leg through the window is not
+    const ein = stop('eingang');
+    const a = pt(ein.eye[0], ein.eye[2], ein.eye[1]);
+    const b = pt(theke.eye[0], theke.eye[2], theke.eye[1]);
+    expect(clear(a, b)).toBe(false);
+    expect(routeGlide(a, { x: theke.eye[0], z: theke.eye[2], eyeY: theke.eye[1] }, glideVia(1, 2, tour.stops), pool, floor, EYE_M)).toEqual(theke.via);
   });
 });

@@ -22,7 +22,7 @@ import { discoveryId, groupTarget, isEnclosing, resolveTarget } from '../catalog
 import type { NodeExtras, PickTarget, ZoneCatalogue } from '../catalogue';
 import { FRAME_GAP_M, FRAME_LIFT_M, flatPanel, frameRing, frameWidth } from '../flatFrame';
 import type { P3 } from '../flatFrame';
-import { chooseProxy, isSmallBox } from '../pickProxy';
+import { chooseProxy, isSmallBox, proxySlack } from '../pickProxy';
 import type { ProxyBox } from '../pickProxy';
 
 /** `messing` #C29A4B mixed 30 % towards white (style.md: lighter by 30 %), sRGB. */
@@ -160,7 +160,8 @@ export class TwinTargets {
   /**
    * Nearest clickable target along `ray` (zone frame, unit direction), or null (nothing, an occluder, or too far).
    * `angle` (rad, `pickAngle`) = the pick radius: a ray that misses but passes that close to a small product, in
-   * front of what it does hit, picks the product (an exact product hit always wins).
+   * front of what it does hit, picks the product (an exact product hit always wins). Behind a clickable target (a
+   * shelf bar) the proxy may lie a little deeper (`proxySlack`), behind an occluder (a wall) not at all.
    */
   pick(ray: Ray, far = PICK_FAR_M, angle = 0): PickHit | null {
     if (!this.bvh) return null;
@@ -170,7 +171,8 @@ export class TwinTargets {
     if (exact?.target.kind !== 'product' && angle > 0 && this.proxies.length) {
       const o = ray.origin;
       const d = ray.direction;
-      const p = chooseProxy([o.x, o.y, o.z], [d.x, d.y, d.z], this.proxies, angle, hit ? hit.distance : Infinity, far);
+      // behind a wall (an occluder, t = −1) no depth slack: a thin wall never lets a pick through
+      const p = chooseProxy([o.x, o.y, o.z], [d.x, d.y, d.z], this.proxies, angle, hit ? hit.distance : Infinity, far, proxySlack(t));
       if (p.index >= 0) return { target: this.entries[this.proxyOf[p.index]!]!.target, distance: p.distance };
     }
     if (!exact || !hit) return null;

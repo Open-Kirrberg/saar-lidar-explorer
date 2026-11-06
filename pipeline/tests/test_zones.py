@@ -173,3 +173,48 @@ def test_twin_catalogue_file():
     c["discoverable"].append("unbekannt")
     assert any("discoverable" in e for e in Z.validate_catalogue(c))
     assert Z.validate_catalogue({"objects": {}})[0].startswith("catalogue: schema")
+
+
+def _with_fills_and_tour() -> dict:
+    c = _catalogue()
+    c["fills"] = {"default": "morgens", "states": [
+        {"id": "morgens", "name_de": "Morgens", "info_de": "Kurz nach dem Öffnen.", "products": ["brezel"]},
+        {"id": "feierabend", "name_de": "Feierabend", "info_de": "Nach Ladenschluss.", "products": []}]}
+    c["tour"] = {"name_de": "Kleine Führung", "stops": [
+        {"id": "theke", "title_de": "Die Theke", "text_de": "Hier wird bedient.", "target": "theke",
+         "eye": [6.0, 245.9, -0.6], "look": [3.9, 245.0, -1.8], "via": [[8.4, -4.15], [6.1, -4.15]]},
+        {"id": "kasse", "title_de": "Die Kasse", "text_de": "Hier bezahlst du.", "eye": [5.6, 245.9, -1.0],
+         "look": [2.3, 245.7, -1.1]}]}
+    return c
+
+
+def test_catalogue_fills_and_tour_blocks():
+    assert Z.validate_catalogue(_with_fills_and_tour()) == []
+    c = _with_fills_and_tour()
+    c["tour"]["stops"][1]["target"] = None                                    # no highlight: fine
+    assert Z.validate_catalogue(c) == []
+
+
+@pytest.mark.parametrize("patch, msg", [
+    (lambda c: c["fills"]["states"].pop(), "fills needs"),
+    (lambda c: c["fills"].update(default="mittags"), "fills.default"),
+    (lambda c: c["fills"]["states"][1].update(id="morgens"), "unique"),
+    (lambda c: c["fills"]["states"][0].update(id="Morgens!"), "a-z0-9-"),
+    (lambda c: c["fills"]["states"][0]["products"].append("unbekannt"), "products = unique ids"),
+    (lambda c: c["fills"]["states"][0].update(name_de=""), "name_de 1–40"),
+    (lambda c: c.update(fills=[]), "fills needs"),
+    (lambda c: c["tour"].update(stops=c["tour"]["stops"][:1]), "tour needs 2–12"),
+    (lambda c: c["tour"].update(name_de=""), "tour.name_de"),
+    (lambda c: c["tour"]["stops"][1].update(id="theke"), "unique"),
+    (lambda c: c["tour"]["stops"][0].update(target="hinterhof"), "target"),
+    (lambda c: c["tour"]["stops"][0].update(eye=[381467.0, 245.0, -5462254.0]), "zone frame"),
+    (lambda c: c["tour"]["stops"][0].update(look=[6.0, 245.9, -0.6]), "different"),
+    (lambda c: c["tour"]["stops"][0].update(via=[[0, 0]] * 5), "via"),
+    (lambda c: c["tour"]["stops"][0].update(via=[[0, 0, 0]]), "via"),
+    (lambda c: c["tour"]["stops"][0].update(text_de="x" * 301), "text_de"),
+])
+def test_broken_fills_and_tour_blocks(patch, msg):
+    c = _with_fills_and_tour()
+    patch(c)
+    errs = Z.validate_catalogue(c)
+    assert any(msg in e for e in errs), errs
