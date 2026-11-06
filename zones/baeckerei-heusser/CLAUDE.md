@@ -37,3 +37,4 @@ Zone frame from the [zone contract](../../docs/zone-contract.md): EPSG:25832, `x
 - Visible changes need a headless browser check with screenshots in the git-ignored `docs/shots/baeckerei-heusser/` (repo root). Use a free port (check `lsof`), drive frames with `window.sle.step(n)`, and stop the server afterwards.
 - Another session may work in `zones/schloss-karlsberg/`. Don't touch it.
 - Shipped item = one line in `../../CHANGELOG.md`. A decision = a new ADR in `../../docs/adr/`.
+- Release (the twin is public since 2026-11-06): `bh-datenschutz` checklist, then `scripts/release/export-data.sh --zones-only` and commit only `zones/` in the data staging repo; push data before code. Never run the full data export from this checkout ([RELEASING.md](../../scripts/release/RELEASING.md) §2). Pushing is the lead's job after review.
