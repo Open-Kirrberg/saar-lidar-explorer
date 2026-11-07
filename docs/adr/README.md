@@ -20,6 +20,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0009](0009-candidates-public-user-data-private.md) | Candidates public; markers, reviews and location private | Accepted | 2026-11-02 | v1 "candidates local only" |
 | [0010](0010-craters-never-public.md) | Crater / UXO indicators are never public | Accepted | 2026-11-02 | |
 | [0011](0011-castle-evidence-no-hms.md) | Castle: evidence tags, confidence, no HMS material | Accepted | 2026-11-01 | |
+| [0049](0049-orte-im-vergleich-places-only.md) | *Orte im Vergleich*: leaderboards rank places only, aggregates and labelled estimates, no server | Accepted | 2026-11-07 | |
 | **🚀 Hosting & licences** | | | | |
 | [0012](0012-github-pages-release.md) | Public hosting: GitHub Pages via `scripts/release/` | Accepted | 2026-11-02 | v1 non-goal "local only" |
 | [0013](0013-attribution-every-source.md) | Attribution for every source | Accepted | 2026-11-01 | |

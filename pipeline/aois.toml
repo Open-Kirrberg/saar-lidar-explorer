@@ -32,6 +32,14 @@ name = "Homburg / Kirrberg / Karlsberg"
 bbox = [378000, 5460000, 384000, 5468000]
 phase = "P1"
 
+# Orte im Vergleich (docs/plans/orte-im-vergleich.md): statistics only, no 3D tiles are built or published for it.
+# bbox = the nine place outlines (Gemarkungen, places.py) + 200 m, snapped outward to 1 km; places.py rewrites it.
+[orte]
+name = "Orte im Vergleich (stats only)"
+bbox = [375000, 5453000, 387000, 5471000]   # written by places.py: 9 place outlines + 200 m, 1 km grid
+phase = "stats"
+stats_only = true
+
 # F16 point-cloud focus areas (pointcloud.py, contract "Point clouds"). Defined once under [defaults] so every
 # AOI inherits them; an AOI writes the areas whose bbox lies fully inside it. bbox in EPSG:25832, multiples of
 # 100 m (tileSize), ≈ 1 km² each, placed to touch as few 1 km LAZ tiles as possible.

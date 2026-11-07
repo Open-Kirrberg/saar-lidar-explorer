@@ -582,6 +582,219 @@ then `count` records of **10 bytes** at offset `16 + 10·k`:
 
 **App tolerance.** Missing `trees`, a non-object or `format` ≠ `sle-trees-v1` → absent (logged, not fatal). `path` must contain `{i}` and `{j}`. `chunks` entries that are not three integers with `0 ≤ i < nx`, `0 ≤ j < ny`, `count ≥ 1` are skipped. A chunk whose bytes fail the header check (magic, version 1, size `16 + 10·count`) or 404s is skipped; the other chunks still show. Unknown `type` base codes read as unknown; unknown manifest fields are ignored.
 
+## 🏆 Place statistics (`stats`, optional, Orte im Vergleich)
+
+Aggregates per place (Gemarkung) for the leaderboard *Orte im Vergleich*: parcels, trees, canopy, biomass range, built-up area (*Ortslage*), green and sealed shares, inhabitants, tallest tree, PV totals per municipality. Written by `pipeline/stats.py`; plan: [docs/plans/orte-im-vergleich.md](plans/orte-im-vergleich.md); decision: [ADR 0049](adr/0049-orte-im-vergleich-places-only.md). `stats` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid and the app hides the panel.
+
+**Privacy (G1–G3, binding).** Every published value is an aggregate over a **place** (or a municipality). The files contain **no** per-parcel, per-building or per-person value, no parcel id (`flstkennz`), no address and no owner data. Per-building PV detections and per-parcel intermediates stay in `data/work/orte/` and are never written under `app/public/data/`. **Minimum-size rule:** an aggregate that rests on fewer than **5** buildings (Ortslage, PV) or 5 parcels (place totals) is not published: the value is `null` and its field path is listed in the place's `suppressed`. A place with fewer than 5 parcels is left out entirely. The only published point is `tallest` (one tree per place); it is never inside the Ortslage and always ≥ 10 m inside the place outline. The stats step refuses to write a file with a parcel-id, owner, address or person key (matched by fragment) or a parcel-id- or address-like string value, and outline features with properties other than `{id, name_de}`.
+
+**Stats extent ≠ AOI.** Statistics may cover a larger area than the 3D tiles (all nine places, including all of Zweibrücken) without publishing tiles for it. `extent` is the area whose inputs were processed; trees outside the AOI come from a stats-only `trees.py` run with the same method, so tree ids follow the Trees rule everywhere. One difference: the Trees layer drops every top above `max_height` (45 m); the stats run keeps tops up to the CHM clip (60 m) and counts a top above 45 m only when it passes the `tallest` plausibility checks (the stats area has real 50–55 m conifer stands). So a place's `tallest` tree is often **not** in the AOI's Trees layer (above 45 m, or outside the 3D tiles): `tallest.in_trees` says whether it is. When it is `false` the app draws its own marker at `tallest.E/N` (ground from the terrain) instead of looking the tree up by `id`. `aoi_share_pct` tells the app how much of a place it can show in 3D.
+
+**Manifest key** (owned by the stats step, replaced on each run via `update_manifest`, all other keys kept):
+
+```ts
+stats = {
+  format: 'sle-stats-v1',                 // anything else → the whole key is ignored
+  url: 'stats/places.json',               // relative to the AOI dir
+  geometry?: 'stats/places.geojson',      // relative to the AOI dir; outlines, see below
+  generated: string,                      // ISO 8601 UTC, = places.json `generated`
+  places: number,                         // = places.json places.length
+  label_de?: string                       // default 'Orte im Vergleich'
+}
+```
+
+### `stats/places.json`
+
+UTF-8 JSON, a few KB (target < 30 KB). All coordinates **EPSG:25832 metres `[E, N]`** (not the local frame). All paths relative to the AOI dir.
+
+```ts
+Range = [lo: number, mid: number, hi: number]   // lo ≤ mid ≤ hi, an estimate (G7); the UI shows "lo–hi" and labels it „geschätzt“
+Places = {
+  format: 'sle-stats-v1',
+  version: 1,                             // bumped only for breaking changes (then format changes too)
+  generated: string,                      // ISO 8601 UTC
+  aoi: string,                            // e.g. 'overall'
+  crs: 'EPSG:25832',
+  extent: [Emin, Nmin, Emax, Nmax],       // integer metres, area whose inputs were processed
+  geometry?: { url: 'stats/places.geojson', simplify_m: 10, featureCount: number },
+  min_count: 5,                           // minimum-size rule actually applied
+  label_de: 'Orte im Vergleich',
+  disclaimer_de: string,                  // e.g. „Schätzungen aus Luftdaten, keine amtlichen Zahlen …“; the panel shows it
+  inputs: Record<InputId, Input>,
+  method: Record<Topic, Method>,
+  disciplines: Discipline[],
+  places: Place[],                        // sorted by name_de (de collation); NOT a ranking
+  municipalities: Municipality[],
+  attribution: string                     // '; '-joined verbatim entries of all inputs used (no duplicates)
+}
+```
+
+**`inputs`** — one entry per source actually used; ids are free snake_case (`lidar_sl`, `lidar_rlp`, `alkis_sl`, `alkis_rlp`, `lod2_sl`, `lod2_rlp`, `dop_cir_sl`, `dop_rgbi_rlp`, `osm`, `zensus`, `mastr`, `imperviousness` …):
+
+```ts
+Input = {
+  name_de: string,                        // e.g. 'Digitales Oberflächenmodell DOM1'
+  provider: string,                       // e.g. 'LVGL-SL', 'LVermGeoRP', 'Destatis', 'BNetzA', 'OSM', 'EEA/Copernicus'
+  year: number | null,                    // data epoch (flight / census / register year), null if unknown
+  retrieved: string,                      // ISO date of the download (cached copy)
+  licence: string,                        // SPDX-like: 'dl-de/by-2-0', 'ODbL-1.0', 'CC-BY-4.0' …
+  attribution: string,                    // verbatim Quellenvermerk, no ';' (ADR 0026 rules: retrieval year, trailing (<Layer>) tag)
+  url?: string                            // dataset URI (https://…)
+}
+```
+
+The stats step also merges every `attribution` entry into the manifest's `attribution` string (as in "manifest.json"). Examples: `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0 (DOP20)` for the CIR DOP, `Zensus 2022, © Statistische Ämter des Bundes und der Länder, dl-de/by-2-0` (wording confirmed against the bundled description before release), `Marktstammdatenregister, © Bundesnetzagentur, dl-de/by-2-0`, `© OpenStreetMap-Mitwirkende, ODbL`.
+
+**`method`** — keyed by topic; the `id` is versioned and changes whenever the algorithm or a parameter that changes results changes (`-v1` → `-v2`). Ids in Phase 0:
+
+| Topic | `id` | Meaning |
+|---|---|---|
+| `assign` | `parcel-pip-v1` | trees and areas belong to the place whose parcels contain the tree top (point in polygon, `make_valid`, first match) |
+| `crown` | `crown-disc-v1` | crown area = Σ π r² of the place's trees; `crown_pct` = crown area ÷ place area (capped at 100) |
+| `biomass` | `crown-allometry-v1` | `D = 0.557 · (H · 2r)^0.809` cm; `AGB = 0.0673 · (ρ · D² · H)^0.976` kg; ρ = 0.42 conifer, 0.60 else; `lo = mid · 0.5`, `hi = mid · 2`; CO₂ = 1.8 × AGB |
+| `ortslage` | `ortslage-bldg-buffer-50m-v1` | union of LoD2 footprints buffered 50 m, holes < 1 ha closed, clipped to the place; checked against OSM `landuse=residential` (overlap reported in `params`). Includes commercial, industrial and clinic sites and outlying plant buildings (e.g. a landfill), not only housing; the discipline texts say so |
+| `green` | `ndvi-cir-v1` | Ortslage cell is green when CHM ≥ 3 m **or** NDVI ≥ threshold (SL CIR WMS, RLP RGBI tiles); `canopy_pct` = CHM ≥ 3 m part only |
+| `sealed` | `sealed-v1` | Ortslage cell is sealed when it is not green, not OSM water, and a building (LoD2 mask), an OSM paved road (buffered by its `width` or road class) / parking / square / `area:highway`, or non-vegetated in the NDVI (< `ndvi_bare_max`, 0.08 on the SL scale; also catches unmapped yards and bare soil). Copernicus imperviousness is **not** used in v1 (`params.imperviousness`); adding it means `sealed-v2` |
+| `inhabitants` | `zensus-grid-area-v1` | Σ Zensus 2022 100 m cells × share of the cell inside the place |
+| `tallest` | `tallest-checked-v3` | highest non-fill tree that passes the plausibility checks (crown radius ≥ 2 m; CHM support, no single-cell spike or narrow tower top; below the 60 m CHM clip; no LoD2 building within 5 m; no OSM pylon / mast / tower / chimney within 15 m; terrain: DTM rises ≤ 3 m within 4 m of the top, so no gully bottom or bank foot under overhanging canopy; valley: mean DTM within 15 m ≤ 3 m above the top's ground, so no ravine bottom spanned by the canopy of both slopes) **and stands outside the Ortslage** (no garden tree is published by position, G1/G2) **and ≥ 10 m inside the place outline** (`edge_clear_m`; a top on the Gemarkung line may belong to the neighbour and must stay inside the 10 m-simplified outline); detector cap 60 m, see `params`. The height is the LiDAR CHM at the top cell, not a ground measurement |
+| `category` | `category-inhabitants-v1` | `category` = `'stadt'` from 5,000 inhabitants (`inhabitants`, grid estimate) on, else `'dorf'` |
+| `pv_mastr` | `mastr-municipality-v1` | MaStR PV units „in Betrieb“ per municipality key, balcony plants included |
+
+```ts
+Method = { id: string, label_de?: string, params?: Record<string, unknown> }   // params informative (thresholds, radii, ρ …)
+```
+
+**`disciplines`** — the app renders every leaderboard generically from this list (no discipline is hard-coded):
+
+```ts
+Discipline = {
+  id: string,                             // slug, e.g. 'gruenste-ortslage'
+  name_de: string,                        // 'Grünste Ortslage'
+  emoji?: string,                         // '🌳'
+  description_de: string,                 // one line, what is measured
+  scope: 'place' | 'municipality',        // which array `measure` reads from
+  measure: string,                        // dotted path into Place / Municipality, e.g. 'ortslage.green_pct'
+  unit: string,                           // display unit: '%', 'm', 'Bäume/Einw.', 'kWp/Einw.'
+  higher_is_better: boolean,
+  method: string,                         // a method id from `method`, e.g. 'ndvi-cir-v1'
+  ready: boolean                          // false → listed as „bald“, no board
+}
+```
+
+Phase 0 list (pipeline may add more; Biomass is **never** a discipline, Q3):
+
+| `id` | `measure` | `unit` | higher better | `method` | `ready` |
+|---|---|---|---|---|---|
+| `gruenste-ortslage` | `ortslage.green_pct` | `%` | ✓ | `ndvi-cir-v1` | ✓ |
+| `wenigsten-beton` | `ortslage.sealed_pct` | `%` | ✗ | `sealed-v1` | ✓ |
+| `baeume-pro-einwohner` | `trees_per_inhabitant` | `Bäume/Einw.` | ✓ | `zensus-grid-area-v1` | ✓ |
+| `waldreichste-gemarkung` | `crown_pct` | `%` | ✓ | `crown-disc-v1` | ✓ |
+| `riesenbaum` | `tallest.h` | `m` | ✓ | `tallest-checked-v3` | ✓ |
+| `sonnenstaerkster-ort` | `pv.kwp_per_inhabitant` (scope `municipality`) | `kWp/Einw.` | ✓ | `mastr-municipality-v1` | ✓ |
+| `groesster-fortschritt` | — | — | ✓ | — | ✗ |
+| `artenvielfalt` | — | — | ✓ | — | ✗ |
+
+**Ranking rule (app).** A board ranks entries of its `scope` whose `measure` is a finite number; ties share a rank. Places with `complete: false` are listed below the board, unranked, marked „unvollständig“. `null` (suppressed or not available) shows „keine Daten“, unranked. `other-flight` places are ranked with a badge „andere Befliegung“, with the year mix from `lidar_epochs` when present (e.g. „andere Befliegung: 47 % 2022“).
+
+**`places`:**
+
+```ts
+Place = {
+  id: string,                             // slug: lowercase, ä→ae ö→oe ü→ue ß→ss, other non [a-z0-9] → '-'; e.g. 'kirrberg', 'einoed', 'moersbach', 'bruchhof-sanddorf'
+  name_de: string,                        // 'Einöd' = the Gemarkung name; the UI says „Gemarkung Einöd“, not the Stadtteil (outlines and inhabitants differ, see below)
+  kind: 'gemarkung' | 'gemarkung-group' | 'ortsteil',   // Phase 0: 'gemarkung' (a town of several Gemarkungen: 'gemarkung-group')
+  gemarkungen: string[],                  // ALKIS Gemarkung names as in flurstuecke `gemarkung`
+  state: 'SL' | 'RLP',
+  municipality: string,                   // id into `municipalities`, e.g. 'homburg', 'zweibruecken', 'bechhofen'
+  category: 'stadt' | 'dorf',             // fairness size class (§5 of the plan): by inhabitants, see method `category`
+  complete: boolean,                      // false when flags contain 'cut-by-aoi' or an input does not cover the place
+  flags: Flag[],
+  suppressed: string[],                   // field paths nulled by the minimum-size rule, e.g. ['ortslage']
+  lidar_epoch: number,                    // flight year of the majority of the place's LiDAR cells: 2025 (SL) or 2022 (RLP)
+  lidar_epochs?: Array<[year: number, pct: number]>,   // share of the place's LiDAR cells per flight, largest first; pct 0.1
+  label: [E, N],                          // label / fly-to point inside the outline (pole of inaccessibility), integer m
+  bbox: [Emin, Nmin, Emax, Nmax],         // of the full outline, integer m
+  aoi_share_pct: number,                  // share of area_ha inside the 3D AOI tiles (0 … 100)
+  area_ha: number,                        // Σ official parcel area (ALKIS flaeche_m2, else polygon area)
+  parcels: number,
+  trees: number,                          // non-fill + fill trees with their top inside the place (tops > 45 m only when plausible, see "Stats extent")
+  crown_ha: number,
+  crown_pct: number,
+  agb_t: Range,                           // above-ground dry biomass, tonnes (estimate, G7)
+  co2_t: Range,                           // CO₂ equivalent, tonnes (estimate, G7)
+  ortslage: null | {
+    area_ha: number,
+    buildings: number,                    // LoD2 buildings used (≥ min_count, else ortslage = null)
+    canopy_pct: number,                   // CHM ≥ 3 m
+    green_pct: number,                    // canopy + green below 3 m; ≥ canopy_pct
+    sealed_pct: number                    // green_pct + sealed_pct ≤ 100
+  },
+  inhabitants: number | null,             // Zensus 2022, apportioned
+  trees_per_inhabitant: number | null,
+  tallest: null | { h: number, E: number, N: number, id: number, in_trees?: boolean },
+                                          // id = stable tree id by the Trees rule; E, N = top cell centre;
+                                          // in_trees: the AOI's Trees layer holds this id (false: above max_height or outside the tiles → own marker)
+  pv: null                                // Phase 0 always null (flag 'pv-municipality-only'); Phase 1: aggregates only, see below
+}
+Flag = 'other-flight'                     // LiDAR (≥ 1 % of the cells, or an RLP place) from another flight (RLP 2022 vs SL 2025, Q5); shares in `lidar_epochs`
+     | 'cut-by-aoi'                       // outline reaches beyond `extent` or an input's coverage; totals are partial
+     | 'pv-municipality-only'             // no own PV figure; the card shows the municipality's MaStR total
+     | 'estimate'                         // a normally measured value (area, trees, inhabitants) was extrapolated here; UI prefixes „≈“
+```
+
+**Gemarkung ≠ Stadtteil.** A place is the cadastral Gemarkung, not the district people know: built-up areas cross Gemarkung lines (part of Schwarzenbach lies in Gemarkung Einöd), so `inhabitants` differs from the town's district figures by up to ≈ ±25 % (Einöd 3,500 vs district 2,810; Beeden-Schwarzenbach 3,560 vs 4,665), while the totals agree. The UI labels places as Gemarkung and shows `disclaimer_de`.
+
+Unknown flags are shown as plain text or ignored; the app must not fail on them. Values that are always estimates (`agb_t`, `co2_t`, PV `kwp`) are `Range`s and need no flag.
+
+**PV per place (Phase 1, reserved shape).** `pv = { source: 'dop-detect', buildings: number, with_pv: number, residential_with_pv_pct: number | null, kwp: Range, roof_potential_used_pct: number | null, method: string }`, aggregates only; `buildings < min_count` → `pv = null` + `suppressed: ['pv']`. Per-building detections are never published.
+
+**`municipalities`** — MaStR is per municipality, not per Gemarkung (Q10):
+
+```ts
+Municipality = {
+  id: string,                             // slug, e.g. 'homburg', 'zweibruecken', 'bechhofen'
+  name_de: string,
+  state: 'SL' | 'RLP',
+  ags: string,                            // 8-digit Amtlicher Gemeindeschlüssel
+  places: string[],                       // place ids in this file that belong to it (not all its Gemarkungen)
+  inhabitants: number | null,             // official Zensus 2022 municipality total (not the grid)
+  pv: null | {
+    source: 'mastr',
+    as_of: string,                        // ISO date of the MaStR export
+    systems: number,                      // units in operation
+    kwp: number,                          // Σ gross power, kWp (register value, not an estimate)
+    kwp_per_inhabitant: number | null,
+    small_systems: number,                // units < 30 kWp (no coordinates in MaStR)
+    by_year?: Array<[year: number, systems: number, kwp: number]>   // commissioned per year
+  }
+}
+```
+
+**Rounding (publish rounded values; the pipeline rounds, the app displays as is):**
+
+| Field | Rounding |
+|---|---|
+| counts: `parcels`, `trees`, `buildings`, `systems`, `small_systems` | whole numbers |
+| `inhabitants` | nearest 10 (Zensus cells are altered for confidentiality) |
+| `area_ha`, `crown_ha`, `ortslage.area_ha` | 0.1 ha |
+| `*_pct` (shares) | 0.1 percentage points |
+| `agb_t`, `co2_t`, PV `kwp` Range | each bound 2 significant digits (e.g. `[57000, 110000, 230000]`) |
+| `trees_per_inhabitant`, `kwp_per_inhabitant` | 2 significant digits |
+| MaStR `kwp` | whole kWp |
+| `tallest.h` | 0.1 m; `tallest.E/N` exact cell centre (x.5) |
+| `lidar_epochs` pct | 0.1 percentage points |
+| `label`, `bbox`, `extent` | whole metres |
+
+Rounding happens last; derived values (shares, per-inhabitant) are computed from unrounded numbers.
+
+### `stats/places.geojson` (outlines)
+
+`FeatureCollection` (UTF-8), one feature per place in `places`, used to fly to a place and outline it (map and 3D). Coordinates **EPSG:25832 `[E, N]`, rounded to 1 m**, 2D only, **not clipped** to the AOI (the full place outline, also beyond `extent` if the parcels are known), **not densified**; the app drapes outlines like vectors where it has terrain and draws them 2D elsewhere. Geometry: dissolved union of the place's ALKIS parcels (`make_valid`), holes < 1 ha dropped, made into a clean coverage (each outline snapped within 2 m to the earlier ones and cut by them: the SL and RLP parcels overlap or leave sub-metre gaps along the state border), then coverage-simplified to `simplify_m` = **10 m**, so neighbours share their border without overlaps or gaps. `Polygon` or `MultiPolygon`; winding not guaranteed. Properties: `{ id: string /* = Place.id */, name_de: string }` only. Target < 150 KB for all places.
+
+**Size.** places.json ≈ 10–30 KB, places.geojson < 150 KB: small enough for the public release. The release export stages exactly these two files of `stats/`.
+
+**App tolerance.** Missing `stats`, a non-object, `format` ≠ `sle-stats-v1` or a non-string `url` → absent (logged, not fatal). A 404 or a places.json whose `format` ≠ `sle-stats-v1` → panel hidden. Missing `geometry` or a 404 on it → no outlines; fly-to uses `label` and `bbox`. A place without a string `id` or `name_de` is skipped. A discipline whose `measure` does not resolve to a number for any entry shows „keine Daten“. Unknown fields, flags, topics, input ids and disciplines with unknown `scope` are ignored.
+
 ## Other files
 
 - `app/public/data/pois.geojson`: WGS84 FeatureCollection of known sites. Properties: `id`, `name` (DE), `type` (`castle|palace|garden|bunker|burial_mound|cave|boundary_stone|mine|other`), `confidence` (`high|med|low`), `source` (URL), `note`.

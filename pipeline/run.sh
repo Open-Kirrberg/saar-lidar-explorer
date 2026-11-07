@@ -20,10 +20,14 @@ for s in "${STEPS[@]}"; do
     detect) step "detect $AOI" uv run python detect.py "$AOI" ;;   # F15 candidates: private/local data only
     pointcloud) step "pointcloud $AOI" uv run python pointcloud.py "$AOI" ;;   # F16 focus-area point clouds (LAZ ≈ 45 MB/km²)
     trees) step "trees $AOI" uv run python trees.py "$AOI" ;;                 # V2.4 tree crowns from the CHM (after buildings, ortho)
+    places) step "places"    uv run python places.py ;;                         # Orte im Vergleich: place outlines + parcels (AOI-independent, data/work/orte)
+    stats-trees) step "stats-trees" uv run python stats_trees.py all ;;        # Orte im Vergleich: trees + rasters over the stats bbox (long, downloads)
+    stats-inputs) step "stats-inputs" uv run python stats_inputs.py all ;;     # Orte im Vergleich: NDVI, Zensus grid, MaStR
+    stats) step "stats $AOI" uv run python stats.py "$AOI" ;;                 # Orte im Vergleich: place stats (needs data/work/orte from places.py, stats_trees.py, stats_inputs.py)
     pois)  step "pois"       uv run python pois.py ;;
     attribution) step "attribution $AOI" uv run python -c 'import sys, common; print(common.refresh_attribution(sys.argv[1]))' "$AOI" ;;  # manifest-only: heal superseded entries
     test)  step "tests"      uv run pytest -q ;;
-    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|pois|detect|pointcloud|trees|attribution|test)"; exit 1 ;;
+    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|pois|detect|pointcloud|trees|places|stats-trees|stats-inputs|stats|attribution|test)"; exit 1 ;;
   esac
 done
 du -sh "../app/public/data/$AOI" "../app/public/data/$AOI/xyz" 2>/dev/null || true
