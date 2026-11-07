@@ -128,6 +128,8 @@ export interface TextEnv {
 export const CASTLE_NAME = 'Schloss Karlsberg';
 /** Exact *Orte* entry the „finden“ step names. */
 export const CASTLE_POI = 'Schloss Karlsberg – Hauptschloss';
+/** The castle zone's card in *Orte* → „Nachbauten zum Betreten“ (zone `name_de`). */
+export const CASTLE_ZONE_CARD = 'Schloss Karlsberg 1789';
 
 export function stepText(st: TutState, env: TextEnv): StepText {
   const portal = env.target?.kind === 'portal';
@@ -155,7 +157,7 @@ export function stepText(st: TutState, env: TextEnv): StepText {
         icon: '🗺️',
         title: `Finde ${CASTLE_NAME}`,
         body: portal
-          ? `Tippe auf „Orte“ und dann auf „${CASTLE_POI}“ – oder auf der Karte oben rechts auf das Tor.`
+          ? `Tippe auf „Orte“ und bei „${CASTLE_ZONE_CARD}“ auf „Hinfliegen“ – oder auf der Karte oben rechts auf das Tor.`
           : `Tippe auf „Orte“ und dann auf „${CASTLE_POI}“.`,
         anchors: portal ? ['places', 'minimap'] : ['places'],
       };
@@ -164,7 +166,7 @@ export function stepText(st: TutState, env: TextEnv): StepText {
         icon: '🏰',
         title: 'Flieg zum Schloss',
         body: portal
-          ? `Tippe in „Orte“ auf „${CASTLE_POI}“ oder auf das Tor in der Karte. Am Tor erscheint „Betreten“.`
+          ? `Tippe in „Orte“ bei „${CASTLE_ZONE_CARD}“ auf „Hinfliegen“ oder auf das Tor in der Karte. Am Tor erscheint „Betreten“.`
           : `Tippe in „Orte“ auf „${CASTLE_POI}“ – die Kamera fliegt hin.`,
         anchors: ['places'],
       };

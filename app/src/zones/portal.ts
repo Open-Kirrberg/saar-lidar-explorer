@@ -70,6 +70,32 @@ export function fallbackExitPose(zone: ZoneManifest, portal: Portal, groundH?: n
   };
 }
 
+/**
+ * Where „Hinfliegen“ (Orte drawer) parks the camera: in front of the portal along `facing_deg`,
+ * looking back at it, close enough that the portal is offered right away — horizontal distance
+ * 0.8 · radius (30…150 m), height above ground 0.45 × that distance but at least 25 m — above the
+ * tree tops, so a crown between camera and portal can't fill the view (true metres; the caller
+ * scales by the exaggeration).
+ */
+export function portalApproach(portal: Pick<Portal, 'E' | 'N' | 'radius_m' | 'facing_deg'>): {
+  E: number;
+  N: number;
+  agl: number;
+  heading_deg: number;
+  pitch_deg: number;
+} {
+  const back = Math.min(150, Math.max(30, portal.radius_m * 0.8));
+  const agl = Math.max(25, back * 0.45);
+  const rad = (portal.facing_deg * Math.PI) / 180;
+  return {
+    E: portal.E + Math.sin(rad) * back,
+    N: portal.N + Math.cos(rad) * back,
+    agl,
+    heading_deg: normHeading(portal.facing_deg + 180),
+    pitch_deg: -(Math.atan2(agl, back) * 180) / Math.PI,
+  };
+}
+
 /** Distance from a zone-frame point to an axis-aligned box (0 inside). */
 export function distanceToBox(p: readonly [number, number, number], box: ZoneAsset['bboxLocal']): number {
   if (!box) return 0;

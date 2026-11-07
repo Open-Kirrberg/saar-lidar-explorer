@@ -12,7 +12,7 @@ import {
 } from '../src/zones/contract';
 import type { Pose, ZoneManifest } from '../src/zones/contract';
 import { normaliseRing, pointInRing, ringIsSimple, ringSignedArea } from '../src/zones/geometry';
-import { PORTAL_HYSTERESIS, fallbackExitPose, pickLod, portalsInRange, updatePortalFocus } from '../src/zones/portal';
+import { PORTAL_HYSTERESIS, fallbackExitPose, pickLod, portalApproach, portalsInRange, updatePortalFocus } from '../src/zones/portal';
 import { MSG_LOAD_FAILED, initialZoneSession, zoneSession } from '../src/zones/session';
 import { FIXTURE } from '../scripts/fixture-terrain';
 
@@ -299,5 +299,23 @@ describe('zone session: enter and leave the fixture zone', () => {
     const loading = zoneSession(o, { type: 'enter', zone: z, portalId: 'tuer', pose: overworldPose });
     expect(zoneSession(loading, { type: 'enter', zone: z, portalId: 'tuer', pose: overworldPose })).toBe(loading);
     expect(zoneSession(loading, { type: 'loaded', zoneId: 'other' })).toBe(loading);
+  });
+});
+
+describe('portal approach („Hinfliegen“ in the Orte drawer)', () => {
+  it('parks in front of the portal, inside its radius, looking back at it', () => {
+    for (const [radius, facing] of [[40, 115.7], [250, 260.5], [10, 0], [1000, 90]] as const) {
+      const p = { E: 1000, N: 2000, radius_m: radius, facing_deg: facing };
+      const a = portalApproach(p);
+      const d = Math.hypot(a.E - p.E, a.N - p.N);
+      expect(d).toBeGreaterThanOrEqual(30);
+      expect(d).toBeLessThanOrEqual(150);
+      if (radius > 30) expect(d).toBeLessThan(radius); // offered on arrival
+      // heading points from the camera back to the portal (grid heading: 0 = +N, 90 = +E)
+      const h = (Math.atan2(p.E - a.E, p.N - a.N) * 180) / Math.PI;
+      expect(((a.heading_deg - h) % 360 + 360) % 360).toBeCloseTo(0, 6);
+      expect(a.pitch_deg).toBeLessThan(0);
+      expect(a.agl).toBeCloseTo(Math.max(25, d * 0.45), 6);
+    }
   });
 });

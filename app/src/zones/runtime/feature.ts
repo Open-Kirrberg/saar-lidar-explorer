@@ -19,6 +19,7 @@ import type { ZoneModule } from './api';
 import { builtinZones, builtinZonesEnabled } from './builtin';
 import { createPortalPrompter, createZoneFlow, MSG_NO_RUNTIME } from './flow';
 import type { ZoneFlow } from './flow';
+import { portalApproach } from '../portal';
 import { PortalMarker } from './marker';
 import { overworldPose, restoreRig, rigSnapshot } from './overworld';
 import type { RigSnapshot } from './overworld';
@@ -270,6 +271,50 @@ export function mountZones(h: FeatureHost): () => void {
     },
   );
 
+  // ---- „Orte“ drawer: Nachbauten -----------------------------------------------------------------------
+  // The portals are only found by flying past their marker — easy to miss, and on a phone the narrow
+  // view rarely shows them at the start. The drawer lists every zone with „Betreten“ / „Hinfliegen“.
+  const placesCard = el('section', { class: 'sle-card open sle-zone-places', 'aria-labelledby': 'sle-zone-places-title' });
+  const placesList = el('div', { class: 'sle-zone-places-list', role: 'list' });
+  placesCard.append(el('h3', { class: 'sle-card-title-static', id: 'sle-zone-places-title', text: 'Nachbauten zum Betreten' }), placesList);
+  // first in the drawer, above „Bekannte Orte“ (seq 0 keeps later features' wrappers below it)
+  h.places.dataset.seq = '0';
+  h.places.parentElement?.prepend(h.places);
+  const closeDrawer = () => h.places.closest('.sle-drawer')?.querySelector<HTMLButtonElement>('.sle-dlg-close')?.click();
+  const renderPlaces = () => {
+    placesList.replaceChildren();
+    for (const z of zones) {
+      const p = z.portals[0];
+      if (!p) continue;
+      const enter = el('button', { type: 'button', class: 'sle-btn primary', text: 'Betreten', 'aria-label': `${z.name_de} betreten` });
+      enter.addEventListener('click', () => {
+        if (flow.state().phase !== 'overworld') return;
+        closeDrawer();
+        prompter.close();
+        void flow.enter(z, p.id);
+      });
+      const fly = el('button', { type: 'button', class: 'sle-btn', text: 'Hinfliegen', 'aria-label': `Zu ${z.name_de} fliegen` });
+      fly.addEventListener('click', () => {
+        if (flow.state().phase !== 'overworld') return;
+        closeDrawer();
+        const a = portalApproach(p);
+        const exag = terrain.uniforms.uExag.value;
+        void ctx.flyTo(a.E, a.N, { agl: a.agl * exag, heading: a.heading_deg, pitch: a.pitch_deg, lookAt: false });
+      });
+      placesList.append(
+        el(
+          'div',
+          { class: 'sle-zone-place', role: 'listitem' },
+          el('div', { class: 'sle-zone-place-head' }, el('strong', { text: z.name_de }), el('span', { class: 'sle-zone-badge', text: evidenceBadge(z) })),
+          z.summary_de ? el('p', { class: 'sle-zone-place-summary', text: z.summary_de }) : null,
+          el('div', { class: 'sle-zone-place-actions' }, enter, fly),
+        ),
+      );
+    }
+    placesCard.hidden = !placesList.childElementCount;
+    if (placesCard.parentElement !== h.places) h.places.append(placesCard);
+  };
+
   const setZones = (list: ZoneManifest[]) => {
     for (const m of markers) m.dispose();
     h.services.labels.clearGroup('zone-portals');
@@ -285,6 +330,7 @@ export function mountZones(h: FeatureHost): () => void {
       }
     }
     setPortals(portalInfos(zones));
+    renderPlaces();
   };
 
   // a tier change while inside a zone reaches the zone (V2.7: the castle's HUD is tiered too)
