@@ -1,0 +1,78 @@
+/* 🏆 Orte im Vergleich (src/places): card in the „Orte“ drawer, phone-safe (no horizontal page scroll). */
+.sle-cmp .sle-card-body { padding: 6px 8px 10px; }
+.sle-cmp-chips {
+  display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 6px; scrollbar-width: thin;
+  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+}
+.sle-cmp-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 4px 10px;
+  border-radius: 999px; border: 1px solid rgba(255, 255, 255, 0.18); background: #2a2a2a; color: var(--ui-fg);
+  font: 12px var(--ui-font); cursor: pointer; white-space: nowrap;
+}
+.sle-cmp-chip:hover:not(:disabled) { background: #383838; }
+.sle-cmp-chip.on { background: var(--ui-accent); border-color: var(--ui-accent); color: #1c1c1c; font-weight: 600; }
+.sle-cmp-chip.soon { opacity: 0.55; cursor: default; }
+.sle-cmp-emoji { font-size: 14px; line-height: 1; }
+.sle-cmp-soon { font-size: 10px; padding: 0 5px; border-radius: 6px; background: rgba(255, 255, 255, 0.12); }
+.sle-cmp-desc { margin: 2px 0 6px; color: var(--ui-dim); }
+.sle-cmp-note {
+  margin: 0 0 6px; padding: 6px 8px; border-radius: 8px; border-left: 3px solid #ffcf5a;
+  background: rgba(255, 207, 90, 0.08); color: var(--ui-fg);
+}
+.sle-cmp-note[hidden] { display: none; }
+.sle-cmp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.sle-cmp-row {
+  width: 100%; display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 6px;
+  min-height: 40px; padding: 5px 8px; border: 1px solid transparent; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04); color: var(--ui-fg); font: 12.5px var(--ui-font); text-align: left; cursor: pointer;
+}
+.sle-cmp-row:hover { background: rgba(255, 255, 255, 0.09); }
+.sle-cmp-row.active { border-color: #45f2c7; background: rgba(69, 242, 199, 0.1); }
+.sle-cmp-rank { font-size: 15px; text-align: center; font-variant-numeric: tabular-nums; }
+.sle-cmp-rank.dim { color: var(--ui-dim); font-size: 12px; }
+.sle-cmp-name { min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.sle-cmp-sub { color: var(--ui-dim); font-size: 11px; }
+.sle-cmp-val { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sle-cmp-badges { display: flex; flex-wrap: wrap; gap: 3px; }
+.sle-cmp-badges:empty { display: none; }
+.sle-cmp-badge {
+  display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 10.5px; line-height: 16px;
+  background: rgba(255, 255, 255, 0.1); color: var(--ui-dim); border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.sle-cmp-badge.b-other-flight { background: rgba(120, 170, 255, 0.16); color: #b9d2ff; border-color: rgba(120, 170, 255, 0.5); }
+.sle-cmp-badge.b-incomplete { background: rgba(255, 140, 90, 0.15); color: #ffb48f; border-color: rgba(255, 140, 90, 0.5); }
+.sle-cmp-badge.b-mun { background: rgba(255, 207, 90, 0.15); color: #ffcf5a; border-color: rgba(255, 207, 90, 0.5); }
+.sle-cmp-rest { margin: 8px 0 3px; color: var(--ui-dim); font-weight: 600; }
+.sle-cmp-card-nav { display: flex; justify-content: space-between; gap: 6px; margin-bottom: 6px; }
+.sle-cmp-card-nav .sle-btn { min-height: 32px; }
+.sle-cmp-card-title { margin: 2px 0 4px; font-size: 14px; }
+.sle-cmp-flight {
+  margin: 6px 0; padding: 6px 8px; border-radius: 8px; border-left: 3px solid #78aaff; background: rgba(120, 170, 255, 0.1);
+}
+.sle-cmp-placing { margin: 6px 0; font-weight: 600; color: var(--ui-accent); }
+.sle-cmp-kvs { margin: 6px 0; display: flex; flex-direction: column; gap: 2px; }
+.sle-cmp-kv { display: grid; grid-template-columns: minmax(0, 42%) minmax(0, 1fr); gap: 8px; padding: 2px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+.sle-cmp-kv dt { color: var(--ui-dim); }
+.sle-cmp-kv dd { margin: 0; overflow-wrap: anywhere; }
+.sle-cmp-est {
+  display: inline-block; padding: 0 5px; border-radius: 5px; font-size: 10px; line-height: 15px;
+  background: rgba(255, 207, 90, 0.15); color: #ffcf5a; border: 1px solid rgba(255, 207, 90, 0.45);
+}
+.sle-cmp-actions { display: flex; gap: 6px; margin: 8px 0 4px; }
+.sle-cmp-actions .sle-btn { flex: 1; min-height: 38px; }
+.sle-cmp-actions.wrap { flex-wrap: wrap; }
+.sle-cmp-actions.wrap .sle-btn { flex: 1 1 40%; }
+.sle-cmp-disclaimer { margin: 10px 0 4px; color: var(--ui-dim); line-height: 1.4; }
+.sle-cmp-sources { color: var(--ui-dim); }
+.sle-cmp-sources summary { cursor: pointer; padding: 4px 0; }
+.sle-cmp-sources p { margin: 4px 0; overflow-wrap: anywhere; }
+.sle-cmp-board[hidden], .sle-cmp-card[hidden] { display: none; }
+
+/* Riesenbaum pins (3D, Labels3D) and minimap markers */
+.sle-pin.sle-giant-pin .sle-pin-txt { background: rgba(18, 92, 60, 0.9); border: 1px solid #45f2c7; max-width: none; } /* the height must stay readable */
+.sle-pin.sle-giant-pin { cursor: pointer; pointer-events: auto; }
+.sle-giant-icon { background: none; border: 0; }
+.sle-giant-dot {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 13px;
+  background: rgba(18, 92, 60, 0.92); border: 1.5px solid #45f2c7; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}

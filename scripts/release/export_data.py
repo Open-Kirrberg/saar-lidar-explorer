@@ -24,6 +24,11 @@ ADR 0043) are dropped from zone.json, `scene/` and every other file stay local; 
 a local path, the private material folder or an e-mail address, or a GLB with embedded images where the
 policy forbids them, aborts the export. zones/index.json lists only the staged zones.
 
+Orte im Vergleich (ADR 0049) and the historic forest mask: of `<aoi>/stats/` only the files the manifest key
+`stats` names (`places.json`, `places.geojson`) and of `<aoi>/forest_hist/` only the PNG of `forest_hist` are
+staged (`keyed_layer_files`); review reports and work files there never are. A key whose file is missing or
+whose JSON names a local path aborts; a key with another `format` is dropped with its folder.
+
 Idempotent: files are copied only when size/mtime differ, generated files only when their content
 changes, and files no longer planned are deleted (a `.git/` directory is never touched).
 --zones-only stages just <out1>/zones/ (nothing else in either repo is read, written or deleted);
@@ -107,6 +112,13 @@ PRIVATE_AOI_FILES = re.compile(
     r"^(?:run\.json|report(?:_[^/]*)?\.html|eval(?:_[^/]*)?\.(?:json|md)|labels\.jsonl|fachbericht(?:_[^/]*)?(?:/.*|\.[a-z]+)?"
     r"|manifest\.json\.bak[^/]*|[^/]*\.sld-new/.*)$"
 )
+# Orte im Vergleich + historic forest (ADR 0049, data-contract „Place statistics“ / „Historic forest mask“):
+# manifest key -> (folder, required format, path fields). Only the files the key names are public; the
+# pipeline's review reports and work files (stats_report.json etc. stay in data/work) are never staged.
+KEYED_LAYERS: Dict[str, Tuple[str, str, Tuple[str, ...]]] = {
+    "stats": ("stats/", "sle-stats-v1", ("url", "geometry")),
+    "forest_hist": ("forest_hist/", "sle-forest-hist-v1", ("path",)),
+}
 # Last line of defence: no staged AOI text file may still name a UXO class (case-insensitive).
 UXO_TEXT_SUFFIXES = (".json", ".geojson", ".html", ".md", ".txt", ".jsonl", ".csv", ".toml")
 UXO_TEXT_MARKERS = re.compile(rb"(?i)crater|bombentrichter|trichterfeld")
@@ -321,12 +333,17 @@ def plan_aoi(src: Path, aoi: str, xyz_max_zoom: int, data2_url: str, plan1: Plan
     stats = {k: {"tiles": 0, "bytes": 0} for k in xyz}
     skipped_tiles = 0
     cand_ok = candidate_files_filter(manifest)
+    keyed = keyed_layer_files(aoi_dir, manifest)
     skipped_private: List[str] = []
     for f in walk_files(aoi_dir):
         rel = f.relative_to(aoi_dir).as_posix()
         if rel == "manifest.json":
             continue
         if PRIVATE_AOI_FILES.match(rel) or (rel.startswith("candidates/") and not cand_ok(rel)):
+            skipped_private.append(rel)
+            continue
+        folder = next((d for d in keyed if rel.startswith(d)), None)
+        if folder is not None and rel not in keyed[folder]:
             skipped_private.append(rel)
             continue
         hit = next((p for p in xyz_dirs if rel.startswith(p + "/")), None)
@@ -366,6 +383,37 @@ def plan_aoi(src: Path, aoi: str, xyz_max_zoom: int, data2_url: str, plan1: Plan
         sys.exit(f"[export-data] refusing to export: staged files still name a UXO class: {', '.join(leaks[:10])}")
     return {"manifest": manifest, "skippedTiles": skipped_tiles, "xyz": stats, "uxoRemoved": uxo,
             "skippedPrivate": skipped_private}
+
+
+def keyed_layer_files(aoi_dir: Path, manifest: dict) -> Dict[str, set]:
+    """KEYED_LAYERS folders -> the AOI-relative files their manifest key names (the only files staged there).
+    A key with another `format` (or not an object) is removed from `manifest` (the app would ignore it) and its
+    folder stages nothing; a named file that is missing, outside the folder or a JSON file naming a local path
+    aborts the export. Without the key nothing in the folder is staged."""
+    out: Dict[str, set] = {}
+    for key, (folder, fmt, fields) in KEYED_LAYERS.items():
+        entry = manifest.get(key)
+        out[folder] = set()
+        if entry is None:
+            continue
+        if not isinstance(entry, dict) or entry.get("format") != fmt:
+            print(f"[export-data] manifest key {key!r} is not {fmt}: dropped, {folder} not staged")
+            manifest.pop(key, None)
+            continue
+        for field in fields:
+            rel = entry.get(field)
+            if rel is None and field != fields[0]:
+                continue  # optional (stats.geometry)
+            if not isinstance(rel, str) or not rel.startswith(folder) or ".." in rel.split("/"):
+                sys.exit(f"[export-data] refusing to export: {key}.{field} = {rel!r} is not a file under {folder}")
+            f = aoi_dir / rel
+            if not f.is_file():
+                sys.exit(f"[export-data] refusing to export: {key}.{field} names a missing file {rel}")
+            allowed_source(f)
+            if rel.endswith((".json", ".geojson")) and ZONE_LEAK_MARKERS.search(f.read_text(encoding="utf-8", errors="replace")):
+                sys.exit(f"[export-data] refusing to export: {rel} names a local path or an e-mail address")
+            out[folder].add(rel)
+    return out
 
 
 def candidate_files_filter(manifest: dict):

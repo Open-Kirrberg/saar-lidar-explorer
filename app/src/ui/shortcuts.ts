@@ -31,6 +31,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   // ---- Flug (DroneController) ----
   { group: 'Flug', keys: ['Klick'], label: 'Maus fangen (Esc gibt sie frei)', short: 'Maus fangen', codes: [], hud: true },
   { group: 'Flug', keys: ['Ziehen'], label: 'umsehen ohne Fangen', short: 'umsehen', codes: [], hud: true },
+  { group: 'Ansicht', keys: ['Klick auf Baum'], label: 'Baum-Steckbrief (Esc schließt)', short: 'Baum-Steckbrief', codes: [], feature: 'tree-card' },
   {
     group: 'Flug',
     keys: ['W', 'A', 'S', 'D'],

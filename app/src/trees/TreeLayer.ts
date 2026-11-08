@@ -34,6 +34,8 @@ import { TREE_SHAPES, latheArrays } from './treeShapes';
 import type { LatheArrays } from './treeShapes';
 import { TREE_STRIDE, buildInstanceRows, decodeTrees, gatherRows, rowBounds, treeChunkRef } from './treeData';
 import type { ManifestTrees, RowBounds } from './treeData';
+import { pickTreeRows, rayHitsBox } from './treePick';
+import type { PickHit, PickOptions, PickRay } from './treePick';
 
 /**
  * V2.4: CHM trees streamed per level-0 chunk (`trees/{i}_{j}.bin`, contract "Trees").
@@ -243,6 +245,36 @@ export class TreeLayer extends Group {
       tris += this.nearCount * this.lathes.near.triangles;
     }
     st.triangles = tris;
+  }
+
+  /**
+   * Baum-Steckbrief: CPU pick of the nearest drawn tree along a ray (world frame, displayed y) over
+   * the resident chunks (treePick.ts). Chunks whose box the ray misses are skipped. Null while the
+   * layer is hidden or nothing is hit.
+   */
+  pick(ray: PickRay, o: Pick<PickOptions, 'slackPerM' | 'minApparent' | 'maxDistance'>): PickHit | null {
+    if (!this.visible) return null;
+    const u = this.terrain.uniforms;
+    const exag = u.uExag.value;
+    const hRef = u.uHRef.value;
+    const opts: PickOptions = { ...o, hRef, exag, params: this.params, lensFade: this.treeUniforms.uLensFade.value };
+    const slack = o.slackPerM * o.maxDistance;
+    let best: PickHit | null = null;
+    for (const e of this.resident.values()) {
+      const b = e.bounds;
+      const reach = b.rMax * 1.1 * CROWN_SCALE_MAX + slack + 1;
+      const box = {
+        xMin: b.xMin - reach,
+        xMax: b.xMax + reach,
+        yMin: displayY(b.gMin, hRef, exag) - 1,
+        yMax: displayY(b.gMax, hRef, exag) + b.hMax + slack + 1,
+        zMin: b.zMin - reach,
+        zMax: b.zMax + reach,
+      };
+      if (!rayHitsBox(ray, box, best?.exact ? best.t + reach : o.maxDistance + reach)) continue;
+      best = pickTreeRows(e.rows, ray, opts, best);
+    }
+    return best;
   }
 
   /** Free everything (layer off for good). In-flight fetches are discarded on arrival. */

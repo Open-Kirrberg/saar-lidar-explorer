@@ -78,13 +78,71 @@ class AOI:
         ]
 
 
-def load_aoi(key: str, path: Path = PIPELINE_DIR / "aois.toml") -> AOI:
+# --- stats-only AOIs (aois.toml `stats_only = true`, e.g. [orte]) ---------------------------------------------
+# A stats-only AOI is a statistics area: no 3D tiles are built or published for it. The steps below write tiles,
+# layers or manifests under app/public/data/<aoi>/ (or fetch the inputs for them) and are refused for it, both by
+# run.sh (`plan_steps`) and by `load_aoi` when one of these scripts is the entry point.
+TILE_STEPS = ("fetch", "build", "xyz", "osm", "cadastre", "buildings", "ortho", "historic", "detect", "pointcloud",
+              "trees", "forest")
+# script stem → run.sh step name
+TILE_STEP_SCRIPTS = {**{s: s for s in TILE_STEPS if s != "forest"}, "historic_forest": "forest"}
+# `./run.sh <stats-only aoi>` without steps: place outlines, stats-area trees + inputs, then the place statistics,
+# written into the output AOI (aois.toml `stats_output`, default STATS_OUTPUT_AOI).
+STATS_ONLY_DEFAULT_STEPS = ("places", "stats-trees", "stats-inputs", "stats")
+STATS_OUTPUT_AOI = "overall"
+DEFAULT_STEPS = ("fetch", "build", "xyz", "osm", "cadastre", "buildings", "ortho", "historic", "pois", "detect",
+                 "pointcloud", "trees", "test")
+
+
+def aoi_config(key: str, path: Path = PIPELINE_DIR / "aois.toml") -> dict[str, Any]:
+    """Raw aois.toml entry of `key` merged over [defaults]; exits with the known names when `key` is unknown."""
     cfg = tomllib.loads(path.read_text())
-    defaults = cfg.get("defaults", {})
     if key not in cfg or key == "defaults":
         names = [k for k in cfg if k != "defaults"]
         sys.exit(f"unknown AOI {key!r}; known: {', '.join(names)}")
-    a = {**defaults, **cfg[key]}
+    return {**cfg.get("defaults", {}), **cfg[key]}
+
+
+def stats_only_message(key: str, step: str) -> str:
+    return (f"AOI {key!r} is stats_only (aois.toml): a statistics area, no 3D tiles are built for it, so step "
+            f"{step!r} is refused. Tile steps ({' '.join(TILE_STEPS)}) need a tile AOI such as 'overall'. "
+            f"For the statistics run './run.sh {key}' (= {' '.join(STATS_ONLY_DEFAULT_STEPS)}).")
+
+
+def entry_step(argv0: str | None = None) -> str | None:
+    """run.sh step name of the running entry script (`fetch.py` → 'fetch'), None for anything else."""
+    a = sys.argv[0] if argv0 is None else argv0
+    return TILE_STEP_SCRIPTS.get(Path(a).stem) if a else None
+
+
+def plan_steps(key: str, steps: Iterable[str] = (), path: Path = PIPELINE_DIR / "aois.toml"
+               ) -> list[tuple[str, str]]:
+    """run.sh step plan: [(step, AOI the step runs for)]. Empty `steps` → the default chain (stats-only AOIs:
+    STATS_ONLY_DEFAULT_STEPS). Exits with `stats_only_message` when a tile step is asked for a stats-only AOI,
+    before any step runs. For a stats-only AOI the `stats` step writes into its output AOI (`stats_output`,
+    default 'overall')."""
+    a = aoi_config(key, path)
+    steps = list(steps)
+    stats_only = bool(a.get("stats_only", False))
+    if not steps:
+        steps = list(STATS_ONLY_DEFAULT_STEPS if stats_only else DEFAULT_STEPS)
+    if stats_only:
+        bad = [s for s in steps if s in TILE_STEPS]
+        if bad:
+            sys.exit(stats_only_message(key, bad[0]))
+        out = str(a.get("stats_output", STATS_OUTPUT_AOI))
+        return [(s, out if s == "stats" else key) for s in steps]
+    return [(s, key) for s in steps]
+
+
+def load_aoi(key: str, path: Path = PIPELINE_DIR / "aois.toml", *, step: str | None = None) -> AOI:
+    """AOI config of `key`. A stats-only AOI (`stats_only = true`) is refused for tile steps: `step` names the
+    calling step (run.sh name); when omitted it is derived from the entry script (`build.py` → 'build'), so every
+    tile script refuses it without a check of its own. Stats scripts (places, stats_*) are no tile steps."""
+    a = aoi_config(key, path)
+    step = step or entry_step()
+    if a.get("stats_only") and step in TILE_STEPS:
+        sys.exit(stats_only_message(key, step))
     e0, n0, e1, n1 = (int(v) for v in a["bbox"])
     aoi = AOI(key, a["name"], e0, n0, e1, n1, int(a["buffer_m"]), a["county"], int(a["chunk_size"]))
     if aoi.width % aoi.chunk_size or aoi.height % aoi.chunk_size:
@@ -270,3 +328,15 @@ def swap_dir(staging: Path, out_dir: Path) -> None:
     staging.rename(out_dir)
     if old.exists():
         shutil.rmtree(old)
+
+
+def _main(argv: list[str]) -> None:
+    """`python common.py plan <aoi> [steps…]`: the step plan for run.sh, one `<step> <aoi>` line per step."""
+    if len(argv) < 2 or argv[0] != "plan":
+        sys.exit("usage: python common.py plan <aoi> [steps…]")
+    for s, k in plan_steps(argv[1], argv[2:]):
+        print(f"{s} {k}")
+
+
+if __name__ == "__main__":
+    _main(sys.argv[1:])

@@ -13,12 +13,15 @@ import { modalOpen } from '../ui/modalKeys';
 import { FOCUS_AREAS, bboxRing } from './aois';
 import { horizontalFovDeg, minimapPose, northBadgeOffset, unrotatePoint, wedgePath } from './bearing';
 import type { MapMode } from './bearing';
+import { cornerLift, zoomToFitAround } from './fit';
 import { borderNdc, footprintFromRays } from './footprint';
 import { DOP_WMS, mergeOverlayPrefs, syncOverlayPrefs, xyzOverlay } from './overlays';
 import { resolveDataPath } from '../data/urls';
 import type { RayHit, V3 } from './footprint';
 
 const PREFS_KEY = 'sle.map.v2';
+/** Dispatched synchronously when the full-screen map opens / closes (the shell re-places its corner). */
+export const MAP_FULL_EVENT = 'sle:map-full';
 /** v1 prefs (size/collapsed/follow are gone; base, overlays and relief opacity carry over into Labor). */
 const PREFS_KEY_V1 = 'sle.map.v1';
 const CP_WMS = 'https://geoportal.saarland.de/gdi-sl/inspirewms_Flurstuecke_Grundstuecke_ALKIS?';
@@ -128,6 +131,13 @@ export class Minimap {
   private compactZoom: number;
   /** showBounds() opened the full-screen map; endTemporaryView() closes it again. */
   private temporaryFull = false;
+  /** Area the user selected (e.g. a place outline): the full map fits it when it opens. */
+  private focus: L.LatLngBounds | null = null;
+  /** Compact dial zoomed out to show `bounds` around the player until `until` (ms, extended while flying). */
+  private peek: { bounds: L.LatLngBounds; until: number; ms: number; zoom: number } | null = null;
+  private peekTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Full map: px the bottom-right controls move up to clear the shell's „© Quellen“ button. */
+  private cornerLiftPx = 0;
   private coneFov = 0;
   private coneRadius = 0;
   private labor = false;
@@ -160,8 +170,8 @@ export class Minimap {
     this.centerBtn = container.querySelector<HTMLButtonElement>('.gmm-center')!;
     this.attrEl = container.querySelector<HTMLElement>('.gmm-attr')!;
 
-    const E0 = manifest.origin.E0 + manifest.size.width / 2;
-    const N0 = manifest.origin.N0 + manifest.size.height / 2;
+    const E0 = manifest.origin.E0 + (manifest.size.width * manifest.cellSize) / 2; // size is in cells
+    const N0 = manifest.origin.N0 + (manifest.size.height * manifest.cellSize) / 2;
     const c0 = utmToWgs84(E0, N0);
 
     this.map = L.map(this.mapEl, {
@@ -293,8 +303,12 @@ export class Minimap {
     this.map.on('dragstart', () => this.setFollow(false));
     this.map.on('zoomend', () => {
       if (!this.full) {
-        this.compactZoom = this.map.getZoom();
-        this.savePrefs({ zoom: this.compactZoom });
+        // A peek zoom is temporary; a zoom the user makes during a peek ends it and is kept.
+        if (this.peek && this.map.getZoom() !== this.peek.zoom) this.stopPeek(false);
+        if (!this.peek) {
+          this.compactZoom = this.map.getZoom();
+          this.savePrefs({ zoom: this.compactZoom });
+        }
       }
       if (this.full ? this.follow : true) this.recenter();
     });
@@ -316,6 +330,7 @@ export class Minimap {
 
     const ro = new ResizeObserver(() => {
       this.map.invalidateSize({ animate: false });
+      this.syncCornerLift();
       this.updatePlayerIcon();
       this.placeNorthBadge();
       if (this.full && !this.follow) this.scheduleCamera(true);
@@ -364,6 +379,8 @@ export class Minimap {
     this.temporaryFull = false;
     this.full = on;
     this.root.classList.toggle('gmm-full', on);
+    // The shell re-places its „© Quellen“ corner now (a phone sheet hides behind the full map), before we measure it.
+    window.dispatchEvent(new CustomEvent(MAP_FULL_EVENT, { detail: { full: on } }));
     for (const c of this.fullControls.splice(0)) c.remove();
     const m = this.map;
     if (on) {
@@ -389,8 +406,40 @@ export class Minimap {
     }
     this.setFollow(true);
     this.applyMode();
+    this.syncCornerLift();
+    // A selected area (place outline) and the player both show when the full map opens.
+    if (on && this.focus) this.fitFull(L.latLngBounds(this.focus.getSouthWest(), this.focus.getNorthEast()).extend(this.player.getLatLng()));
     this.root.querySelector<HTMLElement>(on ? '.gmm-close' : '.gmm-expand')?.focus({ preventScroll: true });
     // Size changes are picked up by the ResizeObserver.
+  }
+
+  /**
+   * Show an area (e.g. a selected place's outline, WGS84 bounds). Full-screen map: fit it (stops
+   * following; the centre button returns to the player). Compact dial (player-centred, round): zoom
+   * out for `peekMs` after the current flight ends so the area shows around the player, then back to
+   * the user's zoom (a zoom by the user ends the peek). Nothing is persisted.
+   */
+  fitBounds(bounds: L.LatLngBounds, opts: { peekMs?: number; maxZoom?: number } = {}): void {
+    if (!bounds.isValid()) return;
+    if (this.full) {
+      this.fitFull(bounds, opts.maxZoom);
+      return;
+    }
+    const ms = opts.peekMs ?? 4000;
+    this.peek = { bounds, until: performance.now() + ms, ms, zoom: this.map.getZoom() };
+    this.updateCamera();
+    this.schedulePeekEnd();
+  }
+
+  /**
+   * The selected area (null clears it): fitted now (see `fitBounds`) and again, together with the
+   * player, whenever the full-screen map opens while it is set.
+   */
+  setFocus(bounds: L.LatLngBounds | null, opts: { peekMs?: number; fit?: boolean } = {}): void {
+    this.focus = bounds && bounds.isValid() ? bounds : null;
+    if (this.focus) {
+      if (opts.fit !== false) this.fitBounds(this.focus, opts);
+    } else this.stopPeek(true);
   }
 
   /**
@@ -401,9 +450,7 @@ export class Minimap {
     const wasFull = this.full;
     this.setFull(true);
     this.temporaryFull = !wasFull;
-    this.setFollow(false);
-    this.map.invalidateSize({ animate: false });
-    this.map.fitBounds(L.latLngBounds(points), { padding: [16, 16], maxZoom: 15, animate: false });
+    this.fitFull(L.latLngBounds(points), 15, 16);
   }
 
   /** Undo `showBounds()`. */
@@ -497,6 +544,7 @@ export class Minimap {
     this.destroyed = true;
     for (const off of this.offs.splice(0)) off();
     if (this.footprintTimer) clearTimeout(this.footprintTimer);
+    if (this.peekTimer) clearTimeout(this.peekTimer);
     this.map.remove();
     this.root.classList.remove('gmm', 'gmm-full', 'gmm-heading');
     this.root.innerHTML = '';
@@ -637,7 +685,8 @@ export class Minimap {
 
   /** Outline of the loaded AOI (solid red, tooltip with its name and size). */
   private aoiOutline(): L.Polygon {
-    const { origin, size, name } = this.ctx.manifest;
+    const { origin, name, cellSize } = this.ctx.manifest;
+    const size = { width: this.ctx.manifest.size.width * cellSize, height: this.ctx.manifest.size.height * cellSize }; // cells → m
     const ring = this.toLatLngs(bboxRing([origin.E0, origin.N0, origin.E0 + size.width, origin.N0 + size.height]));
     const km = (m: number) => (m / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 });
     return L.polygon(ring, { color: '#e03c31', weight: 2, fill: false, interactive: true, bubblingMouseEvents: true }).bindTooltip(
@@ -680,6 +729,62 @@ export class Minimap {
     }
   }
 
+  /** Full map: fit `b` inside the controls (close / centre top right, zoom bottom right above „© Quellen“). */
+  private fitFull(b: L.LatLngBounds, maxZoom = 16, pad = 24): void {
+    this.setFollow(false);
+    this.map.invalidateSize({ animate: false });
+    this.syncCornerLift();
+    this.map.fitBounds(b, { paddingTopLeft: [pad, pad + 8], paddingBottomRight: [pad + 40, pad + this.cornerLiftPx], maxZoom, animate: false });
+  }
+
+  /** Compact dial zoom at which the peek area's farthest corner lies inside the round dial. */
+  private peekZoom(center: L.LatLng): number {
+    const pk = this.peek!;
+    const z = this.map.getZoom();
+    const c = this.map.project(center, z);
+    let d = 0;
+    for (const ll of [pk.bounds.getNorthWest(), pk.bounds.getNorthEast(), pk.bounds.getSouthWest(), pk.bounds.getSouthEast()]) {
+      d = Math.max(d, this.map.project(ll, z).distanceTo(c));
+    }
+    const r = (this.root.querySelector<HTMLElement>('.gmm-dial')?.clientWidth ?? 150) / 2;
+    return zoomToFitAround(z, d, r * 0.85, this.map.getMinZoom(), this.compactZoom);
+  }
+
+  private schedulePeekEnd(): void {
+    if (this.peekTimer) clearTimeout(this.peekTimer);
+    const tick = () => {
+      this.peekTimer = null;
+      const pk = this.peek;
+      if (!pk || this.destroyed) return;
+      const now = performance.now();
+      if (this.ctx.controller.flying) pk.until = Math.max(pk.until, now + pk.ms); // the peek runs out after the flight
+      if (now < pk.until) this.peekTimer = setTimeout(tick, Math.min(500, pk.until - now + 10));
+      else this.stopPeek(true);
+    };
+    this.peekTimer = setTimeout(tick, 300);
+  }
+
+  /** End the dial peek; `restore` returns to the user's zoom. */
+  private stopPeek(restore: boolean): void {
+    if (this.peekTimer) clearTimeout(this.peekTimer);
+    this.peekTimer = null;
+    if (!this.peek) return;
+    this.peek = null;
+    if (restore && !this.full && !this.destroyed && this.map.getZoom() !== this.compactZoom) this.map.setZoom(this.compactZoom, { animate: false });
+  }
+
+  /** Full map: lift Leaflet's bottom-right controls (zoom, attribution) above the „© Quellen“ button. */
+  private syncCornerLift(): void {
+    let lift = 0;
+    if (this.full) {
+      const keep = document.querySelector<HTMLElement>('[data-shell-anchor="sources"]')?.getBoundingClientRect() ?? null;
+      lift = cornerLift(this.root.getBoundingClientRect(), keep);
+    }
+    if (lift === this.cornerLiftPx) return;
+    this.cornerLiftPx = lift;
+    this.root.style.setProperty('--gmm-br-lift', `${lift}px`);
+  }
+
   private recenter(): void {
     const { E, N } = this.ctx.store.get();
     if (!E && !N) return;
@@ -718,7 +823,9 @@ export class Minimap {
     if (!this.full || this.follow) {
       const p = this.map.latLngToContainerPoint(latlng);
       const c = this.map.getSize().divideBy(2);
-      if (p.distanceTo(c) > 0.5) this.map.setView(latlng, this.map.getZoom(), { animate: false });
+      const zoom = !this.full && this.peek ? this.peekZoom(latlng) : this.map.getZoom();
+      if (this.peek && !this.full) this.peek.zoom = zoom;
+      if (p.distanceTo(c) > 0.5 || zoom !== this.map.getZoom()) this.map.setView(latlng, zoom, { animate: false });
     }
     if (!this.labor) return;
     const now = performance.now();

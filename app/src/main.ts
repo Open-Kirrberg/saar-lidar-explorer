@@ -24,6 +24,7 @@ import { createSettingsRuntime, createShell } from './shell/Shell';
 import { registerLens } from './lens';
 import type { ShellApi } from './shell/types';
 import { registerZones } from './zones/runtime/feature';
+import { registerPlaceStats } from './places';
 import { installTutorial } from './tutorial/Tutorial';
 import type { ZonesApi } from './zones/runtime/feature';
 import './ui/style.css';
@@ -245,6 +246,7 @@ async function main(): Promise<void> {
     areaNote: `Gebiet: ${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''}`,
   });
   registerZones(ctx); // V2.6b: zone portals (Standard), loading screen, enter / leave
+  registerPlaceStats(ctx); // 🏆 Orte im Vergleich: card in the „Orte“ drawer (Standard, when manifest.stats)
   installTutorial(ctx); // V2.9 first-flight tutorial: 🟢 Standard, once per profile (ADR 0038)
   installTrees(ctx); // V2.4 CHM trees: 🟢 Standard feature `trees`, updated via ctx.onFrame (app/README „Bäume“)
   registerLens(ctx); // V2.5: game look + Relikt-Blick lens (src/lens, ADR 0035)

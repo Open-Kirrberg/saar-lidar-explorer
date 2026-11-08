@@ -8,11 +8,14 @@
  * a „Bäume“ switch in *Einstellungen*, persisted in localStorage `sle.trees.v1`.
  * The relief lab's DSM canopy (F5, *Wald* ≠ aus, Labor) replaces the trees while it is on, so the
  * two never overlap. `setLensFade(0…1)` is for the Relikt-Blick lens (V2.5).
+ * With `shell` it also registers 🟢 `tree-card`, the *Baum-Steckbrief*: tap / click a tree → card
+ * (TreeCard.ts; plan „Orte im Vergleich“ §4).
  */
 import type { Camera, Scene } from 'three';
 import type { Manifest } from '../data/manifest';
 import type { FeatureHost, ShellApi } from '../shell/types';
 import type { AppState, Store } from '../state';
+import { mountTreeCard } from './TreeCard';
 import { TreeLayer } from './TreeLayer';
 import type { TreeStats, TreeTerrain } from './TreeLayer';
 
@@ -55,6 +58,9 @@ export interface InstallTreesOptions {
   /** Per-frame hook (AppContext.onFrame); without it call `update(dt)` yourself. */
   onFrame?: (cb: (dt: number) => void) => () => void;
 }
+
+/** Baum-Steckbrief (tap a tree → card): Standard, part of the trees layer. */
+export const TREE_CARD_FEATURE = { id: 'tree-card', tier: 'standard', label: 'Baum-Steckbrief' } as const;
 
 const PREFS_KEY = 'sle.trees.v1';
 
@@ -169,6 +175,7 @@ export function installTrees(o: InstallTreesOptions): TreesApi {
       unsub();
       offFrame?.();
       unregister?.();
+      unregisterCard?.();
       o.scene.remove(layer);
       layer.dispose();
     },
@@ -179,6 +186,12 @@ export function installTrees(o: InstallTreesOptions): TreesApi {
     tier: TREES_FEATURE.tier,
     label: TREES_FEATURE.label,
     mount: (h) => mountSettings(h, api),
+  });
+  const unregisterCard = o.shell?.registerFeature({
+    id: TREE_CARD_FEATURE.id,
+    tier: TREE_CARD_FEATURE.tier,
+    label: TREE_CARD_FEATURE.label,
+    mount: (h) => mountTreeCard(h, layer),
   });
   window.sleTrees = api; // verification handle (perf script, browser checks)
   return api;

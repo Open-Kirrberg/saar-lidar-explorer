@@ -1,0 +1,51 @@
+/* 🌳 Baum-Steckbrief: floating card (like the Relikt-Blick card) + selection pin above the crown. */
+.sle-tree-card {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(var(--above-footer) + 54px);
+  width: min(360px, calc(100vw - 2 * var(--gap))); box-sizing: border-box; padding: 12px 14px;
+  max-height: 70vh; overflow: auto; pointer-events: auto;
+  border-radius: 16px; background: var(--ui-bg-strong); color: var(--ui-fg); font: 14px/1.4 var(--ui-font);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45); border: 1px solid rgba(126, 214, 120, 0.6); z-index: 6;
+}
+.sle-tree-card[hidden] { display: none; }
+.sle-tree-card[data-side='right'] { left: auto; right: calc(var(--gap) + var(--safe-r, 0px)); transform: none; }
+.sle-tree-card[data-side='left'] { left: calc(var(--gap) + var(--safe-l, 0px)); transform: none; }
+.sle-tree-card header { display: flex; align-items: flex-start; gap: 8px; }
+.sle-tree-card h2 { flex: 1; margin: 0; font-size: 17px; color: #a8e39a; }
+.sle-tree-card .sle-tree-x {
+  border: 0; background: transparent; color: var(--ui-fg); font-size: 20px; line-height: 1;
+  min-width: 36px; min-height: 36px; cursor: pointer; border-radius: 10px;
+}
+.sle-tree-card .sle-tree-x:hover { background: rgba(255, 255, 255, 0.1); }
+.sle-tree-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; }
+.sle-tree-chip { font-size: 12px; padding: 1px 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.1); }
+.sle-tree-chip.fill { background: rgba(255, 196, 92, 0.18); color: #ffd28a; cursor: help; }
+.sle-tree-chip.giant { background: rgba(18, 92, 60, 0.9); border: 1px solid #45f2c7; }
+.sle-tree-giant { margin: 6px 0; font-size: 13px; color: #c9f5e6; }
+.sle-tree-kvs { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 8px 0 6px; font-size: 13px; }
+.sle-tree-kv { display: contents; }
+.sle-tree-kvs dt { color: var(--ui-dim); }
+.sle-tree-kvs dt[title] { cursor: help; }
+.sle-tree-kvs dd { margin: 0; }
+.sle-tree-est {
+  display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 8px; vertical-align: 1px;
+  background: rgba(255, 196, 92, 0.16); color: #ffd28a;
+}
+.sle-tree-sub { display: block; color: var(--ui-dim); font-size: 12px; }
+.sle-tree-link {
+  margin-top: 2px; padding: 4px 10px; min-height: 32px; border: 1px solid #45f2c7; border-radius: 10px;
+  background: transparent; color: #8ff5da; font: 13px var(--ui-font); cursor: pointer;
+}
+.sle-tree-link:hover { background: rgba(69, 242, 199, 0.12); }
+.sle-tree-note { margin: 6px 0 0; color: var(--ui-dim); font-size: 12px; }
+.sle-tree-note.warn { color: #ffd28a; }
+.sle-tree-src { margin-top: 6px; color: var(--ui-dim); font-size: 12px; }
+.sle-tree-src summary { cursor: pointer; min-height: 24px; }
+.sle-tree-src p { margin: 4px 0 0; }
+
+.sle-tree-sel { pointer-events: none; color: #ffe27a; font: 700 18px/1 var(--ui-font); text-shadow: 0 0 4px #000, 0 0 2px #000; }
+.sle-tree-sel.occluded { opacity: 0.45; }
+
+@media (max-width: 600px) {
+  .sle-tree-card, .sle-tree-card[data-side] { left: var(--gap); right: var(--gap); width: auto; transform: none; bottom: calc(var(--above-footer) + 50px); max-height: 55dvh; }
+  .sle-tree-link { min-height: 40px; }
+}

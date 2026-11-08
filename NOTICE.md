@@ -18,7 +18,10 @@ keep the licence of the material they show or derive from. Reuse them under that
 
 Data served by the public site (separate repositories `saar-lidar-data`, `saar-lidar-data-2`): Geobasisdaten Saarland
 and Rheinland-Pfalz under **Datenlizenz Deutschland – Namensnennung – 2.0** (https://www.govdata.de/dl-de/by-2-0),
-OpenStreetMap under **ODbL 1.0**; see the README and `ATTRIBUTION` of those repositories.
+OpenStreetMap under **ODbL 1.0**; the place statistics *Orte im Vergleich* (`overall/stats/`) also derive from
+**Zensus 2022** (© Statistische Ämter des Bundes und der Länder) and the **Marktstammdatenregister** (© Bundesnetzagentur),
+both dl-de/by-2-0, and the historic forest mask (`overall/forest_hist/`) from the historic maps of GeoBasis-DE/LVGL-SL
+(dl-de/by-2-0); see the README and `ATTRIBUTION` of those repositories.
 
 > **Schauen, nicht graben.** The app shows hypotheses from terrain data, not finds. Archaeological sites are protected
 > (SDschG Saarland, DSchG Rheinland-Pfalz); no digging or detector use, report finds to the Landesdenkmalamt.

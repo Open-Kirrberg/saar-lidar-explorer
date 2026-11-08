@@ -254,16 +254,20 @@ def test_ground_rise_measures_max_rise_within_radius():
 
 
 def test_tree_reason_order_and_terrain():
-    crown = np.maximum(_cone(50, 30), 0)
+    crown = np.maximum(_cone(50, 30, k=S.chm_pad()), 0)
     yy, xx = np.mgrid[-15:16, -15:16]
     flat, no_b = np.full((31, 31), 300.0, np.float32), np.zeros((11, 11), bool)
     assert S.tree_reason(50.0, 5.0, 100.0, crown, no_b, flat) is None
-    assert S.tree_reason(50.0, 5.0, 10.0, crown, no_b, flat) == "pylon-or-mast"
-    assert S.tree_reason(60.0, 5.0, 100.0, crown, no_b, flat) == "chm-clip"
+    assert S.tree_reason(50.0, 5.0, 25.0, crown, no_b, flat) == "pylon-or-mast"   # v4: 30 m clearance
+    assert S.tree_reason(50.0, 5.0, 31.0, crown, no_b, flat) is None
+    tall = np.maximum(_cone(60.9, 36, k=S.chm_pad()), 0)                           # v4: unclipped 60.9 m crown
+    assert S.tree_reason(60.9, 5.0, 100.0, tall, no_b, flat) is None
+    assert S.tree_reason(80.0, 5.0, 100.0, crown * 1.6, no_b, flat) == "too-tall"  # mast / turbine / crane
     b = no_b.copy()
     b[0, 0] = True
     assert S.tree_reason(50.0, 5.0, 100.0, crown, b, flat) == "building"
     assert S.tree_reason(50.0, 5.0, 100.0, crown[:-1], no_b, flat) == "edge"
+    assert S.tree_reason(50.0, 5.0, 100.0, crown[4:-4, 4:-4], no_b, flat) == "edge"  # v3-size window too small
     assert S.tree_reason(50.0, 5.0, 100.0, crown, no_b, flat[:9, :9]) == "edge"   # DTM window too small
     gully = (300 + 1.0 * np.abs(xx)).astype(np.float32)
     assert S.tree_reason(50.0, 5.0, 100.0, crown, no_b, gully) == "terrain"
@@ -272,9 +276,46 @@ def test_tree_reason_order_and_terrain():
     ravine = (300 + 0.6 * np.abs(xx)).astype(np.float32)  # rise 2.4 m in 4 m, but ≈ 5 m deep within 15 m
     assert S.tree_reason(50.0, 5.0, 100.0, crown, no_b, ravine) == "valley"
     assert S.tree_reason(50.0, 5.0, 100.0, crown, no_b, None) is None   # no DTM → terrain tests skipped
-    spike = _flat(0.0)
-    spike[4, 4] = 50.0
+    spike = _flat(0.0, k=S.chm_pad())
+    spike[8, 8] = 50.0
     assert S.tree_reason(50.0, 5.0, 100.0, spike, no_b, flat) == "spike"
+    jib = _flat(20.0, k=S.chm_pad())                 # a crane jib seen blurred: a 5 m wide, 17 m long bar at 60 m
+    jib[6:11, :] = 60.0                              # (wide enough to pass the spike / narrow support tests)
+    assert S.tree_reason(60.0, 5.0, 100.0, jib, no_b, flat) == "linear"
+
+
+def test_remeasure_at_clip_keeps_v3_rejection_without_unclipped_chm():
+    k = S.chm_pad()
+    clipped = np.minimum(np.maximum(_cone(60.9, 36, k=k), 0), 60.0).astype(np.float32)   # detector CHM, 60 m clip
+    raw = np.maximum(_cone(60.9, 36, k=k), 0).astype(np.float32)                          # DSM − DTM, no clip
+    h, win, why = S.remeasure_at_clip(60.0, clipped, raw)
+    assert why is None and h == pytest.approx(60.9) and win is raw                        # v4: re-measured
+    assert S.remeasure_at_clip(60.0, clipped, None) == (60.0, clipped, "chm-clip")       # no raw LiDAR → v3 rule
+    assert S.remeasure_at_clip(60.0, clipped, raw[1:, 1:])[2] == "chm-clip"              # shape mismatch
+    nan_top = raw.copy()
+    nan_top[k, k] = np.nan
+    assert S.remeasure_at_clip(60.0, clipped, nan_top)[2] == "chm-clip"
+    assert S.remeasure_at_clip(60.0, clipped[1:, 1:], raw[1:, 1:])[2] == "chm-clip"       # window cut at the edge
+    low = np.maximum(_cone(50, 30, k=k), 0)
+    assert S.remeasure_at_clip(50.0, low, None) == (50.0, low, None)                      # below the clip: unchanged
+
+
+def test_linear_ratio_round_tops_vs_lines():
+    k = S.chm_pad()
+    assert S.linear_ratio(np.maximum(_cone(50, 30, k=k), 0), 50.0) == pytest.approx(1.0, abs=0.05)
+    bar = _flat(10.0, k=k)
+    bar[k, :] = 50.0
+    assert S.linear_ratio(bar, 50.0) > 5
+    diag = _flat(10.0, k=k)
+    for d in range(-6, 7):
+        diag[k + d, k + d] = 50.0
+    assert S.linear_ratio(diag, 50.0) > 5            # 8-connected diagonal line
+    blob = _flat(10.0, k=k)
+    blob[k - 2:k + 3, k - 3:k + 4] = 50.0            # 5 × 7 m crown top: not a line
+    assert S.linear_ratio(blob, 50.0) < S.TALLEST["linear_ratio_max"]
+    lone = _flat(10.0, k=k)
+    lone[k, k] = 50.0
+    assert S.linear_ratio(lone, 50.0) == 1.0         # one cell: the spike test handles it
 
 
 def test_valley_depth_is_zero_on_planes_and_positive_in_hollows():
@@ -408,6 +449,8 @@ def test_osm_features_classifies_and_assembles_multipolygons():
             {"type": "way", "role": "inner", "geometry": _ll(hole)}]},
         {"type": "node", "tags": {"power": "tower"}, "lon": 5, "lat": 6},
         {"type": "node", "tags": {"power": "pole"}, "lon": 7, "lat": 8},
+        {"type": "node", "tags": {"power": "generator", "generator:source": "wind"}, "lon": 9, "lat": 9},
+        {"type": "node", "tags": {"power": "generator", "generator:source": "solar"}, "lon": 3, "lat": 3},
         {"type": "way", "tags": {"man_made": "chimney"}, "geometry": _ll([(0, 0), (2, 0), (2, 2), (0, 2), (0, 0)])},
     ]}
     f = S.osm_features(data, lambda pts: [(p["lon"], p["lat"]) for p in pts])
@@ -416,8 +459,9 @@ def test_osm_features_classifies_and_assembles_multipolygons():
     assert road.area == pytest.approx(100 * 5.5)    # flat caps, full width
     assert len(f["water"]) == 1
     assert len(f["residential"]) == 1 and f["residential"][0].area == pytest.approx(10_000 - 400)
-    assert f["hazards"][0] == (5, 6) and len(f["hazards"]) == 2
-    assert f["hazards"][1] == pytest.approx((1, 1))
+    assert f["hazards"][0] == (5, 6) and len(f["hazards"]) == 3
+    assert f["hazards"][1] == (9, 9) and f["wind"] == [(9, 9)]   # wind turbine yes, solar generator no
+    assert f["hazards"][2] == pytest.approx((1, 1))
 
 
 # ------------------------------------------------------------------------------------------- Zensus xlsx
@@ -580,7 +624,7 @@ def test_method_ids_are_the_contract_ids():
     assert {k: v["id"] for k, v in m.items()} == {
         "assign": "parcel-pip-v1", "crown": "crown-disc-v1", "biomass": "crown-allometry-v1",
         "ortslage": "ortslage-bldg-buffer-50m-v1", "green": "ndvi-cir-v1", "sealed": "sealed-v1",
-        "inhabitants": "zensus-grid-area-v1", "tallest": "tallest-checked-v3", "pv_mastr": "mastr-municipality-v1",
+        "inhabitants": "zensus-grid-area-v1", "tallest": "tallest-checked-v4", "pv_mastr": "mastr-municipality-v1",
         "category": "category-inhabitants-v1"}
     json.dumps(m)  # serialisable
 

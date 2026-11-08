@@ -8,7 +8,7 @@ Static data for the [Saar LiDAR Explorer]({{APP_URL}}) (code: https://github.com
 
 | Path | What |
 |---|---|
-| `{{AOI}}/` | AOI „{{AOI_NAME}}“: `manifest.json`, height chunks (Terrarium PNG), relief layers, overview levels, DOM, orthophoto, historic maps, LoD2 buildings, OSM ways, ALKIS parcels, point clouds, relict candidates. Format: `docs/data-contract.md` in the code repository. The Leaflet tiles (`xyz`) are in the second data repository ({{DATA2_URL}}), referenced by absolute URLs in the manifest. |
+| `{{AOI}}/` | AOI „{{AOI_NAME}}“: `manifest.json`, height chunks (Terrarium PNG), relief layers, overview levels, DOM, orthophoto, historic maps, LoD2 buildings, OSM ways, ALKIS parcels, point clouds, relict candidates, place statistics *Orte im Vergleich* (`stats/places.json`, `stats/places.geojson`: aggregates per Gemarkung / Gemeinde, estimates as ranges) and the historic forest mask (`forest_hist/`, an estimate from the 1935–40 map symbols). Format: `docs/data-contract.md` in the code repository. The Leaflet tiles (`xyz`) are in the second data repository ({{DATA2_URL}}), referenced by absolute URLs in the manifest. |
 | `pois.geojson` | Known sites („Bekannte Orte“), WGS84. |
 | `shared/karlsberg1789/` | Hypothetical reconstruction of Schloss Karlsberg, summer 1789 (light model for the explorer). |
 | `castle-viewer/terrain/` | 1 m terrain crops (2025 DTM and the 1789 terrain hypothesis) used to build the castle viewer; `SHA256SUMS`. |
@@ -23,6 +23,7 @@ The {{CANDIDATE_COUNT}} *Verdachtsflächen* are the output of an **automatic, un
 The code is MIT-licensed (see the code repository). **The data keep their own licences:**
 
 - Geobasisdaten Saarland (LVGL-SL: DGM1/DOM1/ALS points, DOP20, LoD2, ALKIS, historic maps) and Rheinland-Pfalz (GeoBasis-DE/LVermGeoRP): **Datenlizenz Deutschland – Namensnennung – Version 2.0** (dl-de/by-2-0, https://www.govdata.de/dl-de/by-2-0). All products here are processed („Daten bearbeitet“).
+- Place statistics (`{{AOI}}/stats/`) also use the **Zensus 2022** 100 m grid (© Statistische Ämter des Bundes und der Länder) and the **Marktstammdatenregister** (© Bundesnetzagentur), both dl-de/by-2-0, processed. They are aggregates per place, never per parcel, building or person.
 - OpenStreetMap data (ways, most POI coordinates): **ODbL 1.0** (https://opendatacommons.org/licenses/odbl/), © OpenStreetMap-Mitwirkende.
 - Reconstruction 1789 (`shared/karlsberg1789/`): own work (hypothesis); building footprints partly derived from the Lageplan 2006 by schloss-carlsberg.de („Mannlich“), **CC BY-SA 2.0 DE** — these derived geometries are shared under CC BY-SA 2.0 DE.
 - Relief visualisations, candidates, levels and encodings: derived from the data above (same licences).

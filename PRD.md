@@ -51,7 +51,7 @@ Full table and the remove / freeze list: [0019](docs/adr/0019-feature-tiers.md) 
 
 | Tier | Gist |
 |---|---|
-| 🟢 Standard | Fly/walk · game minimap · nearest places · paths · houses · aerial ground · CHM trees · share + QR · keybind dialog · Relikt-Blick · *Merken* · tutorial · disclaimer banner · castle zone (Kino look, Rundflug, ≈ 8 highlights) |
+| 🟢 Standard | Fly/walk · game minimap · nearest places · paths · houses · aerial ground · CHM trees · share + QR · keybind dialog · Relikt-Blick · *Merken* · tutorial · disclaimer banner · castle zone (Kino look, Rundflug, ≈ 8 highlights) · *Orte im Vergleich* + *Baum-Steckbrief* ([0049](docs/adr/0049-orte-im-vergleich-places-only.md)) |
 | 🟡 Entdecker | Exaggeration · quality · Flurstücke 2D · lens variants · *Zeitreise* 1840 / 1935 · castle time of day, photo mode, *Gewissheit* |
 | 🔴 Labor | Full HUD · relief lab · F15 review · marker list + GeoJSON · measuring · F18 report · castle *Dokumentation* |
 | 🧊 Freeze | *Mein Standort* · point cloud · castle festivals · plan sheets / glTF |

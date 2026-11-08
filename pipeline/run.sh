@@ -3,11 +3,16 @@
 # Steps can be selected:      ./run.sh karlsberg build xyz
 set -euo pipefail
 cd "$(dirname "$0")"   # always run from pipeline/ (never from the untrusted data dirs)
+# Stats-only AOIs (aois.toml `stats_only = true`, e.g. orte) refuse the tile steps; `./run.sh orte` alone runs
+# places stats-trees stats-inputs and then `stats` for the output AOI (overall). The plan comes from common.py.
 AOI="${1:-karlsberg}"; shift || true
-if [[ $# -gt 0 ]]; then STEPS=("$@"); else STEPS=(fetch build xyz osm cadastre buildings ortho historic pois detect pointcloud trees test); fi
+PLAN=$(uv run python common.py plan "$AOI" "$@") || exit 1
+STEPS=(); AOIS=()
+while read -r s a; do [[ -n "$s" ]] && STEPS+=("$s") && AOIS+=("$a"); done <<< "$PLAN"
 
 step() { local t0=$SECONDS; echo "=== $1"; shift; "$@"; echo "=== done in $((SECONDS - t0))s"; }
-for s in "${STEPS[@]}"; do
+for n in "${!STEPS[@]}"; do
+  s="${STEPS[$n]}"; AOI="${AOIS[$n]}"
   case "$s" in
     fetch) step "fetch $AOI" uv run python fetch.py "$AOI" ;;
     build) step "build $AOI" uv run python build.py "$AOI" ;;
@@ -17,6 +22,7 @@ for s in "${STEPS[@]}"; do
     buildings) step "buildings $AOI" uv run python buildings.py "$AOI" ;;
     ortho) step "ortho $AOI" uv run python ortho.py "$AOI" ;;
     historic) step "historic $AOI" uv run python historic.py "$AOI" ;;
+    forest) step "forest $AOI" uv run python historic_forest.py "$AOI" ;;          # forest mask from hist_1840/hist_1935 (after historic)
     detect) step "detect $AOI" uv run python detect.py "$AOI" ;;   # F15 candidates: private/local data only
     pointcloud) step "pointcloud $AOI" uv run python pointcloud.py "$AOI" ;;   # F16 focus-area point clouds (LAZ ≈ 45 MB/km²)
     trees) step "trees $AOI" uv run python trees.py "$AOI" ;;                 # V2.4 tree crowns from the CHM (after buildings, ortho)
@@ -27,7 +33,8 @@ for s in "${STEPS[@]}"; do
     pois)  step "pois"       uv run python pois.py ;;
     attribution) step "attribution $AOI" uv run python -c 'import sys, common; print(common.refresh_attribution(sys.argv[1]))' "$AOI" ;;  # manifest-only: heal superseded entries
     test)  step "tests"      uv run pytest -q ;;
-    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|pois|detect|pointcloud|trees|places|stats-trees|stats-inputs|stats|attribution|test)"; exit 1 ;;
+    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|forest|pois|detect|pointcloud|trees|places|stats-trees|stats-inputs|stats|attribution|test)"; exit 1 ;;
   esac
 done
+AOI="${AOIS[${#AOIS[@]}-1]:-$AOI}"
 du -sh "../app/public/data/$AOI" "../app/public/data/$AOI/xyz" 2>/dev/null || true

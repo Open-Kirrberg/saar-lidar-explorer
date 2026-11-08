@@ -2,10 +2,15 @@
  * Manifest types + loader for docs/data-contract.md (v2; v1 manifests load as a single level).
  * Optional additive keys: `vectors` (F10/F12), `rgb` image layers → `imageLayers` (F13/F14),
  * `layers.bldg` mask (R0.7), `models.buildings` (F11), `xyz.hist_*` (F14), `candidates` (F15),
- * `pointclouds` (F16), `trees` (V2.4, parsed in trees/treeData.ts).
+ * `pointclouds` (F16), `trees` (V2.4, parsed in trees/treeData.ts), `stats` (Orte im Vergleich,
+ * parsed in places/placesData.ts), `forest_hist` (Baum-Steckbrief, parsed in trees/treeFacts.ts).
  */
+import { parseManifestStats } from '../places/placesData';
+import type { ManifestStats } from '../places/placesData';
 import { parseTrees } from '../trees/treeData';
 import type { ManifestTrees } from '../trees/treeData';
+import { parseForestHist } from '../trees/treeFacts';
+import type { ManifestForestHist } from '../trees/treeFacts';
 
 export type HeightEncoding = 'terrarium';
 export type LayerEncoding = 'u8';
@@ -134,6 +139,10 @@ export interface Manifest {
   pointclouds?: ManifestPointClouds;
   /** Optional CHM trees (V2.4, 'sle-trees-v1'); see "Trees" in docs/data-contract.md. */
   trees?: ManifestTrees;
+  /** Optional place statistics (Orte im Vergleich, 'sle-stats-v1'); see "Place statistics" in docs/data-contract.md. */
+  stats?: ManifestStats;
+  /** Optional historic forest mask ('sle-forest-hist-v1', Baum-Steckbrief); see "Historic forest mask" in docs/data-contract.md. */
+  forest_hist?: ManifestForestHist;
   /**
    * Resolution levels fine → coarse, contiguous from level 0 (always ≥ 1 entry after
    * validateManifest; v1 manifests and v2 manifests without valid coarse levels give [level 0]).
@@ -947,6 +956,12 @@ export function validateManifest(m: unknown): Manifest {
   const trees = parseTrees((x as { trees?: unknown }).trees, top.chunks);
   if (trees) out.trees = trees;
   else delete out.trees;
+  const stats = parseManifestStats((x as { stats?: unknown }).stats);
+  if (stats) out.stats = stats;
+  else delete out.stats;
+  const forestHist = parseForestHist((x as { forest_hist?: unknown }).forest_hist);
+  if (forestHist) out.forest_hist = forestHist;
+  else delete out.forest_hist;
   return out;
 }
 

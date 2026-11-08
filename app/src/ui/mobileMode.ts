@@ -111,6 +111,7 @@ export const TOUCH_GESTURES: readonly TouchGesture[] = [
   { gesture: '2 Finger auseinander/zusammen', label: 'näher / weiter weg' },
   { gesture: '2 Finger drehen', label: 'Blickrichtung drehen' },
   { gesture: '2 Finger hoch/runter schieben', label: 'neigen' },
+  { gesture: 'Baum antippen', label: 'Baum-Steckbrief' },
   { gesture: 'doppelt tippen', label: 'heranzoomen' },
   { gesture: 'lange drücken', label: 'Fundmarker setzen (beim Messen: Punkt)' },
   { gesture: 'Karte antippen', label: 'dorthin fliegen' },

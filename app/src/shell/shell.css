@@ -276,7 +276,7 @@
   .sle-speed .sle-bar-mini { width: 30px; height: 30px; flex: none; }
   .sle-speed-val { min-width: 28px; font-size: 11.5px; }
   .sle-corner { bottom: calc(var(--above-footer) + 4px); right: var(--gap); }
-  .sle-drawer-body { padding-bottom: 56px; } /* room for „© Quellen“, which floats above the sheet */
+  /* „© Quellen“ sits above an open sheet (Shell.ts syncCorner), so the sheet needs no room for it. */
   .sle-splash { width: calc(100vw - 2 * var(--gap)); font-size: 12.5px; }
   .sle-drawer {
     left: 0; right: 0; width: auto; top: auto; bottom: var(--above-footer); max-height: 58dvh; border-radius: 16px 16px 0 0;

@@ -42,7 +42,7 @@ URL parameters:
 
 | Input | Action |
 |---|---|
-| Click canvas | Capture the mouse (pointer lock) for mouse look. `Esc` releases it. |
+| Click canvas | Capture the mouse (pointer lock) for mouse look. `Esc` releases it. A click on a near tree opens its *Baum-Steckbrief* instead (see *Bäume*); while captured, a click picks the tree under the crosshair. |
 | Drag (without lock) | Look around |
 | `W A S D` / arrow keys | Fly horizontally in the heading direction (drone style, not pitched) |
 | `Space` / `E` | Climb |
@@ -145,7 +145,12 @@ src/
   trees/   V2.4 CHM trees (see *Bäume*): treeData.ts (pure: sle-trees-v1 decode/encode, fmix32 ids/ranks, manifest
            tolerance, instance rows, gather), lod.ts (pure: density, rank prefix, crown scale, LOD bands — TS twins of the
            GLSL), treeShapes.ts (pure: lathe meshes per LOD), TreeMaterial.ts (GLSL3 instanced shader, dither cross-fade),
-           TreeLayer.ts (chunk streaming, near/mid/far meshes, stats), index.ts (`installTrees`, feature `trees`)
+           TreeLayer.ts (chunk streaming, near/mid/far meshes, stats, CPU `pick`), index.ts (`installTrees`, features
+           `trees` + `tree-card`); Baum-Steckbrief: treePick.ts (pure: ray vs. per-tree cylinders), treeFacts.ts (pure:
+           crown-allometry-v1 twin, `forest_hist` parse/lookup/wording, point in Gemarkung), TreeCard.ts (picking + card)
+  places/  🏆 Orte im Vergleich (see *Orte im Vergleich*): placesData.ts (pure: manifest `stats`, sle-stats-v1 +
+           outline parsers, ranking rule, badges, German formatting, AOI clipping, sheet framing), PlaceLayer.ts (draped
+           outline + minimap outline, Riesenbaum pins), PlacesPanel.ts (card in the „Orte“ drawer), index.ts (feature `place-stats`)
   candidates/ F15 Verdachtsflächen: candidateData.ts (pure: parse, labels, filter, N/P order, outlines,
            marker text), reviewStore.ts (pure: localStorage `sle.candidates.v1.<aoi>`, re-attach ≤ 3 m,
            export), colors.ts, CandidateLayer.ts (outlines/circles via DrapedLines, selection on top),
@@ -269,10 +274,12 @@ desktop                                        phone (≤ 600 px)
 | `markers` | 🟢 standard | 🔴 labor | MarkerManager, long-press form; list card in Labor |
 | `minimap` | 🟢 standard | | game minimap in `slots.minimap` (V2.3, ADR 0036); Labor: layer control on the full-screen map |
 | `places` | 🟢 standard | | *Orte* drawer (nearest places, search) |
+| `place-stats` | 🟢 standard | | 🏆 *Orte im Vergleich* card in the *Orte* drawer (only with `stats`), see *Orte im Vergleich* |
 | `zone-portals` | 🟢 standard | | V2.6b portal markers, „… betreten“ prompt, loading screen, zones ([below](#zones-v26b-)) |
 | `tutorial` | 🟢 standard | | V2.9 first-flight tutorial card (once per profile; restart in *Steuerung* / *Einstellungen*), see *Tutorial* below |
 | `osm-paths` / `buildings` | 🟢 standard | 🔴 labor | 3D layers; their cards in Labor (only with `vectors` / `models.buildings`) |
 | `trees` | 🟢 standard | | V2.4 CHM trees (only with `trees`); switch „Bäume“ in *Einstellungen* (see *Bäume*) |
+| `tree-card` | 🟢 standard | | *Baum-Steckbrief*: tap / click a tree → card (only with `trees`), see *Bäume* |
 | `quality`, `exaggeration` | 🟡 entdecker | | sections in *Einstellungen* |
 | `reconstruction`, `tour` | 🟡 entdecker | | *Werkzeuge* cards (Rekonstruktion 1789, Tour) |
 | `relief-lab`, `flight-tech`, `hud-full` | 🔴 labor | | *Darstellung*, *Flug & Technik*, NN/Kurs/E/N/fps HUD rows |
@@ -424,6 +431,7 @@ All registered as shell features in `src/shell/builtins.ts` (see *Shell*).
   - Footprint (Labor): 12 rays through the screen border against `terrain.intersectRay`, clamped to 2.5 km, ≤ every 150 ms (`footprint.ts`).
   - Zone portals: `minimap.setPortals([{ id, E, N, label }])` draws glowing door icons; click flies there (or `onPortalClick`). Hook for V2.6b `zonePortals()` — not wired yet.
   - `showBounds(points)` / `endTemporaryView()` open and close the full-screen map for a temporary fit (Locate).
+  - `fitBounds(bounds, { peekMs })` shows an area: the full-screen map fits it (stops following); the round dial zooms out (`zoomToFitAround`, `fit.ts`) until the area fits around the player, for `peekMs` (4 s) after the current flight, then back to the user's zoom (a user zoom ends the peek; never persisted). `setFocus(bounds | null)` keeps a selected area (place outline): fitted now and, together with the player, whenever the full map opens. Full map: Leaflet's bottom-right controls move up by `--gmm-br-lift` when the shell's „© Quellen“ button would cover them (`cornerLift`); `setFull` fires `sle:map-full` synchronously so the shell re-places that button first.
 - **Bekannte Orte (F7)**, `src/pois/`:
   - `pois.ts` (pure): parse `public/data/pois.geojson`, group by type (German labels, fixed order), forgiving search (case-, umlaut- and ß-insensitive; all words must match).
   - `PoiPanel.ts`: the *Orte* drawer (Standard) with search, `nur im Gebiet`, and `in 3D zeigen`.
@@ -492,6 +500,30 @@ window.sleTrees.stats() → { resident, loading, failed, trees, instances: { nea
 | Count | resident trees = manifest counts (205,831 in 100 chunks, 0 mismatches); every record drawn within `full` |
 | Ortho, H7 plots | P3 orchard tree-for-tree on the crowns; P2 broadleaf density and gaps; P1 spruce block vs. broadleaf margin and path |
 | No popping | unit tests (same anchor, exactly-one-LOD, monotone visibility, conservative prefix); 240 m frame-diff walk: peaks follow the trees-off peaks, no isolated spikes |
+
+### Baum-Steckbrief 🌳 (plan „Orte im Vergleich“ §4, §8 Phase 0)
+
+Tap / click a tree in 3D → a floating card (desktop: at the side away from the tree; phones: bottom sheet; `Esc` / × closes). Feature 🟢 `tree-card`, registered by `installTrees`. Verification handle: `window.sleTreeCard.pickAt(x, y)`, `.close()`, `.open`.
+
+| Piece | How |
+|---|---|
+| 🎯 Picking | The instanced trees have no CPU geometry (`mesh.raycast` is a no-op), so `TreeLayer.pick(ray)` tests the camera ray against one vertical cylinder per resident row (`treePick.ts`): displayed ground `hRef + (g − hRef)·exag` up to `+ h`, radius = the shader's crown radius bound (`r · 1.1 · crownScale(d)`); only trees the shader draws (existence ≥ 0.5 incl. lens fade); chunk boxes the ray misses are skipped. Exact hits beat near misses (6 px mouse / 14 px touch slack); nearest along the ray wins; a terrain hit ≥ 3 m before it (ridge) cancels. Far forest is not picked (crown < 2.5 px or > 1.5 km), so a click there still captures the mouse. ≈ 0.6–0.9 ms per pick incl. card render (overall, ≈ 105 k resident trees, headless) |
+| 🖱️ Input | window capture listeners like the lens: click ≤ 5 px / < 600 ms (touch ≤ 12 px) on the canvas; a mouse hit suppresses that click's pointer lock. Touch waits 300 ms so a double tap still zooms. Off while *Markieren* / *Messen* own taps, inside zones and while the trees are hidden (switch, lens, relief-lab canopy) |
+| 📋 Card | type (Laubbaum / Nadelbaum / Baum; chip „geschätzte Position“ for fill trees + note), height ± 0,5 m, crown diameter, trunk diameter, biomass and CO₂ as ranges with „Schätzung“ (`treeAllometry` = TS twin of `stats.py` `crown-allometry-v1`: same formula, ρ, lo/hi factors; a unit test pins the Python numbers), historic forest, Gemarkung, Riesenbaum note when the id = a place's `tallest.id`, tree id; „Quellen und Methode“ collapsed. No parcel / owner data (G3) |
+| 🗺️ Historic forest | manifest `forest_hist` (`sle-forest-hist-v1`), loaded once on the first card: PNG decoded as data (`colorSpaceConversion: 'none'`), size and value set (0–15, 255) checked, else absent. Wording (`forestSummary`, contract app rule): one map is one snapshot, so „laut Karte 1935–40 wahrscheinlich Wald“ (+ „Schätzung“); „seit …“ only when ≥ 2 classified epochs with a map at the point agree („laut Karten seit mindestens 1836–41 wahrscheinlich Wald“, or „laut Karten seit … (1800: kein Wald erkannt)“); „1935–40: auf der Karte kein Wald erkannt“; no readable epoch → „Historische Karten hier nicht auswertbar“. 1840 is not `classified` today („1836–41: nicht auswertbar“, the reason as tooltip). Map name + attribution under „Quellen und Methode“ |
+| 🏘️ Gemarkung | point in the `stats/places.geojson` outlines (even-odd, 10 m simplified) → „Gemarkung <Name>“ + button „Orte im Vergleich ›“, which fires `PLACE_OPEN_EVENT` (`sle:place-open`); the panel opens the *Orte* drawer and that place's card (phones: the tree card closes) |
+| 📍 Selection | small ▼ pin above the crown (Labels3D, lift `h + 0.5`, same ground rule) |
+
+## Orte im Vergleich 🏆
+
+`src/places/`, one call in `main.ts`: `registerPlaceStats(ctx)` → 🟢 Standard feature `place-stats`, mounted only when the manifest has a valid `stats` key (contract „Place statistics“, `sle-stats-v1`; decision [ADR 0049](../docs/adr/0049-orte-im-vergleich-places-only.md), plan [Orte im Vergleich](../docs/plans/orte-im-vergleich.md) §5/§8).
+
+- **Where:** a collapsible card in the *Orte* drawer, between „Nachbauten zum Betreten“ and „Bekannte Orte“ (it is about places, needs no tools, and is the playful entry to the data, so Standard, not Labor). Phones (ADR 0014): the same card in the bottom sheet; chips scroll sideways, no page scroll; fly-to frames the place above the sheet (`framedPose`: the camera keeps its oblique pose near the target and looks down more steeply; the pose is flown to directly, so no look-at point falls outside the terrain). While a sheet is open the shell lifts „© Quellen“ above it (`Shell.ts` `syncCorner`), so it covers no card values.
+- **Boards:** generic from `disciplines` (emoji + `name_de` chips; `ready: false` → „bald“). Ranking rule per contract (finite values only, ties share a rank, `complete: false` and `null` listed unranked). *Sonnenstärkster Ort* (`scope: municipality`) is a Gemeinde board with a note why (MaStR only per Gemeinde). Places are labelled „Gemarkung …“; badges: Stadt/Dorf, „andere Befliegung: 56 % 2022“ (explained in the card: RLP-Befliegung, trees ≈ 20 % higher from `method.crown.params.rlp_border_effect`), „unvollständig“.
+- **Tap:** fly to the place (oblique, like the POI list), outline it in 3D (DrapedLines, clipped to the AOI rectangle in metres = `size × cellSize`, `aoiRect`; exaggeration in the shader) and on the minimap (full outline, `Minimap.setFocus`: the dial zooms out briefly, the full map fits it; card button *Auf der Karte* opens it). A place mostly outside the 3D area (or with its label outside) is flown to at the centroid of its part inside the AOI (`insideFocus`) with a toast „Nur x % … liegen im 3D-Gebiet“; none inside → no flight, the full map shows it. Then open the place card (area, parcels, trees, crown, Ortslage green/sealed/canopy, inhabitants, trees per inhabitant, Riesenbaum, biomass and CO₂ as ranges labelled „Schätzung“, PV of the Gemeinde, LiDAR epochs, 3D share), with `disclaimer_de` and the `attribution` under „Quellen und Methode“.
+- **Riesenbaum:** while that discipline is chosen, a pin per place at `tallest.E/N` (3D: tip at displayed ground + true height; minimap: 🌲 marker); tap → fly to the tree, framing the crown top (pin tip). Phones show the short pin text „🌲 60,9 m“ (`giantPinText`, name in the tooltip), so the label stays clear of the minimap dial. The pin is always our own marker (also for `in_trees: true`, where it sits on the rendered tree; the tree layer has no highlight API yet). Tops outside the AOI show only on the map.
+- Prefs: chosen discipline in `localStorage sle.placesCmp.v1` (per viewer). No global keys.
+- Not verified: live flight feel and real-phone touch (headless checks with `window.sle.step`, 390 × 844 and 1440 × 900).
 
 ## Rekonstruktion 1789 (F19)
 
@@ -689,6 +721,7 @@ pnpm run perf:gltf -- --url 'http://127.0.0.1:5241/?aoi=overall'    # baeckerei-
 - Rekonstruktion 1789 (F19): only the one dataset `shared/karlsberg1789/` is looked up (no discovery of other `shared/<id>/`); no distance fade/LOD (≈ 340 k triangles always drawn while on); where today's LoD2 buildings stand inside the model both are drawn (no masking); the model is not hidden by the canopy; skirts reach 0.5 m below the 2025 DTM, so at high exaggeration they sink visibly deeper into ruin pits (by design). Browser rendering, frame time and the round trip with the viewer were not verified in this build step.
 - Mobile (F20): nothing tested on a real phone (see *Touch (F20)* / *Mein Standort*). A long-press marker leaves Markieren on, and it opens the form by a synthetic canvas tap because `MarkerManager.openForm` is private (a public `openDraftAt(E, N, h)` would fix both). The Markieren hint still mentions keys and clicks. The lil-gui panels (*Darstellung*, *Flug & Technik*) still render 245 px wide inside the 320 px drawer. After *Mein Standort* the camera sits ≈ 200 m above the ground under it (150 m is relative to the target). The compass ignores magnetic declination (≈ 2–3°). The desktop canvas now has `touch-action: none`.
 - Shell (V2.2): Labor is not blocked on phones but is cramped there (long drawer); the default „aerial ground“ look is V2.5's; the tutorial and zone prompt/loading APIs have no caller yet (checked once via `window.sle.shell` in the browser); live flight feel of *Gehen* and real frame pacing were not checked (hidden tab, `step()`).
+- Baum-Steckbrief: on phones the card can cover the picked tree (the camera does not move). A picked tree hidden behind a nearer crown loses to it (nearest along the ray). Places' Riesenbäume with `in_trees: false` are not in the Trees layer and so have no card (their pin flies there). Real-phone touch and a visible (non-headless) tab were not checked.
 - Bäume (V2.4): one far draw call per chunk (≈ 100 at Hoch, ≈ 35 on Mobil); `renderer.info` triangles count every submitted instance, including those the shader collapses. Beyond the vegetation radius (3 km at Hoch) the relief is bare. No trunk collision when walking (ADR 0017). Hidden trees keep their chunks (≈ 7 MB). Real-phone frame time, live flight feel and the castle reuse of `decodeTrees` were not checked.
 - Lens (V2.5): trees fade through `window.sleTrees.setLensFade` (V2.4b) and the DSM canopy through its own target. A lab overlay parked in Standard is off after a reload. With the lens, the phone bar has 7–8 items (34–45 px wide at 360–390 px; a *Mehr* menu is for the reference-phone pass). The glow is a terrain-shader loop (≤ 24 rings), so its cost on a real phone GPU is unknown (proxy only). Live flight feel with the lens on was not checked.
 - Buildings: bases are matched to the 1 m DTM only; where a coarser terrain level is drawn (far field) the ground may sit slightly off the bases (not measured). Buildings are not pickable. A few LoD2 buildings keep a gap > 0.5 m where the pipeline's 5 m skirt cap applies (2 Karlsberg / 20 overall).

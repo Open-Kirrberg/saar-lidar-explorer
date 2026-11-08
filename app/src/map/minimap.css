@@ -70,6 +70,8 @@
 .gmm-full .gmm-center { top: 58px; }
 .gmm-full .gmm-center[hidden] { display: none; }
 .gmm-full .gmm-map { cursor: grab; }
+/* Zoom + attribution clear the shell's floating „© Quellen“ button (Minimap.syncCornerLift). */
+.gmm-full .leaflet-bottom.leaflet-right { bottom: var(--gmm-br-lift, 0px); }
 .gmm-map .leaflet-control-attribution { font-size: 10px; line-height: 1.35; max-width: 100%; white-space: normal; }
 .gmm-map .leaflet-control-layers-expanded { font-size: 12px; max-height: 70vh; overflow-y: auto; }
 

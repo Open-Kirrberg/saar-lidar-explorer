@@ -32,8 +32,9 @@ Methods (ids are versioned; the parameters are written into places.json `method[
 - sealed `sealed-v1`: not green, not OSM water, and (LoD2 building cell or OSM paved road/parking/square area
   or NDVI < T_BARE). Copernicus imperviousness is not used in v1.
 - inhabitants `zensus-grid-area-v1`: Σ Zensus 2022 100 m cells × share of the cell inside the place.
-- tallest `tallest-checked-v3`: highest non-fill tree that passes the plausibility checks (crown radius, CHM
-  support against spikes, CHM clip, terrain (gully / bank foot / valley bottom), building and pylon/mast clearance;
+- tallest `tallest-checked-v4`: highest non-fill tree that passes the plausibility checks (crown radius, CHM
+  support against spikes, unclipped CHM ≤ 75 m for tops at the detector's 60 m clip, no line-shaped top (crane,
+  rotor blade), terrain (gully / bank foot / valley bottom), building and pylon / mast / wind-turbine clearance;
   TALLEST), stands
   outside the Ortslage (no garden tree is published by position, G1/G2) and ≥ edge_clear_m inside the place
   outline (a top on the Gemarkung line may belong to the neighbour; it also stays inside the 10 m-simplified
@@ -104,8 +105,9 @@ CANOPY_M = 3.0
 T_GREEN = 0.15
 T_BARE = 0.08
 TALLEST = {"min_crown_r_m": 2.0, "ring_r_m": (1.5, 2.5), "ring_median_frac": 0.75, "disc_r_m": 4.0,
-           "disc_frac_min": 0.5, "disc_level_frac": 0.6, "bldg_clear_m": 5, "hazard_clear_m": 15.0,
-           "chm_clip_m": 59.9, "ground_r_m": 4.0, "ground_rise_max_m": 3.0, "valley_r_m": 15.0,
+           "disc_frac_min": 0.5, "disc_level_frac": 0.6, "bldg_clear_m": 5, "hazard_clear_m": 30.0,
+           "clip_m": 59.9, "max_tree_m": 75.0, "linear_r_m": 8.0, "linear_level_frac": 0.8,
+           "linear_ratio_max": 3.0, "ground_r_m": 4.0, "ground_rise_max_m": 3.0, "valley_r_m": 15.0,
            "valley_depth_max_m": 3.0, "edge_clear_m": 10.0,
            "max_candidates": 2000}
 # Terrain check: in a gully or at the foot of a steep bank the canopy of the trees on the slope spans the low ground,
@@ -119,7 +121,17 @@ TALLEST = {"min_crown_r_m": 2.0, "ring_r_m": (1.5, 2.5), "ring_median_frac": 0.7
 # Place edge (v3): the top must lie ≥ edge_clear_m inside the full place outline. ALKIS borders are exact to
 # ≈ 1 m and the published outline is coverage-simplified by SIMPLIFY_M (10 m), so a top on the line (Bechhofen's
 # v2 pick: 0.24 m from the Gemarkung border at a clearing edge) may belong to the neighbour or plot outside it.
-TALLEST_ID = "tallest-checked-v3"
+# v4 (2026-11-07, review): trees.smooth_chm clips the CHM at 60 m, so a 60.9 m top in Bruchhof-Sanddorf read as
+# 60.0 and was rejected as "chm-clip". Tops at the clip (h ≥ clip_m) are now re-measured on the unclipped CHM
+# (DSM − DTM from the raw LiDAR tiles, build.py mosaic rules, buildings 0) and kept up to max_tree_m (75 m; the
+# tallest trees in Germany are ≈ 67 m). Without a usable unclipped window (raw tiles missing, window cut at the
+# data edge) the true height is unknown and the v3 rule stays: "chm-clip" (remeasure_at_clip). Above it they are masts, wind turbines or cranes ("too-tall": 55 tops at the
+# clip in the stats area, 50 of them 70–181 m in two wind farms and at a mast). Hazards now include OSM wind
+# turbines (power=generator + generator:source=wind) and the clearance is 30 m. Linear test: the cells ≥
+# linear_level_frac · h connected to the top within linear_r_m must not form a line (principal-axis ratio ≤
+# linear_ratio_max): a crane jib, a rotor blade or a power line is long and thin, a crown top is round (two 60 m
+# cranes in Zweibrücken: ratio 5.5 and 6.8; 45–60 m tree tops: median 1.3, p95 2.0).
+TALLEST_ID = "tallest-checked-v4"
 APP_MAX_HEIGHT = 45.0           # trees.Params.max_height: the app drops taller tops; stats checks them instead
 LIDAR_EPOCH = {0: 2025, 1: 2022}   # src.tif code → flight year (0 LVGL-SL ALS 2025, 1 LVermGeoRP 2022)
 
@@ -352,26 +364,71 @@ def valley_depth(dtm_win: np.ndarray, radius: float) -> float:
     return float(v.mean() - c) if v.size and np.isfinite(c) else math.inf
 
 
+def chm_pad(p: Mapping[str, Any] = TALLEST) -> int:
+    """Half side (cells) of the CHM window `tree_reason` expects: covers the disc and the linear test."""
+    return max(int(math.ceil(p["disc_r_m"])), int(math.ceil(p["linear_r_m"])))
+
+
+def linear_ratio(win: np.ndarray, h: float, p: Mapping[str, Any] = TALLEST) -> float:
+    """Elongation of the top's high part (pure): the cells ≥ linear_level_frac · h within linear_r_m that are
+    8-connected to the window centre, as the ratio of their principal axes (√ of the covariance eigenvalues, each
+    cell counted as a unit square). ≈ 1 for a round crown top, ≫ 1 for a crane jib, rotor blade or cable."""
+    from scipy import ndimage
+    k = win.shape[0] // 2
+    yy, xx = np.mgrid[-k:k + 1, -k:k + 1]
+    m = (np.nan_to_num(win, nan=0.0) >= p["linear_level_frac"] * h) & (np.hypot(yy, xx) <= p["linear_r_m"])
+    lab, _ = ndimage.label(m, structure=np.ones((3, 3), bool))
+    if lab[k, k] == 0:
+        return 1.0
+    sel = lab == lab[k, k]
+    if sel.sum() < 2:
+        return 1.0
+    cov = np.cov(np.c_[xx[sel], yy[sel]].T.astype(np.float64)) + np.eye(2) / 12.0
+    lo, hi = np.linalg.eigvalsh(cov)
+    return float(math.sqrt(hi / lo))
+
+
+def remeasure_at_clip(h: float, chm_win: np.ndarray, raw_win: np.ndarray | None,
+                      p: Mapping[str, Any] = TALLEST) -> tuple[float, np.ndarray, str | None]:
+    """Height of a top at the detector's 60 m CHM clip (pure). Below clip_m: (h, chm_win, None) unchanged. At the
+    clip: re-measured on the unclipped CHM window `raw_win` (side 2·chm_pad+1, same shape as `chm_win`) →
+    (unclipped h, raw_win, None). Without a usable unclipped window (None from `unclipped_chm`, a shape mismatch,
+    no finite value at the top) the true height is unknown and the v3 rejection holds: (h, chm_win, "chm-clip")."""
+    if h < p["clip_m"]:
+        return h, chm_win, None
+    k = chm_pad(p)
+    if raw_win is None or chm_win.shape != (2 * k + 1, 2 * k + 1) or raw_win.shape != chm_win.shape \
+            or not np.isfinite(raw_win[k, k]):
+        return h, chm_win, "chm-clip"
+    return float(raw_win[k, k]), raw_win, None
+
+
 def tree_reason(h: float, r: float, hazard_dist_m: float, chm_win: np.ndarray, bldg_win: np.ndarray | None,
                 dtm_win: np.ndarray | None = None, p: Mapping[str, Any] = TALLEST) -> str | None:
-    """Plausibility of one tree top (pure). `chm_win`: CHM (1 m) of side 2·ceil(disc_r_m)+1 centred on the top;
+    """Plausibility of one tree top (pure). `h`: CHM at the top (the unclipped CHM for tops at the detector clip);
+    `chm_win`: CHM (1 m) of side 2·chm_pad+1 centred on the top (unclipped for tops at the clip);
     `dtm_win`: DTM (1 m) of side 2·ceil(valley_r_m)+1 centred on the top; `bldg_win`: building mask within
-    bldg_clear_m. None = plausible tree; else the reason."""
+    bldg_clear_m; `hazard_dist_m`: distance to the nearest OSM pylon / mast / tower / chimney / wind turbine.
+    None = plausible tree; else the reason."""
     if hazard_dist_m < p["hazard_clear_m"]:
         return "pylon-or-mast"
-    if h >= p["chm_clip_m"]:
-        return "chm-clip"
-    k, kv = int(math.ceil(p["disc_r_m"])), int(math.ceil(p["valley_r_m"]))
+    if h > p["max_tree_m"]:
+        return "too-tall"
+    k, kv = chm_pad(p), int(math.ceil(p["valley_r_m"]))
+    kd = int(math.ceil(p["disc_r_m"]))
     if chm_win.shape != (2 * k + 1, 2 * k + 1) or (dtm_win is not None and dtm_win.shape != (2 * kv + 1, 2 * kv + 1)):
         return "edge"
     if bldg_win is not None and np.asarray(bldg_win).any():
         return "building"
     if dtm_win is not None:
-        if ground_rise(dtm_win[kv - k:kv + k + 1, kv - k:kv + k + 1], p["ground_r_m"]) > p["ground_rise_max_m"]:
+        if ground_rise(dtm_win[kv - kd:kv + kd + 1, kv - kd:kv + kd + 1], p["ground_r_m"]) > p["ground_rise_max_m"]:
             return "terrain"
         if valley_depth(dtm_win, p["valley_r_m"]) > p["valley_depth_max_m"]:
             return "valley"
-    return spike_reason(chm_win, h, r, p)
+    why = spike_reason(chm_win, h, r, p)
+    if why is None and linear_ratio(chm_win, h, p) > p["linear_ratio_max"]:
+        return "linear"
+    return why
 
 
 def size_category(inhabitants: float | None, min_inh: int = STADT_MIN_INHABITANTS) -> str:
@@ -497,8 +554,13 @@ def _is_water(tags: Mapping[str, str]) -> bool:
     return tags.get("natural") == "water" or tags.get("landuse") == "reservoir" or tags.get("waterway") == "riverbank"
 
 
+def _is_wind_turbine(tags: Mapping[str, str]) -> bool:
+    return tags.get("power") == "generator" and (tags.get("generator:source") == "wind"
+                                                 or tags.get("generator:method") == "wind_turbine")
+
+
 def _is_hazard(tags: Mapping[str, str]) -> bool:
-    return tags.get("power") == "tower" or tags.get("man_made") in HAZARD_MAN_MADE
+    return tags.get("power") == "tower" or tags.get("man_made") in HAZARD_MAN_MADE or _is_wind_turbine(tags)
 
 
 def _relation_polygon(members: list[dict], project):
@@ -529,13 +591,15 @@ def osm_features(data: Mapping[str, Any], project: Callable[[list[dict]], list[t
     `project` maps a list of {lat, lon} to [(E, N), …] in EPSG:25832."""
     import shapely
     from shapely.geometry import LineString, Polygon
-    out: dict[str, list] = {"paved": [], "water": [], "residential": [], "hazards": []}
+    out: dict[str, list] = {"paved": [], "water": [], "residential": [], "hazards": [], "wind": []}
     for el in data.get("elements", []):
         tags = el.get("tags") or {}
         typ = el.get("type")
         if typ == "node":
             if _is_hazard(tags) and "lat" in el:
                 out["hazards"].append(project([el])[0])
+                if _is_wind_turbine(tags):
+                    out["wind"].append(out["hazards"][-1])
             continue
         geom = None
         if typ == "way" and len(el.get("geometry") or []) >= 2:
@@ -543,6 +607,8 @@ def osm_features(data: Mapping[str, Any], project: Callable[[list[dict]], list[t
             closed = len(pts) >= 4 and pts[0] == pts[-1]
             if _is_hazard(tags):
                 out["hazards"].append(tuple(LineString(pts).centroid.coords[0]))
+                if _is_wind_turbine(tags):
+                    out["wind"].append(out["hazards"][-1])
                 continue
             w = road_width(tags)
             if w is not None:
@@ -757,12 +823,16 @@ def methods(osm_check: Mapping[str, Any], ortslage_info: Mapping[str, Any], ndvi
         "tallest": {"id": TALLEST_ID, "label_de": "Höchster plausibler Baum außerhalb der Ortslage",
                     "params": {k: (list(v) if isinstance(v, tuple) else v) for k, v in TALLEST.items()
                                if k != "max_candidates"} | {
-                        "detector_max_height_m": 60.0, "app_max_height_m": APP_MAX_HEIGHT,
+                        "detector_clip_m": 60.0, "app_max_height_m": APP_MAX_HEIGHT,
                         "above_app_max": "kept when plausible (same checks), also in trees/crown/biomass",
                         "fill_trees": "excluded", "outside_ortslage": True,
                         "in_trees": "true when the AOI Trees layer holds the tree (by id); else the app draws "
                                     "its own marker (outside the 3D tiles or above the Trees max_height)",
-                        "hazards": "OSM power=tower, man_made=mast|tower|chimney|communications_tower",
+                        "hazards": "OSM power=tower, man_made=mast|tower|chimney|communications_tower, "
+                                   "power=generator + generator:source=wind (within hazard_clear_m)",
+                        "clip": "tops at the detector clip (h ≥ clip_m) are re-measured on the unclipped CHM "
+                                "(DSM − DTM) and kept up to max_tree_m; without unclipped LiDAR they are "
+                                "rejected (chm-clip)",
                         **({"tall_trees": dict(tall)} if tall else {})}},
         "category": {"id": "category-inhabitants-v1", "label_de": "Größenklasse nach Einwohnern",
                      "params": {"stadt_min_inhabitants": STADT_MIN_INHABITANTS, "source": "zensus-grid-area-v1"}},
@@ -791,6 +861,7 @@ def overpass_query(bbox: tuple[float, float, float, float]) -> str:
             f'  nwr["landuse"="reservoir"]({b});\n'
             f'  way["waterway"="riverbank"]({b});\n'
             f'  node["power"="tower"]({b});\n'
+            f'  nwr["power"="generator"]["generator:source"="wind"]({b});\n'
             f'  nwr["man_made"~"^(mast|tower|chimney|communications_tower)$"]({b});\n'
             ");\nout tags geom;\n")
 
@@ -886,6 +957,22 @@ class Grid:
             return np.zeros((max(0, r1 - r0), max(0, c1 - c0)), bool)
         return rasterize([(g, 1) for g in geoms], out_shape=(r1 - r0, c1 - c0),
                          transform=from_origin(self.e0 + c0, self.n1 - r0, 1, 1), fill=0, dtype="uint8").astype(bool)
+
+
+def unclipped_chm(e: float, n: float, pad: int, bldg_win: np.ndarray | None, offset: float) -> np.ndarray | None:
+    """CHM without the detector's 60 m clip around the top cell centred (e, n): DSM − DTM from the cached raw
+    LiDAR tiles with the build.py mosaic rules (stats_trees.lidar_window, RLP offset), building cells 0 like
+    rasters/chm.tif. Side 2·pad+1, row 0 = north; None without LiDAR."""
+    from stats_trees import lidar_window
+    ec, nc = int(math.floor(e)), int(math.floor(n))
+    lw = lidar_window((ec - pad, nc - pad, ec + pad + 1, nc + pad + 1), "mosaic", offset)
+    if lw is None:
+        return None
+    dtm, dsm, _state = lw
+    chm = np.maximum(dsm - dtm, 0.0).astype(np.float32)
+    if bldg_win is not None and bldg_win.shape == chm.shape:
+        chm[np.asarray(bldg_win).astype(bool)] = 0.0
+    return chm
 
 
 def ndvi_sl_scale(ndvi_i8: np.ndarray, src: np.ndarray, table: Mapping[str, Any] | None) -> np.ndarray:
@@ -1135,26 +1222,55 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
     # --- tree plausibility (TALLEST checks): every top above the app cap, and the tallest candidates -----------
     from scipy.spatial import cKDTree
     hz_tree = cKDTree(hazards) if len(hazards) else None
+    wind = np.array(osm["wind"], float).reshape(-1, 2)
+    wind_tree = cKDTree(wind) if len(wind) else None
+    rlp_offset = float((load_json("stats_trees_prepare.json").get("rlp_offset") or {}).get("applied", 0.0)
+                       if (ORTE_DIR / "stats_trees_prepare.json").exists() else 0.0)
     reason_cache: dict[int, str | None] = {}
+    h_unclipped: dict[int, float] = {}   # tops at the detector clip: CHM height without the clip
+    linear_log: list[dict] = []          # local review list (data/work only)
+    kc = chm_pad()
 
     def plaus(i: int) -> str | None:
         if i not in reason_cache:
             e, n = float(T["E"][i]), float(T["N"][i])
             hd = float(hz_tree.query((e, n))[0]) if hz_tree is not None else math.inf
             cell = (e - 0.5, n - 0.5, e + 0.5, n + 0.5)
-            cw = grid.window(cell, pad=int(math.ceil(TALLEST["disc_r_m"])))
+            h = float(T["h"][i])
+            cw = grid.window(cell, pad=kc)
             chm_w = grid.read(RASTER_DIR / "chm.tif", cw)
+            if h >= TALLEST["clip_m"]:
+                raw = unclipped_chm(e, n, kc, grid.read(RASTER_DIR / "bldg.tif", cw), rlp_offset)
+                h, chm_w, clip_why = remeasure_at_clip(h, chm_w, raw)
+                if clip_why is not None:     # true height unknown: v3 rule
+                    reason_cache[i] = clip_why
+                    return clip_why
+                h_unclipped[i] = h
             dtm_w = grid.read(RASTER_DIR / "dtm.tif", grid.window(cell, pad=int(math.ceil(TALLEST["valley_r_m"]))))
             bw = grid.read(RASTER_DIR / "bldg.tif", grid.window(cell, pad=int(TALLEST["bldg_clear_m"])))
-            reason_cache[i] = tree_reason(float(T["h"][i]), float(T["r"][i]), hd, chm_w, bw, dtm_w)
+            why = tree_reason(h, float(T["r"][i]), hd, chm_w, bw, dtm_w)
+            if why == "linear":
+                wd = float(wind_tree.query((e, n))[0]) if wind_tree is not None else None
+                linear_log.append({"E": e, "N": n, "h": round(h, 1), "ratio": round(linear_ratio(chm_w, h), 2),
+                                   "wind_dist_m": None if wd is None else round(wd)})
+            reason_cache[i] = why
         return reason_cache[i]
     tall = np.flatnonzero(T["h"] > app_cap + 1e-6)
     tall_bad = np.array([i for i in tall if plaus(int(i)) is not None], np.int64)
     tall_rejects: dict[str, int] = {}
     for i in tall_bad:
         tall_rejects[reason_cache[int(i)]] = tall_rejects.get(reason_cache[int(i)], 0) + 1
+    at_clip = [i for i in h_unclipped if reason_cache.get(i) is None]
     report["tall_trees"] = {"app_cap_m": app_cap, "above_cap": int(tall.size), "kept": int(tall.size - tall_bad.size),
-                            "rejected": tall_rejects}
+                            "rejected": tall_rejects, "at_clip": len(h_unclipped),
+                            "at_clip_kept": [{"h": round(h_unclipped[i], 2), "E": float(T["E"][i]),
+                                              "N": float(T["N"][i])} for i in at_clip]}
+    report["linear_rejects"] = linear_log
+    report["wind_turbines_osm"] = int(len(wind))
+    if at_clip:   # kept tops at the clip carry their unclipped height (also in crown/biomass)
+        T["h"] = T["h"].astype(np.float64)
+        for i in at_clip:
+            T["h"][i] = h_unclipped[i]
     if tall_bad.size:
         keep_t = np.ones(T["E"].size, bool)
         keep_t[tall_bad] = False
@@ -1351,7 +1467,8 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
         "extent": extent, "geometry": {"url": "stats/places.geojson", "simplify_m": int(SIMPLIFY_M),
                                        "featureCount": len(feats_out)},
         "min_count": MIN_COUNT, "label_de": LABEL_DE, "disclaimer_de": DISCLAIMER_DE, "inputs": inputs,
-        "method": methods(osm_check, orts_info, qtable is not None, border, report["tall_trees"]),
+        "method": methods(osm_check, orts_info, qtable is not None, border,
+                          {k: v for k, v in report["tall_trees"].items() if k != "at_clip_kept"}),
         "disciplines": disciplines(),
         "places": [round_place(p) for p in places_raw], "municipalities": munis, "attribution": attribution,
     }

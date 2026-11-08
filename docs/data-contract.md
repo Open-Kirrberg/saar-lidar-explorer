@@ -4,7 +4,7 @@ The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (
 
 **Zones** (detailed places behind portals: castle, bakery, …) have their own binding contract: [zone-contract.md](zone-contract.md) (`sle-zone-v1`, [ADR 0029](adr/0029-zones-same-bundle-folder-layout.md)). Frames, proj4 and attribution rules below apply to zones unchanged.
 
-**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid.
+**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`, Orte im Vergleich `stats` and `forest_hist`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees", "Place statistics", "Historic forest mask"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid. **Revision 2.2 (Orte im Vergleich Phase 0, 2026-11-08):** adds the optional `stats` key (`sle-stats-v1`: `stats/places.json` + `stats/places.geojson`, [ADR 0049](adr/0049-orte-im-vergleich-places-only.md)) and the optional `forest_hist` key (`sle-forest-hist-v1`: `forest_hist/forest_hist.png`) — additive like `trees`: `version` stays 1/2, manifests without them stay valid, and the app hides the panel / the card row when a key is missing or invalid.
 
 ## Coordinate frames
 
@@ -582,13 +582,57 @@ then `count` records of **10 bytes** at offset `16 + 10·k`:
 
 **App tolerance.** Missing `trees`, a non-object or `format` ≠ `sle-trees-v1` → absent (logged, not fatal). `path` must contain `{i}` and `{j}`. `chunks` entries that are not three integers with `0 ≤ i < nx`, `0 ≤ j < ny`, `count ≥ 1` are skipped. A chunk whose bytes fail the header check (magic, version 1, size `16 + 10·count`) or 404s is skipped; the other chunks still show. Unknown `type` base codes read as unknown; unknown manifest fields are ignored.
 
+## 🌲 Historic forest mask (`forest_hist`, optional)
+
+Where the historic maps of the AOI show forest, for the *Baum-Steckbrief* („laut Karte 1935–40 wahrscheinlich Wald“; „seit …“ only once two classified epochs agree, e.g. later „laut Karten seit mindestens 1840 wahrscheinlich Wald“) and the Phase 1 forest-age class ([plan „Orte im Vergleich“](plans/orte-im-vergleich.md) §4). Written by `pipeline/historic_forest.py` (`./run.sh <aoi> forest`, after `historic`) from the 1 m mosaics of the image layers `hist_1840` and `hist_1935` (see "Image layers"). `forest_hist` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid. It is an **estimate** from map symbols, not a forest register.
+
+```ts
+forest_hist = {
+  format: 'sle-forest-hist-v1',           // anything else → the whole key is ignored
+  path: 'forest_hist/forest_hist.png',    // relative to the AOI dir: ONE 8-bit greyscale PNG for the whole AOI
+  encoding: 'u8-bits',
+  cellSize: 5,                            // metres per pixel
+  size: { width: number, height: number },// = ceil(AOI width / cellSize) × ceil(AOI height / cellSize)
+  nodata: 255,
+  epochs: Array<{
+    year: 1840 | 1935,                    // nominal map epoch
+    bit: number,                          // forest bit of this epoch (1840: 0, 1935: 1)
+    noMapBit: number,                     // "the map has no image here" bit (1840: 2, 1935: 3)
+    key: string,                          // image layer it was read from: 'hist_1840' | 'hist_1935'
+    label_de: string,                     // 'Wald 1836–41' | 'Wald 1935–40'
+    map_de: string,                       // e.g. 'TK25, Ausgaben 1935–40'
+    classified: boolean,                  // false → the forest bit is always 0 and means "unknown", never "no forest"
+    note_de: string,                      // one line for the UI, e.g. why an epoch is not classified
+    accuracy?: { n, tp, fp, fn, tn, precision, recall, accuracy, unsure, sample }   // review sample, informative
+  }>,
+  method: 'hist-forest-symbols-v1', params: {...}, generated: ISO-8601,   // informative
+  label_de: 'Historischer Wald (Schätzung)',
+  attribution: string,                    // also merged into the top-level `attribution`
+  source: string                          // informative
+}
+```
+
+**Grid.** Pixel `(px, py)` (row 0 = north) covers the 5 m square whose **centre** is `E = E0 + (px + 0.5) · 5`, `N = N0 + height − (py + 0.5) · 5` (AOI origin and `size.height` in cells of the manifest, 1 m). Lookup of a point: `px = floor((E − E0) / 5)`, `py = floor((N0 + height − N) / 5)`; outside `0 … width−1 / 0 … height−1` → no data. One file (≈ 0.1–0.3 MB for `overall`), no chunks, no levels: the app loads it once when it needs it (tree card), not for rendering.
+
+**Value** (decode as data: `createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' })` or a PNG decoder; never colour-managed): `255` = no data. Otherwise, per entry of `epochs`: `v & (1 << noMapBit)` → that map has no image here (unknown); else `v & (1 << bit)` → forest on that map. Values 0–15 occur. An epoch with `classified: false` is unknown everywhere.
+
+**Method `hist-forest-symbols-v1`** (details and parameters: [pipeline/README.md](../pipeline/README.md#-historic-forest-mask-historic_forestpy)):
+- **TK25 1935–40** (`hist_1935`, `classified: true`): forest is drawn as tree symbols (broadleaf „Ω“, conifer „Λ“), not as an area tint. Symbols are found by template matching; their smoothed density (σ 50 m) above a threshold is forest; parts < 1 ha dropped, holes < 0.5 ha closed. Effective resolution ≈ 50–100 m: edges are blurred, small woods, hedges and single trees are missed, orchards and ring-like glyphs can read as forest. Accuracy on an independent random sample is in `accuracy` (2026-11-08, `overall`: precision 0.76, recall 0.79, accuracy 0.86 on the 76 of 100 points that could be labelled; the 24 unsure points — map edges, roads, text, dense villages — are not counted, so real accuracy is lower).
+- **Bayerische Originalpositionsblätter 1836–41** (`hist_1840`, `classified: false`): the scan has relief hachures, water, roads, buildings, boundaries and names but **no forest signature**, so forest cannot be read from it. The app must not claim „Wald seit 1840“ from this file while `classified` is false.
+
+**App rule.** Show it only as an estimate („laut Karte 1935–40 wahrscheinlich Wald, Schätzung“), with the map name and `attribution`; never as a fact about a parcel. One map is one snapshot: „seit …“ only when at least two classified epochs with a map at the point agree on forest. No forest bit for a classified epoch = „auf der Karte kein Wald erkannt“, not „sicher kein Wald“.
+
+**Manifest + attribution.** The forest step owns the whole `forest_hist` key (replaced on each run via `update_manifest`) and adds `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (Historische Karten)` (already present when `historic` ran). The release export may publish the PNG (derived from dl-de/by-2-0 maps, same credit); it contains no personal data.
+
+**App tolerance.** Missing `forest_hist`, a non-object, `format` ≠ `sle-forest-hist-v1`, a non-string `path`, `cellSize` not a positive number or `size` not two positive integers → absent (logged, not fatal). A 404, a decode error or an image whose size ≠ `size` → absent. Unknown epochs or fields are ignored; an epoch without a numeric `bit`/`noMapBit` is treated as unknown.
+
 ## 🏆 Place statistics (`stats`, optional, Orte im Vergleich)
 
 Aggregates per place (Gemarkung) for the leaderboard *Orte im Vergleich*: parcels, trees, canopy, biomass range, built-up area (*Ortslage*), green and sealed shares, inhabitants, tallest tree, PV totals per municipality. Written by `pipeline/stats.py`; plan: [docs/plans/orte-im-vergleich.md](plans/orte-im-vergleich.md); decision: [ADR 0049](adr/0049-orte-im-vergleich-places-only.md). `stats` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid and the app hides the panel.
 
 **Privacy (G1–G3, binding).** Every published value is an aggregate over a **place** (or a municipality). The files contain **no** per-parcel, per-building or per-person value, no parcel id (`flstkennz`), no address and no owner data. Per-building PV detections and per-parcel intermediates stay in `data/work/orte/` and are never written under `app/public/data/`. **Minimum-size rule:** an aggregate that rests on fewer than **5** buildings (Ortslage, PV) or 5 parcels (place totals) is not published: the value is `null` and its field path is listed in the place's `suppressed`. A place with fewer than 5 parcels is left out entirely. The only published point is `tallest` (one tree per place); it is never inside the Ortslage and always ≥ 10 m inside the place outline. The stats step refuses to write a file with a parcel-id, owner, address or person key (matched by fragment) or a parcel-id- or address-like string value, and outline features with properties other than `{id, name_de}`.
 
-**Stats extent ≠ AOI.** Statistics may cover a larger area than the 3D tiles (all nine places, including all of Zweibrücken) without publishing tiles for it. `extent` is the area whose inputs were processed; trees outside the AOI come from a stats-only `trees.py` run with the same method, so tree ids follow the Trees rule everywhere. One difference: the Trees layer drops every top above `max_height` (45 m); the stats run keeps tops up to the CHM clip (60 m) and counts a top above 45 m only when it passes the `tallest` plausibility checks (the stats area has real 50–55 m conifer stands). So a place's `tallest` tree is often **not** in the AOI's Trees layer (above 45 m, or outside the 3D tiles): `tallest.in_trees` says whether it is. When it is `false` the app draws its own marker at `tallest.E/N` (ground from the terrain) instead of looking the tree up by `id`. `aoi_share_pct` tells the app how much of a place it can show in 3D.
+**Stats extent ≠ AOI.** Statistics may cover a larger area than the 3D tiles (all nine places, including all of Zweibrücken) without publishing tiles for it. `extent` is the area whose inputs were processed; trees outside the AOI come from a stats-only `trees.py` run with the same method, so tree ids follow the Trees rule everywhere. One difference: the Trees layer drops every top above `max_height` (45 m); the stats run keeps tops up to the detector's CHM clip (60 m; a top at the clip is re-measured on the unclipped CHM and kept up to 75 m, see `tallest-checked-v4`) and counts a top above 45 m only when it passes the `tallest` plausibility checks (the stats area has real 50–61 m conifer stands). So a place's `tallest` tree is often **not** in the AOI's Trees layer (above 45 m, or outside the 3D tiles): `tallest.in_trees` says whether it is. When it is `false` the app draws its own marker at `tallest.E/N` (ground from the terrain) instead of looking the tree up by `id`. `aoi_share_pct` tells the app how much of a place it can show in 3D.
 
 **Manifest key** (owned by the stats step, replaced on each run via `update_manifest`, all other keys kept):
 
@@ -656,7 +700,7 @@ The stats step also merges every `attribution` entry into the manifest's `attrib
 | `green` | `ndvi-cir-v1` | Ortslage cell is green when CHM ≥ 3 m **or** NDVI ≥ threshold (SL CIR WMS, RLP RGBI tiles); `canopy_pct` = CHM ≥ 3 m part only |
 | `sealed` | `sealed-v1` | Ortslage cell is sealed when it is not green, not OSM water, and a building (LoD2 mask), an OSM paved road (buffered by its `width` or road class) / parking / square / `area:highway`, or non-vegetated in the NDVI (< `ndvi_bare_max`, 0.08 on the SL scale; also catches unmapped yards and bare soil). Copernicus imperviousness is **not** used in v1 (`params.imperviousness`); adding it means `sealed-v2` |
 | `inhabitants` | `zensus-grid-area-v1` | Σ Zensus 2022 100 m cells × share of the cell inside the place |
-| `tallest` | `tallest-checked-v3` | highest non-fill tree that passes the plausibility checks (crown radius ≥ 2 m; CHM support, no single-cell spike or narrow tower top; below the 60 m CHM clip; no LoD2 building within 5 m; no OSM pylon / mast / tower / chimney within 15 m; terrain: DTM rises ≤ 3 m within 4 m of the top, so no gully bottom or bank foot under overhanging canopy; valley: mean DTM within 15 m ≤ 3 m above the top's ground, so no ravine bottom spanned by the canopy of both slopes) **and stands outside the Ortslage** (no garden tree is published by position, G1/G2) **and ≥ 10 m inside the place outline** (`edge_clear_m`; a top on the Gemarkung line may belong to the neighbour and must stay inside the 10 m-simplified outline); detector cap 60 m, see `params`. The height is the LiDAR CHM at the top cell, not a ground measurement |
+| `tallest` | `tallest-checked-v4` | highest non-fill tree that passes the plausibility checks (crown radius ≥ 2 m; CHM support, no single-cell spike or narrow tower top; a top at the detector's 60 m CHM clip is re-measured on the **unclipped** CHM (DSM − DTM) and must stay ≤ 75 m (`max_tree_m`; taller = mast, wind turbine, crane), and is rejected as `chm-clip` (the v3 rule) when no unclipped window can be read; **no line-shaped top** (cells ≥ 0.8 h within 8 m connected to the top have a principal-axis ratio ≤ 3: crane jibs, rotor blades and cables are long and thin); no LoD2 building within 5 m; no OSM pylon / mast / tower / chimney / **wind turbine** (`power=generator` + `generator:source=wind`) within **30 m**; terrain: DTM rises ≤ 3 m within 4 m of the top, so no gully bottom or bank foot under overhanging canopy; valley: mean DTM within 15 m ≤ 3 m above the top's ground, so no ravine bottom spanned by the canopy of both slopes) **and stands outside the Ortslage** (no garden tree is published by position, G1/G2) **and ≥ 10 m inside the place outline** (`edge_clear_m`; a top on the Gemarkung line may belong to the neighbour and must stay inside the 10 m-simplified outline); detector clip 60 m, see `params`. The height is the LiDAR CHM at the top cell (unclipped for tops at the clip), not a ground measurement. v3 (until 2026-11-07) rejected every top at the 60 m clip and knew no wind turbines nor line shapes |
 | `category` | `category-inhabitants-v1` | `category` = `'stadt'` from 5,000 inhabitants (`inhabitants`, grid estimate) on, else `'dorf'` |
 | `pv_mastr` | `mastr-municipality-v1` | MaStR PV units „in Betrieb“ per municipality key, balcony plants included |
 
@@ -689,7 +733,7 @@ Phase 0 list (pipeline may add more; Biomass is **never** a discipline, Q3):
 | `wenigsten-beton` | `ortslage.sealed_pct` | `%` | ✗ | `sealed-v1` | ✓ |
 | `baeume-pro-einwohner` | `trees_per_inhabitant` | `Bäume/Einw.` | ✓ | `zensus-grid-area-v1` | ✓ |
 | `waldreichste-gemarkung` | `crown_pct` | `%` | ✓ | `crown-disc-v1` | ✓ |
-| `riesenbaum` | `tallest.h` | `m` | ✓ | `tallest-checked-v3` | ✓ |
+| `riesenbaum` | `tallest.h` | `m` | ✓ | `tallest-checked-v4` | ✓ |
 | `sonnenstaerkster-ort` | `pv.kwp_per_inhabitant` (scope `municipality`) | `kWp/Einw.` | ✓ | `mastr-municipality-v1` | ✓ |
 | `groesster-fortschritt` | — | — | ✓ | — | ✗ |
 | `artenvielfalt` | — | — | ✓ | — | ✗ |

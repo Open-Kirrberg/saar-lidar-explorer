@@ -102,6 +102,19 @@ Size report: `../_release/data-size-report.txt`. What it does:
   staged zone file names a local path (`/Users/…`), the private material folder or an e-mail address (GLBs:
   their JSON chunk incl. node names and extras) or a GLB embeds images where the policy forbids them (bakery:
   no textures, ADR 0042). Run the `bh-datenschutz` checklist first and tick it in the release notes.
+- **Orte im Vergleich + historic forest** ([ADR 0049](../../docs/adr/0049-orte-im-vergleich-places-only.md),
+  contract „Place statistics“ / „Historic forest mask“): of `overall/stats/` only `places.json` + `places.geojson`
+  (manifest key `stats`, `sle-stats-v1`) and of `overall/forest_hist/` only `forest_hist.png` (key `forest_hist`,
+  `sle-forest-hist-v1`) are staged; review reports and work files there never are. A key naming a missing file, a
+  path outside its folder or a JSON naming a local path **aborts**; a key with another `format` is dropped with its
+  folder. **Licence audit** (record in `AUDIT.md`): aggregates per Gemarkung / Gemeinde only (no parcel, building or
+  owner data; groups < 5 suppressed), derived from ALKIS, LiDAR DGM/DOM, DOP20 RGB/CIR/RGBI and LoD2 of
+  GeoBasis-DE/LVGL-SL and GeoBasis-DE/LVermGeoRP (dl-de/by-2-0, Daten bearbeitet), OSM (ODbL), **Zensus 2022**
+  (© Statistische Ämter des Bundes und der Länder, dl-de/by-2-0) and the **Marktstammdatenregister**
+  (© Bundesnetzagentur, dl-de/by-2-0); the forest mask from the historic maps of GeoBasis-DE/LVGL-SL
+  (dl-de/by-2-0, Daten bearbeitet). All credits are in the manifest `attribution` and thus in `ATTRIBUTION` /
+  README. Publishing them needs the user's go (plan „Orte im Vergleich“ §8, last Phase 0 box); with
+  `--zones-only` these keys are not shipped (see above: publish `stats/`, `forest_hist/` and the two manifest keys).
 - Both: `.nojekyll`, `README.md` (contents, licences, the **candidates are unverified hypotheses** note,
   „Schauen, nicht graben“), `ATTRIBUTION`, `index.html` landing page linking to the app.
 

@@ -71,8 +71,10 @@ OVERALL = "overall"
 FORMAT = "sle-orte-trees-v1"
 # Height filter of the stats trees. trees.Params.max_height (45 m) drops every taller top in the app, but the stats
 # area has real stands of 50–55 m (Douglas fir / spruce, checked in DOP + DTM/DSM, review 2026-11-07). So the stats
-# detection keeps tops up to the CHM clip (trees.smooth_chm clips at 60 m); stats.py counts a top above the app cap
-# only when it passes its tall-tree checks (pylon/mast, building, CHM clip, spike/narrow support).
+# detection keeps tops up to the CHM clip (trees.smooth_chm clips at 60 m, so h ≤ 60 here); stats.py counts a top
+# above the app cap only when it passes its tall-tree checks (pylon/mast/wind turbine, building, spike/narrow support,
+# line shape) and re-measures a top at the clip on the unclipped CHM (DSM − DTM via `lidar_window`, kept ≤ 75 m;
+# tallest-checked-v4: the 60.9 m Bruchhof-Sanddorf conifer read as 60.0 here).
 STATS_MAX_HEIGHT = 60.0
 
 

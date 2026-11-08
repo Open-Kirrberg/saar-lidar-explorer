@@ -1,7 +1,7 @@
 # 🌳 Orte im Vergleich: trees, parcels and green balance (living plan)
 
-- **Status:** 📐 Planned, questions settled; Phase 0 next. Nothing is built yet.
-- **Last updated:** 2026-11-07
+- **Status:** 🚧 Phase 0 built and reviewed (stats pipeline, *Orte im Vergleich* panel, *Baum-Steckbrief*, historic forest mask); the public release waits for the user's go. SL land use (Q9) still pending.
+- **Last updated:** 2026-11-08
 - **Origin:** user idea, 2026-11-07: make the LiDAR data more visible, add gamification and leaderboards between places, and later collect more data with the community.
 - **How to keep this alive:** update the status boxes in §8 and the open questions in §9. Add a dated line to §10 for every decision and to §11 for every change to this file. Once an item ships, its decisions move into an ADR and its format into `docs/data-contract.md` (contract first, [ADR 0004](../adr/0004-contract-first.md)); this file then links to them instead of repeating them.
 
@@ -61,7 +61,7 @@ Overall: 23,725 parcels; 13,188 of them have at least one tree; 326,010 trees.
 | Position, height, crown radius | LiDAR CHM (exists) | ±0.5 m, 1 cm, 1 dm |
 | Broadleaf or conifer | DOP colour (exists) | weak, often wrong in shade |
 | **Species** | DLR *Tree Species Germany* (10 m COG, CC BY 4.0), cross-checked with the Thünen map (CC BY 4.0); Q6 | probability per 10 m cell, e.g. "probably beech (70 %)". Certain only through people on site. |
-| **Age** | (a) height plus yield table → ±20 years; (b) historic maps 1840/1935 → "forest since at least 1840" (doable now); (c) true age only from SaarForst forest inventory (not open) or a known planting year | class, not years |
+| **Age** | (a) height plus yield table → ±20 years; (b) historic maps → „laut Karte 1935–40 wahrscheinlich Wald“ (built; the 1836–41 sheets have no forest signature, so „since 1840“ needs another map, §10); (c) true age only from SaarForst forest inventory (not open) or a known planting year | class, not years |
 | **Trunk girth / DBH** | community tape measurement at 1.3 m | the most valuable contribution: it calibrates the biomass model |
 | Understorey | LAZ point clouds (exist for 3 areas) | pilot |
 
@@ -169,15 +169,15 @@ The real hurdle is the community (Phase 2), not the data volume: accounts, GDPR,
 
 ### Phase 0: numbers and the first leaderboard (no server)
 - [x] Open questions settled (Q1–Q12, 2026-11-07); Q13 stays open and does not block Phase 0
-- [ ] Re-check the SL ALKIS WFS for land use (`Nutzung`, Q9) and measure the RLP 2022 border effect (Q5)
-- [ ] Stats bbox covering the nine places completely, including all of Zweibrücken (stats only, no new 3D tiles)
-- [ ] New inputs for stats: DOP CIR (SL WMS, RLP RGBI tiles), Zensus 2022 population grid, MaStR municipality totals (open-mastr bulk, cached once)
-- [ ] `pipeline/stats.py` with tests: parcels, trees, crown, biomass range, built-up area, green / grey, tallest tree; output `sle-stats-v1`
-- [ ] Contract section in `docs/data-contract.md` and an ADR (leaderboards for places only, G1–G7)
-- [ ] Review: table plus map image per place, checked for plausibility **before** any app work
-- [ ] App panel *Orte im Vergleich* (one leaderboard per discipline, tap → fly to the place, place card)
-- [ ] *Baum-Steckbrief* on tree tap: height, crown, biomass range, "forest since 1840"
-- [ ] Release through `scripts/release/` after review
+- [x] Re-check the SL ALKIS WFS for land use (`Nutzung`, Q9) and measure the RLP 2022 border effect (Q5). SL WFS 414 still answers 503, so land use stays pending (building-buffer Ortslage); border effect measured (Q5)
+- [x] Stats bbox covering the nine places completely, including all of Zweibrücken (stats only, no new 3D tiles)
+- [x] New inputs for stats: DOP CIR (SL WMS, RLP RGBI tiles), Zensus 2022 population grid, MaStR municipality totals (open-mastr bulk, cached once)
+- [x] `pipeline/stats.py` with tests: parcels, trees, crown, biomass range, built-up area, green / grey, tallest tree; output `sle-stats-v1`
+- [x] Contract section in `docs/data-contract.md` and an ADR (leaderboards for places only, G1–G7): „Place statistics“, „Historic forest mask“, [ADR 0049](../adr/0049-orte-im-vergleich-places-only.md)
+- [x] Review: table plus map image per place, checked for plausibility **before** any app work (four rounds, incl. the CHM clip, §10)
+- [x] App panel *Orte im Vergleich* (one leaderboard per discipline, tap → fly to the place, place card): `app/src/places/`
+- [x] *Baum-Steckbrief* on tree tap: height, crown, biomass range, historic forest („laut Karte 1935–40 wahrscheinlich Wald“; 1840 not classifiable, §10): `app/src/trees/TreeCard.ts`
+- [ ] Release through `scripts/release/` after review: export staging ready (`stats/`, `forest_hist/` + manifest keys, licence audit note in RELEASING.md); waits for the user's go
 
 ### Phase 1: richer attributes, still no server
 - [ ] Species probability from the DLR map (Q6, cross-check Thünen) per tree and per place
@@ -204,11 +204,11 @@ The real hurdle is the community (Phase 2), not the data volume: accounts, GDPR,
 | Q2 | Does Saarland offer an open CIR (near-infrared) DOP WMS? | Claude | ✅ SL: yes, `sl_dop20_cir` and `sl_dop20_ir` in the open truedop WMS (no fees, dl-de/by-2-0 as RGB). RLP: no CIR in the WMS, but open DOP20 RGBI tiles in the geoshop (dl-de/by-2-0). → NDVI for *Grünste Ortslage* |
 | Q3 | Show biomass in the app as a range ("100–250 t") or not at all until the tape calibration exists? | user | ✅ 2026-11-07: as a labelled range (biomass and CO₂); not a leaderboard discipline until calibrated |
 | Q4 | Gemarkung or district (Ortsteil) as the unit? | user | ✅ 2026-11-07: Gemarkung first; Ortsteile later as a second view |
-| Q5 | Year and season of the RLP LiDAR, and how it compares with SL 2025 | Claude | ✅ RLP tiles are DOM1/DGM1 **2022** (SL 2025, leaf-off per ADR 0030); RLP season unknown. → `other-flight` flag on Mörsbach, Bechhofen, Zweibrücken; Phase 0 measures crowns per ha on both sides of the border in similar forest and reports the offset |
+| Q5 | Year and season of the RLP LiDAR, and how it compares with SL 2025 | Claude | ✅ RLP tiles are DOM1/DGM1 **2022** (SL 2025, leaf-off per ADR 0030); RLP season unknown. → `other-flight` flag on Mörsbach, Bechhofen, Zweibrücken. **Border effect measured (Phase 0):** in similar forest on both sides RLP 2022 finds ≈ 20 % more trees per ha of canopy (ratio 1.20; canopy cover −3.3 pp). Not harmonised: the app shows the raw values with the *andere Befliegung* badge and names the offset |
 | Q6 | Licence and access of the Thünen tree species map | Claude | ✅ DLR *Tree Species Germany* (10 m COG, EPSG:3035, CC BY 4.0, 10 classes + canopy loss, F1 0.89) preferred; Thünen *Dominant Tree Species 2017/18* (CC BY 4.0, 11 classes, 75–87 %) as cross-check. A 10 m forest context, not a per-tree truth |
 | Q7 | Licence and attribution of the Zensus 2022 100 m grid | Claude | ✅ Destatis „Gitterdaten“ ZIPs (population ≈ 18 MB, 100 m CSV). Credit „Zensus 2022, © Statistische Ämter des Bundes und der Länder, dl-de/by-2-0“; confirm in the bundled description before release. Small cells are altered for confidentiality |
 | Q8 | Community backend: OSM, own server or local-first? | user | ⏸ 2026-11-07: decided later, with a pilot partner, before Phase 2 |
-| Q9 | Does the ALKIS WFS offer actual land use (*tatsächliche Nutzung*) openly? | Claude | ◐ RLP: yes, `ave:Nutzung` in the open ALKIS-vereinfacht WFS 519. SL: WFS 414 returned 503 on 2026-11-07, re-check at Phase 0 start; fallback is the building-buffer Ortslage |
+| Q9 | Does the ALKIS WFS offer actual land use (*tatsächliche Nutzung*) openly? | Claude | ◐ RLP: yes, `ave:Nutzung` in the open ALKIS-vereinfacht WFS 519. SL: WFS 414 returned 503 on 2026-11-07 and **still 503 at the Phase 0 re-check**; land use stays pending, Phase 0 uses the building-buffer Ortslage. Re-check before Phase 1 |
 | Q10 | MaStR: how reliable is the "Ort" field for districts (Kirrberg, Bruchhof …) within Homburg? Which postcodes cover which places? | Claude | ✅ Small PV (< 30 kW) only per municipality: all Homburg districts share PLZ 66424, „Ort“ is the postal town. ≥ 30 kW units have coordinates. Access: `open-mastr` bulk export (dl-de/by-2-0, ≈ 2–3 GB, once) |
 | Q11 | PV detection: which model (licence, accuracy on German DOP20), and is a full-resolution DOP fetch for roof areas polite enough? | Claude | ✅ Candidate *3D-PV-Locator* (MIT, German orthophotos, weights in a requester-pays S3 bucket). Fine-tune or validate on 20 cm Homburg tiles; full-res fetch only for roof boxes, sequential and cached. Phase 1 |
 | Q12 | Is there an open Saarland solar roof register (*Solardachkataster*) we may use instead of our own LoD2 potential? | Claude | ✅ No open register: SL has only partial municipal viewers (a 2024 state law may bring one), RLP's Solarkataster is a viewer only. → compute roof potential from LoD2 ourselves |
@@ -221,9 +221,15 @@ The real hurdle is the community (Phase 2), not the data volume: accounts, GDPR,
 - **2026-11-07:** Places (Q1): the 7 core places plus Bechhofen and Zweibrücken. Unit (Q4): Gemarkung. Biomass (Q3): shown as a labelled range, not ranked. Backend (Q8): decided before Phase 2 (user).
 - **2026-11-07:** Research answers: NDVI from CIR (Q2), DLR species map (Q6), Zensus grid (Q7), MaStR only per municipality (Q10), 3D-PV-Locator (Q11), own roof potential (Q12).
 - **2026-11-07:** PV is a discipline (user). Per-building PV detections are never published, only aggregates per place (G1/G2, in line with MaStR's own privacy rule for small systems).
+- **2026-11-08:** Riesenbaum = `tallest-checked-v4`: the detector clips the CHM at 60 m, so tops at the clip are re-measured on the unclipped CHM (DSM − DTM) and kept up to 75 m; wind turbines, masts and line-shaped tops (cranes) are rejected; without a readable unclipped CHM a top at the clip is rejected as in v3. Bruchhof-Sanddorf's winner is a **60.9 m** conifer, most likely a Douglas fir (hypothesis: the only species here that reaches ≈ 60 m; species is not measurable from these data).
+- **2026-11-08:** Historic forest: the Bayer. Positionsblätter 1836–41 have no forest signature (`classified: false`), so the card says „laut Karte 1935–40 wahrscheinlich Wald“ (*Schätzung*), never „seit 1840“; „seit …“ only once two classified maps agree at the point.
+- **2026-11-08:** A Riesenbaum that is not in the 3D tree layer (above the 45 m cap or outside the tiles, `in_trees: false`) gets its own pin in 3D and on the minimap; phones show the short pin („🌲 60,9 m“).
+- **2026-11-08:** RLP places keep their raw counts (no correction factor) with the *andere Befliegung* badge, which names the measured ≈ 20 % offset (Q5).
+- **2026-11-08:** The panel is a card in the *Orte* drawer in the 🟢 Standard tier (between the walk-in zones and *Bekannte Orte*): it needs no tools and is the playful entry to the data. Places mostly outside the 3D area fly to their part inside and say so; the whole outline is on the map.
 
 ## 11. Changelog of this document
 
 - **2026-11-07:** First version, from the planning conversation (baseline numbers from the prototype run over `overall`).
 - **2026-11-07:** Discipline ☀️ PV added (MaStR, DOP detection, LoD2 potential, privacy rule), with Q10–Q12.
 - **2026-11-07:** All open questions settled except Q13 (older LiDAR epochs, added); Phase 0 checklist updated. Ready to start Phase 0.
+- **2026-11-08:** Phase 0 built: boxes ticked except the release (waits for the user's go); status line, §4 forest wording, Q5 (border effect measured) and Q9 (SL WFS still 503) updated; five decisions logged in §10.

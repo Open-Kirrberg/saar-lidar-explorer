@@ -274,7 +274,26 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
       /* ignore */
     }
     if (id && focus) drawers[id].querySelector<HTMLElement>('.sle-drawer-body button, .sle-drawer-body input, .sle-dlg-close')?.focus({ preventScroll: true });
+    syncCorner();
   };
+  // Phones: a drawer is a bottom sheet, and „© Quellen“ (ADR 0026: always visible) would float over its
+  // content („Schätzung“ chips, values). While a sheet is open the corner sits right above the sheet.
+  const syncCorner = () => {
+    const d = openDrawer ? drawers[openDrawer] : null;
+    let bottom = '';
+    if (d && !d.hidden && !minimapSlot.classList.contains('gmm-full')) {
+      const r = d.getBoundingClientRect();
+      const host = ui.getBoundingClientRect();
+      if (r.height > 0 && r.width >= host.width * 0.9 && r.top > host.top) bottom = `${Math.round(host.bottom - r.top + 6)}px`;
+    }
+    if (corner.style.bottom !== bottom) corner.style.bottom = bottom;
+  };
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => syncCorner());
+    for (const d of Object.values(drawers)) ro.observe(d);
+  }
+  window.addEventListener('resize', syncCorner);
+  window.addEventListener('sle:map-full', syncCorner); // Minimap MAP_FULL_EVENT (sync, before the map measures the corner)
   placesBtn.addEventListener('click', () => setDrawer(openDrawer === 'places' ? null : 'places'));
   toolsBtn.addEventListener('click', () => setDrawer(openDrawer === 'tools' ? null : 'tools'));
   // „Werkzeuge“ exists only while a mounted feature has panel content (Entdecker / Labor).
@@ -525,6 +544,7 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
   syncHudH();
   // System buttons sit under the minimap dial; its height varies (phone dial, hidden map). Full-screen map keeps the last value.
   const syncMapH = () => {
+    syncCorner(); // the full-screen map hides the sheet: the corner returns to its place
     if (minimapSlot.classList.contains('gmm-full') || minimapSlot.classList.contains('size-full')) return;
     ui.style.setProperty('--mm-h', `${Math.ceil(minimapSlot.getBoundingClientRect().height)}px`);
   };
