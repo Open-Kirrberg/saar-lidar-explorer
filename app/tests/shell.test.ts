@@ -497,3 +497,17 @@ describe('placeCorner („© Quellen“ above a phone sheet)', () => {
     expect(wide.sheetTop).toBeGreaterThanOrEqual(208 + 6 + 160 + 6);
   });
 });
+
+describe('© Quellen: BKG VG25 row (S1 Gemeinde level)', () => {
+  it('renders the VG25 credit as a BKG row with the CC BY 4.0 link and the change note', () => {
+    const entry = '© BKG (2026) CC BY 4.0 (Daten verändert), Datenquellen: https://sgx.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf (VG25)';
+    const r = rowFromEntry(entry);
+    expect(r.id).toBe('bkg:VG25');
+    expect(r.provider).toContain('BKG');
+    expect(r.short).toBe('© BKG (2026)');
+    expect(r.licence?.url).toContain('creativecommons.org/licenses/by/4.0');
+    expect(r.modified).toBe(true);
+    expect(r.dataset?.url).toContain('sgx.geodatenzentrum.de');
+    expect(r.full).toBe(entry);
+  });
+});

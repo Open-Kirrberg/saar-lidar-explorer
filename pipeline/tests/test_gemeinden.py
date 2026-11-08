@@ -211,3 +211,30 @@ def test_gemeinde_tree_count_excludes_fill():
     v = GT.gemeinde_values(s)
     assert v["trees"] == 3800
     assert v["crown_ha"] == 25.0
+
+
+def test_vg25_credit_follows_the_bkg_quellenvermerk():
+    """BKG wording: „© BKG (Jahr) CC BY 4.0 … Datenquellen: https://sgx.geodatenzentrum.de/…“ with the change note."""
+    a = G.ATTRIBUTION_VG25
+    assert a.startswith("© BKG (2026) CC BY 4.0 (Daten verändert), Datenquellen: https://sgx.geodatenzentrum.de/")
+    assert a.endswith("datenquellen_vg25.pdf (VG25)") and ";" not in a
+    assert a not in G.ATTRIBUTION_VG25_SUPERSEDED
+
+
+def test_write_levels_into_ortsteile_is_idempotent(tmp_path: Path, monkeypatch):
+    import json
+    monkeypatch.setattr(GS, "APP_DATA", tmp_path)
+    (tmp_path / "overall").mkdir()
+    base = {"version": 2, "aoi": "overall", "stats": {"format": "sle-stats-v1"}, "candidates": {"featureCount": 7},
+            "attribution": "© OpenStreetMap-Mitwirkende, ODbL; " + G.ATTRIBUTION_VG25_SUPERSEDED[0]}
+    (tmp_path / "overall" / "manifest.json").write_text(json.dumps(base))
+    assert GS.write_levels_into_ortsteile() == ["overall"]
+    first = (tmp_path / "overall" / "manifest.json").read_text()
+    GS.write_levels_into_ortsteile()
+    assert (tmp_path / "overall" / "manifest.json").read_text() == first
+    m = json.loads(first)
+    assert m["attribution"] == "© OpenStreetMap-Mitwirkende, ODbL; " + G.ATTRIBUTION_VG25   # superseded line replaced
+    assert m["stats_levels"]["levels"] == [{"level": "gemeinde", "aoi": "saarland", "label_de": "Gemeinden"},
+                                           {"level": "ortsteil", "aoi": "overall", "label_de": "Ortsteile"}]
+    assert {k: v for k, v in m.items() if k not in ("attribution", "stats_levels")} == \
+        {k: v for k, v in base.items() if k != "attribution"}

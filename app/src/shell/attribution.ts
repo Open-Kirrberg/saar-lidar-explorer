@@ -26,6 +26,7 @@ export interface SourceRow {
 }
 
 export const DL_DE_BY_2: Link = { label: 'Datenlizenz Deutschland – Namensnennung – Version 2.0', url: 'https://www.govdata.de/dl-de/by-2-0' };
+export const CC_BY_4: Link = { label: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/deed.de' };
 const ODBL: Link = { label: 'ODbL 1.0', url: 'https://www.openstreetmap.org/copyright' };
 
 const LVGL_PROVIDER = 'Landesamt für Vermessung, Geoinformation und Landentwicklung Saarland (LVGL)';
@@ -101,6 +102,20 @@ export function rowFromEntry(entry: string): SourceRow {
       dataset: RLP_DATASETS[tag] ?? RLP_DATA,
       modified,
       use: `${LAYER_USE[tag] ?? tag} – Rheinland-Pfalz`,
+    };
+  }
+  if (/©\s*BKG\b/.test(entry)) {
+    // BKG VG25 municipality outlines (S1 Gemeinde level): CC BY 4.0; BKG asks for „BKG“ linked to bkg.bund.de
+    // and the licence linked; „(Daten verändert)“ is BKG's own change note.
+    return {
+      id: `bkg:${tag || 'vg25'}`,
+      provider: 'Bundesamt für Kartographie und Geodäsie (BKG)',
+      short: /©\s*BKG(\s*\(\d{4}\))?/.exec(entry)?.[0] ?? '© BKG',
+      full: entry,
+      licence: CC_BY_4,
+      dataset: entryUrl(entry) ?? { label: 'bkg.bund.de', url: 'https://www.bkg.bund.de' },
+      modified: modified || /Daten verändert/i.test(entry),
+      use: 'Gemeindegrenzen (Gemeinde-Vergleich)',
     };
   }
   if (/OpenStreetMap/i.test(entry)) {

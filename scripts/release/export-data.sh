@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Stage the two public data repositories (GitHub Pages, branch deploy) from app/public/data.
-#   saar-lidar-data   = AOI dataset (no xyz), pois.geojson, shared/, castle-viewer/terrain/, zones/ (RELEASE_ZONES)
+#   saar-lidar-data   = AOI dataset (no xyz), pois.geojson, shared/, castle-viewer/terrain/, zones/ (RELEASE_ZONES),
+#                       stats-only AOIs (RELEASE_STATS_AOIS, e.g. saarland/: manifest + stats/ only)
 #   saar-lidar-data-2 = xyz tiles (<= XYZ_MAX_ZOOM) + 3D-print series (3MF only)
 # Idempotent; fails (exit 2) when a GitHub Pages hard limit is exceeded. See RELEASING.md.
-# Usage: scripts/release/export-data.sh [--dry-run] [--zones-only] [--allow-deletes] [--max-deletes N]
+# Usage: scripts/release/export-data.sh [--dry-run] [--zones-only | --stats-only] [--allow-deletes] [--max-deletes N]
 #        (env overrides: see release.env; SLE_DATA_DIR = data dir)
 #   --dry-run        list what would be written/deleted in both staging repos, change nothing
 #   --zones-only     stage only saar-lidar-data/zones/ (zone packages + index); nothing else is touched
+#   --stats-only     stage only the RELEASE_STATS_AOIS dirs and add just `stats_levels` to the already staged
+#                    $RELEASE_AOI/manifest.json (+ README/ATTRIBUTION/index.html of saar-lidar-data)
 #   --allow-deletes  allow removing more than RELEASE_MAX_DELETES staged files per repo (else exit 3, nothing written)
 # Symlinked inputs are followed inside the repo and RELEASE_LINK_ROOTS (release.env); anything else aborts.
 set -euo pipefail
@@ -24,7 +27,7 @@ mkdir -p "$RELEASE_DIR"
 
 # The Pages workflow builds the castle viewer from COMMITTED code; its terrain must match that code.
 ZONES_ONLY=0
-for ARG in "$@"; do [[ "$ARG" == --zones-only ]] && ZONES_ONLY=1; done
+for ARG in "$@"; do [[ "$ARG" == --zones-only || "$ARG" == --stats-only ]] && ZONES_ONLY=1; done  # partial runs
 if [[ $ZONES_ONLY == 0 && -n "$(git -C "$REPO" status --porcelain -- zones/schloss-karlsberg/viewer zones/schloss-karlsberg/model 2>/dev/null)" ]]; then
   echo "[export-data] WARNING: zones/schloss-karlsberg/ has uncommitted changes – castle-viewer/terrain/ may not match the" >&2
   echo "              published viewer code. Review 'git -C $OUT1 status castle-viewer' and revert it if unsure." >&2
@@ -46,5 +49,5 @@ python3 -I "$HERE/export_data.py" \
   --aoi "$RELEASE_AOI" --xyz-max-zoom "$XYZ_MAX_ZOOM" \
   --app-url "$APP_URL" --data-url "$DATA_URL" --data2-url "$DATA2_URL" --org "$GH_ORG" \
   --site-hard-mb "$SITE_HARD_MB" --site-aim-mb "$SITE_AIM_MB" --file-hard-mb "$FILE_HARD_MB" --file-aim-mb "$FILE_AIM_MB" \
-  --zones "$RELEASE_ZONES" --max-deletes "$RELEASE_MAX_DELETES" ${LINK_ARGS[@]+"${LINK_ARGS[@]}"} \
+  --zones "$RELEASE_ZONES" --stats-aois "$RELEASE_STATS_AOIS" --max-deletes "$RELEASE_MAX_DELETES" ${LINK_ARGS[@]+"${LINK_ARGS[@]}"} \
   --report "$RELEASE_DIR/data-size-report.txt" "$@"

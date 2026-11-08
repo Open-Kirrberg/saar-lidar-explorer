@@ -6,7 +6,7 @@ GitHub repositories in the org **Open-Kirrberg**, all served by GitHub Pages und
 | Repository | Pages | Content | Built by |
 |---|---|---|---|
 | `saar-lidar-explorer` (public, MIT; **this repository**, developed here directly) | GitHub Actions (`.github/workflows/pages.yml`) → `/saar-lidar-explorer/` + standalone castle viewer `/saar-lidar-explorer/castle/` (fallback, [ADR 0048](../../docs/adr/0048-castle-zone-public.md)) | code + `LICENSE`, `NOTICE.md` | `git push origin main` |
-| `saar-lidar-data` | branch deploy (`main`, `/`), `.nojekyll` | AOI `overall` without Leaflet tiles, `pois.geojson`, `shared/` (reconstruction 1789), `castle-viewer/terrain/`, `zones/` (cleared zone packages: castle, bakery) | `export-data.sh` |
+| `saar-lidar-data` | branch deploy (`main`, `/`), `.nojekyll` | AOI `overall` without Leaflet tiles, stats-only AOI `saarland` (leaderboard level „Gemeinden“), `pois.geojson`, `shared/` (reconstruction 1789), `castle-viewer/terrain/`, `zones/` (cleared zone packages: castle, bakery) | `export-data.sh` |
 | `saar-lidar-data-2` | branch deploy (`main`, `/`), `.nojekyll` | Leaflet XYZ tiles (≤ z17), 3D-print series (3MF only) | `export-data.sh` |
 
 **Why two data repos.** GitHub Pages publishes at most **≈ 1 GB per repository** (every file < 100 MB).
@@ -50,6 +50,8 @@ cd pipeline && ./run.sh overall          # if the data are not current
 scripts/release/export-data.sh           # → ../_release/saar-lidar-data, ../_release/saar-lidar-data-2
 scripts/release/export-data.sh --dry-run     # list what would be written/deleted in both repos, change nothing
 scripts/release/export-data.sh --zones-only  # stage only saar-lidar-data/zones/ (nothing else read, written or deleted)
+scripts/release/export-data.sh --stats-only [--dry-run]  # stage only the stats-only AOIs (saarland/) + add `stats_levels`
+                                             # to the staged overall/manifest.json (+ README/ATTRIBUTION/index.html)
 scripts/release/export-data.sh --allow-deletes  # accept removing > RELEASE_MAX_DELETES staged files (default: refuse, exit 3)
 ```
 
@@ -128,8 +130,53 @@ Size report: `../_release/data-size-report.txt`. What it does:
   as a dataset). All credits are in the manifest `attribution` and thus in `ATTRIBUTION` / README. Publishing them needs the user's go (plan „Orte im Vergleich“ §8, last Phase 0 box); with
   `--zones-only` these keys are not shipped (see above: publish `stats/`, `forest_hist/`, `species/` and the three
   manifest keys).
+- **Stats-only AOIs** ([ADR 0051](../../docs/adr/0051-leaderboard-levels-gemeinden-ortsteile.md), contract „Place
+  statistics“ → „Gemeinde level“, revision 2.4): every AOI in `RELEASE_STATS_AOIS` (release.env, default `saarland`) goes to
+  repo 1 as `<aoi>/manifest.json` (byte-identical) + the two files its `stats` key names (`stats/places.json`,
+  `stats/places.geojson`, ≈ 300 KB together); work files, review reports or anything else in the AOI dir are never staged.
+  The export **aborts** when the manifest is not `kind: 'stats-only'`, names another AOI, carries any key besides
+  `version kind aoi name crs stats stats_levels attribution` (tiles, layers, work data), has no valid `stats` key, a stats
+  file is > 1 MB, or the privacy guard finds something (cheap mirror of the pipeline's `check_privacy`: parcel / owner /
+  address / person keys or parcel-id- / address-like values, outline properties other than `id` + `name_de`, and on the
+  Gemeinde level `riesen` / `tallest` tree positions or `biodiversity` with anything but numbers). Above the contract
+  targets (places.json 160 KB, outlines 200 KB) it warns. **`stats_levels`** (in the tile AOI and the stats-only manifest)
+  may only point at staged AOIs that hold that level; other entries are dropped, and with fewer than two levels left the
+  key is dropped (so a run with `RELEASE_STATS_AOIS=` publishes no dangling level switch).
+  **`--stats-only`** is the release path while `overall` has unpublished local changes (pending candidate restage, xyz
+  rewrite): it stages only `saarland/` and adds **only** `stats_levels` from the local `overall/manifest.json` to the
+  manifest already staged in repo 1, keeping its serialisation, so the diff is that one key (the log prints added /
+  removed / changed keys and the local keys that stay unpublished). Check out the published HEAD of
+  `overall/manifest.json` in the staging clone first (`git -C ../_release/saar-lidar-data checkout -- overall/manifest.json`)
+  when it holds unwanted changes. Besides the key it adds only the BKG VG25 credit to that manifest's `attribution`
+  (when the local one carries it; the app's „© Quellen“ reads it). README.md / ATTRIBUTION / index.html are regenerated (BKG VG25 credit, `saarland/` row,
+  BKG + CC BY 4.0 linked on the landing page as the BKG requires for web pages).
 - Both: `.nojekyll`, `README.md` (contents, licences, the **candidates are unverified hypotheses** note,
   „Schauen, nicht graben“), `ATTRIBUTION`, `index.html` landing page linking to the app.
+
+### Licence audit S1 „Gemeinden im Vergleich“ (`saarland/`, 2026-11-08, not published yet)
+
+Aggregates per Gemeinde only (52 SL + Zweibrücken, Bechhofen); no parcel, building, tree position or person data
+(`check_privacy` in the pipeline, the export guard above). Inputs and their credits — all present in
+`saarland/stats/places.json` `inputs` and in the `saarland/manifest.json` `attribution` (a test checks every input credit
+is in the manifest string, which feeds `ATTRIBUTION` / README / index.html):
+
+| Input (`inputs` id) | Licence | Credit (verbatim, from the pipeline) | Audit |
+|---|---|---|---|
+| BKG VG25 Gemeindegrenzen (`vg25`) | **CC BY 4.0** | `© BKG (2026) CC BY 4.0 (Daten verändert), Datenquellen: https://sgx.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf (VG25)` (`ATTRIBUTION_VG25`, `pipeline/gemeinden.py`) | BKG's required Quellenvermerk (gdz.bkg.bund.de VG25 page, checked 2026-11-08): „© BKG (Jahr des letzten Datenbezugs) CC BY 4.0, Datenquellen: https://sgx.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf“, with BKG's own Veränderungshinweis „(Daten verändert)“ after the licence (page „Hinweise zu Nutzungsbedingungen und Quellenvermerken“) since the outlines are dissolved per AGS and simplified to 50 m; ` (VG25)` is the project's layer tag. On web pages „BKG“ links to https://www.bkg.bund.de and „CC BY 4.0“ to the licence: done on the data landing page (export template); **the app's „© Quellen“ row does not link them yet** (open item 2). The old credit (`sg.` host, no change note) is in `ATTRIBUTION_VG25_SUPERSEDED` and replaced wherever a manifest carries it. |
+| Zensus 2022 municipality totals (`zensus_gemeinden`) | dl-de/by-2-0 | `Zensus 2022, © Statistische Ämter des Bundes und der Länder, dl-de/by-2-0, Daten bearbeitet` | ok (same credit as the published `overall` stats) |
+| Marktstammdatenregister (`mastr`) | dl-de/by-2-0 | `Marktstammdatenregister – © Bundesnetzagentur für Elektrizität, Gas, Telekommunikation, Post und Eisenbahnen, dl-de/by-2-0, Daten bearbeitet` | ok (as published) |
+| DLR Tree Species Germany 2022 (`species_dlr`) | CC BY 4.0 | `Baumarten: DLR, Tree Species Germany 2022 (Wegler et al. 2025), CC BY 4.0, doi:10.15489/smh8w3j8i962, Daten bearbeitet (umprojiziert)` | ok; only cell shares per Gemeinde, no pixels |
+| GBIF occurrence search (`gbif`) | records CC0 / CC BY 4.0 / CC BY-NC 4.0 | `GBIF.org (2026-11-08) GBIF Occurrence Search, https://www.gbif.org` + `note_de` (iNaturalist CC BY-NC) | counts only (guard: `biodiversity` numbers only); DOI-backed derived dataset still **open** (user decision 2026-11-08: publish with the plain credit, register the DOI later) |
+| LoD2 / LiDAR SL + RLP (`lod2_*`, `lidar_*`) | dl-de/by-2-0 | as in `overall` | only once S1b values exist (statewide run in progress); re-check `inputs` before the release |
+
+Open items before the go: (1) done 2026-11-08: BKG wording + change note in `ATTRIBUTION_VG25`; `gemeinden_stats.py`
+writes the VG25 credit into `overall`'s `attribution` next to `stats_levels` (idempotent, also `--levels-only`), and
+`--stats-only` adds exactly that line (pattern `STATS_ONLY_ATTRIBUTION`) to the staged manifest. The local `saarland/`
+files keep the old credit until the statewide chain re-runs `gemeinden_stats.py`; until then ATTRIBUTION lists both VG25
+lines (the export warns) — re-run the dry run afterwards. (2) App: „© Quellen“ renders the BKG entry through the
+generic row (provider text „BKG (2026) CC BY 4.0 (Daten verändert)“, no licence link, not marked as modified, no
+bkg.bund.de link) — needs a BKG branch in `rowFromEntry` (`app/src/shell/attribution.ts`). (3) GBIF DOI (above).
+(4) Re-run the dry run after the S1b run and confirm the new `inputs` (LoD2, LiDAR) are in the manifest `attribution`.
 
 ## 3. Release the code
 

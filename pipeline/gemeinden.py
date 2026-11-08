@@ -44,8 +44,15 @@ OUTLINES = GEMEINDE_DIR / "gemeinden.geojson"
 VG25_RAW = RAW_DIR / "vg25"
 VG25_WFS = "https://sgx.geodatenzentrum.de/wfs_vg25"
 VG25_LAYER = "vg25:vg25_gem"
-ATTRIBUTION_VG25 = ("© BKG (2026) CC BY 4.0, Datenquellen: "
-                    "https://sg.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf (VG25)")
+# BKG Quellenvermerk for VG25 (gdz.bkg.bund.de VG25 page + „Hinweise zu Nutzungsbedingungen und Quellenvermerken“,
+# checked 2026-11-08): „© BKG (Jahr des letzten Datenbezugs) CC BY 4.0, Datenquellen: https://sgx.geodatenzentrum.de/…“
+# with BKG's own Veränderungshinweis „(Daten verändert)“ after the licence (outlines dissolved per AGS, simplified 50 m);
+# " (VG25)" is the project's layer tag. On web pages „BKG“ must link to https://www.bkg.bund.de.
+ATTRIBUTION_VG25 = ("© BKG (2026) CC BY 4.0 (Daten verändert), Datenquellen: "
+                    "https://sgx.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf (VG25)")
+# Superseded VG25 credits (replaced wherever a manifest still carries them).
+ATTRIBUTION_VG25_SUPERSEDED = ("© BKG (2026) CC BY 4.0, Datenquellen: "
+                               "https://sg.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf (VG25)",)
 SL_PREFIX = "10"
 RLP_NEIGHBOURS = {"07320000": "Zweibrücken", "07340203": "Bechhofen"}
 NON_MUNICIPALITY_IBZ = {69}          # VG25 ibz 69 = Kondominium (Moselle condominium near Perl): no municipality

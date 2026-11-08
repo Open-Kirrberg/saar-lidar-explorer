@@ -30,6 +30,13 @@ files the manifest key `stats` names (`places.json`, `places.geojson`), of `<aoi
 previews and work files there never are. A key whose file is missing or
 whose JSON names a local path aborts; a key with another `format` is dropped with its folder.
 
+Stats-only AOIs (ADR 0051, `--stats-aois`, e.g. `saarland`: manifest `kind: 'stats-only'`, no terrain): only
+manifest.json + the files of its `stats` key are staged to <out1>/<aoi>/; a manifest with tile keys, a stats file above
+STATS_FILE_HARD_KB or one failing the privacy guard (parcel / owner / address keys or values, outline properties other
+than id + name_de, tree positions or GBIF records on the Gemeinde level) aborts. `stats_levels` (in any manifest) may
+only point at staged AOIs holding that level; other entries are dropped. --stats-only stages just those AOIs and adds
+only `stats_levels` to the manifest already staged in <out1> (the published one), so no other local key leaks.
+
 Idempotent: files are copied only when size/mtime differ, generated files only when their content
 changes, and files no longer planned are deleted (a `.git/` directory is never touched).
 --zones-only stages just <out1>/zones/ (nothing else in either repo is read, written or deleted);
@@ -122,6 +129,30 @@ KEYED_LAYERS: Dict[str, Tuple[str, str, Tuple[str, ...]]] = {
     "forest_hist": ("forest_hist/", "sle-forest-hist-v1", ("path",)),
     "species": ("species/", "sle-species-v1", ("path",)),   # DLR tree species 2022 (CC BY 4.0), contract „Tree species“
 }
+# Stats-only AOIs (ADR 0051, contract „Place statistics“ → „Gemeinde level“, e.g. `saarland`): manifest
+# `kind: 'stats-only'`, no terrain. Only manifest.json + the files its `stats` key names are staged; a manifest with any
+# other top-level key (tiles, layers, work data) aborts, every other file in the AOI dir stays local.
+STATS_ONLY_KIND = "stats-only"
+STATS_ONLY_KEYS = frozenset({"version", "kind", "aoi", "name", "crs", "stats", "stats_levels", "attribution"})
+STATS_LEVELS_FORMAT = "sle-stats-levels-v1"
+STATS_LEVEL_IDS = ("gemeinde", "ortsteil")
+# The only key `--stats-only` adds to the staged (= published) manifest of the tile AOI, and the only `attribution`
+# entries it may add there: the BKG VG25 credit (gemeinden_stats.py writes it next to `stats_levels`, so the app's
+# „© Quellen“, built from the tile AOI's attribution, names the source of the Gemeinde outlines).
+STATS_ONLY_MERGE_KEYS = ("stats_levels",)
+STATS_ONLY_ATTRIBUTION = re.compile(r"^© BKG \(\d{4}\) CC BY 4\.0\b.*\(VG25\)$")
+# Size guard per staged stats file (contract targets: Gemeinde places.json < 160 KB, outlines < 200 KB): above the
+# aim warns, above the hard limit aborts (a stats file that big holds more than aggregates).
+STATS_FILE_AIM_KB = {"places.json": 160, "places.geojson": 200}
+STATS_FILE_HARD_KB = 1024
+# Privacy guard (cheap stdlib mirror of pipeline/stats.py `check_privacy`, which the pipeline already runs): no parcel,
+# owner, address or person keys and no parcel-id- or address-like values; outlines carry {id, name_de} only; on the
+# Gemeinde level no tree positions (`riesen`, `tallest`, ADR 0051) and `biodiversity` as numbers only (GBIF counts,
+# never records or species names).
+STATS_FORBIDDEN_KEY_PARTS = ("flst", "flurst", "kennz", "eigent", "owner", "besitz", "buchung", "adress", "address",
+                             "addr", "strasse", "straße", "hausn", "housenumber", "lagebez", "person", "anschrift", "plz")
+STATS_FORBIDDEN_VALUE = re.compile(
+    r"^(?:DE[A-Z]{2})?\d{6}[\d_]{8,}$|\b\w*(?:straße|strasse|str\.?|weg|gasse|platz)\s+\d+\w?\b", re.IGNORECASE)
 # Last line of defence: no staged AOI text file may still name a UXO class (case-insensitive).
 UXO_TEXT_SUFFIXES = (".json", ".geojson", ".html", ".md", ".txt", ".jsonl", ".csv", ".toml")
 UXO_TEXT_MARKERS = re.compile(rb"(?i)crater|bombentrichter|trichterfeld")
@@ -315,7 +346,10 @@ def tile_zoom_dir(template: str) -> Tuple[str, bool]:
     return prefix, True
 
 
-def plan_aoi(src: Path, aoi: str, xyz_max_zoom: int, data2_url: str, plan1: Plan, plan2: Plan) -> dict:
+def plan_aoi(src: Path, aoi: str, xyz_max_zoom: int, data2_url: str, plan1: Plan, plan2: Plan,
+             level_aois: Optional[Dict[str, Optional[str]]] = None) -> dict:
+    """Plan a tile AOI. `level_aois`: the other AOIs this export stages -> their stats level (`stats_levels` may
+    only point at those; see `check_stats_levels`)."""
     aoi_dir = src / aoi
     mpath = aoi_dir / "manifest.json"
     if not mpath.is_file():
@@ -374,6 +408,9 @@ def plan_aoi(src: Path, aoi: str, xyz_max_zoom: int, data2_url: str, plan1: Plan
     uxo = strip_private_candidates(aoi_dir, aoi, manifest, plan1)
     if uxo["features"] or uxo["masks"]:
         print(f"[export-data] private UXO candidates removed: {uxo['features']} features, {uxo['masks']} mask chunks rewritten")
+    stats_guard = stats_file_guard(aoi_dir, sorted(keyed.get("stats/", ())), stats_level(manifest))
+    for line in check_stats_levels(manifest, {**(level_aois or {}), aoi: stats_level(manifest)}):
+        print(line)
     manifest["release"] = {
         "note": "Public GitHub Pages export (scripts/release/export_data.py): xyz tiles live in a second data repository; maxZoom trimmed, the app overzooms.",
         "xyzMaxZoom": xyz_max_zoom,
@@ -385,7 +422,171 @@ def plan_aoi(src: Path, aoi: str, xyz_max_zoom: int, data2_url: str, plan1: Plan
     if leaks:
         sys.exit(f"[export-data] refusing to export: staged files still name a UXO class: {', '.join(leaks[:10])}")
     return {"manifest": manifest, "skippedTiles": skipped_tiles, "xyz": stats, "uxoRemoved": uxo,
-            "skippedPrivate": skipped_private}
+            "skippedPrivate": skipped_private, "statsWarnings": stats_guard["warnings"]}
+
+
+def stats_level(manifest: dict) -> Optional[str]:
+    """Level of the AOI's own `stats` key ('gemeinde' / 'ortsteil'; no `level` = 'ortsteil'), None without a valid key."""
+    s = manifest.get("stats")
+    if not isinstance(s, dict) or s.get("format") != KEYED_LAYERS["stats"][1]:
+        return None
+    return s.get("level") or "ortsteil"
+
+
+def read_stats_level(src: Path, aoi: str) -> Optional[str]:
+    """`stats_level` of <src>/<aoi>/manifest.json (None when missing or unreadable)."""
+    try:
+        return stats_level(json.loads((src / aoi / "manifest.json").read_text(encoding="utf-8")))
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def check_stats_levels(manifest: dict, staged: Dict[str, Optional[str]]) -> List[str]:
+    """Validate `manifest['stats_levels']` (sle-stats-levels-v1) in place against the AOIs this export stages
+    (`staged`: aoi -> the level of its stats). A level whose AOI is not staged or whose stats are another level is
+    dropped (the public manifest must not point at data that are not public); with a wrong format or fewer than two
+    levels left (no switch) the whole key is dropped. Returns log lines."""
+    sl = manifest.get("stats_levels")
+    if sl is None:
+        return []
+    if not isinstance(sl, dict) or sl.get("format") != STATS_LEVELS_FORMAT or not isinstance(sl.get("levels"), list):
+        manifest.pop("stats_levels", None)
+        return [f"[export-data] manifest key 'stats_levels' is not {STATS_LEVELS_FORMAT}: dropped"]
+    keep, out = [], []
+    for lv in sl["levels"]:
+        if not isinstance(lv, dict) or lv.get("level") not in STATS_LEVEL_IDS:
+            out.append(f"[export-data] stats_levels: unknown level entry {lv!r} dropped")
+        elif lv.get("aoi") not in staged:
+            out.append(f"[export-data] stats_levels: level {lv['level']!r} -> AOI {lv.get('aoi')!r} is not staged: dropped")
+        elif staged[lv["aoi"]] != lv["level"]:
+            out.append(f"[export-data] stats_levels: AOI {lv['aoi']!r} holds level {staged[lv['aoi']]!r}, not {lv['level']!r}: dropped")
+        else:
+            keep.append(lv)
+    if len(keep) < 2:
+        manifest.pop("stats_levels", None)
+        out.append("[export-data] stats_levels: fewer than two staged levels left: key dropped")
+    elif len(keep) != len(sl["levels"]):
+        sl["levels"] = keep
+    return out
+
+
+def stats_privacy_problems(rel: str, doc, level: Optional[str]) -> List[str]:
+    """Privacy guard for one staged stats file (see STATS_FORBIDDEN_*): aggregates only."""
+    out: List[str] = []
+
+    def scan(v, path: str) -> None:
+        if len(out) >= 10:
+            return
+        if isinstance(v, dict):
+            for k, x in v.items():
+                if any(f in str(k).lower() for f in STATS_FORBIDDEN_KEY_PARTS):
+                    out.append(f"{rel}: forbidden key {path}.{k}")
+                scan(x, f"{path}.{k}")
+        elif isinstance(v, list):
+            for i, x in enumerate(v):
+                scan(x, f"{path}[{i}]")
+        elif isinstance(v, str) and STATS_FORBIDDEN_VALUE.search(v.strip()):
+            out.append(f"{rel}: parcel-id- or address-like value at {path}")
+
+    if rel.endswith(".geojson"):
+        for i, f in enumerate((doc or {}).get("features") or []):
+            props = (f or {}).get("properties") or {}
+            if set(props) != {"id", "name_de"}:
+                out.append(f"{rel}: feature {i} has properties {sorted(props)} (contract: id, name_de only)")
+            scan(props, f"features[{i}].properties")
+        return out
+    scan(doc, "")
+    if level == "gemeinde":
+        for p in (doc or {}).get("places") or []:
+            if not isinstance(p, dict):
+                continue
+            pid = p.get("id")
+            if p.get("riesen"):
+                out.append(f"{rel}: place {pid}: tree positions (riesen) on the Gemeinde level (ADR 0051)")
+            if p.get("tallest") is not None:
+                out.append(f"{rel}: place {pid}: tallest tree on the Gemeinde level (ADR 0051)")
+            bio = p.get("biodiversity")
+            flat = list(bio.values()) if isinstance(bio, dict) else []
+            flat += [x for v in flat if isinstance(v, list) for x in v]
+            if any(isinstance(x, (str, dict)) for x in flat):
+                out.append(f"{rel}: place {pid}: biodiversity carries more than counts (records / species names?)")
+    return out
+
+
+def stats_file_guard(aoi_dir: Path, rels: Sequence[str], level: Optional[str]) -> dict:
+    """Size + privacy guard for the stats files about to be staged (AOI-relative paths). Exits (no export) on a
+    file above STATS_FILE_HARD_KB or a privacy problem; returns {'bytes': {rel: n}, 'warnings': [...]}."""
+    sizes: Dict[str, int] = {}
+    warnings: List[str] = []
+    problems: List[str] = []
+    for rel in rels:
+        f = aoi_dir / rel
+        n = f.stat().st_size
+        sizes[rel] = n
+        name = rel.rsplit("/", 1)[-1]
+        if n > STATS_FILE_HARD_KB * 1024:
+            problems.append(f"{rel} is {n / 1024:.0f} KB (hard limit {STATS_FILE_HARD_KB} KB for a stats file)")
+            continue
+        if name in STATS_FILE_AIM_KB and n > STATS_FILE_AIM_KB[name] * 1024:
+            warnings.append(f"{rel} is {n / 1024:.0f} KB (contract target < {STATS_FILE_AIM_KB[name]} KB)")
+        if rel.endswith((".json", ".geojson")):
+            try:
+                doc = json.loads(f.read_text(encoding="utf-8"))
+            except ValueError as e:
+                problems.append(f"{rel}: not JSON ({e})")
+                continue
+            problems += stats_privacy_problems(rel, doc, level)
+    if problems:
+        sys.exit("[export-data] refusing to export stats: " + "; ".join(problems[:10]))
+    for w in warnings:
+        print(f"[export-data] WARNING: {w}")
+    return {"bytes": sizes, "warnings": warnings}
+
+
+def plan_stats_aoi(src: Path, aoi: str, plan1: Plan, level_aois: Optional[Dict[str, Optional[str]]] = None) -> dict:
+    """Plan a stats-only AOI (ADR 0051): <aoi>/manifest.json + the files of its `stats` key, nothing else.
+    Exits (no export) when the manifest is not `kind: 'stats-only'`, names another AOI, carries a key outside
+    STATS_ONLY_KEYS (tiles, layers, work data), has no valid `stats` key, or a stats file fails the size / privacy
+    guard. `stats_levels` is checked against `level_aois` (plus this AOI) like in a tile AOI."""
+    aoi_dir = src / aoi
+    mpath = aoi_dir / "manifest.json"
+    if not mpath.is_file():
+        sys.exit(f"[export-data] no stats-only manifest: {mpath} (run the pipeline, or drop {aoi} from RELEASE_STATS_AOIS)")
+    allowed_source(mpath)
+    raw = mpath.read_bytes()
+    manifest = json.loads(raw)
+    if not isinstance(manifest, dict) or manifest.get("kind") != STATS_ONLY_KIND:
+        sys.exit(f"[export-data] refusing: {aoi}/manifest.json is not kind {STATS_ONLY_KIND!r} (tile AOIs go through --aoi)")
+    if manifest.get("aoi") != aoi:
+        sys.exit(f"[export-data] refusing: {aoi}/manifest.json names AOI {manifest.get('aoi')!r}")
+    extra = sorted(set(manifest) - STATS_ONLY_KEYS)
+    if extra:
+        sys.exit(f"[export-data] refusing: stats-only manifest {aoi} carries keys a stats-only AOI must not have: {', '.join(extra)}")
+    before = json.dumps(manifest, sort_keys=True)
+    keyed = keyed_layer_files(aoi_dir, manifest)
+    files = sorted(keyed.get("stats/", ()))
+    if not files:
+        sys.exit(f"[export-data] refusing: stats-only AOI {aoi} has no valid 'stats' key")
+    level = stats_level(manifest)
+    guard = stats_file_guard(aoi_dir, files, level)
+    for line in check_stats_levels(manifest, {**(level_aois or {}), aoi: level}):
+        print(line)
+    for rel in files:
+        plan1[f"{aoi}/{rel}"] = aoi_dir / rel
+    # unchanged: staged byte-identical; else re-serialised (a dropped stats_levels entry)
+    plan1[f"{aoi}/manifest.json"] = mpath if json.dumps(manifest, sort_keys=True) == before else (
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    skipped = [f.relative_to(aoi_dir).as_posix() for f in walk_files(aoi_dir)]
+    skipped = [r for r in skipped if r != "manifest.json" and r not in files]
+    leaks = uxo_text_leaks(aoi, plan1)
+    if leaks:
+        sys.exit(f"[export-data] refusing to export: staged files still name a UXO class: {', '.join(leaks[:10])}")
+    print(f"[export-data] stats-only AOI {aoi} (level {level}): manifest.json + {len(files)} file(s) staged, "
+          f"{len(skipped)} local file(s) not staged{' (' + ', '.join(skipped[:5]) + ')' if skipped else ''}")
+    places = json.loads((aoi_dir / manifest["stats"]["url"]).read_text(encoding="utf-8"))
+    inputs = places.get("inputs") if isinstance(places, dict) and isinstance(places.get("inputs"), dict) else {}
+    return {"aoi": aoi, "level": level, "manifest": manifest, "files": guard["bytes"], "inputs": inputs,
+            "bytes": sum(guard["bytes"].values()) + len(raw), "skipped": skipped, "warnings": guard["warnings"]}
 
 
 def keyed_layer_files(aoi_dir: Path, manifest: dict) -> Dict[str, set]:
@@ -679,13 +880,27 @@ def attribution_entries(*strings: str) -> List[str]:
 def render(name: str, values: dict) -> bytes:
     text = (TEMPLATES / name).read_text(encoding="utf-8")
     for k, v in values.items():
+        if not v:  # an empty placeholder on a line of its own leaves no blank line (it would split a Markdown table)
+            text = re.sub(r"(?m)^\{\{" + re.escape(k) + r"\}\}\n", "", text)
         text = text.replace("{{" + k + "}}", v)
     return text.encode("utf-8")
 
 
-def pending_deletes(plan: Plan, out: Path, scope: Optional[str] = None) -> List[str]:
-    """Files in `out` (relative, sorted; `.git/` excluded, only under `scope` if given) that are not in
-    `plan`, i.e. what `sync` would delete. Reads only."""
+Scope = Optional[Union[str, Tuple[str, ...]]]
+
+
+def in_scope(rel: str, scope: Scope) -> bool:
+    """`scope` None = everything; else one entry or a tuple: an entry ending in "/" is a prefix, any other names one
+    file exactly (`--stats-only`: "saarland/", "overall/manifest.json", "README.md", …)."""
+    if not scope:
+        return True
+    items = (scope,) if isinstance(scope, str) else scope
+    return any(rel.startswith(s) if s.endswith("/") else rel == s for s in items)
+
+
+def pending_deletes(plan: Plan, out: Path, scope: Scope = None) -> List[str]:
+    """Files in `out` (relative, sorted; `.git/` excluded, only inside `scope` if given, see `in_scope`) that are not
+    in `plan`, i.e. what `sync` would delete. Reads only."""
     planned = set(plan)
     out_list: List[str] = []
     for dirpath, dirnames, filenames in os.walk(out, topdown=True):
@@ -694,12 +909,12 @@ def pending_deletes(plan: Plan, out: Path, scope: Optional[str] = None) -> List[
         dirnames.sort()
         for f in sorted(filenames):
             rel = (Path(dirpath) / f).relative_to(out).as_posix()
-            if rel not in planned and (not scope or rel.startswith(scope)):
+            if rel not in planned and in_scope(rel, scope):
                 out_list.append(rel)
     return out_list
 
 
-def delete_guard(targets: Sequence[Tuple[str, Plan, Path, Optional[str]]], max_deletes: int) -> List[str]:
+def delete_guard(targets: Sequence[Tuple[str, Plan, Path, Scope]], max_deletes: int) -> List[str]:
     """Refusal lines when a sync would delete more than `max_deletes` already-staged files from one repo
     (a source dir that was skipped or is missing, e.g. a symlink not followed, wipes the public site);
     empty when every target is within the limit. Reads only."""
@@ -720,13 +935,13 @@ def delete_guard(targets: Sequence[Tuple[str, Plan, Path, Optional[str]]], max_d
     return lines
 
 
-def sync(plan: Plan, out: Path, scope: Optional[str] = None, dry_run: bool = False,
+def sync(plan: Plan, out: Path, scope: Scope = None, dry_run: bool = False,
          changes: Optional[List[str]] = None) -> Tuple[int, int, int]:
     """Make `out` contain exactly `plan` (except .git/). Returns (copied, unchanged, deleted).
-    `scope` (e.g. "zones/"): only plan entries and files under that prefix are written or deleted, the
-    rest of `out` is not touched. `dry_run`: write nothing, only count. `changes` collects
+    `scope` (e.g. "zones/", or a tuple, see `in_scope`): only plan entries and files inside it are written or
+    deleted, the rest of `out` is not touched. `dry_run`: write nothing, only count. `changes` collects
     "W <path>" / "D <path>" lines."""
-    inside = (lambda rel: rel.startswith(scope)) if scope else (lambda rel: True)
+    inside = lambda rel: in_scope(rel, scope)  # noqa: E731
     log = changes.append if changes is not None else (lambda _l: None)
     if not dry_run:
         out.mkdir(parents=True, exist_ok=True)
@@ -806,6 +1021,180 @@ def size_report(name: str, out: Path, limits: dict) -> Tuple[List[str], bool]:
     return lines, ok
 
 
+def plan_shared(src: Path, app_url: str, plan1: Plan) -> List[str]:
+    """Stage `shared/**` (index.json viewer URL rewritten to the public castle viewer); returns their attributions."""
+    shared_attr: List[str] = []
+    if (src / "shared").is_dir():
+        for f in walk_files(src / "shared"):
+            rel = f.relative_to(src).as_posix()
+            plan1[rel] = f
+            if f.name == "index.json":
+                idx = json.loads(f.read_text(encoding="utf-8"))
+                shared_attr.append(idx.get("attribution", ""))
+                viewer = idx.get("viewer")
+                if isinstance(viewer, dict) and "url" in viewer:
+                    # the local file names the dev castle viewer (localhost:5260); publish the public one
+                    viewer["url"] = app_url.rstrip("/") + "/castle/"
+                    plan1[rel] = (json.dumps(idx, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
+    return shared_attr
+
+
+def pois_attribution(src: Path) -> str:
+    if (src / "pois.geojson").is_file():
+        return json.loads(allowed_source(src / "pois.geojson").read_text(encoding="utf-8")).get("attribution", "")
+    return ""
+
+
+CASTLE_TERRAIN_ATTRIBUTION = ("castle-viewer/terrain: DGM1 GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet; "
+                              "1789-Gelände = Hypothese (eigene Arbeit)")
+
+
+def landing_entries1(m: dict, shared_attr: Sequence[str], pois_attr: str, stats_infos: Sequence[dict],
+                     has_castle: bool) -> List[str]:
+    """Credit list of repo 1 (ATTRIBUTION, README, index.html): the AOI manifest, shared/, pois, the stats-only
+    AOIs (e.g. BKG VG25 for `saarland`), the castle terrain."""
+    entries = attribution_entries(m.get("attribution", ""), *shared_attr, pois_attr,
+                                  *[i["manifest"].get("attribution", "") for i in stats_infos])
+    vg25 = [e for e in entries if STATS_ONLY_ATTRIBUTION.match(e)]
+    if len(vg25) > 1:  # a stats-only AOI built before the credit changed (re-run gemeinden_stats.py)
+        print(f"[export-data] WARNING: {len(vg25)} different BKG VG25 credits in the landing credits: {vg25}")
+    if has_castle:
+        entries.append(CASTLE_TERRAIN_ATTRIBUTION)
+    return entries
+
+
+def stats_aoi_texts(stats_infos: Sequence[dict]) -> Dict[str, str]:
+    """README / index.html snippets for the staged stats-only AOIs (empty when none)."""
+    rows, lic, html_items = [], [], []
+    for i in stats_infos:
+        aoi, man = i["aoi"], i["manifest"]
+        files = ", ".join(f"`{r}`" for r in sorted(i["files"]))
+        unit = "Gemeinde" if i["level"] == "gemeinde" else "place"
+        rows.append(f"| `{aoi}/` | Stats-only AOI „{man.get('name', aoi)}“ (no terrain, `kind: 'stats-only'`): `manifest.json`, "
+                    f"{files} — level `{i['level']}` of the leaderboard *Orte im Vergleich*, aggregates per {unit}, "
+                    f"estimates as ranges. |")
+        ins = "; ".join(f"{v.get('name_de', k)} ({v.get('provider', '?')}, {v.get('licence', '?')})"
+                        for k, v in (i.get("inputs") or {}).items() if isinstance(v, dict))
+        line = f"- Leaderboard level `{aoi}/stats/`: aggregates per {unit} only, never per parcel, building, tree or person. Inputs: {ins or '–'}."
+        if "vg25" in (i.get("inputs") or {}):
+            line += (" Outlines: **BKG VG25** (© BKG, https://www.bkg.bund.de, **CC BY 4.0**, "
+                     "https://creativecommons.org/licenses/by/4.0/), Daten verändert: parts dissolved per AGS, simplified to 50 m.")
+        lic.append(line)
+        item = f"<code>{html.escape(aoi)}/</code> – {html.escape(man.get('name', aoi))}"
+        if "vg25" in (i.get("inputs") or {}):
+            # BKG Quellenvermerk on a web page: „BKG“ and „CC BY 4.0“ linked (gdz.bkg.bund.de, VG25 Nutzungsbedingungen)
+            item += (' (Gemeindegrenzen: © <a href="https://www.bkg.bund.de">BKG</a> VG25, '
+                     '<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, Daten verändert)')
+        html_items.append(item)
+    return {"STATS_AOI_ROWS": "\n".join(rows), "STATS_AOI_LICENCE": "\n".join(lic),
+            "STATS_AOI_HTML": (" Bestenliste ohne Gelände: " + ", ".join(html_items) + ".") if html_items else ""}
+
+
+def landing_files(a: argparse.Namespace, m: dict, entries1: Sequence[str], entries2: Sequence[str],
+                  prints: Sequence[dict], stats_infos: Sequence[dict]) -> Tuple[Plan, Plan]:
+    """`.nojekyll`, README.md, ATTRIBUTION, index.html of both repos."""
+    cand = m.get("candidates") or {}
+    vals = {
+        "ORG": a.org, "APP_URL": a.app_url, "DATA_URL": a.data_url, "DATA2_URL": a.data2_url, "AOI": a.aoi,
+        "AOI_NAME": html.escape(m.get("name", a.aoi)), "XYZ_MAX_ZOOM": str(a.xyz_max_zoom),
+        "CANDIDATE_COUNT": str(cand.get("featureCount", "?")),
+        "ATTRIBUTION_LIST_1": "\n".join(f"- {e}" for e in entries1),
+        "ATTRIBUTION_LIST_2": "\n".join(f"- {e}" for e in entries2),
+        "ATTRIBUTION_HTML_1": "\n".join(f"<li>{html.escape(e)}</li>" for e in entries1),
+        "ATTRIBUTION_HTML_2": "\n".join(f"<li>{html.escape(e)}</li>" for e in entries2),
+        "PRINT_LIST": "\n".join(f"- `print/{p['series']}/` – {p['name_de']}: {p['files3mf']} 3MF-Kacheln" for p in prints) or "- (keine)",
+        "PRINT_HTML": "\n".join(f"<li><a href=\"print/{html.escape(p['series'])}/index.json\">{html.escape(p['name_de'])}</a> – {p['files3mf']} 3MF</li>" for p in prints) or "<li>(keine)</li>",
+        **stats_aoi_texts(stats_infos),
+    }
+    out: Tuple[Plan, Plan] = ({}, {})
+    for plan, which, entries in ((out[0], "1", entries1), (out[1], "2", entries2)):
+        plan[".nojekyll"] = b""
+        plan["README.md"] = render(f"data{which}-README.md", vals)
+        plan["ATTRIBUTION"] = ("\n".join(entries) + "\n").encode("utf-8")
+        plan["index.html"] = render(f"data{which}-index.html", vals)
+    return out
+
+
+def stats_report_lines(stats_infos: Sequence[dict]) -> List[str]:
+    lines = []
+    for i in stats_infos:
+        lines.append(f"  {i['aoi']} (level {i['level']}): {i['bytes'] / 1e3:.1f} KB incl. manifest.json, "
+                     f"{len(i['skipped'])} local file(s) not staged")
+        lines += [f"    {n / 1e3:8.1f} KB  {i['aoi']}/{r}" for r, n in sorted(i["files"].items())]
+        lines += [f"    WARN: {w}" for w in i["warnings"]]
+    return lines
+
+
+def dump_like(base_text: str, doc: dict) -> bytes:
+    """Serialise `doc` in the style of `base_text` (compact or json.dumps default), so a merged manifest diffs by
+    the added key only."""
+    base = json.loads(base_text)
+    if json.dumps(base, ensure_ascii=False, separators=(",", ":")) + "\n" == base_text:
+        return (json.dumps(doc, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
+    return (json.dumps(doc, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def stats_only_export(a: argparse.Namespace, src: Path, stats_ids: List[str], level_aois: Dict[str, Optional[str]],
+                      max_deletes: Optional[int]) -> int:
+    """`--stats-only`: stage the stats-only AOIs into repo 1 and add only STATS_ONLY_MERGE_KEYS from the local
+    <aoi>/manifest.json to the manifest already staged in repo 1 (= the published one when the staging clone is
+    clean); README.md / ATTRIBUTION / index.html of repo 1 are regenerated. Nothing else in either repo is read,
+    written or deleted (no tiles, no pending candidate changes, no other manifest key)."""
+    out1 = a.out1.resolve()
+    if not stats_ids:
+        sys.exit("[export-data] --stats-only needs --stats-aois (RELEASE_STATS_AOIS)")
+    base_path = out1 / a.aoi / "manifest.json"
+    if not base_path.is_file():
+        sys.exit(f"[export-data] --stats-only: no staged {base_path} to add the keys to (check out the published data repo first)")
+    base_text = base_path.read_text(encoding="utf-8")
+    base = json.loads(base_text)
+    local = json.loads(allowed_source(src / a.aoi / "manifest.json").read_text(encoding="utf-8"))
+    staged_levels = {**level_aois, a.aoi: stats_level(base)}
+    plan: Plan = {}
+    infos = [plan_stats_aoi(src, s, plan, staged_levels) for s in stats_ids]
+    merged = json.loads(base_text)
+    for k in STATS_ONLY_MERGE_KEYS:
+        if k in local:
+            merged[k] = json.loads(json.dumps(local[k]))
+        else:
+            merged.pop(k, None)
+    for line in check_stats_levels(merged, staged_levels):
+        print(line)
+    if "stats_levels" in merged:
+        have = attribution_entries(merged.get("attribution", ""))
+        new = [e for e in attribution_entries(local.get("attribution", "")) if STATS_ONLY_ATTRIBUTION.match(e) and e not in have]
+        if new:
+            merged["attribution"] = "; ".join([s for s in [merged.get("attribution") or ""] if s] + new)  # appended, nothing else
+            print(f"[export-data] {a.aoi}/manifest.json attribution: added {new}")
+    added, removed = sorted(set(merged) - set(base)), sorted(set(base) - set(merged))
+    changed = sorted(k for k in set(merged) & set(base) if merged[k] != base[k])
+    print(f"[export-data] {a.aoi}/manifest.json keys: added {added or '-'}, removed {removed or '-'}, changed {changed or '-'} "
+          f"(local keys not published: {sorted(set(local) - set(merged) - {'release'}) or '-'}; "
+          f"local values that differ but stay unpublished: {sorted(k for k in set(local) & set(merged) if local[k] != merged[k] and k not in STATS_ONLY_MERGE_KEYS) or '-'})")
+    plan[f"{a.aoi}/manifest.json"] = base_text.encode("utf-8") if merged == base else dump_like(base_text, merged)
+    has_castle = (out1 / "castle-viewer" / "terrain" / "meta.json").is_file()
+    entries1 = landing_entries1(merged, plan_shared(src, a.app_url, {}), pois_attribution(src), infos, has_castle)
+    land1, _ = landing_files(a, merged, entries1, [], [], infos)
+    plan.update(land1)
+    scope = (*(f"{s}/" for s in stats_ids), f"{a.aoi}/manifest.json", *land1)
+    refusal = [] if max_deletes is None else delete_guard([("saar-lidar-data (stats only)", plan, out1, scope)], max_deletes)
+    if refusal and not a.dry_run:
+        print("\n".join(refusal), file=sys.stderr)
+        return EXIT_DELETE_GUARD
+    changes: List[str] = []
+    c, u, d = sync(plan, out1, scope=scope, dry_run=a.dry_run, changes=changes)
+    print(f"[export-data] saar-lidar-data stats only{' (dry run)' if a.dry_run else ''}: {c} written, {u} unchanged, {d} deleted")
+    for line in changes:
+        print(f"  {line}")
+    lines = ["## stats-only AOIs (saar-lidar-data, --stats-only)", *stats_report_lines(infos)]
+    lines += [f"    {len(plan[r]) / 1e3:8.1f} KB  {r}" for r in sorted(plan) if isinstance(plan[r], bytes) and not r.startswith(tuple(f"{s}/" for s in stats_ids))]
+    print("\n".join(lines))
+    if refusal:
+        print("\n".join(refusal), file=sys.stderr)
+        return EXIT_DELETE_GUARD
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--src", required=True, type=Path, help="app data dir (app/public/data)")
@@ -825,6 +1214,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--file-aim-mb", type=float, default=50)
     ap.add_argument("--zones", default="", help="comma list of zone packages to publish (each must be in PUBLIC_ZONE_POLICY)")
     ap.add_argument("--zones-only", action="store_true", help="stage only <out1>/zones/; nothing else is read, written or deleted")
+    ap.add_argument("--stats-aois", default="", help="comma list of stats-only AOIs (kind 'stats-only', e.g. saarland) staged to repo 1")
+    ap.add_argument("--stats-only", action="store_true",
+                    help="stage only the --stats-aois and add their manifest key stats_levels to the already staged "
+                         "<out1>/<aoi>/manifest.json (+ README/ATTRIBUTION/index.html); nothing else is touched")
     ap.add_argument("--dry-run", action="store_true", help="list what would be written/deleted, change nothing")
     ap.add_argument("--link-root", action="append", type=Path, default=[],
                     help="also follow input symlinks that resolve inside this dir (repeatable; the repo, --src and "
@@ -841,6 +1234,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         if str(o.resolve()).startswith(str(Path(__file__).resolve().parents[2]) + os.sep):
             sys.exit(f"[export-data] refusing to write inside the code repository: {o}")
     zone_ids = [z.strip() for z in a.zones.split(",") if z.strip()]
+    stats_ids = [s.strip() for s in a.stats_aois.split(",") if s.strip()]
+    if a.zones_only and a.stats_only:
+        sys.exit("[export-data] --zones-only and --stats-only exclude each other")
+    for s in stats_ids:
+        if s == a.aoi or "/" in s or s.startswith("."):
+            sys.exit(f"[export-data] bad stats-only AOI name {s!r}")
 
     if a.zones_only:
         plan_z: Plan = {}
@@ -864,56 +1263,29 @@ def main(argv: Optional[List[str]] = None) -> int:
         print("\n".join(lines))
         return 0 if ok else 2
 
+    level_aois = {s: read_stats_level(src, s) for s in stats_ids}
+    if a.stats_only:
+        return stats_only_export(a, src, stats_ids, level_aois, max_deletes)
     plan1: Plan = {}
     plan2: Plan = {}
-    aoi_info = plan_aoi(src, a.aoi, a.xyz_max_zoom, a.data2_url, plan1, plan2)
+    stats_infos = [plan_stats_aoi(src, s, plan1, {**level_aois, a.aoi: read_stats_level(src, a.aoi)}) for s in stats_ids]
+    aoi_info = plan_aoi(src, a.aoi, a.xyz_max_zoom, a.data2_url, plan1, plan2, level_aois=level_aois)
     m = aoi_info["manifest"]
     if (src / "pois.geojson").is_file():
         plan1["pois.geojson"] = allowed_source(src / "pois.geojson")
-    shared_attr = []
-    if (src / "shared").is_dir():
-        for f in walk_files(src / "shared"):
-            rel = f.relative_to(src).as_posix()
-            plan1[rel] = f
-            if f.name == "index.json":
-                idx = json.loads(f.read_text(encoding="utf-8"))
-                shared_attr.append(idx.get("attribution", ""))
-                viewer = idx.get("viewer")
-                if isinstance(viewer, dict) and "url" in viewer:
-                    # the local file names the dev castle viewer (localhost:5260); publish the public one
-                    viewer["url"] = a.app_url.rstrip("/") + "/castle/"
-                    plan1[rel] = (json.dumps(idx, ensure_ascii=False, indent=1) + "\n").encode("utf-8")
+    shared_attr = plan_shared(src, a.app_url, plan1)
     has_castle = plan_castle_terrain(a.castle_terrain.resolve(), plan1)
     zones = plan_zones(src / "zones", zone_ids, plan1)
     prints = plan_print(src, plan2)
 
-    pois_attr = ""
-    if (src / "pois.geojson").is_file():
-        pois_attr = json.loads((src / "pois.geojson").read_text(encoding="utf-8")).get("attribution", "")
-    entries1 = attribution_entries(m.get("attribution", ""), *shared_attr, pois_attr)
-    if has_castle:
-        entries1.append("castle-viewer/terrain: DGM1 GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet; 1789-Gelände = Hypothese (eigene Arbeit)")
+    entries1 = landing_entries1(m, shared_attr, pois_attribution(src), stats_infos, has_castle)
     hist_attr = [e.get("attribution", "") for e in (m.get("xyz") or {}).values()]
     # relief tiles: the terrain entries of the manifest (those without a "(product)" suffix)
     terrain_attr = [e for e in attribution_entries(m.get("attribution", "")) if "(" not in e and "OpenStreetMap" not in e]
     entries2 = attribution_entries(*terrain_attr, *hist_attr, *[p["attribution"] for p in prints])
-    cand = m.get("candidates") or {}
-    vals = {
-        "ORG": a.org, "APP_URL": a.app_url, "DATA_URL": a.data_url, "DATA2_URL": a.data2_url, "AOI": a.aoi,
-        "AOI_NAME": html.escape(m.get("name", a.aoi)), "XYZ_MAX_ZOOM": str(a.xyz_max_zoom),
-        "CANDIDATE_COUNT": str(cand.get("featureCount", "?")),
-        "ATTRIBUTION_LIST_1": "\n".join(f"- {e}" for e in entries1),
-        "ATTRIBUTION_LIST_2": "\n".join(f"- {e}" for e in entries2),
-        "ATTRIBUTION_HTML_1": "\n".join(f"<li>{html.escape(e)}</li>" for e in entries1),
-        "ATTRIBUTION_HTML_2": "\n".join(f"<li>{html.escape(e)}</li>" for e in entries2),
-        "PRINT_LIST": "\n".join(f"- `print/{p['series']}/` – {p['name_de']}: {p['files3mf']} 3MF-Kacheln" for p in prints) or "- (keine)",
-        "PRINT_HTML": "\n".join(f"<li><a href=\"print/{html.escape(p['series'])}/index.json\">{html.escape(p['name_de'])}</a> – {p['files3mf']} 3MF</li>" for p in prints) or "<li>(keine)</li>",
-    }
-    for plan, which in ((plan1, "1"), (plan2, "2")):
-        plan[".nojekyll"] = b""
-        plan["README.md"] = render(f"data{which}-README.md", vals)
-        plan["ATTRIBUTION"] = ("\n".join(entries1 if which == "1" else entries2) + "\n").encode("utf-8")
-        plan["index.html"] = render(f"data{which}-index.html", vals)
+    land1, land2 = landing_files(a, m, entries1, entries2, prints, stats_infos)
+    plan1.update(land1)
+    plan2.update(land2)
 
     limits = {"site_hard": a.site_hard_mb, "site_aim": a.site_aim_mb, "file_hard": a.file_hard_mb, "file_aim": a.file_aim_mb}
     report: List[str] = []
@@ -945,6 +1317,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     zone_lines = [f"  {z['id']}: {z['files']} files, {z['bytes'] / 1e6:.1f} MB + zone.json, {z['referenceDropped']} reference "
                   f"asset(s) dropped, {len(z['skipped'])} local file(s) not staged" for z in zones]
     report += ["## zones (saar-lidar-data/zones/)", *(zone_lines or ["  (none)"]), ""]
+    report += ["## stats-only AOIs (saar-lidar-data)", *(stats_report_lines(stats_infos) or ["  (none)"]), ""]
     text = "\n".join(report)
     print(text)
     if a.report:

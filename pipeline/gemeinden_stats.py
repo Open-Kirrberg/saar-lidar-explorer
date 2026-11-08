@@ -9,8 +9,9 @@ optional and possibly partial) from data/work/gemeinden/ and writes
     app/public/data/saarland/stats/places.json     sle-stats-v1, level 'gemeinde'
     app/public/data/saarland/stats/places.geojson  outlines {id, name_de}, coverage-simplified 50 m
 
-and adds `stats_levels` to the manifests of the Ortsteile AOIs in ORTSTEILE_AOIS (today `overall`) unless
---no-levels. A discipline is `ready` only when every place has it (`discipline_state` 'ready' or 'none'); slow inputs
+and adds `stats_levels` plus the BKG VG25 credit (the outlines the level switch shows, so the app's „© Quellen“, built
+from the tile AOI's `attribution`, names BKG) to the manifests of the Ortsteile AOIs in ORTSTEILE_AOIS (today `overall`)
+unless --no-levels. `--levels-only` does just that (idempotent, no work files read). A discipline is `ready` only when every place has it (`discipline_state` 'ready' or 'none'); slow inputs
 that are not done for a place are 'pending' there and its values are null, never estimated (R3: computed centrally).
 """
 from __future__ import annotations
@@ -326,10 +327,7 @@ def build(write_levels: bool = True) -> dict[str, Any]:
         print(f"  wrote {AOI}/stats/{name} ({fmt_bytes(len(text.encode()))})")
         if len(text.encode()) > limit:
             print(f"  ! {name} is above the contract target {fmt_bytes(limit)}", file=sys.stderr)
-    levels = {"format": "sle-stats-levels-v1", "levels": [
-        {"level": "gemeinde", "aoi": AOI, "label_de": "Gemeinden"},
-        *({"level": "ortsteil", "aoi": a, "label_de": "Ortsteile"} for a in ORTSTEILE_AOIS
-          if (APP_DATA / a / "manifest.json").exists())]}
+    levels = stats_levels_value()
     man = {"version": 1, "kind": "stats-only", "aoi": AOI, "name": "Saarland – Gemeinden im Vergleich",
            "crs": "EPSG:25832",
            "stats": {"format": "sle-stats-v1", "url": "stats/places.json", "geometry": "stats/places.geojson",
@@ -340,9 +338,7 @@ def build(write_levels: bool = True) -> dict[str, Any]:
     tmp.write_text(json.dumps(man, ensure_ascii=False, indent=2) + "\n")
     tmp.replace(mf)
     if write_levels:
-        for a in ORTSTEILE_AOIS:
-            if (APP_DATA / a / "manifest.json").exists():
-                update_manifest(APP_DATA / a, {"stats_levels": levels})
+        write_levels_into_ortsteile(levels)
     G.write_json(G.GEMEINDE_DIR / "stats_report.json", {
         "generated": generated, "ready": {d["id"]: d["ready"] for d in disc},
         "pending": {d["id"]: [p["id"] for p in places if p["discipline_state"][d["id"]] == "pending"]
@@ -350,6 +346,27 @@ def build(write_levels: bool = True) -> dict[str, Any]:
     print(f"  {len(places)} Gemeinden; ready: " + ", ".join(d["id"] for d in disc if d["ready"]) +
           "; pending: " + ", ".join(d["id"] for d in disc if not d["ready"]))
     return doc
+
+
+def stats_levels_value() -> dict:
+    """`stats_levels` (sle-stats-levels-v1): Gemeinden first, then every Ortsteile AOI that exists."""
+    return {"format": "sle-stats-levels-v1", "levels": [
+        {"level": "gemeinde", "aoi": AOI, "label_de": "Gemeinden"},
+        *({"level": "ortsteil", "aoi": a, "label_de": "Ortsteile"} for a in ORTSTEILE_AOIS
+          if (APP_DATA / a / "manifest.json").exists())]}
+
+
+def write_levels_into_ortsteile(levels: dict | None = None) -> list[str]:
+    """Idempotent: set `stats_levels` in every existing Ortsteile AOI manifest and make sure its `attribution` carries
+    the current VG25 credit (superseded VG25 credits replaced). Touches no other key. Returns the AOIs written."""
+    levels = levels or stats_levels_value()
+    done = []
+    for a in ORTSTEILE_AOIS:
+        if (APP_DATA / a / "manifest.json").exists():
+            update_manifest(APP_DATA / a, {"stats_levels": levels}, attribution=[G.ATTRIBUTION_VG25],
+                            drop_attribution=G.ATTRIBUTION_VG25_SUPERSEDED)
+            done.append(a)
+    return done
 
 
 def build_inputs(meta, mastr, gbif_doc, roofs_ok, trees_doc) -> dict:
@@ -436,9 +453,14 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("aoi", nargs="?", default=AOI)
     ap.add_argument("--no-levels", action="store_true", help="do not write stats_levels into the Ortsteile AOIs")
+    ap.add_argument("--levels-only", action="store_true",
+                    help="only write stats_levels + the VG25 credit into the Ortsteile AOIs (no work files read)")
     a = ap.parse_args(argv)
     if a.aoi != AOI:
         sys.exit(f"gemeinden_stats.py publishes the AOI {AOI!r} only")
+    if a.levels_only:
+        print("  stats_levels + VG25 credit: " + (", ".join(write_levels_into_ortsteile()) or "(no Ortsteile AOI)"))
+        return
     build(write_levels=not a.no_levels)
 
 

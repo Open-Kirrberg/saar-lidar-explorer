@@ -1473,7 +1473,7 @@ New method ids (in `method`):
 
 **Outlines** (`saarland/stats/places.geojson`): as "places.geojson" above (`{id, name_de}` only, EPSG:25832, 1 m integers, coverage-simplified, holes < 1 ha dropped) with `simplify_m` **50** (54 outlines over 2,650 km², ≈ 170 KB, target **< 200 KB**; 25 m gave 260 KB). **Size** of places.json target **< 160 KB** (≈ 25 KB gzip on Pages).
 
-**Inputs** (new ids): `vg25` (`© BKG (2026) CC BY 4.0, Datenquellen: https://sg.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf (VG25)`, licence `CC-BY-4.0`), plus the known `zensus_gemeinden`, `mastr`, `species_dlr`, `gbif`, `lod2_sl`, `lod2_rlp`, `lidar_sl`, `lidar_rlp` (the LiDAR ones only once at least one Gemeinde has S1b values).
+**Inputs** (new ids): `vg25` (`© BKG (2026) CC BY 4.0 (Daten verändert), Datenquellen: https://sgx.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf (VG25)`, licence `CC-BY-4.0`), plus the known `zensus_gemeinden`, `mastr`, `species_dlr`, `gbif`, `lod2_sl`, `lod2_rlp`, `lidar_sl`, `lidar_rlp` (the LiDAR ones only once at least one Gemeinde has S1b values).
 
 **Privacy** (ADR 0049) unchanged: aggregates per Gemeinde only; the S1b run keeps per-tile sums and at most the 10 highest tops per Gemeinde and tile in `data/work/gemeinden/` (never published); `check_privacy` runs on the file.
 
