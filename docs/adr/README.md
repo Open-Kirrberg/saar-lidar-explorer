@@ -11,6 +11,8 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0002](0002-epsg25832-local-origin.md) | EPSG:25832 everywhere, local origin in 3D | Accepted | 2026-11-01 | |
 | [0003](0003-terrarium-heights-native-grid.md) | Terrarium heights on the native grid | Accepted | 2026-11-01 | |
 | [0004](0004-contract-first.md) | Contract first: `docs/data-contract.md` is binding | Accepted | 2026-11-01 | |
+| [0055](0055-global-grid-tile-ownership-central-overview.md) | Global 1 km grid (origin E 300 000 / N 5 400 000), tile ownership by largest share, chunk presence bitmap, central overview levels, one session origin (manifest v3) | Accepted | 2026-11-08 | v2 levels anchored per AOI (for v3 places) |
+| [0056](0056-slim-formats-live-relief.md) | Slim formats: WebP lossless data, AVIF visual layers, live hillshade/slope/LRM/VAT, no DSM, 2D OSM, derived parcel lines, no AVIF fallback | Accepted | 2026-11-08 | |
 | **🛠️ Rendering & UI stack** | | | | |
 | [0005](0005-custom-terrain-engine.md) | Custom three.js terrain engine (Giro3D = plan B) | Accepted | 2026-11-01 | |
 | [0006](0006-leaflet-minimap.md) | Leaflet 1.9.4 for the 2D map | Accepted | 2026-11-01 | |
@@ -19,6 +21,7 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0008](0008-hypotheses-schauen-nicht-graben.md) | Hypotheses only — „Schauen, nicht graben“ | Accepted | 2026-11-01 | |
 | [0009](0009-candidates-public-user-data-private.md) | Candidates public; markers, reviews and location private | Accepted | 2026-11-02 | v1 "candidates local only" |
 | [0010](0010-craters-never-public.md) | Crater / UXO indicators are never public | Accepted | 2026-11-02 | |
+| [0053](0053-relict-candidates-opt-in-new-places.md) | Relict candidates off by default in new place repos, opt-in by the Ortspate | Accepted | 2026-11-08 | |
 | [0011](0011-castle-evidence-no-hms.md) | Castle: evidence tags, confidence, no HMS material | Accepted | 2026-11-01 | |
 | [0049](0049-orte-im-vergleich-places-only.md) | *Orte im Vergleich*: leaderboards rank places only, aggregates and labelled estimates, no server | Accepted | 2026-11-07 | |
 | [0050](0050-orte-im-vergleich-medal-table-no-total.md) | *Orte im Vergleich*: full view with a Medaillenspiegel instead of a weighted total score; „nach oben“ hints as whole-Gemarkung amounts | Accepted | 2026-11-08 | |
@@ -26,6 +29,8 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | **🚀 Hosting & licences** | | | | |
 | [0012](0012-github-pages-release.md) | Public hosting: GitHub Pages via `scripts/release/` | Accepted | 2026-11-02 | v1 non-goal "local only" |
 | [0013](0013-attribution-every-source.md) | Attribution for every source | Accepted | 2026-11-01 | |
+| [0052](0052-one-repo-per-municipality-central-catalog.md) | One repo per municipality (Gemeinde) under Open-Kirrberg, data built in Actions, one central catalog | Accepted | 2026-11-08 | |
+| [0054](0054-community-content-licences.md) | Community content: CC BY 4.0 / CC BY-SA 4.0 for text and images, CC0 data, ODbL for OSM-derived | Accepted | 2026-11-08 | |
 | **🎮 v2 — game shell** | | | | |
 | [0014](0014-audience-scope-devices.md) | Audience: Kirrberg public · area frozen · desktop = phone | Superseded by 0028 (reference-phone line) · Accepted | 2026-11-04 | v1 "personal tool" |
 | [0015](0015-overworld-zones-portals.md) | Overworld + zones behind portals | Accepted | 2026-11-04 | |

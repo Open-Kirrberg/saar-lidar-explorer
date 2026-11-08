@@ -181,10 +181,10 @@ CONTRIBUTING.md           German, step by step; CODEOWNERS = the Ortspaten
 | # | Question | Status |
 |---|---|---|
 | D1 | GitHub org | **decided:** stay with Open-Kirrberg (user, 2026-11-08) |
-| D2 | Unit of a repo | proposed: Gemeinde; Ortsteile inside |
+| D2 | Unit of a repo | **decided:** Gemeinde; Ortsteile inside ([ADR 0052](../adr/0052-one-repo-per-municipality-central-catalog.md)) |
 | D3 | Leaderboard levels | **decided:** separate tables for Gemeinden and Ortsteile, never mixed ([ADR 0051](../adr/0051-leaderboard-levels-gemeinden-ortsteile.md)) |
-| D4 | Relict candidates in new places | proposed: off by default, opt-in by the Ortspate |
-| D5 | Licence of community content | proposed: text and images CC BY 4.0 (or CC BY-SA 4.0 per item), data contributions CC0 or ODbL where derived from OSM |
+| D4 | Relict candidates in new places | **decided:** off by default, opt-in by the Ortspate ([ADR 0053](../adr/0053-relict-candidates-opt-in-new-places.md)) |
+| D5 | Licence of community content | **decided** ([ADR 0054](../adr/0054-community-content-licences.md)): text and images CC BY 4.0 (or CC BY-SA 4.0 per item), data contributions CC0 or ODbL where derived from OSM |
 | D6 | Ortho and historic maps: host or load the WMS live | **decided (S0):** host both as AVIF q65; the historic WMS needs a session cookie (not usable cross-origin), the ortho is the default ground and must be reliable. A live 0.2 m ortho near the camera may come later |
 | D7 | Second place and first Ortspate | open, user |
 | D8 | When to retire `saar-lidar-data` / `-2` | after S3, with a transition period |
@@ -193,6 +193,7 @@ CONTRIBUTING.md           German, step by step; CODEOWNERS = the Ortspaten
 
 - 2026-11-08: user wants to scale to Zweibrücken and the whole Saarland, community-driven on GitHub, one repo per place, no backend (GitHub Pages).
 - 2026-11-08: stay under the org Open-Kirrberg (D1).
+- 2026-11-08 (S2 contract): manifest `version: 3` (older apps reject it instead of drawing gaps); global grid origin E 300000 / N 5400000, 256 km; tile id `"{E_km}_{N_km}"`; presence = base64 bitmap; ownership = largest m² share, tie → smaller AGS; relief buffer = own tiles + 8 neighbours, recomputed from the official sources (byte-identical at borders); fixed u8 value ranges in v3; one session origin and one catalog `height_ref_m`; central `sle-overview-v1` serves levels ≥ 2; catalog with inline ownership bitmaps; no AVIF fallback files. D2, D4, D5 accepted as ADR 0052–0054 (autonomous-decision rule).
 - 2026-11-08 (S0): target format ≤ 5.5 MB/km² confirmed on Homburg (5.3); D6 = host ortho and historic maps as AVIF. The format changes (WebP/AVIF paths, live relief, no dsm, 2D OSM, presence list) go into the S2 contract work; the live-VAT shader prototype stays on the branch `spike/s0-live-vat` until then.
 - 2026-11-08 (S1): Gemeinde level as a stats-only AOI `saarland` plus manifest key `stats_levels` (ADR 0051). Outlines: BKG VG25 (CC BY 4.0). RLP neighbours for now: Zweibrücken and Bechhofen; more through their place repos later. Size class by legal status (Stadt / Gemeinde). On this level the tree count is measured crown tops only (no conifer fill from the 10 m DLR map, which doubled counts in conifer tiles). Grünste Ortslage (NDVI), Wenigsten Beton and Riesenbaum are not offered on this level in S1.
 
@@ -200,3 +201,4 @@ CONTRIBUTING.md           German, step by step; CODEOWNERS = the Ortspaten
 
 - 2026-11-08: first draft from the brainstorm in chat.
 - 2026-11-08: S0 result merged (§5, §8, D6), S1 decisions logged, D3 decided, Homburg's AGS in the catalog example fixed (10045114).
+- 2026-11-08: S2 contract written (data contract revision 3.0, ADR 0052–0056); §4 stays as the overview, the binding text is in the contract.

@@ -1,10 +1,10 @@
-# Data Contract v2 — pipeline → app
+# Data Contract v3 — pipeline → app
 
 The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (git-ignored). The app (`app/`) loads them via `fetch('data/<aoi>/manifest.json')`. Both sides must follow this file; change it only together with a `CHANGELOG.md` line (and an ADR if the change is a decision, e.g. a new layer kind).
 
 **Zones** (detailed places behind portals: castle, bakery, …) have their own binding contract: [zone-contract.md](zone-contract.md) (`sle-zone-v1`, [ADR 0029](adr/0029-zones-same-bundle-folder-layout.md)). Frames, proj4 and attribution rules below apply to zones unchanged.
 
-**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`, Orte im Vergleich `stats` and `forest_hist`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees", "Place statistics", "Historic forest mask"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid. **Revision 2.2 (Orte im Vergleich Phase 0, 2026-11-08):** adds the optional `stats` key (`sle-stats-v1`: `stats/places.json` + `stats/places.geojson`, [ADR 0049](adr/0049-orte-im-vergleich-places-only.md)) and the optional `forest_hist` key (`sle-forest-hist-v1`: `forest_hist/forest_hist.png`) — additive like `trees`: `version` stays 1/2, manifests without them stay valid, and the app hides the panel / the card row when a key is missing or invalid. **Revision 2.3 (Orte im Vergleich Phase 1, 2026-11-08):** adds the optional `species` key (`sle-species-v1`: `species/species.png`, see "Tree species") — additive like `forest_hist`: `version` stays 1/2, manifests without it stay valid, and the tree card hides the species row when it is missing or invalid. **Revision 2.4 (S1 Saarland leaderboard, 2026-11-08):** adds the optional top-level key `stats_levels` (`sle-stats-levels-v1`) and **stats-only manifests** (`kind: 'stats-only'`, e.g. AOI `saarland`: `stats` + `stats_levels` + `attribution`, no terrain), see "Gemeinde level" under "Place statistics" — additive: tile manifests keep `version` 1/2 and stay valid without the key.
+**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`, Orte im Vergleich `stats` and `forest_hist`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees", "Place statistics", "Historic forest mask"). The app loads v1, v2 and v3 (see Revision 3.0 below): a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid. **Revision 2.2 (Orte im Vergleich Phase 0, 2026-11-08):** adds the optional `stats` key (`sle-stats-v1`: `stats/places.json` + `stats/places.geojson`, [ADR 0049](adr/0049-orte-im-vergleich-places-only.md)) and the optional `forest_hist` key (`sle-forest-hist-v1`: `forest_hist/forest_hist.png`) — additive like `trees`: `version` stays 1/2, manifests without them stay valid, and the app hides the panel / the card row when a key is missing or invalid. **Revision 2.3 (Orte im Vergleich Phase 1, 2026-11-08):** adds the optional `species` key (`sle-species-v1`: `species/species.png`, see "Tree species") — additive like `forest_hist`: `version` stays 1/2, manifests without it stay valid, and the tree card hides the species row when it is missing or invalid. **Revision 2.4 (S1 Saarland leaderboard, 2026-11-08):** adds the optional top-level key `stats_levels` (`sle-stats-levels-v1`) and **stats-only manifests** (`kind: 'stats-only'`, e.g. AOI `saarland`: `stats` + `stats_levels` + `attribution`, no terrain), see "Gemeinde level" under "Place statistics" — additive: tile manifests keep `version` 1/2 and stay valid without the key. **Revision 3.0 (S2 many places, 2026-11-08):** manifest `version: 3` = v2 plus the global grid (`grid`, rectangles aligned at 1 km), the chunk `presence` list, fixed u8 ranges, WebP/AVIF files, `derived` relief modes (no baked hillshade/slope/slrm/vat at level 0), no `dsm`, 2D OSM and derived parcel lines; plus the catalog `sle-catalog-v1` and the central overview `sle-overview-v1`, see "Many places (v3, S2)". The app loads v1, v2 and v3; v1/v2 keep their meaning unchanged.
 
 ## Coordinate frames
 
@@ -17,6 +17,7 @@ The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (
 
 - Cell size **1 m**. Source DGM1 is PixelIsArea: pixel `(col,row)` of a 1 km tile with lower-left `(E,N)` has its **centre** at `E + col + 0.5`, `N + 1000 − row − 0.5`.
 - AOI raster: `width × height` cells (e.g. 3000 × 3000), sample `(c, r)` at centre `E0 + c + 0.5`, `N0 + height − r − 0.5` (row 0 = north edge, as in GeoTIFF).
+- v3 (Revision 3.0): the AOI rectangle lies on the **global 1 km grid** and may publish only some chunks (`presence`); `(i, j)` stay relative to the rectangle, see "Many places (v3, S2)".
 - Chunks: `chunkSize = 500` cells. Chunk `(i, j)`: `i` = column index going **east**, `j` = row index going **south**, from the north-west corner. Chunk `(i,j)` owns cells `c ∈ [i·500, i·500+500)`, `r ∈ [j·500, j·500+500)`.
 - **Height images carry a 1-cell apron on every side**: 502 × 502 pixels, pixel `(px,py)` ↔ AOI cell `(i·500 − 1 + px, j·500 − 1 + py)`. Cells outside the AOI raster are edge-clamped. The mesh is built over the 500 × 500 owned cells (plus a shared edge to the neighbour via the apron so there are no gaps); the apron also allows seamless per-pixel normals.
 - **Relief layer images have no apron**: 500 × 500 pixels, pixel `(px,py)` ↔ cell `(i·500 + px, j·500 + py)`.
@@ -27,6 +28,7 @@ The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (
 - **`u8`** (relief layers): single-channel grayscale PNG (or WebP lossless), `value = min + (v / 255) · (max − min)` with `min`/`max` from the manifest. Layers that are already display images (e.g. `vat`) use `min: 0, max: 1`.
 - **`rgb`** (colour images: orthophoto, historic maps; F13/F14): RGB8 WebP or JPEG (`format`), one image per chunk covering exactly the chunk's 500 × 500 cells at `pixelsPerChunk` px per side, see "Image layers". **Decoded with normal sRGB handling** (`colorSpace = SRGBColorSpace`, default `createImageBitmap` colour conversion) — unlike `terrarium`/`u8`, these are pictures, not data.
 - Decode heights in a worker / with `createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' })`. Never let the browser colour-manage them.
+- v3 (Revision 3.0): which file types (`.png` / `.webp` lossless / `.avif` lossy) each encoding allows, and the AVIF rules, are in "Slim formats (v3)".
 
 ## manifest.json
 
@@ -523,6 +525,296 @@ Paths are written with the level number substituted (`levels/2/dtm/{i}_{j}.png`)
 Typical chunk (DTM + 2 resident layers) ≈ **1.5 MB**, with canopy ≈ 2.5 MB, worst case (all 9 level-0 layers + DSM + low-pass) ≈ 5.3 MB. No mipmaps (data textures use Nearest/Linear without mips). The JS heap keeps a ~1 MB Float32 copy of each height texture (HeightQuery, skirts). Overall AOI, everything resident: level 0 ≈ 290 MB (≈ 480 MB with canopy), levels 1–4 (65 chunks) ≈ 100 MB — far below the 1.5 GB acceptance bound. The app still enforces an explicit budget so larger AOIs stay bounded: 600 MiB soft (hard cap 1400 MiB), LRU eviction, coarsest level pinned (`app/src/terrain/budget.ts`); measured peak on an overall flight 382.6 MB.
 
 **Image decode tiers (perf pass).** The files stay at `pixelsPerChunk` (no data change); the app decodes each chunk's `rgb` image at the smallest of P₀, P₀/2, P₀/4 … (≥ 125 px) that still gives ≥ 1 texel per CSS pixel at the chunk's nearest point (`createImageBitmap` resize, `app/src/terrain/imageRes.ts`), re-decodes it when the camera approaches (up) or recedes (down, 20 % band), and under budget pressure halves image detail once before the mesh is coarsened. Byte accounting uses the decoded size. The 1-texel apron is built from neighbour edges resampled to the chunk's own tier, so chunks at different tiers stay seamless.
+
+## 🗺️ Many places (v3, S2): global grid, presence, catalog, central overview, slim formats
+
+Plan: [orte-skalieren.md](plans/orte-skalieren.md) §4, §5, §9 S2 and the [S0 report](plans/orte-skalieren-s0.md) §3. Decisions: [ADR 0052](adr/0052-one-repo-per-municipality-central-catalog.md) (one repo per Gemeinde + catalog), [ADR 0055](adr/0055-global-grid-tile-ownership-central-overview.md) (grid, ownership, presence, overview), [ADR 0056](adr/0056-slim-formats-live-relief.md) (slim formats, live relief), [ADR 0053](adr/0053-relict-candidates-opt-in-new-places.md) (candidates opt-in). **Revision 3.0** adds three things, all versioned so old readers fail loudly instead of misrendering:
+
+| Format | File | Written by |
+|---|---|---|
+| manifest `version: 3` | `<data_url>manifest.json` of a place (or any AOI on the global grid) | pipeline (place build) |
+| `sle-catalog-v1` | `catalog.json` of `Open-Kirrberg/orte-katalog` | catalog build |
+| `sle-overview-v1` | `overview/overview.json` (+ chunk images) | catalog build |
+
+v1 and v2 manifests keep their meaning and stay loadable (R9). The app has two session modes:
+- **Single-AOI mode** (`?aoi=<id>`, or no catalog configured): today's behaviour, one manifest (v1, v2 or v3), session origin = its `origin`, its own levels.
+- **Catalog mode** (build-time `VITE_CATALOG_URL` set, absolute or relative to the page, and no `?aoi=` in the URL): the app loads the catalog, the overview and the v3 manifests of the places around the camera, and streams all of them into one world. If the catalog fails to load or validate, the app falls back to single-AOI mode with the preferred AOI (logged, not fatal).
+
+### Global grid (`sle-grid-25832-v1`)
+
+| Constant | Value |
+|---|---|
+| CRS | EPSG:25832, cell size 1 m (PixelIsArea, cell centres at +0.5 m as in "Grid & chunks") |
+| origin (south-west corner) `Eg, Ng` | **E 300 000, N 5 400 000** |
+| extent `Wg = Hg` | **256 000 m** → north-west corner `(Eg, NgTop) = (300 000, 5 656 000)` |
+| tile | 1 000 m square; **tile id** = `"{E/1000}_{N/1000}"` of its south-west corner, e.g. `"382_5466"` (= `sources[].tile` and the LVGL / GeoBasis RLP file names); valid tiles: `300 ≤ E/1000 < 556`, `5400 ≤ N/1000 < 5656` |
+| level-k chunk side `S_k` | `500 · 2^k` m (level 0: 500 m, 1: 1 km = one tile, 2: 2 km … 9: 256 km); `k ≤ 9` |
+
+Manifests and the overview declare the grid as
+
+```jsonc
+"grid": { "id": "sle-grid-25832-v1", "origin": { "E": 300000, "N": 5400000 }, "extent_m": 256000, "tile_m": 1000, "chunk_m": 500 }
+```
+
+and a reader rejects any other value (catalog mode: the source is not placeable; single-AOI mode: loaded as a standalone AOI).
+
+**Global chunk address** `(k, I, J)`: `I` counts east, `J` counts **south** (row order, like `j`), both from the NW corner: a chunk with west edge `Ew` and north edge `Nn` has `I = (Ew − Eg) / S_k`, `J = (NgTop − Nn) / S_k`. Because `Hg` is a multiple of every `S_k` (k ≤ 9), alignment counted from the south and from the north is the same.
+
+**Aligned rectangle.** A rectangle `[E0, N0, E0 + W, N0 + H]` (metres) is *aligned at G* when `(E0 − Eg) mod G = 0`, `(N0 − Ng) mod G = 0`, `W mod G = 0`, `H mod G = 0`. **Every v3 manifest rectangle is aligned at 1 000 m**; the overview rectangle is aligned at `S_K` of its coarsest level `K`. Chunk indices `(i, j)` in paths stay **relative to the rectangle's NW corner**, exactly as in "Grid & chunks" and "Levels" (so loaders and the chunk writer keep their formulas), and convert to global addresses by
+
+`I = i + (E0 − Eg) / S_k`, `J = j + (NgTop − (N0 + H)) / S_k` — integers for every level the file carries (places: k ∈ {0, 1}; overview: 2 ≤ k ≤ K).
+
+**Coverage check (2026-11-08).** Saarland bbox `[308000, 5441000, 388000, 5501000]` (AOI `saarland`), Zweibrücken / Bechhofen (E ≤ 402 000) and all of Rheinland-Pfalz except a ≈ 6 km strip of the western Eifel (E ≈ 294 000 near Prüm) lie inside; extending west needs a new grid id. Existing AOIs:
+
+| AOI | rectangle | aligned at 1 km? |
+|---|---|---|
+| karlsberg | 381000–384000 × 5465000–5468000 | ✅ |
+| homburg | 378000–381000 × 5463000–5466000 | ✅ |
+| overall | 378000–384000 × 5460000–5468000 | ✅ |
+| homburg-gemeinde | 374000–385000 × 5456000–5472000 | ✅ |
+| kirrberg | 380000–383000 × 5460000–5463500 | ❌ north edge on the 500 m grid only: level-0 chunks align, level-1 chunks do not; stays v2 (single-AOI mode) unless snapped to 5 464 000 |
+| fixture, orte, saarland | synthetic / stats-only | not applicable |
+
+### Presence bitmap
+
+One encoding for every "which cells of a rectangle exist" list (catalog tiles, manifest presence, overview presence):
+
+```ts
+Bitmap = { w: number, h: number, bits: string, count: number }
+```
+
+- `w × h` cells of the rectangle, **row-major, row 0 = north**, column 0 = west; bit index `b = row · w + col`.
+- `bits` = RFC 4648 **standard base64 with padding** of `ceil(w · h / 8)` bytes; bit `b` = `(byte[b >> 3] >> (b & 7)) & 1` (LSB first). Trailing bits after `w · h` are 0.
+- `count` = number of set bits (a checksum; mismatch → the bitmap is invalid).
+- Example: `w = 3, h = 2`, cells (col, row) (0,0), (2,0), (1,1) set → bits 0, 2, 4 → byte `0x15` → `{ "w": 3, "h": 2, "bits": "FQ==", "count": 3 }`.
+- Size: Saarbrücken (≈ 22 × 18 tiles) = 50 bytes = 68 characters; all 54 catalog places < 10 KB; overview level 2 over 128 × 96 km (64 × 48 chunks) = 512 characters. A list of tile ids would be ≈ 30 × larger and is not used.
+
+### Manifest `version: 3`
+
+A v3 manifest is a v2 manifest (all keys and paths keep their meaning) with these changes:
+
+```jsonc
+{
+  "version": 3,
+  "aoi": "homburg",                               // = catalog place id for a place
+  "name": "Homburg",
+  "place": { "id": "homburg", "ags": "10045114" }, // required in catalog mode, must match the catalog entry
+  "crs": "EPSG:25832",
+  "grid": { "id": "sle-grid-25832-v1", "origin": { "E": 300000, "N": 5400000 }, "extent_m": 256000, "tile_m": 1000, "chunk_m": 500 },
+  "origin": { "E0": 374000, "N0": 5456000 },       // rectangle aligned at 1 km (REQUIRED in v3)
+  "size": { "width": 11000, "height": 16000 }, "cellSize": 1, "chunkSize": 500, "chunks": { "nx": 22, "ny": 32 },
+  "presence": { "w": 11, "h": 16, "bits": "…", "count": 96 },   // tiles of the rectangle that are published
+  "heightRange": { "min": 221.8, "max": 412.3 },
+  "height": { "dtm": { "path": "dtm/{i}_{j}.webp", "encoding": "terrarium", "apron": 1 } },   // no dsm
+  "layers": {
+    "svf":      { "path": "relief/svf/{i}_{j}.avif",      "encoding": "u8", "min": 0.6, "max": 1, "lossy": true, "label_de": "Himmelssicht (SVF)" },
+    "opns_pos": { "path": "relief/opns_pos/{i}_{j}.avif", "encoding": "u8", "min": 60, "max": 95, "unit": "deg", "lossy": true, "label_de": "Offenheit positiv" },
+    "opns_neg": { "path": "relief/opns_neg/{i}_{j}.avif", "encoding": "u8", "min": 60, "max": 95, "unit": "deg", "lossy": true, "label_de": "Offenheit negativ" },
+    "chm":      { "path": "relief/chm/{i}_{j}.webp",      "encoding": "u8", "min": 0, "max": 40, "unit": "m", "label_de": "Vegetationshöhe" },
+    "mask":     { "path": "relief/mask/{i}_{j}.webp",     "encoding": "u8", "min": 0, "max": 1, "label_de": "Ergänzte Daten (RLP/Lücke)" },
+    "bldg":     { "path": "relief/bldg/{i}_{j}.webp",     "encoding": "u8", "min": 0, "max": 1, "label_de": "Gebäudemaske" },
+    "ortho":    { "path": "ortho/{i}_{j}.avif", "encoding": "rgb", "format": "avif", "pixelsPerChunk": 1000, "kind": "image", "label_de": "Luftbild (DOP20)", "attribution": "…" }
+  },
+  "derived": {                                     // see "Derived relief modes"
+    "hillshade": { "method": "live-hillshade", "label_de": "Schummerung" },
+    "slope":     { "method": "live-slope", "unit": "deg", "label_de": "Hangneigung" },
+    "slrm":      { "method": "live-lrm", "params": { "radius_m": 20 }, "unit": "m", "label_de": "Lokales Relief" },
+    "vat":       { "method": "rvt-vat-combined-v1", "inputs": ["svf", "opns_pos"], "label_de": "VAT (Kombination)" }
+  },
+  "levels": [
+    { "level": 0, "…": "= top level" },
+    { "level": 1, "cellSize": 2, "chunks": { "nx": 11, "ny": 16 }, "size": { "width": 5500, "height": 8000 },
+      "height": { "dtm": { "path": "levels/1/dtm/{i}_{j}.webp", "encoding": "terrarium", "apron": 1 } },
+      "layers": { "vat":   { "path": "levels/1/vat/{i}_{j}.avif", "encoding": "u8", "min": 0, "max": 1, "lossy": true, "label_de": "VAT (Kombination)" },
+                  "ortho": { "path": "ortho/levels/1/{i}_{j}.avif", "encoding": "rgb", "format": "avif", "pixelsPerChunk": 500, "kind": "image", "label_de": "Luftbild (DOP20)" } } }
+  ],
+  "build": { "pipeline": "0.9.0", "…": "…" },     // `pipeline` = pipeline version string (REQUIRED in v3; the catalog CI compares neighbours)
+  "xyz": { "vat": { "url": "xyz/vat/{z}/{x}/{y}.png", "minZoom": 12, "maxZoom": 16, "bounds": [[49.25, 7.22], [49.40, 7.38]] } },
+  "attribution": "…"
+}
+```
+
+Rules (each one testable on a manifest alone):
+1. **`grid`** equals the constant above; `origin`/`size` form a rectangle aligned at 1 km.
+2. **`presence`** (optional; absent = every tile of the rectangle present): `w = width · cellSize / 1000`, `h = height · cellSize / 1000`. Level-0 chunk `(i, j)` exists iff tile bit `(⌊i/2⌋, ⌊j/2⌋)` is set; level-1 chunk `(i, j)` (= one tile) iff bit `(i, j)`. **A chunk outside the presence list is "not mine": no request is made, it is not an error and not a hole** (the app draws the coarser level or another source there). Every per-chunk file of every key (`height`, u8 and `rgb` layers, `models.buildings.chunks`, `trees.chunks`, `candidates.mask.chunks`) exists only for present chunks; chunk lists naming an absent chunk are invalid entries (skipped, logged). Conversely every present chunk has its `dtm` image at every level the manifest lists.
+3. **Levels:** `levels` is optional and holds level 0 and at most level 1 for a place (k ≥ 2 come from the overview, below). In single-AOI mode a v3 manifest may also carry k ≥ 2 (v2 rules); catalog mode ignores them. Level 1 carries `dtm` and the baked `vat` (block mean of the 1 m VAT, see "Derived relief modes"), optionally `rgb` layers at 500 px; **no `hillshade` at any level**.
+4. **Aprons from real data:** height images (502², apron 1, every level) take the apron cells from the real neighbouring terrain (the buffered mosaic, see "Tile ownership"), also at the place's outer edge and next to absent tiles; edge clamp only outside the catalog area's source data. So the edge row of a chunk equals the apron row of its neighbour, whichever place publishes it.
+5. **Fixed value ranges.** `min`/`max` of u8 layers are **constants** in v3, identical in every place, so one decode range serves chunks of several places: `svf` 0.6–1, `opns_pos` / `opns_neg` 60–95°, `chm` 0–40 m, `mask` / `bldg` / `vat` 0–1. (v1/v2 pick ranges from percentiles per AOI; that stays valid there.)
+6. **Content per tile.** Everything a place publishes belongs to its present tiles: trees with the top cell centre in a present tile; buildings with the footprint centroid in a present tile; candidates with the centroid in a present tile; point-cloud areas with the bbox centre in a present tile; OSM lines clipped to the union of present tiles; parcel label points inside present tiles. So two neighbouring places never draw the same object twice. (Parcel `polygons` stay unclipped, see "Vectors"; a lookup takes the first hit.)
+7. **`xyz`** in a v3 place: RGBA tiles with **alpha 0 outside the place's present tiles**, so the minimap can stack the tiles of several places without a seam; `bounds` = WGS84 bounds of the rectangle. Recommended: `vat` only, `maxZoom` 16 (S0 §2.6).
+8. The pipeline writes `version: 3` exactly when it writes `grid` (place builds); `version`, `grid`, `presence` and `levels` are owned by `build.py` and written together.
+
+### Tile ownership and the relief buffer
+
+**Ownership rule `largest-share-v1`** (computed by the catalog build, never by a place repo):
+- Candidates: every catalog place (all statuses, including `stats`) with its **unsimplified** BKG VG25 outline in EPSG:25832 (the published `places.geojson` is simplified and is not used).
+- For each tile `T`: `a_p = round(area(T ∩ outline_p))` in integer m² (float64 GEOS/shapely, Python `round`). **Owner = the place with the largest `a_p ≥ 1`; ties → the smallest `ags` (8-digit string compare), then the smallest `id`.** Tiles with no `a_p ≥ 1` have no owner (no 3D at level ≤ 1 there).
+- Every tile has at most one owner, so the union of all places' tiles is a partition. A new VG25 edition can move tiles; the catalog names the edition in `ownership.outlines`, and the affected places rebuild.
+- Test vectors: a tile split 600 000 / 400 000 m² → the first; 500 000 / 500 000 → the place with the smaller AGS; a tile half in France and 3 m² in a Saarland municipality → that municipality.
+
+**Relief buffer.** A place builds exactly its owned tiles (`presence` ⊆ owned tiles; fewer only while `status` is `building`). To make borders seamless it computes everything from the official sources with a buffer, never from a neighbour repo's output:
+- **Fetch set** = the owned tiles plus all their 8-neighbour tiles (the square dilation by `buffer_m`, 100 m ≤ `buffer_m` ≤ 1000 m, default 200 m), regardless of who owns the neighbours. Sources and precedence as today ([ADR 0001](adr/0001-lidar-sources-rlp-fill.md)): LVGL-SL first, GeoBasis RLP fill, NoData fill and the `mask` layer as in build.
+- **Locality requirement:** every published value of a cell (heights, apron, svf/openness, the internal 1 m VAT behind level-1 `vat`, chm, mask, bldg, level-1 block means) depends only on source data within `buffer_m` of that cell, with fixed parameters (`svf`/openness r = 10 m, 16 directions; no percentile ranges, rule 5). **Test:** building tile `T` as part of two different tile sets yields byte-identical lossless files and identical encoder input for lossy files.
+- Neighbours built with different `build.pipeline` versions may differ slightly at the border (heights never do: same source, same fill); the catalog CI warns.
+
+### Catalog (`sle-catalog-v1`)
+
+Published as `catalog.json` on the Pages site of `Open-Kirrberg/orte-katalog`; small (≈ 30 KB for 54 places), fetched once per session with `cache: 'no-cache'` (revalidated, Pages ETag).
+
+```ts
+Catalog = {
+  format: 'sle-catalog-v1',               // exact; anything else → no catalog mode
+  generated: string,                      // ISO-8601
+  crs: 'EPSG:25832',
+  grid: Grid,                             // the constant above
+  height_ref_m: number,                   // session hRef of the exaggeration rule in catalog mode: integer metres, = floor(lowest DTM height of the catalog area)
+  ownership: { rule: 'largest-share-v1', outlines: string /* e.g. "BKG VG25, Stand 31.12.2025" */, attribution: string },
+  overview?: string,                      // URL of the sle-overview-v1 file (below)
+  leaderboard?: string,                   // URL of a stats-only manifest (kind 'stats-only', "Gemeinde level"), e.g. "stats/manifest.json"
+  attribution: string,                    // '; '-joined, no ';' inside an entry
+  places: CatalogPlace[]                  // file order = tie order for display
+}
+CatalogPlace = {
+  id: string,                             // /^[a-z0-9][a-z0-9-]{0,39}$/, unique; = the place id on the Gemeinde level of the leaderboard
+  name_de: string,
+  ags: string,                            // /^\d{8}$/, unique (Homburg "10045114")
+  state: 'SL' | 'RP',
+  status: '3d' | 'building' | 'stats',
+  repo?: string,                          // "Open-Kirrberg/ort-homburg" (informative, for links)
+  data_url?: string,                      // required for '3d' and 'building'; absent for 'stats'
+  maintainers?: string[],                 // GitHub handles only (R7)
+  bbox: [number, number, number, number], // [Emin, Nmin, Emax, Nmax] of the OWNED tiles, multiples of 1000
+  tiles: Bitmap,                          // owned tiles in bbox: w = (Emax − Emin)/1000, h = (Nmax − Nmin)/1000
+  manifest_version?: number, pipeline?: string, built?: string,   // informative, copied by the catalog CI from the place manifest
+  options?: { relict_candidates?: boolean }                        // informative mirror of ort.toml (ADR 0053)
+}
+```
+
+- **`status`** is the source of truth for 3D: `'3d'` = the place publishes a v3 manifest for all owned tiles; `'building'` = a v3 manifest exists but may cover only part (presence ⊂ tiles) or is being rebuilt; `'stats'` = no place repo yet („Ortspate gesucht“), only overview terrain. The Gemeinde-level `places.json` ([ADR 0051](adr/0051-leaderboard-levels-gemeinden-ortsteile.md)) carries the same enum; the catalog build writes it from the catalog (join on `ags`). If both are loaded and disagree, the app uses the catalog's value for 3D, fly-to and the „Ortspate gesucht“ hint (`place_aoi` / `aoi_share_pct` are single-AOI fields and are ignored in catalog mode).
+- **URL resolution:** `data_url`, `overview` and `leaderboard` resolve with `new URL(value, catalogUrl)`; a `data_url` without a trailing `/` gets one. Allowed schemes: `https:`; `http:` only for `localhost`, `127.0.0.1`, `[::1]`, `*.localhost` (dev). The place manifest is `<data_url>manifest.json`; every relative path in it resolves against `data_url` (absolute `xyz` URLs as in "Public release"). Moving a place to another static host = changing `data_url` only.
+- **CORS:** every host serves all files with `Access-Control-Allow-Origin: *` and needs no cookies (GitHub Pages does; an object store must be configured so). The app fetches with `mode: 'cors'`, `credentials: 'omit'` and hands workers absolute URLs only.
+- **Versioning:** keys may be added without a format change (readers ignore unknown keys). A breaking change gets `sle-catalog-v2` in a new file `catalog-v2.json` published next to `catalog.json` during a transition. Place manifests of any pipeline age stay valid as long as they are v3 (R9); a place still on v1/v2 is treated as `'stats'` for 3D in catalog mode (logged).
+- **Which places load:** the app keeps the manifests of the places with `status` `'3d'` / `'building'` whose `bbox` lies within **8 km** of the camera's ground point (distance from the point to the rectangle, 0 inside), nearest first, and drops them beyond **12 km** (hysteresis; their chunks leave through the LRU). A fly-to target loads its place first. The catalog's `bbox` list is the spatial index (linear scan, ≤ a few hundred entries).
+- **Owner lookup:** at catalog load the app builds `tileId → placeId` from all `tiles` bitmaps. A tile claimed twice (invalid catalog) → first place in file order, logged. Presence bits of a manifest outside its catalog tiles are ignored (logged).
+
+### Multi-origin (catalog mode)
+
+- **One float64 session origin** `(Es, Ns)` = the SW corner of the tile under the start camera position (integer km). World frame `x = E − Es`, `y = h`, `z = −(N − Ns)` for the whole session; it never changes during a session.
+- **Every source is translated by its offset**, exactly as shared datasets are placed ("Placement in an AOI"): a place (or the overview) with rectangle origin `(E0, N0)` sits at `Object3D.position = (E0 − Es, 0, −(N0 − Ns))`; its vertex buffers, model files (`frame: 'local'`), tree and point decodes stay local to its own origin, so float32 never holds raw UTM. three.js composes model-view matrices in float64 on the CPU; world positions in shaders (fog) stay below ≈ 1 cm error within ±150 km.
+- **One `hRef`** for the exaggeration rule = catalog `height_ref_m` (single-AOI mode keeps `heightRange.min` of its manifest). Different `hRef` per place would tear the terrain at borders.
+- The URL hash and every handover keep absolute E/N (unchanged), so links work in both modes.
+
+### Central overview levels (`sle-overview-v1`)
+
+Coarse levels span several municipalities, so the catalog builds them once for the catalog area (the union of all owned tiles) and anchors them at the global grid:
+
+```ts
+Overview = {
+  format: 'sle-overview-v1',              // exact
+  generated: string, crs: 'EPSG:25832', grid: Grid,
+  bbox: [Emin, Nmin, Emax, Nmax],         // aligned at S_K (K = coarsest level), covers the catalog area
+  heightRange: { min, max },
+  levels: OverviewLevel[],                // fine → coarse, contiguous, first level ≥ 2 (Saarland: 2 … 6)
+  attribution: string
+}
+OverviewLevel = {
+  level: number,                          // k ≥ 2
+  cellSize: number,                       // 2^k
+  chunkSize: 500,
+  size: { width, height },                // (Emax − Emin)/2^k, (Nmax − Nmin)/2^k cells (integers, no partial blocks)
+  chunks: { nx, ny },                     // (Emax − Emin)/S_k, (Nmax − Nmin)/S_k
+  presence: Bitmap,                       // w = nx, h = ny; set iff the chunk intersects ≥ 1 owned tile of any catalog place
+  height: { dtm: { path: 'levels/{k}/dtm/{i}_{j}.webp', encoding: 'terrarium', apron: 1, quant_m?: number } },
+  layers?: { vat?: LayerSource /* u8 0–1, lossy AVIF allowed */, ortho?: ImageLayer /* rgb, 500 px */ }
+}
+```
+
+- Paths resolve against the overview file's URL. `(i, j)` are relative to the overview `bbox` NW corner (global address by the formula above).
+- Level-k cell = mean of the 2^k × 2^k block of the NoData-filled 1 m DTM (same sources and fill as the places), apron from real data, edge clamp only at the overview `bbox` edge. Because the block grid is global, an overview level-2 cell is the mean of four place level-1 cells.
+- **`quant_m`** (recommended 0.05): heights are rounded to multiples of `quant_m` before terrarium encoding, which makes the lossless WebP smaller; decoding is unchanged, the value is informative.
+- `vat` is optional (block mean of the 1 m VAT where a statewide relief run exists); without it a VAT mode shows live hillshade on overview levels (v2 fallback rule).
+- **Traffic warning (S0 §2.5):** coarse levels were ≈ 26 MB of a Homburg flight session (21 MB dtm, 5 MB ortho). On one central site that is ≈ 3 900 sessions per month for the whole Saarland under the ≈ 100 GB soft limit. Keep them cheap (`quant_m`, no `ortho` below level 3 if needed) and, when traffic grows, point `overview` at another static host.
+
+### Which source serves a chunk (catalog mode)
+
+The quadtree is global: nodes are `(k, I, J)`; the coarsest overview level is the root set (pinned, as today). For a node:
+
+```
+k ≥ 2:      overview, if it has level k and its presence bit is set; else none.
+k ∈ {0,1}:  T = the tile containing the node (k = 1: the node itself); owner = tileOwner(T)
+            none     if T has no owner, or the owner's status is 'stats', or its manifest failed / is not v3 / mismatches grid or place id,
+                     or T's presence bit is 0 in that manifest;
+            pending  while the owner's manifest is loading;
+            else     (owner, i = I − (E0 − Eg)/S_k, j = J − (NgTop − (N0 + H))/S_k) with the owner's paths.
+```
+
+`none` and `pending` stop refinement into that node (never a request, never an error). The terrain must have no holes: where some children of a node are `none`, the parent stays drawn for those quadrants (or the whole node stays unrefined). Edges between different sources at the same level match by rule 4 (heights) and the runtime layer apron from neighbour chunks of any source (rule 5); across levels the existing skirts apply. In single-AOI mode every chunk comes from the one manifest, and a v3 manifest's absent chunks are `none` as above.
+
+### Slim formats (v3)
+
+| Data | `encoding` | Files | Lossless? | Decode |
+|---|---|---|---|---|
+| heights `dtm` (places, overview) | `terrarium` | `.webp` (lossless) or `.png` | **must** be bit-exact | `createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' })` |
+| data u8 `chm`, `mask`, `bldg`, candidates `class8` mask | `u8` | `.webp` (lossless) or `.png` | **must** be bit-exact | same, read R |
+| visual u8 `svf`, `opns_pos`, `opns_neg`, level `vat` | `u8` | `.avif` (`lossy: true`) or `.webp` / `.png` | may be lossy | same, read R |
+| colour `ortho`, `hist_*` | `rgb` | `.avif` (`format: 'avif'`) or `.webp` / `.jpg` | lossy | sRGB (unchanged) |
+
+- **Format by extension.** `.png`, `.webp`, `.avif` are accepted for `terrarium` and `u8` in every version (the decode path is format-agnostic); `format` is optional for `u8` and, if present, must match the extension. `rgb` `format` gains `'avif'`. `terrarium` and the data layers above must never point to `.avif` (rejected: layer absent, height source invalid).
+- **WebP lossless:** VP8L, RGB without alpha (u8: R = G = B), encoder `lossless=True, exact=True`, method 6. The pipeline asserts byte equality of the decoded pixels with the source array for every file it writes.
+- **AVIF u8:** 8-bit, full range, monochrome (4:0:0) where the encoder supports it, else 4:4:4 with identity matrix (R = G = B), no ICC profile; quality 90 (S0). `lossy: true` on the layer. Budget, checked by the pipeline on every file: mean |Δ| ≤ 1.5 and max |Δ| ≤ 16 u8 levels against the source. **AVIF rgb:** quality 65, 8-bit 4:2:0 allowed.
+- **Browsers without AVIF:** no fallback files are published (they would double the largest layers). Chrome ≥ 85, Firefox ≥ 93 and Safari ≥ 16 decode AVIF, which covers the audience devices ([ADR 0028](adr/0028-phone-proxy-headroom.md)). The decode worker probes once with a 1 × 1 AVIF; on failure every `.avif` layer counts as absent: `rgb` → relief shading instead of the ortho, `svf` / `opns_*` hidden, derived `vat` unavailable (falls back to live hillshade), and the UI shows once „Dieser Browser kann AVIF nicht anzeigen – Luftbild und einige Reliefansichten fehlen.“
+
+### Derived relief modes (`derived`, v3)
+
+`derived` maps a relief mode key to a method the app computes live instead of loading a baked layer:
+
+```ts
+derived = { [key: string]: { method: string, inputs?: string[], params?: object, unit?: string, label_de: string } }
+```
+
+**Resolution** for mode `m` on a chunk at level `k`: (1) a baked layer `m` of that level (level 0: `layers[m]`, k ≥ 1: `levels[k].layers[m]`) wins; (2) else `derived[m]`, if every `inputs` key is a layer of that level and its texture is resident for the chunk; (3) else the v2 fallback (live hillshade / neutral). Unknown `method` → that entry is ignored. Methods:
+
+| `method` | Definition (true heights, no exaggeration, gradient `∇h = (∂h/∂E, ∂h/∂N)` in m/m from the DTM) |
+|---|---|
+| `live-hillshade` | the app's live hillshade (sun from the UI), as drawn today |
+| `live-slope` | `s = atan(|∇h|)` in degrees |
+| `live-lrm` | `h − mean of the (2r+1)² box`, `r = params.radius_m` (20 = the old `slrm`, S0: mean |Δ| 0.005 m) |
+| `rvt-vat-combined-v1` | RVT „VAT combined“ from `svf` + `opns_pos`, below |
+
+**`rvt-vat-combined-v1`** (= `pipeline/build.py` `VAT_GENERAL` / `VAT_FLAT` through `rvt.blend_func`; spike `spike/s0-live-vat`). With decoded `svf` (via `min`/`max`) and `O` = `opns_pos` in degrees:
+1. Hillshade `hs = clamp(n · L, 0, 1)` with `n = normalize(−∂h/∂E, −∂h/∂N, 1)` and `L = (cos e · sin a, cos e · cos a, sin e)` in (east, north, up), sun azimuth `a = 315°` (clockwise from grid north), elevation `e = 35°`, single direction, independent of the UI sun.
+2. For each preset `P = (s_max, o_min, o_max, v_min)`: general `(50, 68, 93, 0.7)`, flat `(15, 85, 91, 0.9)`:
+   - `r1 = 0.5 · (1 − clamp(s / s_max, 0, 1)) + 0.5 · hs` (slope, luminosity 50 %)
+   - `o = clamp((O − o_min) / (o_max − o_min), 0, 1)`; `r2 = r1 > 0.5 ? 1 − (1 − 2 · (r1 − 0.5)) · (1 − o) : 2 · r1 · o` (positive openness, overlay at **full strength**: rvt's `blend_overlay` writes its result into the background array in place, so the nominal 50 % opacity has no effect in the baked VAT, and the live formula must reproduce that quirk)
+   - `v = clamp((svf − v_min) / (1 − v_min), 0, 1)`; `VAT_P = 0.75 · r2 + 0.25 · v · r2` (svf, multiply 25 %)
+3. `VAT = 0.5 · VAT_general + 0.5 · VAT_flat` ∈ [0, 1], shown as grey.
+
+Tolerance (tests on fixture chunks, baked u8 `vat` vs the formula on the decoded u8 inputs): mean |Δ| ≤ 1 u8 level, p99 ≤ 2 (S0: 0.4 / 1.2; the max of 15 occurs only where `opns_pos` is clipped by its u8 range). The live variant may evaluate `∇h` per fragment from the bilinear height texture (S0: visually equal). Level-1 and overview `vat` stay **baked** (block mean of the internal 1 m VAT), because svf / openness exist only at level 0.
+
+**v3 place builds write no `hillshade`, `slope`, `slrm` or `vat` layer at level 0** and declare all four in `derived`; presets that used `slrm` use `live-lrm` with r = 20.
+
+### No `dsm` in v3; canopy from DTM + CHM
+
+v3 manifests carry no `height.dsm`. Where a surface is needed (canopy surface of the *Wald* lab modes, `dsmAt` in profiles and measuring, the canopy lens target), the app uses `dsm = dtm + chm` per cell (bilinear on both; `chm` decoded 0–40 m). S0: mean |Δ| 0.03 m, p99 0.08 m against the real DSM; only objects above 40 m (towers, pylons, chimneys) are cut. `bldg` keeps suppressing canopy over buildings. v1/v2 manifests with `dsm` are read as before.
+
+### Vectors in v3
+
+- **`vectors.osm` with `densified: false`:** 2D `[E, N]` rounded to **0.1 m**, the original OSM vertices (not densified), no `heights`, clipped to the union of the place's present tiles (lines cut exactly at the tile edges). The app densifies to ≤ 2 m (linear in E/N) before draping with HeightQuery. Without `densified` (or `true`) the old rule (≤ 2 m, optional baked heights) applies.
+- **`vectors.flurstuecke` with `lines: 'derived'`:** `path` is absent and `polygons` is required; the app derives the boundary lines: every ring segment of every polygon, each undirected segment (endpoints rounded to 0.01 m) drawn once, clipped to the union of the place's present tiles, densified ≤ 2 m, draped. `labels` stays required (points inside present tiles only, rule 6). Polygons keep their rules (2D, not clipped, original vertices).
+- Old manifests (no `lines`, string `path`) keep loading the baked boundary file.
+
+### App tolerance (v3, catalog, overview)
+
+- Manifest `version` 3 without a valid `grid` or with a rectangle not aligned at 1 km → **rejected in catalog mode** (place treated as `'stats'`, logged); in single-AOI mode a missing/invalid `grid` only disables placement (the manifest loads standalone).
+- Invalid `presence` (wrong `w`/`h`, bad base64, `count` mismatch) → the whole place manifest is rejected in catalog mode; in single-AOI mode treated as "all present" with a warning.
+- A 404 on a chunk the presence list names → that chunk shows the coarser level (logged once per layer), as in v2.
+- Catalog: invalid `format`, `grid` or JSON → no catalog mode. A place with an invalid `id`/`ags`/`bbox`/`tiles` is skipped (its tiles have no owner); a missing `data_url` on a `'3d'`/`'building'` place → treated as `'stats'`. Unknown `status` → `'stats'`. Unknown keys ignored.
+- Overview: invalid → no levels ≥ 2 (places still stream; the root set is then the places' level 1). Malformed levels end the list (contiguous valid prefix, as in v2).
+- `derived` entries with an unknown `method` or `inputs` that are not layers → ignored. A u8 layer with `lossy: true` is excluded from exact value readouts (e.g. probes show „≈“).
+
+### Size (target format, S0)
+
+≈ 5.3 MB/km² for a place (Homburg 82–120 tiles ≈ 0.45–0.65 GB; Saarbrücken ≈ 0.9–1.1 GB, borderline: AVIF q75 for svf/openness or a second site) plus ≈ 0.5 MB/km² `xyz.vat` ≤ z16; a typical flight ≈ 147 MB. Details: [S0 report](plans/orte-skalieren-s0.md) §3–4.
 
 ## 🌳 Trees (`trees`, optional, V2.4)
 
