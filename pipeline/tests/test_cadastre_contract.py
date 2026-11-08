@@ -36,6 +36,8 @@ def test_flurstuecke_manifest_and_files(aoi):
     a = load_aoi(aoi)
     m = json.loads((APP_DATA / aoi / "manifest.json").read_text())
     entry = m["vectors"]["flurstuecke"]
+    if entry.get("lines") == "derived":
+        pytest.skip("v3 place output (lines: 'derived') – checked in test_cadastre_v3.py")
     assert entry["crs"] == "EPSG:25832" and isinstance(entry["path"], str) and isinstance(entry["labels"], str)
     assert ATTRIBUTION_ALKIS_SL in m["attribution"].split("; ")
 

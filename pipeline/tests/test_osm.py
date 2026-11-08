@@ -161,6 +161,8 @@ def test_generated_osm_geojson_matches_contract(aoi):
     a = load_aoi(aoi)
     m = json.loads((APP_DATA / aoi / "manifest.json").read_text())
     entry = m["vectors"]["osm"]
+    if entry.get("densified") is False:
+        pytest.skip("v3 place output (densified: false) – checked in test_osm_v3.py")
     assert entry["path"] == "vectors/osm.geojson" and entry["crs"] == "EPSG:25832"
     assert ATTRIBUTION_OSM in [s.strip() for s in m["attribution"].split(";")]
     fc = json.loads((APP_DATA / aoi / entry["path"]).read_text())

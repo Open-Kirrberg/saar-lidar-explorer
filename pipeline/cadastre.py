@@ -19,6 +19,13 @@ Every line/label coordinate gets a baked z (bilinear from data/work/<aoi>/dtm.ti
 vectors/flurstuecke_polygons.geojson (POLISH) holds the whole parcel polygons (2D, original vertices, deduped by
 FLSTKENNZ, `flaeche_m2` from FLAECHE) for the app's point-in-polygon parcel lookup.
 
+v3 places (contract "Vectors in v3", rule 6): `lines: 'derived'` – no boundary-line file (the app derives the
+lines from the polygons), polygons of every parcel that intersects a present 1 km tile (whole, 2D), one label
+point per parcel only if it lies in a present tile (2D, no baked heights). The label point is chosen per parcel
+independently of the place (FlurstueckPunkt inside the parcel, else its representative point), so two
+neighbouring places never label the same parcel. The WFS caches of the covering rectangle AOI (`cache_from`)
+are reused.
+
 Usage:  uv run python cadastre.py <aoi>
 """
 from __future__ import annotations
@@ -38,7 +45,8 @@ from typing import Any
 import shapely
 from shapely.geometry import LineString, MultiLineString, MultiPolygon, Point, Polygon, box, shape
 
-from common import APP_DATA, RAW_DIR, WORK_DIR, fmt_bytes, http_open, load_aoi, update_manifest
+from common import AOI, RAW_DIR, WORK_DIR, fmt_bytes, http_open, load_aoi, update_manifest
+from grid import TILE_M
 from heights import DtmSampler, bake_collection
 
 WFS_URL = "https://geoportal.saarland.de/registry/wfs/414"
@@ -452,11 +460,13 @@ def polygon_geometry(g) -> dict[str, Any] | None:
     return {"type": "MultiPolygon", "coordinates": polys}
 
 
-def build_polygons(parcels: list[Mapping[str, Any]], bbox: Bbox) -> tuple[dict[str, Any], dict[str, int]]:
+def build_polygons(parcels: list[Mapping[str, Any]], bbox: Bbox | None = None, *, area=None
+                   ) -> tuple[dict[str, Any], dict[str, int]]:
     """Parcel polygons for point-in-polygon lookup (contract "vectors.flurstuecke.polygons"): one feature per
-    FLSTKENNZ (first occurrence wins), every parcel whose geometry intersects the AOI bbox, whole (not
-    clipped), 2D, properties matching the label point plus zae/nen and flaeche_m2 (ALKIS FLAECHE)."""
-    aoi = box(*bbox)
+    FLSTKENNZ (first occurrence wins), every parcel whose geometry intersects the AOI bbox (or the shapely
+    `area`, e.g. the union of a v3 place's present tiles), whole (not clipped), 2D, properties matching the
+    label point plus zae/nen and flaeche_m2 (ALKIS FLAECHE)."""
+    aoi = area if area is not None else box(*bbox)
     seen: set[str] = set()
     feats = []
     stats = {"polygons": 0, "poly_dup": 0, "poly_outside": 0, "poly_no_number": 0, "poly_no_geom": 0, "poly_area": 0}
@@ -500,6 +510,117 @@ def build_polygons(parcels: list[Mapping[str, Any]], bbox: Bbox) -> tuple[dict[s
     return {"type": "FeatureCollection", "features": feats}, stats
 
 
+# --- v3 places (contract "Vectors in v3", rule 6) ----------------------------------------------------
+
+Tile = tuple[int, int]
+
+
+def tiles_area(tiles: Iterable[Tile], tile_m: int = TILE_M):
+    """Union of the 1 km tiles (SW corner `(E_km, N_km)`) as one shapely geometry."""
+    return shapely.union_all([box(e * tile_m, n * tile_m, (e + 1) * tile_m, (n + 1) * tile_m) for e, n in tiles])
+
+
+def canonical_label_point(parcel_geom, punkt_geom) -> tuple[Point | None, str]:
+    """Label position of one parcel, independent of any AOI: the first ALKIS FlurstueckPunkt covered by the
+    parcel, else the parcel's representative point; rounded to 0.01 m (the published coordinate, which is
+    also the one tested against the tiles). Returns (point, how), how in {'punkt', 'representative', 'none'}."""
+    if parcel_geom is None or parcel_geom.is_empty:
+        return None, "none"
+    pt, how = None, "representative"
+    if punkt_geom is not None and not punkt_geom.is_empty:
+        for p in (list(punkt_geom.geoms) if hasattr(punkt_geom, "geoms") else [punkt_geom]):
+            if parcel_geom.covers(p):
+                pt, how = p, "punkt"
+                break
+    if pt is None:
+        pt = parcel_geom.representative_point()
+    return Point(round(pt.x, 2), round(pt.y, 2)), how
+
+
+def in_tiles(x: float, y: float, tiles: frozenset[Tile] | set[Tile], tile_m: int = TILE_M) -> bool:
+    """Point in one of the tiles (half-open squares, as grid.tile_of_point: a point on a shared edge belongs
+    to exactly one tile, so two places with disjoint tiles never both keep it)."""
+    return (math.floor(x / tile_m), math.floor(y / tile_m)) in tiles
+
+
+def build_labels_v3(parcels: list[Mapping[str, Any]], punkte: list[Mapping[str, Any]],
+                    tiles: frozenset[Tile] | set[Tile]) -> tuple[dict[str, Any], dict[str, int]]:
+    """Label points of a v3 place: one per parcel (deduped by FLSTKENNZ), at its canonical label point, kept
+    only when that point lies in a present tile. 2D [E, N] rounded to 0.01 m, no baked heights."""
+    punkt_by_kennz: dict[str, Any] = {}
+    for f in dedupe(punkte):
+        k = clean((f.get("properties") or {}).get("FLSTKENNZ"))
+        if k and k not in punkt_by_kennz:
+            punkt_by_kennz[k] = to_geom(f)
+    stats = {"label_punkt": 0, "label_representative": 0, "label_other_tile": 0, "label_no_number": 0,
+             "label_no_geom": 0}
+    labels = []
+    seen: set[str] = set()
+    for f in dedupe(parcels):
+        p = f.get("properties") or {}
+        text = label_text(p.get("FLSTNRZAE"), p.get("FLSTNRNEN"))
+        if text is None:
+            stats["label_no_number"] += 1
+            continue
+        kennz = clean(p.get("FLSTKENNZ")) or ""
+        if kennz and kennz in seen:
+            continue
+        pt, how = canonical_label_point(to_geom(f), punkt_by_kennz.get(kennz))
+        if pt is None:
+            stats["label_no_geom"] += 1
+            continue
+        if not in_tiles(pt.x, pt.y, tiles):
+            stats["label_other_tile"] += 1
+            continue
+        if kennz:
+            seen.add(kennz)
+        stats[f"label_{how}"] += 1
+        props = {"text": text, "flstkennz": kennz, "gemarkung": clean(p.get("GEMARKUNG")) or "",
+                 "flur": clean(p.get("FLUR")) or ""}
+        lage = clean(p.get("LAGEBEZTXT"))
+        if lage:
+            props["lage"] = lage
+        labels.append({"type": "Feature", "properties": props,
+                       "geometry": {"type": "Point", "coordinates": [pt.x, pt.y]}})
+    stats["labels"] = len(labels)
+    return {"type": "FeatureCollection", "features": labels}, stats
+
+
+def build_outputs_v3(parcels: list[Mapping[str, Any]], punkte: list[Mapping[str, Any]],
+                     tiles: frozenset[Tile] | set[Tile]) -> tuple[dict[str, Any], dict[str, Any], dict[str, int]]:
+    """(labels FeatureCollection, polygons FeatureCollection, stats) of a v3 place: polygons of every parcel
+    intersecting a present tile (whole), labels inside present tiles only. No boundary lines (`lines: 'derived'`)."""
+    label_fc, stats = build_labels_v3(parcels, punkte, tiles)
+    poly_fc, poly_stats = build_polygons(parcels, area=tiles_area(tiles))
+    stats.update(poly_stats)
+    return label_fc, poly_fc, stats
+
+
+def manifest_entry(*, featureCount: int, source: str, v3: bool) -> dict[str, Any]:
+    """`vectors.flurstuecke`: v1/v2 baked boundary lines (`path`, `heights: 'baked'`); v3 `lines: 'derived'`
+    (no `path`, `polygons` required, featureCount = number of polygons, 2D labels without `heights`)."""
+    entry: dict[str, Any] = {}
+    if not v3:
+        entry["path"] = "vectors/flurstuecke.geojson"
+    entry.update({"labels": "vectors/flurstuecke_labels.geojson", "polygons": "vectors/flurstuecke_polygons.geojson"})
+    if v3:
+        entry["lines"] = "derived"
+    entry.update({"crs": "EPSG:25832", "featureCount": featureCount, "label_de": "Flurstücke", "source": source})
+    if not v3:
+        entry["heights"] = "baked"
+    return entry
+
+
+def fetch_area(aoi: AOI) -> tuple[Bbox, Path]:
+    """(WFS bbox, cache dir): a v3 place with `cache_from` reuses the covering rectangle AOI's WFS cache
+    (its bbox, its cache dir) and filters the answer to its tiles; otherwise its own rectangle."""
+    own: Bbox = (aoi.e0, aoi.n0, aoi.e1, aoi.n1)
+    c = aoi.cache_aoi() if aoi.is_place else None
+    if c is not None and c.e0 <= aoi.e0 and c.n0 <= aoi.n0 and aoi.e1 <= c.e1 and aoi.n1 <= c.n1:
+        return (c.e0, c.n0, c.e1, c.n1), CADASTRE_RAW / c.key
+    return own, CADASTRE_RAW / aoi.key
+
+
 def write_geojson(path: Path, fc: Mapping[str, Any]) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     data = json.dumps(fc, ensure_ascii=False, separators=(",", ":")).encode()
@@ -509,53 +630,60 @@ def write_geojson(path: Path, fc: Mapping[str, Any]) -> int:
 
 def main(aoi_key: str) -> None:
     aoi = load_aoi(aoi_key)
-    aoi_dir = APP_DATA / aoi.key
+    aoi_dir = aoi.data_dir
     if not (aoi_dir / "manifest.json").exists():
         sys.exit(f"{aoi_dir}/manifest.json missing - run the build step first")
+    v3 = aoi.is_place
     bbox: Bbox = (aoi.e0, aoi.n0, aoi.e1, aoi.n1)
-    cache = CADASTRE_RAW / aoi.key
-    print(f"cadastre {aoi.key}: SL WFS 414 + RLP WFS 519, bbox {bbox} (cache {cache})")
-    sl_parcels = fetch_type("Flurstueck", bbox, cache, get=http_get)
-    punkte = fetch_type("FlurstueckPunkt", bbox, cache, get=http_get)
-    rlp_parcels = fetch_type("Flurstueck", bbox, cache, get=http_get, url=rlp_wfs_url, parse=parse_gml_page,
+    fetch_bbox, cache = fetch_area(aoi)
+    print(f"cadastre {aoi.key}: SL WFS 414 + RLP WFS 519, bbox {fetch_bbox} (cache {cache})")
+    sl_parcels = fetch_type("Flurstueck", fetch_bbox, cache, get=http_get)
+    punkte = fetch_type("FlurstueckPunkt", fetch_bbox, cache, get=http_get)
+    rlp_parcels = fetch_type("Flurstueck", fetch_bbox, cache, get=http_get, url=rlp_wfs_url, parse=parse_gml_page,
                              suffix=".gml", cache_prefix="rlp_")
     print(f"  SL: {len(sl_parcels)} parcels, {len(punkte)} label points; RLP: {len(rlp_parcels)} parcels")
 
-    line_fc, label_fc, stats = build_outputs(sl_parcels + rlp_parcels, punkte, bbox)
-    # contract "Baked heights": z bilinear from the filled 1 m DTM for lines *and* label points
-    sampler = DtmSampler.from_geotiff(WORK_DIR / aoi.key / "dtm.tif", aoi.e0, aoi.n1)
-    line_fc, label_fc = bake_collection(line_fc, sampler), bake_collection(label_fc, sampler)
-    n_lines = write_geojson(aoi_dir / "vectors" / "flurstuecke.geojson", line_fc)
+    if v3:
+        assert aoi.owned is not None
+        label_fc, poly_fc, stats = build_outputs_v3(sl_parcels + rlp_parcels, punkte, aoi.owned)
+        # RLP attribution only when an RLP parcel is published for this place (the cache bbox may hold many)
+        rlp_kennz = {clean((f.get("properties") or {}).get("FLSTKENNZ")) for f in rlp_parcels} - {None}
+        rlp_used = any(f["properties"]["flstkennz"] in rlp_kennz for f in poly_fc["features"])
+        stale = aoi_dir / "vectors" / "flurstuecke.geojson"
+        if stale.exists():
+            stale.unlink()  # `lines: 'derived'`: the app derives boundaries from the polygons
+            print(f"  removed stale {stale.name}")
+        n_lines = 0
+        feature_count = stats["polygons"]
+    else:
+        line_fc, label_fc, stats = build_outputs(sl_parcels + rlp_parcels, punkte, bbox)
+        # contract "Baked heights": z bilinear from the filled 1 m DTM for lines *and* label points
+        sampler = DtmSampler.from_geotiff(WORK_DIR / aoi.key / "dtm.tif", aoi.e0, aoi.n1)
+        line_fc, label_fc = bake_collection(line_fc, sampler), bake_collection(label_fc, sampler)
+        n_lines = write_geojson(aoi_dir / "vectors" / "flurstuecke.geojson", line_fc)
+        # polygons for point-in-polygon lookup: 2D, never baked (contract), not clipped
+        poly_fc, poly_stats = build_polygons(sl_parcels + rlp_parcels, bbox)
+        stats.update(poly_stats)
+        rlp_used = bool(rlp_parcels)
+        feature_count = stats["lines"]
     n_labels = write_geojson(aoi_dir / "vectors" / "flurstuecke_labels.geojson", label_fc)
-    # polygons for point-in-polygon lookup: 2D, never baked (contract), not clipped
-    poly_fc, poly_stats = build_polygons(sl_parcels + rlp_parcels, bbox)
     n_polys = write_geojson(aoi_dir / "vectors" / "flurstuecke_polygons.geojson", poly_fc)
-    stats.update(poly_stats)
-    fetched = json.loads((cache_subdir(cache, "Flurstueck", bbox) / "hits.json").read_text()).get("fetched", "")
+    fetched = json.loads((cache_subdir(cache, "Flurstueck", fetch_bbox) / "hits.json").read_text()).get("fetched", "")
     source = f"ALKIS Saarland, WFS SL ALKIS Vereinfacht (abgerufen {fetched})"
-    rlp_attr = [ATTRIBUTION_ALKIS_RLP] if rlp_parcels else []
-    if rlp_parcels:
-        rlp_fetched = json.loads((cache_subdir(cache, "rlp_Flurstueck", bbox) / "hits.json").read_text())["fetched"]
+    rlp_attr = [ATTRIBUTION_ALKIS_RLP] if rlp_used else []
+    if rlp_used:
+        rlp_fetched = json.loads((cache_subdir(cache, "rlp_Flurstueck", fetch_bbox) / "hits.json").read_text())["fetched"]
         source += f"; ALKIS Rheinland-Pfalz, WFS RP ALKIS Vereinfacht (abgerufen {rlp_fetched})"
     update_manifest(
         aoi_dir,
-        {"vectors": {"flurstuecke": {
-            "path": "vectors/flurstuecke.geojson",
-            "labels": "vectors/flurstuecke_labels.geojson",
-            "polygons": "vectors/flurstuecke_polygons.geojson",
-            "crs": "EPSG:25832",
-            "featureCount": stats["lines"],
-            "label_de": "Flurstücke",
-            "source": source,
-            "heights": "baked",
-        }}},
+        {"vectors": {"flurstuecke": manifest_entry(featureCount=feature_count, source=source, v3=v3)}},
         merge=["vectors"],
         attribution=[ATTRIBUTION_ALKIS_SL, *rlp_attr],
-        drop_attribution=[] if rlp_parcels else [ATTRIBUTION_ALKIS_RLP],
+        drop_attribution=[] if rlp_used else [ATTRIBUTION_ALKIS_RLP],
     )
     print("  " + ", ".join(f"{k}={v}" for k, v in stats.items()))
-    print(f"  flurstuecke.geojson {fmt_bytes(n_lines)}, flurstuecke_labels.geojson {fmt_bytes(n_labels)}, "
-          f"flurstuecke_polygons.geojson {fmt_bytes(n_polys)}")
+    print(("  " if v3 else f"  flurstuecke.geojson {fmt_bytes(n_lines)}, ") +
+          f"flurstuecke_labels.geojson {fmt_bytes(n_labels)}, flurstuecke_polygons.geojson {fmt_bytes(n_polys)}")
 
 
 if __name__ == "__main__":

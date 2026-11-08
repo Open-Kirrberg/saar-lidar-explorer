@@ -8,6 +8,10 @@ query is unchanged; `--refresh` forces a new download. Ways are projected to EPS
 the AOI bbox, densified to segments ≤ 2 m, rounded to 0.01 m and written per docs/data-contract.md
 ("Vectors"). Every vertex gets a baked z (bilinear from data/work/<aoi>/dtm.tif, `heights: "baked"`).
 The manifest gets `vectors.osm` (shared section, merged) and the ODbL attribution.
+
+v3 places (contract "Vectors in v3", rule 6): the cached Overpass answer of the covering rectangle AOI
+(`cache_from`) is reused; ways are clipped exactly to the union of the place's present 1 km tiles (cut at the
+tile edges, original OSM vertices, no densification, no baked heights), rounded to 0.1 m, `densified: false`.
 """
 from __future__ import annotations
 
@@ -22,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from common import APP_DATA, AOI, RAW_DIR, WORK_DIR, fmt_bytes, http_open, load_aoi, update_manifest
+from grid import TILE_M
 from heights import DtmSampler, bake_collection
 
 OSM_RAW = RAW_DIR / "osm"
@@ -31,6 +36,7 @@ ATTRIBUTION_OSM = "© OpenStreetMap-Mitwirkende, ODbL"
 LABEL_DE = "Wege & Straßen (OSM)"
 MAX_SEG_M = 2.0  # contract: no segment longer than 2 m
 PRECISION = 2    # contract: coordinates rounded to 0.01 m
+PRECISION_V3 = 1  # contract "Vectors in v3": 2D [E, N] rounded to 0.1 m, original vertices
 
 # --- classification ------------------------------------------------------------------------------
 
@@ -214,6 +220,133 @@ def build_collection(overpass: dict[str, Any], project, bbox: BBox) -> dict[str,
     return {"type": "FeatureCollection", "features": feats}
 
 
+# --- v3 places: clip to the union of present tiles (pure) ----------------------------------------
+
+Tile = tuple[int, int]
+
+
+def _grid_ts(a: float, b: float, step: int) -> list[tuple[float, float]]:
+    """(t, grid value) for every multiple of `step` strictly between a and b, t ∈ (0, 1) along a→b."""
+    if a == b:
+        return []
+    lo, hi = min(a, b), max(a, b)
+    k0, k1 = math.floor(lo / step) + 1, math.ceil(hi / step) - 1
+    return [((k * step - a) / (b - a), float(k * step)) for k in range(k0, k1 + 1)]
+
+
+def clip_polyline_tiles(pts: Sequence[Pt], tiles: frozenset[Tile] | set[Tile],
+                        tile_m: int = TILE_M) -> list[list[Pt]]:
+    """Clip a polyline exactly to the union of square tiles (SW corner `(E_km, N_km)`, half-open squares).
+
+    Every segment is cut where it crosses a tile edge; a sub-segment is kept when its midpoint lies in a
+    tile of `tiles`, so a piece running along an edge belongs to exactly one tile (the one north/east of it)
+    and two places with disjoint tile sets never both keep the same piece. Cut points are emitted only where a
+    piece starts or ends (not where the line passes between two present tiles), with the crossed coordinate
+    set exactly to the grid value. All other vertices are the original ones (no densification). Returns the
+    inside pieces (each ≥ 2 points), unrounded."""
+    pieces: list[list[tuple[Pt, bool]]] = []   # (point, synthetic?)
+    cur: list[tuple[Pt, bool]] = []
+
+    def close() -> None:
+        nonlocal cur
+        if len(cur) >= 2:
+            pieces.append(cur)
+        cur = []
+
+    for p, q in zip(pts, pts[1:]):
+        if p == q:
+            continue  # duplicate vertex: neither cuts nor breaks a piece
+        cuts: dict[float, Pt] = {}
+        for t, x in _grid_ts(p[0], q[0], tile_m):
+            cuts[t] = (x, p[1] + t * (q[1] - p[1]))
+        for t, y in _grid_ts(p[1], q[1], tile_m):
+            if t in cuts:  # through a tile corner: exact on both axes
+                cuts[t] = (cuts[t][0], y)
+            else:
+                cuts[t] = (p[0] + t * (q[0] - p[0]), y)
+        ts = sorted(cuts)
+        nodes: list[tuple[Pt, bool]] = [(p, False), *((cuts[t], True) for t in ts), (q, False)]
+        for (a, a_syn), (b, b_syn) in zip(nodes, nodes[1:]):
+            if a == b:
+                continue
+            mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+            inside = (math.floor(mid[0] / tile_m), math.floor(mid[1] / tile_m)) in tiles
+            if not inside:
+                close()
+                continue
+            if not cur:
+                cur = [(a, a_syn)]
+            cur.append((b, b_syn))
+    close()
+    # drop cut points in the middle of a piece (the line only passes between two present tiles there)
+    return [[pt for k, (pt, syn) in enumerate(pc) if not syn or k in (0, len(pc) - 1)] for pc in pieces]
+
+
+def present_tiles_bbox(tiles: Iterable[Tile], tile_m: int = TILE_M) -> BBox:
+    ts = list(tiles)
+    return (min(t[0] for t in ts) * tile_m, min(t[1] for t in ts) * tile_m,
+            (max(t[0] for t in ts) + 1) * tile_m, (max(t[1] for t in ts) + 1) * tile_m)
+
+
+def way_to_feature_v3(way: dict[str, Any], project: Callable[[Sequence[float], Sequence[float]], tuple],
+                      tiles: frozenset[Tile] | set[Tile]) -> dict[str, Any] | None:
+    """Overpass way → v3 feature (contract "Vectors in v3"): 2D [E, N] rounded to 0.1 m, original vertices,
+    clipped to the union of the present `tiles`; LineString, or MultiLineString if the way leaves and
+    re-enters. None if skipped or entirely outside."""
+    tags = way.get("tags") or {}
+    if not isinstance(tags, dict):
+        return None
+    kind = classify_kind(tags)
+    geom = way.get("geometry")
+    if kind is None or not isinstance(geom, list) or len(geom) < 2 or not isinstance(way.get("id"), int):
+        return None
+    try:
+        lons = [float(g["lon"]) for g in geom]
+        lats = [float(g["lat"]) for g in geom]
+    except (KeyError, TypeError, ValueError):
+        return None
+    es, ns = project(lons, lats)
+    pts = [(float(e), float(n)) for e, n in zip(es, ns)]
+    if not all(math.isfinite(c) for p in pts for c in p):
+        return None
+    e0, n0, e1, n1 = present_tiles_bbox(tiles)
+    if max(p[0] for p in pts) < e0 or min(p[0] for p in pts) > e1 or \
+            max(p[1] for p in pts) < n0 or min(p[1] for p in pts) > n1:
+        return None  # cheap reject before the per-segment clip
+    lines = []
+    for piece in clip_polyline_tiles(pts, tiles):
+        coords = round_coords(piece, PRECISION_V3)
+        if len(coords) >= 2:
+            lines.append(coords)
+    if not lines:
+        return None
+    geometry = ({"type": "LineString", "coordinates": lines[0]} if len(lines) == 1
+                else {"type": "MultiLineString", "coordinates": lines})
+    return {"type": "Feature", "properties": feature_props(way["id"], tags, kind), "geometry": geometry}
+
+
+def build_collection_v3(overpass: dict[str, Any], project, tiles: frozenset[Tile] | set[Tile]) -> dict[str, Any]:
+    feats = []
+    for el in overpass.get("elements", []):
+        if isinstance(el, dict) and el.get("type") == "way":
+            f = way_to_feature_v3(el, project, tiles)
+            if f is not None:
+                feats.append(f)
+    feats.sort(key=lambda f: int(f["properties"]["osm_id"].split("/")[1]))  # deterministic output
+    return {"type": "FeatureCollection", "features": feats}
+
+
+def manifest_entry(n_features: int, source: str, *, v3: bool) -> dict[str, Any]:
+    """`vectors.osm` manifest entry: v1/v2 with baked heights, v3 places `densified: false` and no heights."""
+    entry: dict[str, Any] = {"path": "vectors/osm.geojson", "crs": "EPSG:25832", "featureCount": n_features,
+                             "label_de": LABEL_DE, "source": source}
+    if v3:
+        entry["densified"] = False
+    else:
+        entry["heights"] = "baked"
+    return entry
+
+
 # --- Overpass ------------------------------------------------------------------------------------
 
 def overpass_query(south: float, west: float, north: float, east: float) -> str:
@@ -277,7 +410,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--refresh", action="store_true", help="ignore the cached Overpass response")
     args = ap.parse_args(argv)
     aoi = load_aoi(args.aoi)
-    aoi_dir = APP_DATA / aoi.key
+    aoi_dir = aoi.data_dir
     manifest_path = aoi_dir / "manifest.json"
     if not manifest_path.exists():
         sys.exit(f"{manifest_path} missing – run build first (osm only adds vectors to an existing manifest)")
@@ -285,13 +418,22 @@ def main(argv: list[str] | None = None) -> None:
     if (origin.get("E0"), origin.get("N0")) != (aoi.e0, aoi.n0):
         sys.exit(f"manifest origin {origin} does not match aois.toml bbox for {aoi.key}")
 
-    data = fetch_overpass(aoi, refresh=args.refresh)
+    v3 = aoi.is_place
+    # v3 place: reuse the Overpass answer of the covering rectangle AOI (its query covers our buffered area)
+    src = (aoi.cache_aoi() if v3 else None) or aoi
+    if src is not aoi:
+        print(f"  using the Overpass cache of {src.key}")
+    data = fetch_overpass(src, refresh=args.refresh)
     from pyproj import Transformer
     tr = Transformer.from_crs("EPSG:4326", "EPSG:25832", always_xy=True)
-    bbox: BBox = (aoi.e0, aoi.n0, aoi.e1, aoi.n1)
-    fc = build_collection(data, tr.transform, bbox)
-    sampler = DtmSampler.from_geotiff(WORK_DIR / aoi.key / "dtm.tif", aoi.e0, aoi.n1)
-    fc = bake_collection(fc, sampler)
+    if v3:
+        assert aoi.owned is not None
+        fc = build_collection_v3(data, tr.transform, aoi.owned)
+    else:
+        bbox: BBox = (aoi.e0, aoi.n0, aoi.e1, aoi.n1)
+        fc = build_collection(data, tr.transform, bbox)
+        sampler = DtmSampler.from_geotiff(WORK_DIR / aoi.key / "dtm.tif", aoi.e0, aoi.n1)
+        fc = bake_collection(fc, sampler)
 
     out = aoi_dir / "vectors" / "osm.geojson"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -307,10 +449,8 @@ def main(argv: list[str] | None = None) -> None:
         nverts += sum(len(l) for l in ([g["coordinates"]] if g["type"] == "LineString" else g["coordinates"]))
     osm_base = ((data.get("osm3s") or {}).get("timestamp_osm_base") or "")[:10]
     source = f"OpenStreetMap (Overpass API{', Stand ' + osm_base if osm_base else ''})"
-    update_manifest(aoi_dir, {"vectors": {"osm": {
-        "path": "vectors/osm.geojson", "crs": "EPSG:25832", "featureCount": len(fc["features"]),
-        "label_de": LABEL_DE, "source": source, "heights": "baked",
-    }}}, merge=["vectors"], attribution=[ATTRIBUTION_OSM])
+    update_manifest(aoi_dir, {"vectors": {"osm": manifest_entry(len(fc["features"]), source, v3=v3)}},
+                    merge=["vectors"], attribution=[ATTRIBUTION_OSM])
     print(f"  {len(fc['features'])} features ({', '.join(f'{k} {v}' for k, v in sorted(counts.items()))}), "
           f"{nverts} vertices → {out.relative_to(APP_DATA.parent.parent.parent)} ({fmt_bytes(out.stat().st_size)})")
 
