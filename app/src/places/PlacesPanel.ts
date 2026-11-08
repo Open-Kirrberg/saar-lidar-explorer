@@ -18,6 +18,7 @@ import { utmToWorld } from '../geo';
 import { el } from '../shell/dom';
 import type { FeatureHost } from '../shell/types';
 import { epochSpan, placeIdAt } from '../trees/treeFacts';
+import { modalOpen } from '../ui/modalKeys';
 import { createPanelSection, openPanelSection } from '../ui/panelSection';
 import {
   VISIT_MAX_AGL_M,
@@ -34,6 +35,9 @@ import {
   saveCollect,
 } from './collect';
 import type { KV } from './collect';
+import { buildMatrix, parseCompareParam, rivalFor, withCompareParam } from './compare';
+import { climbList, climbSummaryText, openLeaderboard } from './LeaderboardOverlay';
+import type { OverlayOptions } from './LeaderboardOverlay';
 import { PlaceLayer } from './PlaceLayer';
 import {
   AGE_COLORS,
@@ -171,7 +175,16 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   const note = el('p', { class: 'sle-cmp-note sle-small' });
   const list = el('ol', { class: 'sle-cmp-list' });
   const extra = el('div', { class: 'sle-cmp-extra' });
-  const boardView = el('div', { class: 'sle-cmp-board' }, chips, desc, note, list, extra);
+  // Full view („Alle Ranglisten“ overlay, LeaderboardOverlay.ts): table, Medaillenspiegel, Vergleichen.
+  const fullBtn = el('button', { type: 'button', class: 'sle-btn', text: '⛶ Alle Ranglisten', title: 'Alle Disziplinen in einer Tabelle, Medaillenspiegel' });
+  const cmpBtn = el('button', { type: 'button', class: 'sle-btn', text: '⚖️ Vergleichen', title: 'Zwei oder drei Orte nebeneinander' });
+  fullBtn.addEventListener('click', () => openLb({ tab: 'tabelle', sortBy: discipline?.id ?? null }));
+  cmpBtn.addEventListener('click', () => {
+    const p = selection?.kind === 'place' ? selection.place : null;
+    openLb({ tab: 'vergleich', compare: p ? compareWith(p) : undefined });
+  });
+  const fullRow = el('div', { class: 'sle-cmp-actions sle-cmp-full' }, fullBtn, cmpBtn);
+  const boardView = el('div', { class: 'sle-cmp-board' }, chips, fullRow, desc, note, list, extra);
   const cardView = el('div', { class: 'sle-cmp-card' });
   cardView.hidden = true;
   const disclaimer = el('p', { class: 'sle-cmp-disclaimer sle-small' });
@@ -864,6 +877,40 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     );
   };
 
+  // -- „So kommt <Ort> nach oben“ + full view (compare.ts / LeaderboardOverlay.ts) ----------------------------
+  const openLb = (o: OverlayOptions) => {
+    if (!data) return;
+    openLeaderboard(
+      {
+        data,
+        openDialog: (dl) => h.shell.openDialog(dl),
+        onPick: (p) => {
+          openPlace(p.id);
+          flyToPlace(p);
+          cardView.querySelector<HTMLElement>('.sle-cmp-back')?.focus({ preventScroll: true });
+        },
+      },
+      o,
+    );
+  };
+  /** This place and its natural rival in the current discipline (right above, or right below when 1st). */
+  const compareWith = (p: Place): string[] => {
+    const rival = data ? rivalFor(buildMatrix(data), p.id, discipline?.id ?? null) : null;
+    return rival ? [p.id, rival] : [p.id];
+  };
+  const climbSection = (p: Place) => {
+    const body = climbList(data!, p, () => {
+      const g = cardView.querySelector<HTMLDetailsElement>('details[data-sec="goals"]');
+      if (!g) return;
+      g.open = true;
+      secOpen.set('goals', true);
+      g.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+      g.querySelector<HTMLElement>('summary')?.focus({ preventScroll: true });
+    });
+    if (!body) return null;
+    return section('climb', `🚀 So kommt ${p.name_de} nach oben`, climbSummaryText(data!, p), true, body);
+  };
+
   const placeCard = (p: Place) => {
     const d = discipline;
     const out: Node[] = cardHead(placeTitle(p), badgeEls(p));
@@ -933,10 +980,13 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       });
       actions.append(g);
     }
+    const cmp = el('button', { type: 'button', class: 'sle-btn', text: '⚖️ Vergleichen', title: `${p.name_de} mit dem nächstbesseren Ort vergleichen` });
+    cmp.addEventListener('click', () => openLb({ tab: 'vergleich', compare: compareWith(p) }));
+    actions.append(cmp);
     out.push(actions);
     riesenList = null;
     riesenFor = null;
-    for (const s of [riesenSection(p), speciesSection(p), ageSection(p), bioSection(p), roofSection(p, mun), nutzungSection(p), goalsSection(p)]) if (s) out.push(s);
+    for (const s of [climbSection(p), riesenSection(p), speciesSection(p), ageSection(p), bioSection(p), roofSection(p, mun), nutzungSection(p), goalsSection(p)]) if (s) out.push(s);
     return out;
   };
 
@@ -1014,6 +1064,24 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   };
   window.addEventListener(PLACE_OPEN_EVENT, onOpenEvent);
 
+  // ---- deep link ?vergleich=a,b[,c] (the pose hash stays the view's; the param is dropped once used) ---------
+  let deepTimer: ReturnType<typeof setTimeout> | undefined;
+  const openDeepLink = () => {
+    const ids = data ? parseCompareParam(location.search, data.places.map((p) => p.id)) : null;
+    if (!ids) return;
+    history.replaceState(history.state, '', `${location.pathname}${withCompareParam(location.search, [])}${location.hash}`);
+    let tries = 0;
+    const tryOpen = () => {
+      // Wait while the disclaimer / intro or another dialog is open (≤ 2 min), then show the comparison.
+      if (modalOpen() && ++tries < 240) {
+        deepTimer = setTimeout(tryOpen, 500);
+        return;
+      }
+      openLb({ tab: 'vergleich', compare: ids });
+    };
+    tryOpen();
+  };
+
   // ---- load ----------------------------------------------------------------------------------------------
   const base = terrain.baseUrl;
   void (async () => {
@@ -1053,6 +1121,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       syncGiants();
       if (pendingOpen) openPlace(pendingOpen);
       pendingOpen = null;
+      openDeepLink();
     } catch (err) {
       if (abort.signal.aborted) return;
       console.warn('[places] stats not loaded: panel hidden', err);
@@ -1062,6 +1131,8 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
 
   return () => {
     abort.abort();
+    if (deepTimer !== undefined) clearTimeout(deepTimer);
+    document.getElementById('sle-cmp-full')?.dispatchEvent(new Event('sle:close'));
     window.removeEventListener(PLACE_OPEN_EVENT, onOpenEvent);
     window.removeEventListener(TREE_CARD_OPEN_EVENT, onTreeCard);
     disarm();
