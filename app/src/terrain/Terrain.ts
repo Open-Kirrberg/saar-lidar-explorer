@@ -47,6 +47,7 @@ import type { ChunkSource, SourceResolver } from './sources';
 import { BLDG_KEY, TerrainChunk } from './TerrainChunk';
 import { addCoverageUniforms, createSharedUniforms } from './TerrainMaterial';
 import type { CoverageGrid } from './coverage';
+import { isCovered } from './coverage';
 import type { SharedTerrainUniforms } from './TerrainMaterial';
 import {
   availableModes,
@@ -172,7 +173,10 @@ export interface TerrainOptions {
   resolver?: SourceResolver;
   /** hRef of the exaggeration rule (catalog mode: catalog `height_ref_m`; default: heightRange.min). */
   hRef?: number;
-  /** Catalog mode: owned-tile mask over the terrain rectangle; fragments outside are clipped (coverage.ts). */
+  /**
+   * Catalog mode: covered-tile mask over the terrain rectangle (overview `coverage`, else owned
+   * tiles); fragments outside fade into the haze and CPU height readers return NaN (coverage.ts).
+   */
   coverage?: CoverageGrid;
 }
 
@@ -209,6 +213,8 @@ export class Terrain extends Group {
   readonly aoi: AoiExtent;
   /** Heights from the finest resident level (`heights.heightAt`). */
   readonly heights: LevelHeights;
+  /** Catalog mode: covered 1 km tiles (contract 3.1 „Overview no-data“); null = everything counts. */
+  readonly coverage: CoverageGrid | null;
   /** DSM heights (level-0 chunks whose canopy is resident). */
   readonly canopyHeights: HeightQuery;
   readonly uniforms: SharedTerrainUniforms;
@@ -331,6 +337,7 @@ export class Terrain extends Group {
     this.canopyHeights = new HeightQuery(this.grid, manifest.chunks.nx, manifest.chunks.ny);
     this.uniforms = createSharedUniforms(opts.hRef ?? manifest.heightRange.min, manifest.chunkSize);
     if (opts.coverage) addCoverageUniforms(this.uniforms, opts.coverage, this.aoi);
+    this.coverage = opts.coverage ?? null;
     const svf = manifest.layers.svf;
     const opn = manifest.layers.opns_pos;
     if (svf) this.uniforms.uVatSvfRange.value.set(svf.min, svf.max);
@@ -1092,8 +1099,18 @@ export class Terrain extends Group {
 
   // ---- heights ------------------------------------------------------------------------
 
-  /** True terrain height (m ü. NN) at world x/z (bilinear, edge-clamped; NaN if not loaded). */
+  /**
+   * Catalog mode: is world (x, z) in a covered tile? Overview heights outside are filler (contract
+   * 3.1): no readout, ground clamp, pick, profile or measurement may answer from them. Always true
+   * in single-AOI mode.
+   */
+  covered(x: number, z: number): boolean {
+    return !this.coverage || isCovered(this.coverage, x, z);
+  }
+
+  /** True terrain height (m ü. NN) at world x/z (bilinear, edge-clamped; NaN if not loaded or not covered). */
   heightAt(x: number, z: number): number {
+    if (!this.covered(x, z)) return NaN;
     return this.heights.heightAt(x, z);
   }
 
@@ -1102,6 +1119,7 @@ export class Terrain extends Group {
    * actually drawn there (picking, anchors, collision match the visible mesh).
    */
   surfaceY(x: number, z: number): number {
+    if (!this.covered(x, z)) return NaN; // filler: the drone falls back to fallbackGround (= hRef, where the mesh sinks)
     const h = this.heights.heightAtDisplayed(x, z);
     if (Number.isNaN(h)) return NaN;
     return this.toDisplayY(h);
@@ -1109,7 +1127,7 @@ export class Terrain extends Group {
 
   /** True DSM (canopy/roof) height, NaN if the DSM is not loaded. */
   canopyHeightAt(x: number, z: number): number {
-    return this.canopyHeights.loadedCount ? this.canopyHeights.heightAt(x, z) : NaN;
+    return this.canopyHeights.loadedCount && this.covered(x, z) ? this.canopyHeights.heightAt(x, z) : NaN;
   }
 
   /** Displayed height the drone must stay above: the DTM (flying passes through the canopy, ADR 0020). */

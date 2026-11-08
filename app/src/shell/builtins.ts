@@ -22,6 +22,7 @@
  */
 import { initBuildings } from '../buildings/Buildings';
 import { initCandidates } from '../candidates/Candidates';
+import { getCandidateSource } from '../candidates/source';
 import { bindLongPressContext } from '../controls/touchContext';
 import type { AppContext } from '../main';
 import { Minimap } from '../map/Minimap';
@@ -308,7 +309,7 @@ export function registerBuiltins(shell: ShellApi, d: BuiltinDeps): void {
     id: 'candidates',
     tier: 'labor',
     label: 'Verdachtsflächen prüfen (F15)',
-    available: () => !!m.candidates,
+    available: () => getCandidateSource(ctx).available, // catalog mode: any 3D place not opted out (ADR 0053)
     mount(h) {
       if (!services.minimap || !services.markers) return;
       initCandidates(ctx, h.panel, { minimap: services.minimap, markers: services.markers, labels: services.labels });

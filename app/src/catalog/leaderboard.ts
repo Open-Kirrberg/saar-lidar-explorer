@@ -7,6 +7,7 @@
  * the single-AOI fields `place_aoi` / `aoi_share_pct` are ignored. Pure apart from `loadLeaderboard`.
  */
 import type { Catalog } from '../data/catalog';
+import { tileIdAt } from '../data/globalGrid';
 import type { ManifestStats, PlacesData, StatsLevels } from '../places/placesData';
 import { parseManifestStats, parseStatsLevels } from '../places/placesData';
 
@@ -70,4 +71,16 @@ export async function loadLeaderboard(url: string, fetchFn: typeof fetch = fetch
     console.warn(`[catalog] leaderboard: ${String(err)} → no „Orte im Vergleich“`);
     return null;
   }
+}
+
+/**
+ * Catalog mode: is (E, N) in the 3D area — a tile owned by a place with detailed 3D (`'3d'` /
+ * `'building'`)? Riesen collecting counts only Riesen there („Nur Riesen im 3D-Gebiet“), as in
+ * single-AOI mode where the AOI rectangle is the 3D area; Gemeinde-level Riesen in 'stats' places
+ * have no 3D trees to fly to.
+ */
+export function inCatalog3d(cat: Pick<Catalog, 'owners' | 'byId'>, E: number, N: number): boolean {
+  const id = cat.owners.get(tileIdAt(E, N));
+  const p = id ? cat.byId.get(id) : undefined;
+  return !!p && p.status !== 'stats';
 }

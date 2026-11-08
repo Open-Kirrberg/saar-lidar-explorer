@@ -35,20 +35,22 @@ function rowEl(r: SourceRow): HTMLElement {
 export function createSources(opts: {
   /** Where the splash and the button live (the 3D view's UI layer). */
   parent: HTMLElement;
-  attribution: string;
+  /** Manifest attribution; a function is read each time the dialog opens (catalog mode: places join later). */
+  attribution: string | (() => string);
   /** Extra line in the dialog head (AOI name, fixture fallback). */
   areaNote: string;
   /** Element whose pointer/keyboard input counts as map interaction (the canvas). */
   interactionTarget: HTMLElement;
 }): SourcesUi {
-  const rows = sourceRows(opts.attribution);
+  const attribution = typeof opts.attribution === 'function' ? opts.attribution : () => opts.attribution as string;
+  const rows = sourceRows(attribution());
 
   const open = () => {
     const body = el(
       'div',
       { class: 'sle-src' },
       el('p', { class: 'sle-dim', text: opts.areaNote }),
-      el('ul', { class: 'sle-src-list' }, ...rows.map(rowEl)),
+      el('ul', { class: 'sle-src-list' }, ...sourceRows(attribution()).map(rowEl)),
       el(
         'p',
         { class: 'sle-small' },

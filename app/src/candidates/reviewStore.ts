@@ -57,6 +57,29 @@ export function loadReviews(kv: KV | null | undefined, aoi: string): CandidateRe
   return out;
 }
 
+/**
+ * Catalog mode (S2) stores decisions under `katalog`. The first time that store does not exist it is
+ * seeded from the single-AOI stores of `legacyAois` (e.g. the deployed `overall`; first id wins),
+ * so decisions made before the switch survive; ids that changed meet their candidate again through
+ * `reattachDecisions` (≤ 3 m, same class). The legacy stores stay untouched.
+ */
+export function loadReviewsSeeded(kv: KV | null | undefined, aoi: string, legacyAois: readonly string[]): CandidateReviewStore {
+  let exists = false;
+  try {
+    exists = kv?.getItem(candidatesStorageKey(aoi)) != null;
+  } catch {
+    exists = false;
+  }
+  if (exists || !kv) return loadReviews(kv, aoi);
+  const out = emptyReviewStore();
+  for (const legacy of legacyAois) {
+    if (legacy === aoi) continue;
+    for (const [id, d] of Object.entries(loadReviews(kv, legacy).decisions)) out.decisions[id] ??= d;
+  }
+  if (Object.keys(out.decisions).length) saveReviews(kv, aoi, out);
+  return out;
+}
+
 /** Returns false if storage is unavailable/full. */
 export function saveReviews(kv: KV | null | undefined, aoi: string, store: CandidateReviewStore): boolean {
   try {
@@ -107,6 +130,23 @@ export function reattachDecisions(
     moved++;
   }
   return { store: { version: 1, decisions }, moved };
+}
+
+/**
+ * `reattachDecisions` limited to decisions at points where `inArea` holds (catalog mode: places whose
+ * candidates are loaded), so decisions of places not loaded yet are never moved; the rest is kept.
+ */
+export function reattachWithin(
+  store: CandidateReviewStore,
+  candidates: readonly Candidate[],
+  inArea: (E: number, N: number) => boolean,
+  radius = REATTACH_RADIUS_M,
+): { store: CandidateReviewStore; moved: number } {
+  const inside: Record<string, CandidateDecision> = {};
+  const outside: Record<string, CandidateDecision> = {};
+  for (const [id, d] of Object.entries(store.decisions)) (inArea(d.E, d.N) ? inside : outside)[id] = d;
+  const r = reattachDecisions({ version: 1, decisions: inside }, candidates, radius);
+  return { store: { version: 1, decisions: { ...outside, ...r.store.decisions } }, moved: r.moved };
 }
 
 export interface DecisionExport {

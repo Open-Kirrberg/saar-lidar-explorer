@@ -166,6 +166,8 @@ export interface PlaceStatsSource {
   levelBaseUrl(aoi: string): string;
   /** Adjust every loaded places file (catalog mode: the catalog `status` wins). */
   adjust?(data: PlacesData): void;
+  /** Riesen that count for collecting (catalog mode: only in the 3D area); default: the AOI rectangle. */
+  riesenScope?(E: number, N: number): boolean;
 }
 
 export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels?: StatsLevels, source?: PlaceStatsSource): () => void {
@@ -1494,6 +1496,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels
       data = parsed;
       ownData = parsed;
       riesenAll = riesenInAoi(data.places, aoi);
+      if (source?.riesenScope) riesenAll = riesenAll.filter((x) => source.riesenScope!(x.riese.E, x.riese.N));
       if (meta.geometry) {
         try {
           outlines = parseOutlines(await fetchJson(base + meta.geometry, abort.signal));

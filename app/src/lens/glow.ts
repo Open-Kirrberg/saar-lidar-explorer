@@ -44,7 +44,7 @@ export function glowPool(list: readonly Candidate[], o: GlowPoolOptions = {}): C
  */
 export function glowCentre(E: number, N: number, headingDeg: number, pitchDeg: number, agl: number, maxAhead = 350): { E: number; N: number } {
   const down = (-pitchDeg * Math.PI) / 180;
-  const ahead = down > 0.02 ? Math.min(maxAhead, Math.max(0, agl) / Math.tan(down)) : maxAhead;
+  const ahead = down > 0.02 ? Math.min(maxAhead, Math.max(0, Number.isFinite(agl) ? agl : 0) / Math.tan(down)) : maxAhead;
   const h = (headingDeg * Math.PI) / 180;
   return { E: E + Math.sin(h) * ahead, N: N + Math.cos(h) * ahead };
 }

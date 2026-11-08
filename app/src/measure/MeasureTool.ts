@@ -11,6 +11,8 @@
  * - Measurements are kept per AOI in localStorage `sle.measure.v1.<aoi>` (no profiles; rebuilt on
  *   selection) and can be exported as GeoJSON (WGS84 + E/N/h + metrics).
  */
+import { seedFromLegacy } from '../catalog/session';
+import { deployedAois } from '../data/urls';
 import type { Scene } from 'three';
 import { utmToWgs84 } from '../geo';
 import type { AppContext } from '../main';
@@ -93,6 +95,14 @@ export class MeasureTool {
     labels: Labels3D,
   ) {
     this.storageKey = `sle.measure.v1.${ctx.manifest.aoi}`;
+    // Catalog mode (`katalog`): seeded once from the deployment's single-AOI store (UTM vertices).
+    if (ctx.catalog) {
+      try {
+        seedFromLegacy(localStorage, this.storageKey, (deployedAois() ?? ['overall']).map((a) => `sle.measure.v1.${a}`));
+      } catch {
+        /* no storage */
+      }
+    }
     this.heights = new MeasureHeights(ctx.terrain);
     this.overlay = new MeasureOverlay(ctx.terrain, labels, ctx.manifest.origin);
     ctx.scene.add(this.overlay);

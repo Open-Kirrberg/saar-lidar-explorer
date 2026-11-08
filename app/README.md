@@ -481,14 +481,19 @@ live-lrm r = 20). Canopy and `dsmAt` = DTM + CHM (`terrain/canopyChm.ts`) when t
 hint is shown once (no fallback files). **Vectors:** `densified: false` OSM is densified ≤ 2 m;
 `flurstuecke.lines: 'derived'` → boundary lines from the polygons (`vectors/parcelEdges.ts`).
 **Minimap:** outlines + names of all catalog places, per-place `xyz.vat` tiles stacked.
-**Edge of the catalog area** (`terrain/coverage.ts`, tested). The overview has no no-data marker:
-cells outside the source data are pyramid-filled by the pipeline (flat blocks with stair steps) and
-overview chunks are present when they touch one owned tile, so the coarse levels reach far into
-France / RLP. The terrain therefore gets a coverage mask (one R8 texel per 1 km tile of the session
-rectangle, 255 = owned by any catalog place, sampled bilinearly; shader define `COVERAGE`, catalog
+**Edge of the catalog area** (`terrain/coverage.ts`, tested; contract 3.1 „Overview no-data“).
+Overview heights outside covered 1 km tiles are filler (smooth push-pull, finite for meshes and
+skirts) and carry no meaning. The covered set is the overview's optional `coverage` bitmap (tiles
+with real SL / RLP source data, incl. the relief-buffer ring; `data/overview.ts` parses it, invalid
+size / base64 / count → warning, ignored), else the union of the catalog's owned tiles
+(`catalog/index.ts sessionCoverageIds`). The terrain gets a coverage mask (one R8 texel per 1 km
+tile of the session rectangle, 255 = covered, sampled bilinearly; shader define `COVERAGE`, catalog
 mode only): within ≈ 200 m of the tile edge the relief fades into the haze colour, outside it is
 drawn as plain unlit haze and its vertices sink to hRef (not discarded: a cut heightfield shows the
-skirts behind it from below). The canopy is discarded there.
+skirts behind it from below). The canopy is discarded there. **CPU readers never answer from
+filler:** `Terrain.covered(x, z)` (exact tile test); `heightAt`, `surfaceY`, `canopyHeightAt` (so
+picking, the drone's ground clamp → `fallbackGround` = hRef where the mesh sinks, fly-to framing,
+labels) and *Messen* heights / profiles return NaN outside; the HUD shows „– m über Grund“ there.
 **Parity.** 🏆 *Orte im Vergleich* reads the catalog's `leaderboard` stats-only manifest (Gemeinde
 level; its `stats_levels` AOIs resolve next to it, e.g. `../overall/` for the Ortsteile); catalog
 `status` overrides the stats `status` (join on AGS), `place_aoi` / `aoi_share_pct` are ignored
@@ -500,6 +505,32 @@ place the HUD shows „<Name> · noch kein Detail‑3D · 🙋 Ortspate gesucht�
 over a 'building' place „3D im Aufbau“ (`catalog/placeHint.ts`, feature `place-hint`). POIs
 (`pois.geojson` at the data root) and zones work unchanged; „nur im Gebiet“ means the session
 rectangle.
+**Parity, part 2** (tested in `tests/s2Parity.test.ts`):
+- 🔍 **Verdachtsflächen** (`candidates/source.ts`, shared by the Labor card and the Relikt-Blick lens):
+  every ready place whose manifest has `candidates` and whose catalog entry does not opt out
+  (`options.relict_candidates: false`, [ADR 0053](../docs/adr/0053-relict-candidates-opt-in-new-places.md))
+  adds its file; candidates are absolute UTM, so the session frame places them. Rule 6: only
+  candidates in the place's owned + present tiles are kept, ids once (no doubles at borders). Places
+  loading later add theirs; candidates of dropped places stay (N/P runs across places, a fly-to loads
+  the place again). Filters, N/P, review, „Schauen, nicht graben“ unchanged; reviews + prefs under
+  `katalog` (`sle.candidates.v1.katalog`, seeded once from the deployed single-AOI store, e.g.
+  `overall`; re-attachment only inside loaded places). The card says why the place under the camera
+  shows none („nicht freigeschaltet – die Ortspatin oder der Ortspate kann sie einschalten“, „noch kein
+  Detail-3D“). The feature is available when any 3D place is not opted out.
+- 🗺️ **Layer tables:** a place that loads later adds its missing layer keys (e.g. `hist_1840`,
+  `hist_1935`) to the session manifest (`catalog/session.ts mergePlaceTables`, level 0 + 1; event
+  `sle:session-layers` adds the „Bilder“ buttons in *Darstellung*). Each chunk still comes from its
+  tile's own source; a place without the key shows relief there. Without historic maps the row stays
+  hidden. The Baum-Steckbrief reads `species` / `forest_hist` per place (`TreeCard` per source).
+- 🧭 **Minimap:** every `xyz.<key>` of every ready place, one overlay per key (relief + `hist_*`),
+  stacked; names as in single-AOI mode (`map/overlays.ts placeXyzOverlay`: v3 `vat` label from `derived`).
+- ⎙ **Meldung:** map tiles, name and attribution of the place owning the marker's tile (loaded first if
+  needed, `catalog ownerAt`). **© Quellen** grows with every loaded place's attribution.
+- 🌲 **Riesen collecting** counts only Riesen in tiles of 3D places (`'3d'` / `'building'`,
+  `catalog/leaderboard.ts inCatalog3d`) — the catalog's „3D-Gebiet“.
+- 📏 Measurements (`sle.measure.v1.katalog`) are seeded once from the deployed single-AOI store
+  (`catalog/session.ts seedFromLegacy`); profiles across a place border use both places' 1 m chunks.
+- Share links / URL hash are absolute UTM: single-AOI links open at the same spot in catalog mode.
 
 ## Wege & Flurstücke (F10, F12)
 
@@ -779,14 +810,17 @@ pnpm run perf:gltf -- --url 'http://127.0.0.1:5241/?aoi=overall'    # baeckerei-
 
 ## Known gaps
 
-- **Katalog-Modus (S2):** no per-place candidates (F15 reads `ctx.manifest.candidates`; needs a
-  per-place loader with the place offset + `options.relict_candidates`), no historic layers, point
-  clouds frozen in both modes (ADR 0020); species / historic forest of the tree card only if a place
-  manifest carries them (Homburg does not); Riesen collecting counts Gemeinde-level Riesen anywhere
-  in the session rectangle; the edge mask works per 1 km tile, so real RLP data beyond the owned
-  tiles is hidden too, and the haze plane ends visibly at the overview bbox (far, near the horizon);
-  parcel lookup only via the owning place's polygons; lossy layers are not marked „≈“ in probes;
-  live VAT phone GPU cost and Safari/Firefox AVIF not measured.
+- **Katalog-Modus (S2):** point clouds and *Mein Standort* are frozen in both modes (ADR 0020); the
+  Labor overlay list (lil-gui „Überlagerung“) and the presets do not pick up image layers that join
+  after start-up (the „Bilder“ buttons do); a newly appearing minimap overlay key shows in the Labor
+  layer control only from its next opening; the coverage mask works per 1 km tile and the haze plane
+  ends visibly at the overview bbox (far, near the horizon); parcel lookup only via the owning place's
+  polygons; lossy layers are not marked „≈“ in probes; the candidates' optional `mask` raster is not
+  drawn (as in single-AOI mode); candidate decisions export as aoi `katalog`; *Messen* outside the
+  covered tiles gives no heights (by design), and between covered tiles without a 3D place it uses
+  overview levels (coarse); live VAT phone GPU cost and Safari/Firefox AVIF not measured; no real
+  catalog has `hist_*` / `species` / `forest_hist` yet (checked with unit tests and a local
+  hist-patched copy of Homburg).
 
 - Messen (F17): no editing of finished measurements (delete + redraw); no measurement import; the rubber band is a straight (not draped) preview; the area is horizontal only (no 3D surface area). Exports are not written by the Export button in automated checks (GeoJSON content was checked via `measurementsToGeoJSON`).
 - Verdachtsflächen (F15): the optional `candidates.mask` class raster is not rendered (outlines/circles only); N/P does not switch the relief preset per class; *Bekannte Orte* (`pois/PoiPanel.ts`) still fly with the old, not exaggeration-aware `flyToSite` (one-line switch to `flyToSiteExag`). Precision of the rule-set-2 coarse candidates is unknown (2 inspected by eye). The mask raster is not drawn. Clicking a candidate circle or a point-cloud outline on the minimap no longer also triggers the map's click-to-fly (`bubblingMouseEvents: false`, v1.0.1; verified by code path, not clicked in a browser).

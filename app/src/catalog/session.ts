@@ -69,8 +69,9 @@ export function buildSessionManifest(
     let lvLayers: Record<string, LayerSource> = layers;
     let lvImages: Record<string, ImageLayerSource> = imageLayers;
     if (k === 1) {
-      lvLayers = first?.levels[1]?.layers ?? {};
-      lvImages = first?.levels[1]?.imageLayers ?? {};
+      // Copies: mergePlaceTables adds keys of later places here (never into a place manifest).
+      lvLayers = { ...(first?.levels[1]?.layers ?? {}) };
+      lvImages = { ...(first?.levels[1]?.imageLayers ?? {}) };
     } else if (k >= 2) {
       lvLayers = overview?.levels[k - 2]?.layers ?? {};
       lvImages = overview?.levels[k - 2]?.imageLayers ?? {};
@@ -106,4 +107,64 @@ export function buildSessionManifest(
     levels,
     attribution: joinAttribution(cat.attribution, overview?.attribution, first?.attribution),
   };
+}
+
+/** Window event after place layer keys joined the session manifest (`detail.keys`); the relief panel listens. */
+export const SESSION_LAYERS_EVENT = 'sle:session-layers';
+
+/**
+ * A place became ready: add the layer keys it has and the session tables lack (level 0 and level 1),
+ * e.g. the historic maps `hist_1840` / `hist_1935` of a place that is not the start place, so the
+ * display-mode lists offer them. Chunks still come from each tile's own source (a place without the
+ * key falls back like a coarse level without it). Existing keys are never replaced (fixed v3 ranges,
+ * labels of the first place). Returns the added keys (level 0 first, then level-1-only ones).
+ */
+export function mergePlaceTables(session: Manifest, place: Manifest): string[] {
+  const added: string[] = [];
+  const add = <T>(dst: Record<string, T>, src: Record<string, T> | undefined, note: boolean) => {
+    for (const [k, v] of Object.entries(src ?? {})) {
+      if (k in dst) continue;
+      dst[k] = v;
+      if (note && !added.includes(k)) added.push(k);
+    }
+  };
+  add(session.layers, place.layers, true);
+  session.imageLayers ??= {};
+  add(session.imageLayers, place.imageLayers, true);
+  const l0 = session.levels?.[0];
+  if (l0 && l0.layers !== session.layers) add(l0.layers, place.layers, false);
+  if (l0 && session.imageLayers && l0.imageLayers !== session.imageLayers) add((l0.imageLayers ??= {}), place.imageLayers, false);
+  const s1 = session.levels?.[1];
+  const p1 = place.levels?.[1];
+  if (s1 && p1) {
+    add(s1.layers, p1.layers, false);
+    add((s1.imageLayers ??= {}), p1.imageLayers, false);
+  }
+  return added;
+}
+
+/**
+ * Catalog mode keeps per-AOI local stores (measurements `sle.measure.v1.<aoi>`) under the session id
+ * `katalog`. The first time that key is missing it is copied from the first existing store of the
+ * single-AOI ids the deployment had (`legacyKeys`, e.g. `…overall`), so switching the public app to
+ * catalog mode loses nothing; coordinates in these stores are absolute UTM. Returns the copied key.
+ */
+export function seedFromLegacy(
+  kv: { getItem(k: string): string | null; setItem(k: string, v: string): void } | null | undefined,
+  key: string,
+  legacyKeys: readonly string[],
+): string | null {
+  try {
+    if (!kv || kv.getItem(key) != null) return null;
+    for (const k of legacyKeys) {
+      if (k === key) continue;
+      const v = kv.getItem(k);
+      if (v == null) continue;
+      kv.setItem(key, v);
+      return k;
+    }
+  } catch {
+    /* private mode: nothing to seed */
+  }
+  return null;
 }

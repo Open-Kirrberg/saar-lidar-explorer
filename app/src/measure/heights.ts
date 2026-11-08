@@ -43,7 +43,8 @@ export class MeasureHeights {
 
   /** True DTM height: own/terrain level 0 first, else the terrain's finest resident level. */
   dtmAt(x: number, z: number): LevelHeight {
-    if (!this.terrain.heights.contains(x, z)) return { h: NaN, level: -1 };
+    // Catalog mode: overview filler outside covered tiles is never measured (contract 3.1).
+    if (!this.terrain.heights.contains(x, z) || !this.terrain.covered(x, z)) return { h: NaN, level: -1 };
     let h = this.dtm.heightAt(x, z);
     if (!Number.isNaN(h)) return { h, level: 0 };
     h = this.terrain.heights.levels[0].heightAt(x, z);
@@ -54,7 +55,7 @@ export class MeasureHeights {
 
   /** True DSM height (NaN where no DSM chunk is available). */
   dsmAt(x: number, z: number): number {
-    if (!this.dsm || !this.terrain.heights.contains(x, z)) return NaN;
+    if (!this.dsm || !this.terrain.heights.contains(x, z) || !this.terrain.covered(x, z)) return NaN;
     const h = this.dsm.heightAt(x, z);
     return Number.isNaN(h) ? this.terrain.canopyHeightAt(x, z) : h;
   }

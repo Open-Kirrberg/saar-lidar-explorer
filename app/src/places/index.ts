@@ -10,7 +10,7 @@
  * S1: with a valid `stats_levels` key the card and the full view get a level switch Gemeinden / Ortsteile
  * (levels.ts loads the other level lazily from its AOI, e.g. the stats-only AOI `saarland`).
  */
-import { applyCatalogStatus, levelBaseUrl } from '../catalog/leaderboard';
+import { applyCatalogStatus, inCatalog3d, levelBaseUrl } from '../catalog/leaderboard';
 import type { AppContext } from '../main';
 import { mountPlaceStats } from './PlacesPanel';
 
@@ -32,6 +32,7 @@ export function registerPlaceStats(ctx: AppContext): () => void {
           baseUrl: lb.baseUrl,
           levelBaseUrl: (aoi) => levelBaseUrl(lb, aoi),
           adjust: (d) => void applyCatalogStatus(d, cat.catalog),
+          riesenScope: (E, N) => inCatalog3d(cat.catalog, E, N),
         }),
     });
   }

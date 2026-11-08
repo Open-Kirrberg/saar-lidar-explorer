@@ -1,17 +1,19 @@
 /**
- * Catalog-mode coverage mask (S2 polish). The central overview has no no-data marker: its level-k
- * cells outside the source data (France, RLP beyond the 1-tile relief buffer) are pyramid-filled
- * (`pipeline/overview.py` `pyramid_fill`: flat blocks with stair-step edges), and overview chunks
- * are present when they touch ≥ 1 owned tile, so the coarse levels reach far beyond the catalog
- * area. The terrain shaders therefore mask everything outside the union of the catalog's owned
- * tiles (all statuses): one u8 texel per 1 km tile (255 = owned), sampled bilinearly; within
- * ≈ 200 m of the tile edge the terrain fades into the haze colour, beyond the edge it is drawn as
- * plain, unlit haze and sinks to hRef (not discarded: a cut heightfield would show the skirts
- * behind it from below).
+ * Catalog-mode coverage mask (S2, contract revision 3.1 „Overview no-data“). Overview heights
+ * outside covered 1 km tiles are *filler* (a smooth push-pull continuation that keeps meshes,
+ * aprons and skirts finite) and carry no meaning. The covered set is the overview's optional
+ * `coverage` bitmap (tiles with real SL / RLP source data, incl. the relief-buffer ring and RLP
+ * neighbours; `coverageTileIds`); without a valid one (3.0 files) the union of the catalog's owned
+ * tiles (all statuses). The terrain shaders mask everything outside it: one u8 texel per 1 km tile
+ * (255 = covered), sampled bilinearly; within ≈ 200 m of the tile edge the terrain fades into the
+ * haze colour, beyond the edge it is drawn as plain, unlit haze and sinks to hRef (not discarded: a
+ * cut heightfield would show the skirts behind it from below). CPU readers (height readouts, ground
+ * clamp, profiles, measurements, fly-to framing) never answer from filler: `Terrain.heightAt` and
+ * friends return NaN outside covered tiles (`isCovered`).
  *
  * Pure: no three, no DOM.
  */
-import type { Rect } from '../data/globalGrid';
+import type { Bitmap, Rect } from '../data/globalGrid';
 import { parseTileId, TILE_M } from '../data/globalGrid';
 
 /** One texel per 1 km tile of `rect`, row 0 = south (texture v grows north), 255 = covered. */
@@ -43,6 +45,31 @@ export function coverageGrid(tiles: Iterable<string>, rect: Rect): CoverageGrid 
     data[row * w + col] = 255;
   }
   return { w, h, data, count };
+}
+
+/**
+ * Tile ids of the set bits of an overview `coverage` bitmap over `bbox` (row 0 = north): bit
+ * (col, row) = tile `${bbox[0]/1000 + col}_${bbox[3]/1000 − 1 − row}` (contract „Overview no-data“).
+ */
+export function coverageTileIds(cov: Bitmap, bbox: readonly [number, number, number, number]): string[] {
+  const e0 = Math.round(bbox[0] / TILE_M);
+  const nTop = Math.round(bbox[3] / TILE_M);
+  const out: string[] = [];
+  for (let row = 0; row < cov.h; row++) {
+    for (let col = 0; col < cov.w; col++) if (cov.cells[row * cov.w + col]) out.push(`${e0 + col}_${nTop - 1 - row}`);
+  }
+  return out;
+}
+
+/**
+ * True when world (x, z) of the session frame lies in a covered tile (exact tile test, no
+ * bilinear blend): CPU height readers answer only there. Outside the rectangle → false.
+ */
+export function isCovered(g: CoverageGrid, x: number, z: number): boolean {
+  const col = Math.floor(x / TILE_M);
+  const row = Math.floor(-z / TILE_M);
+  if (col < 0 || row < 0 || col >= g.w || row >= g.h) return false;
+  return g.data[row * g.w + col] > 0;
 }
 
 /**

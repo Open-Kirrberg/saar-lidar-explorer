@@ -322,7 +322,8 @@ async function main(): Promise<void> {
         E: r1(E),
         N: r1(N),
         h: r1(terrain.fromDisplayY(p.y)),
-        agl: r1(controller.agl / exag),
+        // Catalog mode: no height-above-ground readout over overview filler (contract 3.1).
+        agl: terrain.covered(p.x, p.z) ? r1(controller.agl / exag) : NaN,
         heading: r1(normDeg(controller.heading)),
         pitch: r1(controller.pitch),
         speed: r1(controller.speed),

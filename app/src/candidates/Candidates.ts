@@ -1,5 +1,7 @@
 /**
- * F15 "Verdachtsflächen": relict candidates from `manifest.candidates` (pipeline/detect.py).
+ * F15 "Verdachtsflächen": relict candidates from `manifest.candidates` (pipeline/detect.py), or in
+ * catalog mode from every loaded place that publishes them (source.ts: clipped to the place's tiles,
+ * ADR 0053 opt-in, reviews under `katalog`).
  * Lazy load on first use; 3D outlines (CandidateLayer), minimap circles (only while the layer is
  * on), panel card with class filters, min-score slider, counts, score-sorted list with fly-to,
  * keys X (on/off) and N/P (next/previous visible candidate), review (bestätigen → private marker,
@@ -38,7 +40,6 @@ import {
   isKnownPath,
   markerCategoryFor,
   markerTextFor,
-  parseCandidateCollection,
   sanitizeFilter,
   stepCandidate,
 } from './candidateData';
@@ -48,7 +49,8 @@ import { flyToSiteExag } from './flyToSite';
 import { loadCandidatePrefs, saveCandidatePrefs } from './prefs';
 import type { CandidatePrefs } from './prefs';
 import { CLASS_COLORS, KNOWN_PATH_COLOR, SELECTED_COLOR, candidateColor, hexCss } from './colors';
-import { exportDecisions, loadReviews, reattachDecisions, saveReviews } from './reviewStore';
+import { exportDecisions, reattachWithin, saveReviews } from './reviewStore';
+import { getCandidateSource, loadSourceReviews } from './source';
 import './candidates.css';
 
 declare global {
@@ -94,12 +96,13 @@ export interface CandidateDeps {
   labels: Labels3D;
 }
 
-/** Returns null (and adds no UI) when the manifest has no `candidates`. */
+/** Returns null (and adds no UI) when the session can have no candidates (source.ts `available`). */
 export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: CandidateDeps): CandidatesApi | null {
-  const meta = ctx.manifest.candidates;
-  if (!meta) return null;
+  const src = getCandidateSource(ctx);
+  if (!src.available) return null;
+  let meta = src.meta();
   const { terrain, camera, renderer, scene, manifest } = ctx;
-  const aoi = manifest.aoi;
+  const aoi = src.storageId;
   const kv = safeStorage();
   const defaultMin = defaultMinScore(meta.params); // write threshold, not the mask's (contract)
 
@@ -113,7 +116,8 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
 
   let all: Candidate[] | null = null;
   let byId = new Map<string, Candidate>();
-  let reviews: CandidateReviewStore = loadReviews(kv, aoi);
+  // Catalog mode: one store `katalog`, seeded once from the deployed single-AOI stores.
+  let reviews: CandidateReviewStore = loadSourceReviews(src, kv);
   let visible: Candidate[] = [];
   let current: Candidate | null = null;
   let loading: Promise<boolean> | null = null;
@@ -153,6 +157,7 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
       <label><input type="checkbox" data-k="rejected"> verworfene zeigen</label>
       <label><input type="checkbox" data-k="open"> nur ungeprüfte</label>
     </div>
+    <p class="sle-dim sle-small sle-cand-note" data-k="note" hidden></p>
     <div class="sle-cand-detail" data-k="detail" hidden></div>
     <div class="sle-row">
       <button type="button" class="sle-btn" data-act="prev" title="Vorheriger Kandidat (Taste P)">◀ Zurück <kbd>P</kbd></button>
@@ -174,9 +179,23 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
   const status = (t: string) => (q('[data-k=status]').textContent = t);
   const detail = q('[data-k=detail]');
   const listEl = q('[data-k=list]');
-  const methods = meta.method_versions?.length ? meta.method_versions.join(', ') : `${meta.method || 'unbekannt'}${meta.version ? ` v${meta.version}` : ''}`;
-  q('[data-k=method]').textContent =
-    `Verfahren: ${methods}${meta.generated ? ` · ${meta.generated.slice(0, 10)}` : ''} · ${meta.featureCount} Kandidaten. Nur eine Lesehilfe – Funde dem Landesdenkmalamt melden.`;
+  const renderMethod = () => {
+    const methods = meta.method_versions?.length ? meta.method_versions.join(', ') : `${meta.method || 'unbekannt'}${meta.version ? ` v${meta.version}` : ''}`;
+    const where = src.mode === 'catalog' ? ' (geladene Orte)' : '';
+    q('[data-k=method]').textContent =
+      `Verfahren: ${methods}${meta.generated ? ` · ${meta.generated.slice(0, 10)}` : ''} · ${meta.featureCount} Kandidaten${where}. Nur eine Lesehilfe – Funde dem Landesdenkmalamt melden.`;
+  };
+  renderMethod();
+  // Catalog mode: why the place under the camera shows none (ADR 0053: the Ortspate switches them on).
+  const noteEl = q('[data-k=note]');
+  const renderNote = () => {
+    if (src.mode !== 'catalog') return;
+    const s = ctx.store.get();
+    const t = prefs.on ? src.noteAt(s.E, s.N) : '';
+    if (noteEl.textContent !== t) noteEl.textContent = t;
+    noteEl.hidden = !t;
+  };
+  if (src.mode === 'catalog') setInterval(renderNote, 1000);
 
   const syncControls = () => {
     const f = prefs.filter;
@@ -218,30 +237,38 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
   });
 
   // ---- data ---------------------------------------------------------------------------------
+  /** Take the source's current list (first load, or more places in catalog mode). */
+  function adopt(): void {
+    const list = src.all();
+    if (!list) return;
+    all = list;
+    byId = new Map(all.map((c) => [c.id, c]));
+    meta = src.meta();
+    renderMethod();
+    const r = reattachWithin(reviews, all, src.loadedAt);
+    reviews = r.store;
+    if (r.moved) {
+      saveReviews(kv, aoi, reviews);
+      console.info(`[candidates] ${r.moved} decisions re-attached after a detector re-run`);
+    }
+  }
+  src.onChange(() => {
+    adopt();
+    refresh();
+    if (current && !byId.has(current.id)) current = null;
+  });
+
   function load(): Promise<boolean> {
     loading ??= (async () => {
       status('lädt …');
-      try {
-        const res = await fetch(terrain.baseUrl + meta!.path);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const parsed = parseCandidateCollection(await res.json());
-        all = parsed.candidates;
-        byId = new Map(all.map((c) => [c.id, c]));
-        if (parsed.skipped) console.warn(`[candidates] ${parsed.skipped} features skipped (class/geometry/score)`);
-        const r = reattachDecisions(reviews, all);
-        reviews = r.store;
-        if (r.moved) {
-          saveReviews(kv, aoi, reviews);
-          console.info(`[candidates] ${r.moved} decisions re-attached after a detector re-run`);
-        }
-        status('');
-        return true;
-      } catch (err) {
-        console.warn('[candidates] could not load', meta!.path, err);
+      if (!(await src.load())) {
         status('nicht verfügbar');
         loading = null; // allow a retry
         return false;
       }
+      adopt();
+      status('');
+      return true;
     })();
     return loading;
   }
@@ -266,6 +293,7 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
       deps.labels.remove(LABEL_ID);
     }
     if (on && current) showCurrentPin();
+    renderNote();
   }
 
   function setFilter(patch: Partial<CandidateFilter>): void {
@@ -509,7 +537,9 @@ export function initCandidates(ctx: AppContext, panel: HTMLElement, deps: Candid
   }
 
   const api: CandidatesApi = {
-    meta,
+    get meta() {
+      return meta;
+    },
     all: () => all,
     visible: () => visible,
     current: () => current,

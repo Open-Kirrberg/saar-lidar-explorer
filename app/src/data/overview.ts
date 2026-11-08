@@ -30,6 +30,12 @@ export interface Overview {
   baseUrl: string;
   bbox: [number, number, number, number];
   heightRange: { min: number; max: number };
+  /**
+   * Revision 3.1 „Overview no-data“: 1 km tiles of `bbox` with real source data (row 0 = north,
+   * bit (col, row) = tile `(bbox[0]/1000 + col, bbox[3]/1000 − 1 − row)`). Absent (3.0 file or
+   * invalid) → readers take the catalog's owned tiles as the covered set.
+   */
+  coverage?: Bitmap;
   levels: OverviewLevel[];
   attribution: string;
 }
@@ -55,6 +61,14 @@ export function parseOverview(raw: unknown, url: string, warn: (m: string) => vo
   const H = bbox[3] - bbox[1];
   const hr = raw.heightRange as { min?: unknown; max?: unknown } | undefined;
   const heightRange = isObj(hr) && isNum(hr.min) && isNum(hr.max) ? { min: hr.min, max: hr.max } : { min: 0, max: 1000 };
+  let coverage: Bitmap | undefined;
+  if (raw.coverage !== undefined) {
+    const expect = { w: W / 1000, h: H / 1000 };
+    const c = Number.isInteger(expect.w) && Number.isInteger(expect.h)
+      ? decodeBitmap(raw.coverage, expect, (m) => warn(`coverage ${m}; ignored (covered set = owned tiles)`))
+      : (warn('coverage: bbox not on the 1 km grid; ignored'), null);
+    if (c) coverage = c;
+  }
   const levels: OverviewLevel[] = [];
   const list = Array.isArray(raw.levels) ? raw.levels : [];
   for (let n = 0; n < list.length; n++) {
@@ -104,7 +118,7 @@ export function parseOverview(raw: unknown, url: string, warn: (m: string) => vo
     });
   }
   const baseUrl = url.replace(/[^/]*$/, '');
-  return { format: OVERVIEW_FORMAT, url, baseUrl, bbox, heightRange, levels, attribution: typeof raw.attribution === 'string' ? raw.attribution : '' };
+  return { format: OVERVIEW_FORMAT, url, baseUrl, bbox, heightRange, ...(coverage ? { coverage } : {}), levels, attribution: typeof raw.attribution === 'string' ? raw.attribution : '' };
 }
 
 export async function loadOverview(url: string, fetchFn: typeof fetch = fetch): Promise<Overview> {

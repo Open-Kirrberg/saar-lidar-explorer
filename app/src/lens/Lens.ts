@@ -8,8 +8,7 @@
  */
 import './lens.css';
 import type { Candidate } from '../candidates/candidateData';
-import { parseCandidateCollection } from '../candidates/candidateData';
-import { loadReviews } from '../candidates/reviewStore';
+import { getCandidateSource, loadSourceReviews } from '../candidates/source';
 import type { AppContext } from '../main';
 import { lookupParcelLocal } from '../markers/parcel';
 import { el } from '../shell/dom';
@@ -121,37 +120,38 @@ export function createLens(ctx: AppContext): LensController {
     pushMix();
   };
 
+  // Candidates from the session's source (single AOI: one file; catalog: every loaded place, source.ts),
+  // shared with Labor's review card; places that load later add theirs.
+  const candSrc = getCandidateSource(ctx);
   const refreshPool = () => {
     if (!all) return;
-    const reviews = loadReviews(kv, manifest.aoi);
+    const reviews = loadSourceReviews(candSrc, kv);
     pool = glowPool(all, { minScore: GLOW_MIN_SCORE, statusOf: (id) => reviews.decisions[id]?.status });
     dirty = true;
   };
+  candSrc.onChange(() => {
+    if (!all) return;
+    all = candSrc.all();
+    refreshPool();
+  });
 
   const ensureCandidates = (): Promise<void> => {
-    const meta = manifest.candidates;
-    if (!meta) return Promise.resolve();
+    if (!candSrc.available) return Promise.resolve();
     if (all) {
       refreshPool();
       return Promise.resolve();
     }
     loading ??= (async () => {
-      const shared = window.sleCandidates?.all() ?? null; // Labor's review module may have them already
-      if (shared) all = shared;
-      else {
-        busy(true);
-        try {
-          const res = await fetch(terrain.baseUrl + meta.path);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          all = parseCandidateCollection(await res.json()).candidates;
-        } catch (err) {
-          console.warn('[lens] candidates not loaded', err);
+      busy(true);
+      try {
+        if (!(await candSrc.load())) {
           ctx.shell.toast('Verdachtsflächen konnten nicht geladen werden.', true);
           loading = null;
           return;
-        } finally {
-          busy(false);
         }
+        all = candSrc.all();
+      } finally {
+        busy(false);
       }
       refreshPool();
     })();

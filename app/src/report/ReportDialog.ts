@@ -3,10 +3,12 @@
  * relief map snippets + coordinates + Flurstück + sources + heritage note → a single self-contained
  * HTML file offered as a download (Blob + a[download]). Nothing is ever sent anywhere.
  */
-import type { XyzSource } from '../data/manifest';
+import type { Manifest, XyzSource } from '../data/manifest';
+import { ownerAt } from '../catalog';
+import { joinAttribution } from '../catalog/session';
 import { utmToWgs84 } from '../geo';
 import type { AppContext } from '../main';
-import { isImageXyz, xyzOverlay } from '../map/overlays';
+import { isImageXyz, placeXyzOverlay } from '../map/overlays';
 import type { Marker } from '../markers/markerStore';
 import { PARCEL_ATTRIBUTION, lookupParcelLocal, lookupParcelWfs } from '../markers/parcel';
 import { flyToSiteExag } from '../candidates/flyToSite';
@@ -36,13 +38,30 @@ async function waitForTerrain(ctx: AppContext, maxMs: number): Promise<void> {
   }
 }
 
-/** Relief XYZ entries first (VAT preferred), historic maps after. */
-export function reportMapSources(ctx: AppContext): Array<{ key: string; name: string; src: XyzSource }> {
-  const xyz = ctx.manifest.xyz ?? {};
-  return Object.entries(xyz)
-    .map(([key, src]) => ({ key, src, name: xyzOverlay(key, src, ctx.manifest.layers, ctx.manifest.imageLayers).name, image: isImageXyz(key, src) }))
+/**
+ * Relief XYZ entries first (VAT preferred), historic maps after. Catalog mode (S2): the XYZ tiles of
+ * the place that owns the marker's tile (once its manifest is ready), with that place's base URL.
+ */
+export function reportMapSources(ctx: AppContext, at?: { E: number; N: number }): Array<{ key: string; name: string; src: XyzSource; baseUrl: string }> {
+  let m: Pick<Manifest, 'xyz' | 'layers' | 'imageLayers' | 'derived'> = ctx.manifest;
+  let baseUrl = ctx.terrain.baseUrl;
+  if (ctx.catalog) {
+    const o = at ? ownerAt(ctx.catalog, at.E, at.N) : null;
+    if (!o?.manifest || !o.baseUrl) return [];
+    m = o.manifest;
+    baseUrl = o.baseUrl;
+  }
+  return Object.entries(m.xyz ?? {})
+    .map(([key, src]) => ({ key, src, name: placeXyzOverlay(key, src, m).name, image: isImageXyz(key, src) }))
     .sort((a, b) => Number(a.image) - Number(b.image) || Number(b.key === 'vat') - Number(a.key === 'vat'))
-    .map(({ key, name, src }) => ({ key, name, src }));
+    .map(({ key, name, src }) => ({ key, name, src, baseUrl }));
+}
+
+/** Catalog mode: name + attribution of the place at the marker (report header and sources). */
+function reportArea(ctx: AppContext, E: number, N: number): { name: string; attribution: string } {
+  const o = ctx.catalog ? ownerAt(ctx.catalog, E, N) : null;
+  if (!o) return { name: ctx.manifest.name, attribution: ctx.manifest.attribution };
+  return { name: o.place.name_de, attribution: joinAttribution(ctx.manifest.attribution, o.manifest?.attribution) };
 }
 
 export interface BuildOptions {
@@ -62,7 +81,6 @@ export interface BuiltReport {
 /** Collect everything for one marker and return the report HTML (no download). */
 export async function buildMarkerReport(ctx: AppContext, marker: Marker, opts: BuildOptions): Promise<BuiltReport> {
   const status = opts.onStatus ?? (() => {});
-  const { manifest } = ctx;
   const notices: string[] = [];
 
   if (opts.flyFirst) {
@@ -92,7 +110,13 @@ export async function buildMarkerReport(ctx: AppContext, marker: Marker, opts: B
   const { lat, lon } = utmToWgs84(marker.E, marker.N);
   const maps: ReportImage[] = [];
   const sourceKey = opts.mapKey;
-  const mapSrc = reportMapSources(ctx).find((x) => x.key === sourceKey);
+  if (ctx.catalog) {
+    // The marker's place first (its XYZ tiles, name and attribution), also when the marker is far away.
+    const o = ownerAt(ctx.catalog, marker.E, marker.N);
+    if (o && o.place.status !== 'stats' && !o.manifest) await withTimeout(ctx.catalog.places.ensure(o.place.id), 15000, undefined);
+  }
+  const area = reportArea(ctx, marker.E, marker.N);
+  const mapSrc = reportMapSources(ctx, marker).find((x) => x.key === sourceKey);
   if (mapSrc) {
     status('Kartenausschnitt wird erstellt …');
     const detailZ = Math.min(mapSrc.src.maxZoom, 18);
@@ -102,7 +126,7 @@ export async function buildMarkerReport(ctx: AppContext, marker: Marker, opts: B
       [overviewZ, 'Übersicht'],
     ] as const) {
       if (label === 'Übersicht' && z === detailZ) continue;
-      const snip = await renderMapSnippet(ctx.terrain.baseUrl, mapSrc.src, lat, lon, { zoom: z, width: 720, height: 560 });
+      const snip = await renderMapSnippet(mapSrc.baseUrl, mapSrc.src, lat, lon, { zoom: z, width: 720, height: 560 });
       if (snip.tilesDrawn === 0) {
         notices.push(`${label}: keine Kartenkacheln für diese Stelle vorhanden.`);
         continue;
@@ -128,7 +152,7 @@ export async function buildMarkerReport(ctx: AppContext, marker: Marker, opts: B
   }
 
   const sources = attributionLines(
-    manifest.attribution,
+    area.attribution,
     parcel ? PARCEL_ATTRIBUTION.replace(/^Flurstücke:\s*/, '') + ' (Flurstücke)' : '',
     mapSrc?.src.attribution,
   );
@@ -143,7 +167,7 @@ export async function buildMarkerReport(ctx: AppContext, marker: Marker, opts: B
     lat,
     lon,
     generated: generated.toISOString(),
-    aoiName: manifest.name,
+    aoiName: area.name,
     parcel,
     ...(parcelSource ? { parcelSource } : {}),
     view3d,
@@ -167,10 +191,15 @@ export function downloadHtml(html: string, fileName: string): void {
 
 let open: HTMLElement | null = null;
 
+const mapOptions = (sources: ReadonlyArray<{ key: string; name: string }>): string =>
+  sources.length
+    ? sources.map((x) => `<option value="${escapeHtml(x.key)}">${escapeHtml(x.name)}</option>`).join('') + '<option value="">ohne Karte</option>'
+    : '<option value="">keine Kartenkacheln vorhanden</option>';
+
 /** Modal: options + "HTML herunterladen". */
 export function openReportDialog(ctx: AppContext, marker: Marker): void {
   open?.remove();
-  const sources = reportMapSources(ctx);
+  const sources = reportMapSources(ctx, marker);
   const wrap = document.createElement('div');
   wrap.id = 'sle-report';
   wrap.setAttribute('role', 'dialog');
@@ -184,11 +213,7 @@ export function openReportDialog(ctx: AppContext, marker: Marker): void {
       Andere Marker und Kandidaten sind nicht enthalten.</p>
       <label><input type="checkbox" name="fly" checked> Vorher zum Marker fliegen (Schrägansicht)</label>
       ${marker.parcel ? '' : '<label><input type="checkbox" name="parcelOnline"> Flurstück online nachschlagen, falls lokal nicht gefunden (ALKIS-WFS Saarland; übermittelt nur die Koordinate)</label>'}
-      <label class="sle-report-row">Karte <select name="map" class="sle-input">${
-        sources.length
-          ? sources.map((x) => `<option value="${escapeHtml(x.key)}">${escapeHtml(x.name)}</option>`).join('') + '<option value="">ohne Karte</option>'
-          : '<option value="">keine Kartenkacheln vorhanden</option>'
-      }</select></label>
+      <label class="sle-report-row">Karte <select name="map" class="sle-input">${mapOptions(sources)}</select></label>
       <p class="sle-dim sle-small">Die Datei wird nur heruntergeladen – nichts wird versendet. Ob und an wen du sie weitergibst
       (z. B. an das Landesdenkmalamt Saarland), entscheidest du. Genaue Lagen bitte nicht veröffentlichen.</p>
       ${marker.note.length > 1000 ? '<p class="sle-dim sle-small">Lange Notiz: der Ausdruck kann eine dritte Seite brauchen.</p>' : ''}
@@ -244,5 +269,14 @@ export function openReportDialog(ctx: AppContext, marker: Marker): void {
   });
   document.body.appendChild(wrap);
   open = wrap;
+  // Catalog mode: the marker's place may not be loaded yet (far away) — load it, then offer its maps.
+  const o = ctx.catalog ? ownerAt(ctx.catalog, marker.E, marker.N) : null;
+  if (o && !o.manifest && o.place.status !== 'stats') {
+    void ctx.catalog!.places.ensure(o.place.id).then(() => {
+      const sel = form.querySelector<HTMLSelectElement>('select[name=map]');
+      const fresh = reportMapSources(ctx, marker);
+      if (sel && open === wrap && fresh.length) sel.innerHTML = mapOptions(fresh);
+    });
+  }
   submit.focus();
 }

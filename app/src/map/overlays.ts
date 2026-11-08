@@ -2,7 +2,7 @@
  * Pure minimap overlay descriptions (no Leaflet): manifest XYZ layers (relief vs. historic-map
  * images, F14) and the live TrueDOP20 WMS (F13, 2D only).
  */
-import type { ImageLayerSource, LayerSource, XyzSource } from '../data/manifest';
+import type { ImageLayerSource, LayerSource, Manifest, XyzSource } from '../data/manifest';
 
 /** Live WMS of the Saarland TrueDOP20 2025 (EPSG:3857 supported, CORS *, Fees none, noLimitations). */
 export const DOP_WMS = {
@@ -51,6 +51,18 @@ export function xyzOverlay(
     return { key, name, image: true, ...(attribution ? { attribution } : {}) };
   }
   return { key, name: `Relief: ${layers[key]?.label_de ?? key}`, image: false, ...(x.attribution ? { attribution: x.attribution } : {}) };
+}
+
+/**
+ * Catalog mode: overlay of a place's `xyz.<key>`. A v3 place has no baked level-0 `vat` u8 layer but
+ * a `derived.vat` with the label, so the name matches the single-AOI one („Relief: VAT (Kombination)“)
+ * and saved minimap prefs keep working. Every place's tiles of one key stack in one overlay (alpha 0
+ * outside each place's own tiles, contract rule 7).
+ */
+export function placeXyzOverlay(key: string, x: XyzSource, m: Pick<Manifest, 'layers' | 'imageLayers' | 'derived'>): XyzOverlay {
+  const d = m.derived?.[key];
+  const layers = m.layers[key] || !d ? m.layers : { ...m.layers, [key]: { path: '', encoding: 'u8', min: 0, max: 1, label_de: d.label_de } as LayerSource };
+  return xyzOverlay(key, x, layers, m.imageLayers);
 }
 
 /**

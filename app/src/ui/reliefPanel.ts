@@ -4,6 +4,7 @@
  * image layers ("Bilder": orthophoto / historic maps, F13/F14) with an image ↔ relief slider.
  * Lives at the top of #panel as its own lil-gui root with custom DOM for buttons and legend.
  */
+import { SESSION_LAYERS_EVENT } from '../catalog/session';
 import GUI from 'lil-gui';
 import type { Controller } from 'lil-gui';
 import type { PerspectiveCamera, WebGLRenderer } from 'three';
@@ -133,6 +134,15 @@ export function createReliefPanel(ctx: ReliefPanelContext): ReliefPanelApi {
   };
   for (const m of modes) modeButton(m, modeBox);
   for (const m of images) modeButton(m, imageBox);
+  // Catalog mode: image layers (historic maps) of places that load later join the „Bilder“ row.
+  window.addEventListener(SESSION_LAYERS_EVENT, () => {
+    for (const m of terrain.imageModes()) {
+      if (modeByKey.has(m.key)) continue;
+      modeByKey.set(m.key, m);
+      modeButton(m, imageBox);
+    }
+    top.querySelector<HTMLElement>('.rl-images-wrap')!.hidden = imageBox.childElementCount === 0;
+  });
   // v3: presets that used baked slrm/slope use the derived live modes (adaptPreset).
   const usablePresets = [...PRESETS, ...IMAGE_PRESETS].map((p) => adaptPreset(p, (k) => terrain.isValidDisplay(k), terrain.manifest.derived)).filter(
     (p) => terrain.isValidDisplay(p.base) && (!p.overlay || terrain.isValidDisplay(p.overlay.key)),

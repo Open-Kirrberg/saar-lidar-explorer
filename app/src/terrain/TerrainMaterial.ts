@@ -83,7 +83,7 @@ export interface SharedTerrainUniforms {
   uGlowMix: IUniform<number>;
   /** Metres per pixel at 1 m distance (2·tan(fov/2) / drawing-buffer height): minimum glow size. */
   uGlowPx: IUniform<number>;
-  // Catalog mode only (addCoverageUniforms, coverage.ts): `uCoverage` (owned-tile mask over the session
+  // Catalog mode only (addCoverageUniforms, coverage.ts): `uCoverage` (covered-tile mask over the session
   // rectangle, R8 linear) and `uCoverageSize` (rectangle size in metres) via the index signature;
   // present → the chunk materials compile with `COVERAGE` and clip to it.
 }

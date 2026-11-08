@@ -15,7 +15,7 @@ import { horizontalFovDeg, minimapPose, northBadgeOffset, unrotatePoint, wedgePa
 import type { MapMode } from './bearing';
 import { cornerLift, zoomToFitAround } from './fit';
 import { borderNdc, footprintFromRays } from './footprint';
-import { DOP_WMS, mergeOverlayPrefs, syncOverlayPrefs, xyzOverlay } from './overlays';
+import { DOP_WMS, placeXyzOverlay, mergeOverlayPrefs, syncOverlayPrefs, xyzOverlay } from './overlays';
 import { resolveDataPath } from '../data/urls';
 import type { RayHit, V3 } from './footprint';
 import { tileLabelPoint, tileOutlineRings } from '../catalog/outline';
@@ -260,36 +260,46 @@ export class Minimap {
       maxZoom: 20,
       attribution: cadastreAttr,
     } as L.WMSOptions);
-    // S2 catalog mode: stacked per-place relief tiles (alpha 0 outside each place's own tiles).
+    // S2 catalog mode: per-place XYZ tiles, one overlay per key (relief `vat`/`slrm`, historic maps
+    // `hist_*` …), stacked over all ready places (alpha 0 outside each place's own tiles). Keys that
+    // only a later place has get their overlay when it loads (in the Labor layer control on its next
+    // opening; on at once when the saved prefs have it on).
     if (ctx.catalog) {
-      const group = L.layerGroup();
+      const groups = new Map<string, L.LayerGroup>();
       const added = new Set<string>();
-      let name = 'Relief: VAT (Kombination)';
       const addPlaces = () => {
         for (const r of ctx.catalog!.places.ready()) {
-          const x = r.manifest.xyz?.vat;
-          if (!x || added.has(r.place.id)) continue;
-          added.add(r.place.id);
-          const b = x.bounds;
-          const layer = L.tileLayer(resolveDataPath(r.baseUrl, x.url), {
-            minZoom: 10,
-            maxZoom: 20,
-            minNativeZoom: x.minZoom,
-            maxNativeZoom: x.maxZoom,
-            bounds: b ? L.latLngBounds(b) : undefined,
-            opacity: this.prefs.reliefOpacity,
-            attribution: esc(r.manifest.attribution.split(';')[0] ?? ''),
-            className: 'mm-relief',
-          });
-          this.reliefLayers.push(layer);
-          group.addLayer(layer);
+          for (const [key, x] of Object.entries(r.manifest.xyz ?? {})) {
+            const id = `${r.place.id}/${key}`;
+            if (added.has(id)) continue;
+            added.add(id);
+            const ov = placeXyzOverlay(key, x, r.manifest);
+            let group = groups.get(ov.name);
+            if (!group) {
+              group = L.layerGroup();
+              groups.set(ov.name, group);
+              overlays[ov.name] = group;
+              // A key first seen after start-up: on at once when the saved Labor prefs have it on.
+              if (this.overlays === overlays && this.labor && this.prefs.overlays.includes(ov.name)) group.addTo(this.map);
+            }
+            const b = (x as { bounds?: [[number, number], [number, number]] }).bounds ?? r.manifest.wgs84Bounds;
+            const layer = L.tileLayer(resolveDataPath(r.baseUrl, x.url), {
+              minZoom: 10,
+              maxZoom: 20,
+              minNativeZoom: x.minZoom,
+              maxNativeZoom: x.maxZoom,
+              bounds: b ? L.latLngBounds(b) : undefined,
+              opacity: ov.image ? 0.85 : this.prefs.reliefOpacity,
+              attribution: ov.image && ov.attribution ? esc(ov.attribution) : esc(r.manifest.attribution.split(';')[0] ?? ''),
+              className: ov.image ? 'mm-image' : 'mm-relief',
+            });
+            if (!ov.image) this.reliefLayers.push(layer);
+            group.addLayer(layer);
+          }
         }
       };
-      const first = ctx.catalog.places.ready().find((r) => r.manifest.xyz?.vat);
-      if (first) name = xyzOverlay('vat', first.manifest.xyz!.vat, first.manifest.layers, first.manifest.imageLayers).name;
       addPlaces();
       ctx.catalog.places.onChange(addPlaces);
-      overlays[name] = group;
     }
     overlays[AOI_OVERLAY] = ctx.catalog ? this.catalogOutlines() : this.aoiOutline();
     overlays[FOCUS_OVERLAY] = this.focusOutlines();

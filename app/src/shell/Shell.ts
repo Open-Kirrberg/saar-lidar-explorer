@@ -389,7 +389,7 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
   // ---- „© Quellen“ (ADR 0026) --------------------------------------------------------------------------
   const sources = createSources({
     parent: corner,
-    attribution: ctx.manifest.attribution,
+    attribution: () => ctx.manifest.attribution, // catalog mode: grows as places load (catalog/index.ts)
     areaNote: deps.areaNote,
     interactionTarget: renderer.domElement,
   });
