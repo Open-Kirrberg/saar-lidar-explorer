@@ -126,6 +126,13 @@ def test_generated_catalog(path):
         ov = json.loads((path.parent / doc["overview"]).read_text())
         assert ov["format"] == "sle-overview-v1" and ov["grid"] == G.GRID
         assert doc["height_ref_m"] == math.floor(ov["heightRange"]["min"])
+        if "coverage" in ov:                                               # S2 follow-up: real-data tiles
+            cov = ov["coverage"]
+            assert (cov["w"], cov["h"]) == ((ov["bbox"][2] - ov["bbox"][0]) // 1000, (ov["bbox"][3] - ov["bbox"][1]) // 1000)
+            covered = {G.tile_id((ov["bbox"][0] // 1000 + c, ov["bbox"][3] // 1000 - 1 - r))
+                       for c, r in G.decode_bitmap(cov)}
+            missing = set(ov.get("build", {}).get("ownedTilesWithoutCoverage", []))
+            assert set(seen) - missing <= covered
         k_max = ov["levels"][-1]["level"]
         bb = ov["bbox"]
         assert G.is_aligned(bb[0], bb[1], bb[2] - bb[0], bb[3] - bb[1], G.chunk_side(k_max))
@@ -144,3 +151,32 @@ def test_pyramid_fill():
     f = O.pyramid_fill(a)
     assert np.isfinite(f).all() and (f[10:50, 10:60] == 5).all() and (f[200:, 150:] == 9).all()
     assert 5.0 <= f.min() and f.max() <= 9.0
+
+
+def test_coverage_bitmap():
+    bb = (372000, 5460000, 380000, 5464000)          # 8 × 4 tiles
+    cov = O.coverage_bitmap(bb, {(372, 5463), (379, 5460), (380, 5460), (371, 5462)})
+    assert (cov["w"], cov["h"], cov["count"]) == (8, 4, 2)
+    assert G.decode_bitmap(cov) == {(0, 0), (7, 3)}   # row 0 = north; tiles outside the bbox ignored
+
+
+def test_upsample2_cell_centres():
+    import numpy as np
+    c = np.array([[0.0, 4.0], [8.0, 12.0]])
+    u = O.upsample2(c, (4, 4))
+    assert u[0, 0] == 0.0 and u[3, 3] == 12.0                     # edge clamp
+    assert u[0, 1] == pytest.approx(1.0) and u[0, 2] == pytest.approx(3.0)   # 0.75 / 0.25 weights
+    assert u.mean() == pytest.approx(c.mean())
+    assert O.upsample2(c, (3, 3)).shape == (3, 3)
+
+
+def test_pyramid_fill_has_no_stair_steps():
+    """Filler between two data blocks is a smooth ramp: no step larger than a few % of the height difference."""
+    import numpy as np
+    a = np.full((256, 512), np.nan, np.float32)
+    a[:, :32] = 100.0
+    a[:, -32:] = 200.0
+    f = O.pyramid_fill(a)
+    row = f[128].astype(np.float64)
+    assert np.isfinite(f).all() and 100 <= f.min() and f.max() <= 200
+    assert np.abs(np.diff(row[32:-32])).max() < 5.0              # nearest-repeat blocks gave steps of ≈ 20–50

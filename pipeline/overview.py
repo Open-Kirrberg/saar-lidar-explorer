@@ -6,9 +6,11 @@ Levels 2 … K of the catalog area (the union of all owned tiles, data/work/cata
 anchored at the global grid: bbox aligned at S_K, level-k cell = mean of its 2^k × 2^k block of the NoData-filled
 1 m DTM (same sources and per-tile fill as the v3 place builds: tile ± buffer window, SL first, RLP + fixed offset,
 nearest fill), heights quantised to `quant_m` before terrarium, WebP lossless, apron from real data (edge clamp only
-at the bbox edge). A chunk is present iff it intersects an owned tile. Tiles without any source data (France, RLP
-tiles not in the raw cache) are filled from the nearest level-2 cell. `heightRange` = min/max of the 1 m DTM over
-the owned tiles; the catalog's `height_ref_m` = floor(min).
+at the bbox edge). A chunk is present iff it intersects an owned tile. `coverage` = the 1 km tiles of the bbox with
+≥ 1 cell of real source data (after the `h-plausible-v1` rule); cells of the other tiles (France, RLP tiles not in
+the raw cache) carry filler heights (push-pull: NaN-ignoring 2 × 2 means down, bilinear back up), which the app must
+not show (contract: "Overview no-data"). `heightRange` = min/max of the 1 m DTM over the owned tiles; the catalog's
+`height_ref_m` = floor(min).
 
 Output: <DIR>/overview.json + <DIR>/levels/{k}/dtm/{i}_{j}.webp (default app/public/data/orte-katalog/overview).
 """
@@ -25,7 +27,6 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy import ndimage
 
 from common import ATTRIBUTION_RLP, ATTRIBUTION_SL, PIPELINE_VERSION
 from grid import GRID, GRID_E, GRID_N, TILE_M, Tile, chunk_side, encode_bitmap, tiles_bbox
@@ -57,6 +58,15 @@ def level_presence(bbox: tuple[int, int, int, int], k: int, tiles: set[Tile]) ->
     return encode_bitmap(nx, ny, cells)
 
 
+def coverage_bitmap(bbox: tuple[int, int, int, int], tiles: Iterable[Tile]) -> dict[str, Any]:
+    """`coverage`: 1 km tiles of the bbox (w = width / 1000, h = height / 1000, row 0 = north) with real source data.
+    Tiles outside the bbox are ignored. Pure."""
+    w, h = (bbox[2] - bbox[0]) // TILE_M, (bbox[3] - bbox[1]) // TILE_M
+    e0, n_top = bbox[0] // TILE_M, bbox[3] // TILE_M
+    cells = {(e - e0, n_top - 1 - n) for e, n in tiles}
+    return encode_bitmap(w, h, {(c, r) for c, r in cells if 0 <= c < w and 0 <= r < h})
+
+
 def quantise(h: np.ndarray, q: float = QUANT_M) -> np.ndarray:
     return np.round(h / q) * q
 
@@ -80,26 +90,37 @@ def tile_level2(job: tuple) -> tuple:
     if a_rl is None:
         a_rl = np.full_like(a_sl, np.nan)
     try:
-        dtm, _ = B.fill_heights(a_sl, a_rl, B.RLP_OFFSET_V3_M)
+        dtm, mask = B.fill_heights(a_sl, a_rl, B.RLP_OFFSET_V3_M)
     except ValueError:
         return tile, None, math.nan, math.nan
     core = dtm[b:b + 1000, b:b + 1000].astype(np.float64)
-    if not (np.isfinite(a_sl[b:b + 1000, b:b + 1000]) | np.isfinite(a_rl[b:b + 1000, b:b + 1000])).any():
-        return tile, None, math.nan, math.nan   # only fill from the neighbours: treat as no data
+    if not (mask[b:b + 1000, b:b + 1000] < 1).any():
+        return tile, None, math.nan, math.nan   # only fill from the neighbours: no data (not in `coverage`)
     return tile, core.reshape(250, 4, 250, 4).mean(axis=(1, 3)), float(core.min()), float(core.max())
 
 
+def upsample2(c: np.ndarray, shape: tuple[int, int]) -> np.ndarray:
+    """Bilinear 2× upsampling with cell-centre alignment (fine cells 2i, 2i + 1 lie at coarse i ∓ 0.25: weights
+    0.75 / 0.25, edge clamp), cropped to `shape`. Pure."""
+    def axis0(x: np.ndarray) -> np.ndarray:
+        prev = np.concatenate([x[:1], x[:-1]], axis=0)
+        nxt = np.concatenate([x[1:], x[-1:]], axis=0)
+        out = np.empty((2 * x.shape[0],) + x.shape[1:], x.dtype)
+        out[0::2] = 0.75 * x + 0.25 * prev
+        out[1::2] = 0.75 * x + 0.25 * nxt
+        return out
+    return axis0(axis0(c).T).T[:shape[0], :shape[1]]
+
+
 def pyramid_fill(a: np.ndarray) -> np.ndarray:
-    """Fill NaN cells from the NaN-ignoring 2 × 2 block mean of the next coarser grid (recursively). Memory-light
-    replacement for a nearest fill over a statewide grid; only used outside the source data. Pure."""
+    """Push-pull fill of NaN cells: NaN-ignoring 2 × 2 block means down to a full coarse grid (recursively), then
+    bilinear back up (`upsample2`), so the filler is smooth (no stair steps). Memory-light replacement for a nearest
+    fill over a statewide grid; only used outside `coverage` (filler, contract "Overview no-data"). Pure."""
     gap = ~np.isfinite(a)
     if not gap.any():
         return a
     if gap.all():
         raise ValueError("no data")
-    if max(a.shape) <= 64:
-        idx = ndimage.distance_transform_edt(gap, return_distances=False, return_indices=True)
-        return a[tuple(idx)]
     r, c = a.shape
     p = np.pad(a, ((0, r % 2), (0, c % 2)), mode="edge")
     blocks = p.reshape(p.shape[0] // 2, 2, p.shape[1] // 2, 2)
@@ -107,7 +128,7 @@ def pyramid_fill(a: np.ndarray) -> np.ndarray:
     cnt = fin.sum(axis=(1, 3))
     coarse = np.where(cnt > 0, np.where(fin, blocks, 0).sum(axis=(1, 3)) / np.maximum(cnt, 1), np.nan)
     coarse = pyramid_fill(coarse.astype(a.dtype))
-    up = np.repeat(np.repeat(coarse, 2, axis=0), 2, axis=1)[:r, :c]
+    up = upsample2(coarse, (r, c))
     out = a.copy()
     out[gap] = up[gap]
     return out
@@ -129,6 +150,7 @@ def build_overview(out: Path, owned: set[Tile], kmax: int, *, workers: int = 4, 
     sl_p, rlp_p = B.tile_paths("dgm1", sorted(need))
     l2 = np.full((H // 4, W // 4), np.nan, np.float32)   # statewide 24 000² cells: float32 (≈ 2 GB)
     lo, hi = math.inf, -math.inf
+    covered: set[Tile] = set()
     with_data = [t for t in all_tiles if any((t[0] + de, t[1] + dn) in sl_p or (t[0] + de, t[1] + dn) in rlp_p
                                              for de in (-1, 0, 1) for dn in (-1, 0, 1))]
     missing_owned = [t for t in owned if t not in sl_p and t not in rlp_p]
@@ -137,6 +159,7 @@ def build_overview(out: Path, owned: set[Tile], kmax: int, *, workers: int = 4, 
         for n, (t, a, tmin, tmax) in enumerate(ex.map(tile_level2, jobs, chunksize=4)):
             if a is None:
                 continue
+            covered.add(t)
             r0, c0 = (bbox[3] - (t[1] + 1) * TILE_M) // 4, (t[0] * TILE_M - bbox[0]) // 4
             l2[r0:r0 + 250, c0:c0 + 250] = a
             if t in owned:
@@ -171,14 +194,17 @@ def build_overview(out: Path, owned: set[Tile], kmax: int, *, workers: int = 4, 
            "generated": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
            "crs": "EPSG:25832", "grid": GRID, "bbox": list(bbox),
            "heightRange": {"min": round(lo, 2), "max": round(hi, 2)},
+           "coverage": coverage_bitmap(bbox, covered),
            "levels": levels,
            "attribution": "; ".join([ATTRIBUTION_SL] + ([ATTRIBUTION_RLP] if rlp_p else [])),
            "build": {"pipeline": PIPELINE_VERSION, "ownedTiles": len(owned), "tilesWithData": len(with_data),
                      "ownedTilesWithoutSource": sorted(f"{e}_{n}" for e, n in missing_owned),
+                     "ownedTilesWithoutCoverage": sorted(f"{e}_{n}" for e, n in owned - covered),
+                     "heightRule": B.HEIGHT_RULE,
                      "bufferM": BUFFER_M, "rlpOffset": B.RLP_OFFSET_V3_M, "timingS": round(time.time() - T0, 1)}}
     out.mkdir(parents=True, exist_ok=True)
     (out / "overview.json").write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
-    print(f"overview: {total / 1e6:.1f} MB, heightRange {doc['heightRange']}, "
+    print(f"overview: {total / 1e6:.1f} MB, heightRange {doc['heightRange']}, coverage {len(covered)} tiles, "
           f"{len(missing_owned)} owned tiles without source → {out}  [{time.time() - T0:.0f}s]", flush=True)
     return doc
 
