@@ -27,6 +27,10 @@ WORK_DIR = ROOT / "data" / "work"
 APP_DATA = ROOT / "app" / "public" / "data"
 PREVIEW_DIR = ROOT / "docs" / "previews"
 
+# Pipeline version written to `build.pipeline` of v3 manifests (the catalog CI compares neighbours). Bump it when
+# a change alters published bytes of a v3 place (encoders, relief parameters, fill rules).
+PIPELINE_VERSION = "0.9.0"
+
 SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 USER_AGENT = "saar-lidar-explorer-pipeline/0.1 (personal research; polite sequential downloads)"
 
@@ -54,6 +58,34 @@ class AOI:
     buffer_m: int
     county: str
     chunk_size: int
+    # v3 places (contract "Many places (v3, S2)"); None/2 for the v1/v2 rectangle AOIs
+    fmt: int = 2
+    place: str | None = None                       # catalog place id (= manifest `aoi` and `place.id`)
+    ags: str | None = None
+    owned: frozenset[tuple[int, int]] | None = None  # published (present) 1 km tiles, ⊆ the catalog's owned tiles
+    out: str | None = None                          # output dir below app/public/data (default: key)
+    relict_candidates: bool = True                  # ADR 0053: v3 places publish candidates only on opt-in
+
+    @property
+    def data_dir(self) -> Path:
+        """app/public/data/<out or key>/ — where the app-facing files of this AOI go."""
+        return APP_DATA / (self.out or self.key)
+
+    @property
+    def is_place(self) -> bool:
+        return self.owned is not None
+
+    def present(self, e_km: int, n_km: int) -> bool:
+        """True when the tile is published by this AOI (always True for rectangle AOIs inside the rectangle)."""
+        if self.owned is not None:
+            return (e_km, n_km) in self.owned
+        return self.e0 <= e_km * 1000 < self.e1 and self.n0 <= n_km * 1000 < self.n1
+
+    def chunk_present(self, i: int, j: int) -> bool:
+        """Level-0 chunk (i, j) of the rectangle is published (presence rule 2)."""
+        e = self.e0 + i * self.chunk_size
+        n = self.n1 - (j + 1) * self.chunk_size
+        return self.present(e // 1000, n // 1000)
 
     @property
     def width(self) -> int:
@@ -69,7 +101,12 @@ class AOI:
         return self.e0 - b, self.n0 - b, self.e1 + b, self.n1 + b
 
     def tiles(self, buffered: bool = True) -> list[tuple[int, int]]:
-        """1 km tiles (E_km, N_km, lower-left corner) touching the (buffered) AOI."""
+        """1 km tiles (E_km, N_km, lower-left corner) touching the (buffered) AOI. v3 place: the owned tiles,
+        buffered = owned tiles + all their 8-neighbours (the relief buffer fetch set)."""
+        if self.owned is not None:
+            from grid import neighbours8
+            ts = neighbours8(self.owned) if buffered else set(self.owned)
+            return sorted(ts, key=lambda t: (t[1], t[0]))
         e0, n0, e1, n1 = self.buffered if buffered else (self.e0, self.n0, self.e1, self.n1)
         return [
             (e, n)
@@ -143,12 +180,37 @@ def load_aoi(key: str, path: Path = PIPELINE_DIR / "aois.toml", *, step: str | N
     step = step or entry_step()
     if a.get("stats_only") and step in TILE_STEPS:
         sys.exit(stats_only_message(key, step))
+    if a.get("place"):
+        return _load_place(key, a)
     e0, n0, e1, n1 = (int(v) for v in a["bbox"])
     aoi = AOI(key, a["name"], e0, n0, e1, n1, int(a["buffer_m"]), a["county"], int(a["chunk_size"]))
     if aoi.width % aoi.chunk_size or aoi.height % aoi.chunk_size:
         sys.exit(f"AOI {key}: size {aoi.width}x{aoi.height} is not a multiple of chunk_size {aoi.chunk_size}")
     if aoi.buffer_m < 100:
         sys.exit(f"AOI {key}: buffer_m must be >= 100")
+    return aoi
+
+
+def _load_place(key: str, a: Mapping[str, Any]) -> AOI:
+    """v3 place AOI (aois.toml `place = "<catalog id>"`): the rectangle is the bounding box of the owned tiles
+    (catalog ownership, data/work/catalog/tile_owners.json); an optional `tiles = ["E_N", …]` publishes only a
+    subset (fixtures, status 'building'). Always manifest version 3, chunk size 500."""
+    from catalog import load_owners, owned_tiles
+    from grid import parse_tile_id, tiles_bbox, valid_tile
+    owners, meta = load_owners()
+    place = str(a["place"])
+    if place not in meta.get("places", {}):
+        sys.exit(f"AOI {key}: unknown catalog place {place!r}")
+    own = owned_tiles(owners, place)
+    tiles = {parse_tile_id(t) for t in a["tiles"]} if a.get("tiles") else own
+    if not tiles or not tiles <= own or not all(valid_tile(t) for t in tiles):
+        sys.exit(f"AOI {key}: tiles must be a non-empty subset of the tiles owned by {place!r}")
+    e0, n0, e1, n1 = tiles_bbox(tiles)
+    aoi = AOI(key, a.get("name", meta["places"][place]["name_de"]), e0, n0, e1, n1, int(a["buffer_m"]),
+              a["county"], 500, fmt=3, place=place, ags=meta["places"][place]["ags"], owned=frozenset(tiles),
+              out=a.get("out"), relict_candidates=bool(a.get("relict_candidates", False)))
+    if not 100 <= aoi.buffer_m <= 1000:
+        sys.exit(f"AOI {key}: v3 places need 100 <= buffer_m <= 1000")
     return aoi
 
 
