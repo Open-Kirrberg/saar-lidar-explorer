@@ -231,3 +231,67 @@ def test_implausible_heights_are_no_data():
     sl[0, 0] = -0.26
     dtm, mask = B.fill_heights(sl, np.full_like(sl, np.nan), B.RLP_OFFSET_V3_M)
     assert dtm.min() == 300.0 and mask[2, 2] == 1.0 and mask[0, 0] == 1.0
+
+
+# ------------------------------------------------------------------------- h-plausible-v1 (S2 follow-up)
+def _plane(n=400):
+    rr, cc = np.mgrid[:n, :n]
+    return (200.0 + 0.05 * cc + 0.02 * rr).astype(np.float32), rr, cc
+
+
+def _hole(h, rr, cc, r0, c0, radius, depth):
+    d = np.hypot(rr - r0, cc - c0)
+    return (h - depth * np.clip(1 - d / radius, 0, None)).astype(np.float32)
+
+
+def test_pit_rule_flags_narrow_deep_funnel():
+    """An interpolated funnel like SL 343_5457 (24 m wide, 184 m deep, bottom ≈ 0 m) becomes no data as a whole,
+    walls included; the filled DTM then has no cell below the surrounding terrain."""
+    h, rr, cc = _plane()
+    f = _hole(h, rr, cc, 200, 180, 12, 184)
+    pits = B.implausible_pits(f)
+    assert pits[200, 180] and pits.sum() >= 0.9 * ((np.hypot(rr - 200, cc - 180) < 12).sum())
+    assert not pits[np.hypot(rr - 200, cc - 180) > 13].any()
+    dtm, mask = B.fill_heights(f, np.full_like(f, np.nan), B.RLP_OFFSET_V3_M)
+    assert dtm.min() >= h.min() - 1e-3 and (mask[pits] == 1).all() and (mask[~pits] == 0).all()
+
+
+def test_pit_rule_keeps_real_terrain():
+    h, rr, cc = _plane()
+    small = _hole(h, rr, cc, 200, 200, 3, 23)          # 6 m wide, 23 m deep (the deepest real hole, SL 357_5444)
+    assert not B.implausible_pits(small).any()
+    quarry = _hole(h, rr, cc, 200, 200, 120, 80)       # 240 m wide, 80 m deep: wider than PIT_EXTENT_M
+    assert not B.implausible_pits(quarry).any()
+    gorge = h - 60 * np.clip(1 - np.abs(cc - 200) / 20, 0, None).astype(np.float32)   # 40 m wide, 60 m deep, open
+    assert not B.implausible_pits(gorge.astype(np.float32)).any()
+    pit = _hole(h, rr, cc, 200, 200, 12, 49)           # just under PIT_DEPTH_M
+    assert not B.implausible_pits(pit).any()
+    valid = np.ones(h.shape, bool)
+    funnel = _hole(h, rr, cc, 200, 200, 12, 184)
+    valid[190:210, 190:210] = False                    # cells already without source data are not screened
+    assert not B.implausible_pits(funnel, valid).any()
+
+
+def test_pit_rule_is_local():
+    """The verdict is a function of the cells within ≈ 150 m: two windows offset by 130 / 70 m agree in their
+    common part (locality requirement of the relief buffer)."""
+    h, rr, cc = _plane(700)
+    f = _hole(_hole(h, rr, cc, 300, 330, 12, 184), rr, cc, 420, 470, 10, 120)
+    a = B.implausible_pits(f[0:600, 0:600])
+    b = B.implausible_pits(f[130:700, 70:700])
+    assert a.any() and np.array_equal(a[130:600, 70:600], b[:470, :530])
+
+
+def test_floor_and_rule_constants():
+    assert B.H_FLOOR_M < 45 < 137 and B.PIT_DEPTH_M > 23 and B.HEIGHT_RULE == "h-plausible-v1"
+
+
+@pytest.mark.skipif(not (SL_RAW / sl_name("dgm1", 343, 5457)).exists(), reason="SL tile 343_5457 not cached")
+def test_real_funnel_343_5457_removed():
+    tiles = [(343 + de, 5457 + dn) for de in (-1, 0, 1) for dn in (-1, 0, 1)]
+    sl, rl = B.tile_paths("dgm1", tiles)
+    win = B.tile_window((343, 5457), BUF)
+    a = B.read_mosaic(sl, win)[0]
+    dtm, mask = B.fill_heights(a, np.full_like(a, np.nan), B.RLP_OFFSET_V3_M)
+    core = dtm[BUF:BUF + 1000, BUF:BUF + 1000]
+    assert core.min() > 180 and 200 < int((mask == 1).sum()) < 1000

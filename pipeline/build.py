@@ -354,31 +354,92 @@ def v3_layer_entry(key: str, path: str) -> dict:
     return e
 
 
-# v3: heights below this are source errors, not terrain (SL 2025 tiles 343_5457 and 327_5485 hold ≈ 100–200
-# pixels between −0.26 and 100 m, holes of a few hundred px; the lowest real terrain of the catalog area is ≈ 137 m
-# at the Moselle). Treated as no data (nearest fill, mask 1).
-MIN_VALID_HEIGHT_M = 100.0
+# v3 source-height plausibility, rule `h-plausible-v1` (contract "Many places (v3, S2)": Implausible source heights).
+# Two tests, both local (a cell's verdict depends on source data within ≈ 150 m < buffer_m, so the locality test holds):
+# 1. Absolute floor: below H_FLOOR_M nothing is terrain anywhere in the two source areas (RLP's lowest terrain is the
+#    Rhine at the NRW border, ≈ 45 m NHN; the lowest SL 2025 cell is the Moselle near Perl, 137.0 m, tile 308_5489,
+#    measured over all 2 999 cached DGM1 tiles on 2026-11-08). A guard against garbage blocks only.
+# 2. Narrow deep holes: a closed depression (sink fill) deeper than PIT_DEPTH_M whose extent is ≤ PIT_EXTENT_M is a
+#    source error. SL 2025 tiles 343_5457 and 327_5485 each hold one interpolated funnel, 24 m wide, down to −0.26 m
+#    and 0.0 m (184 m and 205 m below its rim; the "≈ 80 pixels of 100–137 m" are its walls). Across all cached
+#    tiles the deepest other closed depression is 23 m (a 6 m wide hole), the next 22 m (240 m wide), so 50 m keeps
+#    a factor > 2 to real terrain and > 3 to the errors. Flagged cells are no data (nearest fill, mask 1).
+HEIGHT_RULE = "h-plausible-v1"
+H_FLOOR_M = 30.0
+PIT_DEPTH_M = 50.0
+PIT_EXTENT_M = 50       # m, larger side of the depression's bounding box; also the screening closing footprint
+
+
+def implausible_pits(h: np.ndarray, valid: np.ndarray | None = None) -> np.ndarray:
+    """Bool mask of the cells of every closed depression deeper than PIT_DEPTH_M and at most PIT_EXTENT_M wide
+    (rule 2 of `h-plausible-v1`). `h`: finite heights (row 0 = north, 1 m); `valid`: cells with source data (only
+    those are screened). Screening: grey closing with a PIT_EXTENT_M square (fills every hole narrower than it)
+    deeper than PIT_DEPTH_M; each screened component is confirmed by a sink fill (morphological reconstruction by
+    erosion) of its bounding box ± PIT_EXTENT_M: the depression = connected cells below the spill level that contain
+    the component; it is flagged when it does not reach the window border, its extent is ≤ PIT_EXTENT_M and its
+    depth > PIT_DEPTH_M. Pure, deterministic."""
+    from skimage.morphology import reconstruction
+    out = np.zeros(h.shape, bool)
+    if min(h.shape) < 3:
+        return out
+    cand = (ndimage.grey_closing(h, size=(PIT_EXTENT_M, PIT_EXTENT_M), mode="nearest") - h) > PIT_DEPTH_M
+    if valid is not None:
+        cand &= valid
+    if not cand.any():
+        return out
+    eight = np.ones((3, 3), bool)
+    lab, _ = ndimage.label(cand, structure=eight)
+    m = PIT_EXTENT_M
+    for k, (rs, cs) in enumerate(ndimage.find_objects(lab), 1):
+        r0, r1 = max(0, rs.start - m), min(h.shape[0], rs.stop + m)
+        c0, c1 = max(0, cs.start - m), min(h.shape[1], cs.stop + m)
+        w = h[r0:r1, c0:c1].astype(np.float64)
+        seed = w.copy()
+        seed[1:-1, 1:-1] = w.max()
+        with warnings.catch_warnings():   # skimage 0.26 sets ndarray.shape (NumPy 2.5 DeprecationWarning)
+            warnings.simplefilter("ignore", DeprecationWarning)
+            depth = reconstruction(seed, w, method="erosion") - w
+        dl, _ = ndimage.label(depth > 0, structure=eight)
+        ids = np.unique(dl[(lab[r0:r1, c0:c1] == k) & (dl > 0)])
+        if not ids.size:
+            continue
+        reg = np.isin(dl, ids)
+        rr, cc = np.nonzero(reg)
+        if rr.min() == 0 or cc.min() == 0 or rr.max() == w.shape[0] - 1 or cc.max() == w.shape[1] - 1:
+            continue    # not closed within the window: wider than PIT_EXTENT_M
+        if max(rr.max() - rr.min(), cc.max() - cc.min()) + 1 > PIT_EXTENT_M or depth[reg].max() <= PIT_DEPTH_M:
+            continue
+        out[r0:r1, c0:c1] |= reg
+    return out
 
 
 def fill_heights(sl: np.ndarray, rlp: np.ndarray, off: float) -> tuple[np.ndarray, np.ndarray]:
     """SL first, RLP + offset where SL has no data, nearest fill for the rest (within the given array only).
+    Source heights failing `h-plausible-v1` (H_FLOOR_M, implausible_pits) are no data first.
     Returns (dtm float32, mask: 0 = SL, 0.5 = RLP, 1 = interpolated)."""
-    sl = np.where(sl < MIN_VALID_HEIGHT_M, np.nan, sl)
-    rlp = np.where(rlp < MIN_VALID_HEIGHT_M, np.nan, rlp)
+    sl = np.where(sl < H_FLOOR_M, np.nan, sl)
+    rlp = np.where(rlp < H_FLOOR_M, np.nan, rlp)
     use_rlp = ~np.isfinite(sl) & np.isfinite(rlp)
     dtm = np.where(use_rlp, rlp + np.float32(off), sl).astype(np.float32)
-    mask = np.zeros(sl.shape, np.float32)
-    mask[use_rlp] = 0.5
     gap = ~np.isfinite(dtm)
-    mask[gap] = 1.0
     if gap.all():
         raise ValueError("no height data in window")
-    return fill_nearest(dtm), mask
+    filled = fill_nearest(dtm)
+    pits = implausible_pits(filled, ~gap)
+    if pits.any():
+        dtm[pits] = np.nan
+        use_rlp &= ~pits
+        gap |= pits
+        filled = fill_nearest(dtm)
+    mask = np.zeros(sl.shape, np.float32)
+    mask[use_rlp] = 0.5
+    mask[gap] = 1.0
+    return filled, mask
 
 
 def fill_surface(dsl: np.ndarray, drlp: np.ndarray, dtm: np.ndarray, off: float) -> np.ndarray:
-    dsl = np.where(dsl < MIN_VALID_HEIGHT_M, np.nan, dsl)
-    drlp = np.where(drlp < MIN_VALID_HEIGHT_M, np.nan, drlp)
+    dsl = np.where(dsl < H_FLOOR_M, np.nan, dsl)
+    drlp = np.where(drlp < H_FLOOR_M, np.nan, drlp)
     use = ~np.isfinite(dsl) & np.isfinite(drlp)
     dsm = np.where(use, drlp + np.float32(off), dsl)
     dsm = np.where(np.isfinite(dsm), dsm, dtm)
@@ -572,6 +633,7 @@ def build_v3(aoi, no_dsm: bool = False, no_previews: bool = False, workers: int 
         "verticalDatum": "DHHN2016 (EPSG:7837)", "bufferM": b, "tiles": len(tiles),
         "params": {k: PARAMS[k] for k in ("svf", "openness", "vat", "chm")},
         "rlpOffset": {"applied": RLP_OFFSET_V3_M, "note": "fixed constant in v3 (locality)"},
+        "heightRule": {"id": HEIGHT_RULE, "floorM": H_FLOOR_M, "pitDepthM": PIT_DEPTH_M, "pitExtentM": PIT_EXTENT_M},
         "encoding": {"webp": "lossless exact method 6", "avif_u8_quality": 90,
                      "avif_max_err": stats["avif_max_err"], "avif_requality_files": stats["avif_requality"]},
         "timingsS": {"total": round(time.time() - T0, 1)},

@@ -29,7 +29,7 @@ PREVIEW_DIR = ROOT / "docs" / "previews"
 
 # Pipeline version written to `build.pipeline` of v3 manifests (the catalog CI compares neighbours). Bump it when
 # a change alters published bytes of a v3 place (encoders, relief parameters, fill rules).
-PIPELINE_VERSION = "0.9.0"
+PIPELINE_VERSION = "0.9.1"
 
 SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 USER_AGENT = "saar-lidar-explorer-pipeline/0.1 (personal research; polite sequential downloads)"
