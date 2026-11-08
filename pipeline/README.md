@@ -305,9 +305,9 @@ only the 1 km tiles it owns; v1/v2 rectangle AOIs (karlsberg, overall, …) are 
 |---|---|
 | `grid.py` | `sle-grid-25832-v1` (origin E 300 000 / N 5 400 000, 256 km, 1 km tiles `"{E_km}_{N_km}"`), global chunk addresses `(k, I, J)`, alignment, the presence bitmap (row 0 = north, LSB first, base64 with padding; the contract example is a test vector), fixed v3 u8 ranges. |
 | `catalog.py` | Ownership `largest-share-v1` from the **unsimplified** VG25 outlines (`data/raw/vg25/`, dissolved per AGS by `gemeinden.parse_vg25`): integer m² per tile, owner = largest share ≥ 1 m², ties → smaller AGS, then id → `data/work/catalog/tile_owners.json` (2 857 tiles, 54 places; Homburg 91). `build` writes `sle-catalog-v1` (`app/public/data/orte-katalog/catalog.json`); status / data_url / repo / opt-ins from `catalog.toml` (unlisted places are `stats`). `height_ref_m` = floor of the overview's 1 m minimum. |
-| `build.py` (v3) | aois.toml `place = "<id>"` (optional `tiles` subset, `out`, `cache_from`, `relict_candidates`): rectangle = bbox of the owned tiles, fetch set = owned tiles + 8 neighbours. **Every tile is computed from its own source window (tile ± `buffer_m`)**: SL first, RLP + a fixed −0.06 m, nearest fill inside the window, svf/openness (r 10 m), internal 1 m VAT, CHM. So a tile's bytes do not depend on which tiles are built with it (locality test). Writes only present chunks: `dtm/{i}_{j}.webp` (terrarium, WebP lossless, apron from real terrain), `relief/{svf,opns_pos,opns_neg}` AVIF q90 (`lossy: true`, budget mean ≤ 1.5 / max ≤ 16 checked per file), `relief/{chm,mask}` WebP lossless, level 1 `levels/1/{dtm,vat}` (one tile per chunk; baked VAT = 2 m block mean), `derived` hillshade/slope/slrm/vat, `presence`, `grid`, `place`, `build.pipeline`, no `dsm`. Work rasters cover the whole rectangle (`vat.tif` NaN outside present tiles). |
+| `build.py` (v3) | aois.toml `place = "<id>"` (optional `tiles` subset, `out`, `cache_from`, `relict_candidates`): rectangle = bbox of the owned tiles, fetch set = owned tiles + 8 neighbours. **Every tile is computed from its own source window (tile ± `buffer_m`)**: implausible source heights out (`h-plausible-v1`: below 30 m, or a closed depression > 50 m deep and ≤ 50 m wide, see below), SL first, RLP + a fixed −0.06 m, nearest fill inside the window, svf/openness (r 10 m), internal 1 m VAT, CHM. So a tile's bytes do not depend on which tiles are built with it (locality test). Writes only present chunks: `dtm/{i}_{j}.webp` (terrarium, WebP lossless, apron from real terrain), `relief/{svf,opns_pos,opns_neg}` AVIF q90 (`lossy: true`, budget mean ≤ 1.5 / max ≤ 16 checked per file), `relief/{chm,mask}` WebP lossless, level 1 `levels/1/{dtm,vat}` (one tile per chunk; baked VAT = 2 m block mean), `derived` hillshade/slope/slrm/vat, `presence`, `grid`, `place`, `build.pipeline`, no `dsm`. Work rasters cover the whole rectangle (`vat.tif` NaN outside present tiles). |
 | `encode.py` | `save_webp_lossless` (VP8L, R = G = B for u8, exact, method 6; asserts the bit-exact decode), `save_avif_u8` (4:0:0, full range, no ICC), `save_avif_rgb` (q65, 4:2:0). |
-| `overview.py` | `sle-overview-v1` levels 2…K (default 6) for the catalog area: bbox aligned at S_K, level-2 cells = 4 × 4 block means of the per-tile filled DTM (same fill as the places), coarser levels by 2 × 2 means, heights quantised to `quant_m` 0.05, WebP lossless, presence = chunks touching an owned tile. |
+| `overview.py` | `sle-overview-v1` levels 2…K (default 6) for the catalog area: bbox aligned at S_K, level-2 cells = 4 × 4 block means of the per-tile filled DTM (same fill as the places), coarser levels by 2 × 2 means, heights quantised to `quant_m` 0.05, WebP lossless, presence = chunks touching an owned tile; `coverage` = 1 km tiles with real source data (contract revision 3.1); cells outside it are push-pull filler (NaN-ignoring 2 × 2 means down to one cell, bilinear back up: smooth, no stair steps) that the app must not show. |
 | `fixture_v3.py` | `app/public/data/fixture-v3/`: two interlocking 3-tile places (Homburg / Kirkel border), a `stats` place, overview 2–3, catalog, README. |
 
 **Homburg as a place (`ort-homburg`, 2026-11-08):** 91 owned tiles (rectangle 375–384 × 5457–5472 km), fetch set
@@ -317,6 +317,20 @@ only the 1 km tiles it owns; v1/v2 rectangle AOIs (karlsberg, overall, …) are 
 (S0 projection 5.3). On top: minimap xyz.vat 44.8 MB (0.49), candidates 12.1 MB, 3 point-cloud areas 119.7 MB.
 Build ≈ 2.8 min (4 workers), all steps ≈ 6 min with warm caches. Statewide catalog: 2 857 owned tiles, 54
 places, 16 KB; overview levels 2–6 (bbox 300–396 × 5432–5528 km, 1 067 chunks) 161 MB in ≈ 7 min.
+
+**S2 follow-ups (2026-11-08, contract revision 3.1, ADR 0057, pipeline 0.9.1).** *Heights:* `build.fill_heights`
+applies `h-plausible-v1` (`H_FLOOR_M` 30, `PIT_DEPTH_M` 50, `PIT_EXTENT_M` 50; ≈ 0.04–0.17 s per tile window).
+Calibrated over all 2 999 cached DGM1 tiles: only the two interpolated funnels in SL 343_5457 (320 cells) and
+327_5485 (353 cells) are removed; the deepest kept closed depressions are 23 m (6 m wide, 357_5444, DSM at ground
+level over it: ambiguous, kept) and 22 m (240 m wide). The lowest real cell is the Moselle near Perl (137.02 m,
+308_5489); overview `heightRange` 100.72 → **137.02** m, catalog `height_ref_m` 100 → **137**. Homburg's heights are
+byte-identical (dtm, relief and level-1 files unchanged after the rebuild). *Overview:* `coverage` = 2 915 tiles
+(2 857 owned + 58 border tiles with data), push-pull filler outside; 167.7 MB (was 161, the smooth filler packs
+slightly worse), ≈ 7.3 min with 8 workers. *Trees:* a place reads only its own `ortho_1m.tif` / `bldg.tif`
+(`trees.covering_paths`); Homburg: 35 of 364 tree chunks changed (border crowns), 665 478 → 665 516 trees
+(+38 conifer fill), still 4.1 MB/km² (371 MB over 91 tiles). `pointcloud.covering_window` still falls back to other
+AOIs' work DTMs for focus areas beyond the rectangle. *Parcels / historic maps for Homburg:* WFS 414 and the
+historic WMS (owsproxy and mapbender) still answer 503 (probed once, 2026-11-08): not built.
 
 Other steps for a place filter per tile (contract rule 6): trees by top cell, buildings / candidates by centroid,
 point-cloud areas by bbox centre, OSM clipped to the present tiles (2D, `densified: false`), parcel labels inside
