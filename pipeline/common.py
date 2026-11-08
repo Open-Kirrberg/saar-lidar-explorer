@@ -65,6 +65,20 @@ class AOI:
     owned: frozenset[tuple[int, int]] | None = None  # published (present) 1 km tiles, ⊆ the catalog's owned tiles
     out: str | None = None                          # output dir below app/public/data (default: key)
     relict_candidates: bool = True                  # ADR 0053: v3 places publish candidates only on opt-in
+    cache_from: str | None = None                   # aois.toml `cache_from`: a rectangle AOI whose raw download
+                                                    # caches cover this one (reuse them instead of fetching again)
+
+    def cache_aoi(self) -> "AOI | None":
+        """The covering rectangle AOI named by `cache_from` (None if unset). Its raw caches (OSM, ortho, WMS,
+        WFS answers) may be read for this AOI; chunk-indexed caches are relative to *its* origin."""
+        if not self.cache_from:
+            return None
+        c = load_aoi(self.cache_from, step="build")
+        b = self.buffered
+        if not (c.e0 - c.buffer_m <= b[0] and c.n0 - c.buffer_m <= b[1] and b[2] <= c.e1 + c.buffer_m
+                and b[3] <= c.n1 + c.buffer_m):
+            sys.exit(f"AOI {self.key}: cache_from {self.cache_from!r} does not cover it")
+        return c
 
     @property
     def data_dir(self) -> Path:
@@ -160,6 +174,15 @@ def plan_steps(key: str, steps: Iterable[str] = (), path: Path = PIPELINE_DIR / 
     default 'overall')."""
     a = aoi_config(key, path)
     steps = list(steps)
+    if a.get("group"):   # e.g. [fixture-v3]: run the tile steps for every member AOI, then the group's own steps
+        own = list(a.get("after", []))
+        member_steps = [s for s in steps if s not in own] if steps else \
+            [s for s in DEFAULT_STEPS if s not in ("pois", "test")]
+        plan = [p for m in a["group"] for p in plan_steps(str(m), member_steps, path)] if member_steps else []
+        plan += [(s, key) for s in own if not steps or s in steps]
+        if not steps:
+            plan.append(("test", key))
+        return plan
     stats_only = bool(a.get("stats_only", False))
     if not steps:
         steps = list(a.get("stats_steps", STATS_ONLY_DEFAULT_STEPS) if stats_only else DEFAULT_STEPS)
@@ -208,7 +231,8 @@ def _load_place(key: str, a: Mapping[str, Any]) -> AOI:
     e0, n0, e1, n1 = tiles_bbox(tiles)
     aoi = AOI(key, a.get("name", meta["places"][place]["name_de"]), e0, n0, e1, n1, int(a["buffer_m"]),
               a["county"], 500, fmt=3, place=place, ags=meta["places"][place]["ags"], owned=frozenset(tiles),
-              out=a.get("out"), relict_candidates=bool(a.get("relict_candidates", False)))
+              out=a.get("out"), relict_candidates=bool(a.get("relict_candidates", False)),
+              cache_from=a.get("cache_from"))
     if not 100 <= aoi.buffer_m <= 1000:
         sys.exit(f"AOI {key}: v3 places need 100 <= buffer_m <= 1000")
     return aoi

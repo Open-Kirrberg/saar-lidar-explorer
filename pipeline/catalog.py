@@ -254,7 +254,10 @@ def main(argv: list[str] | None = None) -> None:
     if a.cmd == "ownership":
         run_ownership()
         return
-    doc = write_catalog(a.out, overview=a.overview, leaderboard=a.leaderboard, height_ref_m=a.height_ref)
+    lb = a.leaderboard
+    if lb is None and (APP_DATA / "saarland" / "manifest.json").exists() and a.out.parent == APP_DATA:
+        lb = "../saarland/manifest.json"   # local dev: the S1 stats-only manifest next to the catalog folder
+    doc = write_catalog(a.out, overview=a.overview, leaderboard=lb, height_ref_m=a.height_ref)
     n = {s: sum(1 for p in doc["places"] if p["status"] == s) for s in STATUSES}
     size = (a.out / "catalog.json").stat().st_size
     print(f"catalog: {len(doc['places'])} places {n}, height_ref_m {doc['height_ref_m']}, {size / 1e3:.1f} KB "

@@ -89,6 +89,30 @@ def tile_level2(job: tuple) -> tuple:
     return tile, core.reshape(250, 4, 250, 4).mean(axis=(1, 3)), float(core.min()), float(core.max())
 
 
+def pyramid_fill(a: np.ndarray) -> np.ndarray:
+    """Fill NaN cells from the NaN-ignoring 2 × 2 block mean of the next coarser grid (recursively). Memory-light
+    replacement for a nearest fill over a statewide grid; only used outside the source data. Pure."""
+    gap = ~np.isfinite(a)
+    if not gap.any():
+        return a
+    if gap.all():
+        raise ValueError("no data")
+    if max(a.shape) <= 64:
+        idx = ndimage.distance_transform_edt(gap, return_distances=False, return_indices=True)
+        return a[tuple(idx)]
+    r, c = a.shape
+    p = np.pad(a, ((0, r % 2), (0, c % 2)), mode="edge")
+    blocks = p.reshape(p.shape[0] // 2, 2, p.shape[1] // 2, 2)
+    fin = np.isfinite(blocks)
+    cnt = fin.sum(axis=(1, 3))
+    coarse = np.where(cnt > 0, np.where(fin, blocks, 0).sum(axis=(1, 3)) / np.maximum(cnt, 1), np.nan)
+    coarse = pyramid_fill(coarse.astype(a.dtype))
+    up = np.repeat(np.repeat(coarse, 2, axis=0), 2, axis=1)[:r, :c]
+    out = a.copy()
+    out[gap] = up[gap]
+    return out
+
+
 def build_overview(out: Path, owned: set[Tile], kmax: int, *, workers: int = 4, quant_m: float = QUANT_M,
                    label: str = "") -> dict[str, Any]:
     from concurrent.futures import ProcessPoolExecutor
@@ -103,7 +127,7 @@ def build_overview(out: Path, owned: set[Tile], kmax: int, *, workers: int = 4, 
           f"levels {K_MIN}…{kmax}, {len(owned)} owned tiles, {len(all_tiles)} tiles in bbox", flush=True)
     need = {(e + de, n + dn) for e, n in all_tiles for de in (-1, 0, 1) for dn in (-1, 0, 1)}
     sl_p, rlp_p = B.tile_paths("dgm1", sorted(need))
-    l2 = np.full((H // 4, W // 4), np.nan, np.float64)
+    l2 = np.full((H // 4, W // 4), np.nan, np.float32)   # statewide 24 000² cells: float32 (≈ 2 GB)
     lo, hi = math.inf, -math.inf
     with_data = [t for t in all_tiles if any((t[0] + de, t[1] + dn) in sl_p or (t[0] + de, t[1] + dn) in rlp_p
                                              for de in (-1, 0, 1) for dn in (-1, 0, 1))]
@@ -119,12 +143,9 @@ def build_overview(out: Path, owned: set[Tile], kmax: int, *, workers: int = 4, 
                 lo, hi = min(lo, tmin), max(hi, tmax)
             if n % 200 == 199:
                 print(f"  {n + 1}/{len(with_data)} tiles  [{time.time() - T0:.0f}s]", flush=True)
-    gap = ~np.isfinite(l2)
-    if gap.all():
+    if not np.isfinite(l2).any():
         raise SystemExit("overview: no DTM data at all")
-    if gap.any():
-        idx = ndimage.distance_transform_edt(gap, return_distances=False, return_indices=True)
-        l2 = l2[tuple(idx)]
+    l2 = pyramid_fill(l2)
     shutil.rmtree(out / "levels", ignore_errors=True)
     levels = []
     arr = l2
@@ -132,7 +153,7 @@ def build_overview(out: Path, owned: set[Tile], kmax: int, *, workers: int = 4, 
     total = 0
     for k in range(K_MIN, kmax + 1):
         if k > K_MIN:
-            arr = arr.reshape(arr.shape[0] // 2, 2, arr.shape[1] // 2, 2).mean(axis=(1, 3))
+            arr = arr.reshape(arr.shape[0] // 2, 2, arr.shape[1] // 2, 2).mean(axis=(1, 3), dtype=np.float64)
         s = chunk_side(k)
         pres = level_presence(bbox, k, owned)
         from grid import decode_bitmap

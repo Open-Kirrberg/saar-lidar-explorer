@@ -134,3 +134,13 @@ def test_generated_catalog(path):
             pres = G.decode_bitmap(lv["presence"])
             d = path.parent / Path(doc["overview"]).parent / "levels" / str(k) / "dtm"
             assert {p.stem for p in d.glob("*.webp")} == {f"{i}_{j}" for i, j in pres}
+
+
+def test_pyramid_fill():
+    import numpy as np
+    a = np.full((300, 200), np.nan, np.float32)
+    a[10:50, 10:60] = 5.0
+    a[200:, 150:] = 9.0
+    f = O.pyramid_fill(a)
+    assert np.isfinite(f).all() and (f[10:50, 10:60] == 5).all() and (f[200:, 150:] == 9).all()
+    assert 5.0 <= f.min() and f.max() <= 9.0
