@@ -1,6 +1,6 @@
 # 🗺️ Orte skalieren: the whole Saarland, one community repo per municipality (living plan)
 
-- **Status:** 📝 Plan drafted (2026-11-08); nothing built yet. Next: **S0 size spike** and **S1 Saarland leaderboard**.
+- **Status:** ✅ S0 done ([spike report](orte-skalieren-s0.md)); 🚧 S1 built locally (data + app), statewide LiDAR run (S1b) and release pending. Next: finish S1, then S2.
 - **Last updated:** 2026-11-08
 - **Origin:** user idea, 2026-11-08: bring Zweibrücken, the neighbouring towns and eventually the whole Saarland into the explorer. One repo per town, village or district, which also collects other data, tools and skills for the community. Community-driven on GitHub, no backend, hosted on GitHub Pages.
 - **How to keep this alive:** tick the boxes in §9, update the open questions in §10, and add a dated line to §11 for every decision and to §12 for every change to this file. Once a step ships, its decisions move into an ADR and its formats into `docs/data-contract.md` (contract first, [ADR 0004](../adr/0004-contract-first.md)); this file then links to them.
@@ -64,7 +64,7 @@ Published on Pages as `catalog.json`; small, cached by the app.
     {
       "id": "homburg",
       "name_de": "Homburg",
-      "ags": "10045113",                       // Amtlicher Gemeindeschlüssel
+      "ags": "10045114",                       // Amtlicher Gemeindeschlüssel
       "state": "SL",
       "repo": "Open-Kirrberg/ort-homburg",
       "data_url": "https://open-kirrberg.github.io/ort-homburg/",
@@ -98,7 +98,18 @@ Coarse LOD levels span several municipalities (a level-5 chunk is 16 km wide), s
 
 ## 5. Size budget (target ≤ 5.5 MB/km²)
 
-Today's 15.6 MB/km² by directory (from `overall`, 48 km²):
+**S0 result (2026-11-08, [spike report](orte-skalieren-s0.md)):** the target holds. Homburg as a whole municipality (82.6 km², AOI `homburg-gemeinde`, a 176 km² rectangle) is ≈ 2.3 GB = 13.1 MB/km² today and **≈ 930 MB = 5.3 MB/km²** in the target format (`overall`: 5.5 MB/km²), without losing a feature:
+- hillshade, slope, SLRM and VAT live in the shader (VAT from svf + opns_pos; mean difference 0.4 grey levels); the baked hillshade was never displayed;
+- svf / openness as AVIF q90, DTM and u8 data layers as WebP lossless (bit-exact in Chromium);
+- `dsm` dropped (DTM + CHM reproduce it to 8 cm p99);
+- only level 1 in a place repo, coarse levels central (§4.3);
+- OSM ways as 2D lines, parcel lines derived from the polygons;
+- ortho and historic maps hosted as AVIF q65 (D6);
+- minimap tiles (missing below, +7.3 MB/km² today): VAT only, ≤ z16, ≈ 0.5 MB/km².
+
+The chunk presence list (§4.2) matters as much: the outline fills only 47 % of its rectangle (298 of 704 chunks don't touch Homburg). As a place repo Homburg owns 82–120 tiles ≈ 0.45–0.65 GB; Saarbrücken (≈ 0.9–1.1 GB) is borderline. **Traffic:** a typical 11 km flight loads ≈ 212 MB today, ≈ 147 MB in the target format; opening and looking around ≈ 80 MB. That is ≈ 680 flights or ≈ 1,800 short visits per site and month under the ≈ 100 GB soft limit.
+
+The first table from the plan draft (before S0), today's 15.6 MB/km² by directory (from `overall`, 48 km²):
 
 | Directory | MB | MB/km² | Lever |
 |---|---|---|---|
@@ -147,7 +158,7 @@ CONTRIBUTING.md           German, step by step; CODEOWNERS = the Ortspaten
 
 | Risk | Mitigation |
 |---|---|
-| Pages is not meant as a data host; bandwidth ≈ 100 GB/month per site | Measure the transfer of a typical session in S0. The app loads data only by URL, so a place can move to any static host (Cloudflare R2, Hetzner Object Storage) by changing `data_url` in the catalog. |
+| Pages is not meant as a data host; bandwidth ≈ 100 GB/month per site | S0 measured ≈ 147 MB per flight in the target format (≈ 680 flights / month / site). The central overview levels carry ≈ 26 MB of every session in the whole Saarland (≈ 3,900 sessions / month): keep them cheap or host them elsewhere. The app loads data only by URL, so a place can move to any static host (Cloudflare R2, Hetzner Object Storage) by changing `data_url` in the catalog. |
 | Repos built with different pipeline versions | R9: the app loads all supported contract versions; the catalog CI warns about outdated places; leaderboard numbers are central anyway. |
 | Load on LVGL / GeoBasis services when many repos build | Build caches, rebuild only on change, at most one build per place at a time, a descriptive User-Agent. |
 | Moderation workload | CI filters routine cases; CODEOWNERS spread the review; content types start small. |
@@ -157,7 +168,7 @@ CONTRIBUTING.md           German, step by step; CODEOWNERS = the Ortspaten
 
 ## 9. Roadmap
 
-- [ ] **S0 Size and traffic spike.** Build one full municipality (Homburg, 82.7 km²) with the current pipeline. Measure MB/km² per directory and the traffic of a typical flight. Prototype shader-derived hillshade / slope / VAT and the ortho / historic map options. Result: target format, update §5.
+- [x] **S0 Size and traffic spike** (2026-11-08, [report](orte-skalieren-s0.md)). Build one full municipality (Homburg, 82.7 km²) with the current pipeline. Measure MB/km² per directory and the traffic of a typical flight. Prototype shader-derived hillshade / slope / VAT and the ortho / historic map options. Result: target format, update §5.
 - [ ] **S1 Saarland leaderboard.** Municipality outlines and stats for all 52 Saarland municipalities plus selected RLP neighbours, computed centrally (first in the explorer pipeline, AOI `saarland` stats-only, later moved to the catalog). App: level switch Gemeinden / Ortsteile, status "Ortspate gesucht". Released via the existing data repo.
 - [ ] **S2 Contract and app for many sources.** `docs/data-contract.md`: global grid, chunk presence list, central overview levels, `sle-catalog-v1`. App: catalog loader, multi-origin streaming, seamless borders, minimap with all place outlines and names (this resolves the open Zweibrücken offer). ADR "one repo per municipality".
 - [ ] **S3 Template and first place repo.** `ort-vorlage` (reusable build workflow, Pages artifact deploy, devcontainer, CI checks, issue forms, skills, CONTRIBUTING.md). Move today's `overall` into `ort-homburg`; zones Schloss Karlsberg and Bäckerei Heusser move with it. Retire `saar-lidar-data` / `-2` once the app reads from the catalog (keep them online during a transition).
@@ -171,10 +182,10 @@ CONTRIBUTING.md           German, step by step; CODEOWNERS = the Ortspaten
 |---|---|---|
 | D1 | GitHub org | **decided:** stay with Open-Kirrberg (user, 2026-11-08) |
 | D2 | Unit of a repo | proposed: Gemeinde; Ortsteile inside |
-| D3 | Leaderboard levels | proposed: separate tables for Gemeinden and Ortsteile |
+| D3 | Leaderboard levels | **decided:** separate tables for Gemeinden and Ortsteile, never mixed ([ADR 0051](../adr/0051-leaderboard-levels-gemeinden-ortsteile.md)) |
 | D4 | Relict candidates in new places | proposed: off by default, opt-in by the Ortspate |
 | D5 | Licence of community content | proposed: text and images CC BY 4.0 (or CC BY-SA 4.0 per item), data contributions CC0 or ODbL where derived from OSM |
-| D6 | Ortho and historic maps: host or load the WMS live | open, S0 |
+| D6 | Ortho and historic maps: host or load the WMS live | **decided (S0):** host both as AVIF q65; the historic WMS needs a session cookie (not usable cross-origin), the ortho is the default ground and must be reliable. A live 0.2 m ortho near the camera may come later |
 | D7 | Second place and first Ortspate | open, user |
 | D8 | When to retire `saar-lidar-data` / `-2` | after S3, with a transition period |
 
@@ -182,7 +193,10 @@ CONTRIBUTING.md           German, step by step; CODEOWNERS = the Ortspaten
 
 - 2026-11-08: user wants to scale to Zweibrücken and the whole Saarland, community-driven on GitHub, one repo per place, no backend (GitHub Pages).
 - 2026-11-08: stay under the org Open-Kirrberg (D1).
+- 2026-11-08 (S0): target format ≤ 5.5 MB/km² confirmed on Homburg (5.3); D6 = host ortho and historic maps as AVIF. The format changes (WebP/AVIF paths, live relief, no dsm, 2D OSM, presence list) go into the S2 contract work; the live-VAT shader prototype stays on the branch `spike/s0-live-vat` until then.
+- 2026-11-08 (S1): Gemeinde level as a stats-only AOI `saarland` plus manifest key `stats_levels` (ADR 0051). Outlines: BKG VG25 (CC BY 4.0). RLP neighbours for now: Zweibrücken and Bechhofen; more through their place repos later. Size class by legal status (Stadt / Gemeinde). On this level the tree count is measured crown tops only (no conifer fill from the 10 m DLR map, which doubled counts in conifer tiles). Grünste Ortslage (NDVI), Wenigsten Beton and Riesenbaum are not offered on this level in S1.
 
 ## 12. Changelog of this file
 
 - 2026-11-08: first draft from the brainstorm in chat.
+- 2026-11-08: S0 result merged (§5, §8, D6), S1 decisions logged, D3 decided, Homburg's AGS in the catalog example fixed (10045114).

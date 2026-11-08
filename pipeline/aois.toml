@@ -40,6 +40,14 @@ bbox = [375000, 5453000, 387000, 5471000]   # written by places.py: 9 place outl
 phase = "stats"
 stats_only = true
 
+# S0 size spike (docs/plans/orte-skalieren-s0.md): the whole municipality Homburg (AGS 10045114, 8 Gemarkungen,
+# 82.6 km²). bbox = bounding rectangle of the dissolved INSPIRE Gemarkung outlines, snapped outward to 1 km
+# (outline: data/work/homburg-gemeinde/outline.geojson). Local measurement AOI, not published.
+[homburg-gemeinde]
+name = "Homburg (Gemeinde)"
+bbox = [374000, 5456000, 385000, 5472000]
+phase = "S0"
+
 # F16 point-cloud focus areas (pointcloud.py, contract "Point clouds"). Defined once under [defaults] so every
 # AOI inherits them; an AOI writes the areas whose bbox lies fully inside it. bbox in EPSG:25832, multiples of
 # 100 m (tileSize), ≈ 1 km² each, placed to touch as few 1 km LAZ tiles as possible.
