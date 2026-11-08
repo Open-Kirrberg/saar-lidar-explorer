@@ -5,7 +5,9 @@
 Input (work rasters of `build.py`, AOI grid, 1 m, PixelIsArea): `data/work/<aoi>/{dtm,dsm}.tif`; optional
 `bldg.tif` (LoD2 footprints, `buildings.py`) and `ortho_1m.tif` (DOP20 at 1 m, `ortho.py`). When the AOI has no
 `bldg`/`ortho` work raster of its own, a work raster of another AOI that covers it is window-read (e.g. karlsberg
-⊂ overall).
+⊂ overall). v3 places read **only their own** work rasters (`covering_paths`): their crown types come from their
+own `ortho_1m.tif` (DOP20 at 1 m, alpha 0 outside the present tiles, black = no data), so a place build gives the
+same trees on any machine, whatever other AOIs lie in data/work (reproducible Actions builds, ADR 0052).
 
 Method (details + plot check in README "Trees"):
 1. CHM = DSM − DTM (NaN → 0, clipped to 0…60 m), building cells (bldg dilated by 1 m) set to 0, Gaussian σ.
@@ -347,11 +349,19 @@ def records_for(aoi: AOI, i: int, j: int, t: Trees) -> tuple[np.ndarray, ...]:
 
 # --- I/O ---------------------------------------------------------------------------------------------------------
 
-def read_covering(aoi: AOI, name: str, bands=None) -> tuple[np.ndarray | None, str | None]:
-    """Work raster `name.tif` of this AOI, else window-read from another AOI's work raster that covers it."""
+def covering_paths(aoi: AOI, name: str) -> list[Path]:
+    """Work rasters `name.tif` to read for this AOI, in order: its own; for a v1/v2 rectangle AOI then every other
+    AOI's (sorted), for a v3 place nothing else (its result must depend only on its own inputs)."""
     own = WORK_DIR / aoi.key / f"{name}.tif"
-    paths = [own] + sorted(p for p in WORK_DIR.glob(f"*/{name}.tif") if p != own)
-    for path in paths:
+    if aoi.is_place:
+        return [own]
+    return [own] + sorted(p for p in WORK_DIR.glob(f"*/{name}.tif") if p != own)
+
+
+def read_covering(aoi: AOI, name: str, bands=None) -> tuple[np.ndarray | None, str | None]:
+    """Work raster `name.tif` of this AOI, else (v1/v2 only) window-read from another AOI's work raster that covers
+    it (`covering_paths`)."""
+    for path in covering_paths(aoi, name):
         if not path.exists():
             continue
         with rasterio.open(path) as ds:
@@ -368,13 +378,11 @@ def read_ortho(aoi: AOI) -> tuple[np.ndarray | None, str | None, bool]:
     """RGB (3, H, W) u8 of the AOI from the `ortho_1m.tif` work rasters, plus the source names and whether cells are
     missing. A 4-band raster (v3 places: band 4 = alpha, 0 = tile not present in that place, RGB black there)
     contributes only its alpha > 0 cells; the remaining cells are filled from the next covering raster (own AOI
-    first, then the others as in `read_covering`). Cells no raster fills stay (0, 0, 0) and the third value is
-    True, so `chunk_trees` must treat black as no data (`zero_ortho_nodata`). A 3-band own raster gives exactly the
-    old result."""
-    own = WORK_DIR / aoi.key / "ortho_1m.tif"
-    paths = [own] + sorted(p for p in WORK_DIR.glob("*/ortho_1m.tif") if p != own)
+    first, then — v1/v2 only — the others, `covering_paths`). Cells no raster fills stay (0, 0, 0) and the third
+    value is True, so `chunk_trees` must treat black as no data (`zero_ortho_nodata`). A 3-band own raster gives
+    exactly the old result."""
     out, need, srcs = None, None, []
-    for path in paths:
+    for path in covering_paths(aoi, "ortho_1m"):
         if not path.exists():
             continue
         with rasterio.open(path) as ds:

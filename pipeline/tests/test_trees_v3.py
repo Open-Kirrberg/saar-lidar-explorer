@@ -141,28 +141,71 @@ def _ortho_tif(path: Path, bands: np.ndarray, e0: int, n_top: int) -> None:
 
 
 def test_read_ortho_alpha_zero_is_missing(tmp_path, monkeypatch):
+    """v1/v2 rectangle AOI: alpha-0 cells of its own raster are filled from other AOIs' rasters that cover it."""
     import trees as T
     monkeypatch.setattr(T, "WORK_DIR", tmp_path)
-    small = AOI("p", "P", 376000, 5462000, 376100, 5462100, 200, "SPK", 500, fmt=3, place="p", ags="1",
-                owned=frozenset({(376, 5462)}), relict_candidates=False)
+    small = AOI("r", "R", 376000, 5462000, 376100, 5462100, 200, "SPK", 500)
     own = np.zeros((4, 100, 100), np.uint8)
     own[:3, :, :60] = 100
     own[3, :, :60] = 255                     # alpha 0 (and black) east of column 60
-    _ortho_tif(tmp_path / "p" / "ortho_1m.tif", own, 376000, 5462100)
+    _ortho_tif(tmp_path / "r" / "ortho_1m.tif", own, 376000, 5462100)
     rgb, src, gaps = T.read_ortho(small)     # nothing else covers it → black + gaps
-    assert src == "p" and gaps and (rgb[:, :, :60] == 100).all() and (rgb[:, :, 60:] == 0).all()
-    # another place's 4-band raster that is black (alpha 0) there too does not help; a 3-band one fills the gap
+    assert src == "r" and gaps and (rgb[:, :, :60] == 100).all() and (rgb[:, :, 60:] == 0).all()
+    # another 4-band raster that is black (alpha 0) there too does not help; a 3-band one fills the gap
     other = np.zeros((4, 300, 300), np.uint8)
     _ortho_tif(tmp_path / "a-other" / "ortho_1m.tif", other, 375900, 5462200)
     big = np.full((3, 300, 300), 70, np.uint8)
     _ortho_tif(tmp_path / "b-big" / "ortho_1m.tif", big, 375900, 5462200)
     rgb, src, gaps = T.read_ortho(small)
-    assert src == "p+b-big" and not gaps
+    assert src == "r+b-big" and not gaps
     assert (rgb[:, :, :60] == 100).all() and (rgb[:, :, 60:] == 70).all()
     # a 3-band own raster is used as is (v1/v2 behaviour)
-    _ortho_tif(tmp_path / "p" / "ortho_1m.tif", np.full((3, 100, 100), 90, np.uint8), 376000, 5462100)
+    _ortho_tif(tmp_path / "r" / "ortho_1m.tif", np.full((3, 100, 100), 90, np.uint8), 376000, 5462100)
     rgb, src, gaps = T.read_ortho(small)
-    assert src == "p" and not gaps and (rgb == 90).all() and rgb.shape == (3, 100, 100)
+    assert src == "r" and not gaps and (rgb == 90).all() and rgb.shape == (3, 100, 100)
     # no raster at all
     monkeypatch.setattr(T, "WORK_DIR", tmp_path / "none")
     assert T.read_ortho(small) == (None, None, False)
+
+
+def test_place_tree_types_ignore_unrelated_work_rasters(tmp_path, monkeypatch):
+    """S2 follow-up (reproducible place builds): a v3 place reads only its own `ortho_1m` / `bldg` work rasters, so
+    its crown types do not depend on which other AOIs' rasters happen to lie in WORK_DIR."""
+    import trees as T
+    monkeypatch.setattr(T, "WORK_DIR", tmp_path)
+    H = W = 200
+    small = AOI("p", "P", 376000, 5462000, 376000 + W, 5462000 + H, 200, "SPK", 500, fmt=3, place="p", ags="1",
+                owned=frozenset({(376, 5462)}), relict_candidates=False)
+    own = np.zeros((4, H, W), np.uint8)
+    own[:3, :, :100] = 120                   # bright (broadleaf) west half; east half alpha 0, as outside the tiles
+    own[3, :, :100] = 255
+    _ortho_tif(tmp_path / "p" / "ortho_1m.tif", own, 376000, 5462000 + H)
+    p = Params(fill=False)
+    chm_in = _cones((H, W), [(100, 98, 20, 8), (60, 160, 20, 6), (150, 40, 18, 6)])
+    dtm = np.zeros((H, W), np.float32)
+    chm, sm = smooth_chm(chm_in, dtm, None, p)
+    tr, tc = find_tops(sm, p)
+
+    def types():
+        rgb, src, gaps = T.read_ortho(small)
+        bldg, bsrc = T.read_covering(small, "bldg")
+        t = chunk_trees(chm, sm, dtm, rgb, tr, tc, (0, H, 0, W), p, zero_ortho_nodata=True)
+        return rgb, src, gaps, bldg, bsrc, t
+
+    rgb0, src0, gaps0, bldg0, bsrc0, t0 = types()
+    assert src0 == "p" and gaps0 and bldg0 is None and bsrc0 is None
+    # unrelated AOIs covering the place: dark 3-band and 4-band orthos, a building mask
+    _ortho_tif(tmp_path / "a-dark" / "ortho_1m.tif", np.full((3, 400, 400), 30, np.uint8), 375900, 5462300)
+    dark4 = np.full((4, 400, 400), 30, np.uint8)
+    dark4[3] = 255
+    _ortho_tif(tmp_path / "z-dark" / "ortho_1m.tif", dark4, 375900, 5462300)
+    _ortho_tif(tmp_path / "a-dark" / "bldg.tif", np.ones((1, 400, 400), np.uint8), 375900, 5462300)
+    rgb1, src1, gaps1, bldg1, bsrc1, t1 = types()
+    assert (src1, gaps1, bldg1, bsrc1) == (src0, gaps0, None, None) and np.array_equal(rgb1, rgb0)
+    assert np.array_equal(t1.type, t0.type) and np.array_equal(t1.bright, t0.bright, equal_nan=True)
+    assert set(t0.type.tolist()) >= {TYPE_CODES["broadleaf"], TYPE_CODES["unknown"]}
+    # a rectangle AOI over the same area still uses them (v1/v2 behaviour kept)
+    rect = AOI("p", "P", 376000, 5462000, 376000 + W, 5462000 + H, 200, "SPK", 500)
+    rgb2, src2, gaps2 = T.read_ortho(rect)
+    assert src2 == "p+a-dark" and not gaps2 and (rgb2[:, :, 100:] == 30).all()
+    assert T.read_covering(rect, "bldg")[1] == "a-dark"
