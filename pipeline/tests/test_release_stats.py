@@ -1,8 +1,9 @@
-"""Orte im Vergleich (ADR 0049) + historic forest mask in the public release export.
+"""Orte im Vergleich (ADR 0049) + historic forest mask + tree species layer in the public release export.
 
 Tests `scripts/release/export_data.py` (stdlib-only release script, loaded by path) on a synthetic AOI dir:
-`plan_aoi` stages `stats/places.json`, `stats/places.geojson` and `forest_hist/forest_hist.png` with the
-manifest keys `stats` and `forest_hist`, and nothing else from those folders. Nothing is exported or pushed.
+`plan_aoi` stages `stats/places.json`, `stats/places.geojson`, `forest_hist/forest_hist.png` and
+`species/species.png` with the manifest keys `stats`, `forest_hist` and `species`, and nothing else from those
+folders. Nothing is exported or pushed.
 """
 from __future__ import annotations
 
@@ -17,20 +18,26 @@ SPEC = importlib.util.spec_from_file_location("export_data", ROOT / "scripts" / 
 export_data = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(export_data)
 
+SPECIES_ATTR = ("Baumarten: DLR, Tree Species Germany 2022 (Wegler et al. 2025), CC BY 4.0, doi:10.15489/smh8w3j8i962, "
+                "Daten bearbeitet (umprojiziert)")
 ATTR = ("© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet; "
         "Zensus 2022, © Statistische Ämter des Bundes und der Länder, dl-de/by-2-0, Daten bearbeitet; "
-        "Marktstammdatenregister – © Bundesnetzagentur, dl-de/by-2-0, Daten bearbeitet")
+        "Marktstammdatenregister – © Bundesnetzagentur, dl-de/by-2-0, Daten bearbeitet; "
+        "GBIF.org (2026-11-08) GBIF Occurrence Search, https://www.gbif.org; " + SPECIES_ATTR)
 STATS = {"format": "sle-stats-v1", "url": "stats/places.json", "geometry": "stats/places.geojson",
          "generated": "2026-11-07T22:55:08Z", "places": 1, "label_de": "Orte im Vergleich"}
 FOREST = {"format": "sle-forest-hist-v1", "path": "forest_hist/forest_hist.png", "encoding": "u8-bits", "cellSize": 5,
           "size": {"width": 2, "height": 2}, "nodata": 255, "epochs": [],
           "attribution": "© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (Historische Karten)"}
+SPECIES = {"format": "sle-species-v1", "path": "species/species.png", "encoding": "u8-class", "cellSize": 10,
+           "size": {"width": 2, "height": 2}, "nodata": 255, "year": 2022, "classes": [], "attribution": SPECIES_ATTR}
 
 
 def _aoi(tmp_path: Path, **keys) -> tuple[Path, dict]:
     aoi_dir = tmp_path / "overall"
     (aoi_dir / "stats").mkdir(parents=True)
     (aoi_dir / "forest_hist").mkdir()
+    (aoi_dir / "species").mkdir()
     (aoi_dir / "dtm").mkdir()
     (aoi_dir / "dtm" / "0_0.png").write_bytes(b"png")
     (aoi_dir / "stats" / "places.json").write_text(json.dumps(
@@ -40,6 +47,8 @@ def _aoi(tmp_path: Path, **keys) -> tuple[Path, dict]:
     (aoi_dir / "stats" / "parcels_work.csv").write_text("fsk;trees\n")                            # never public
     (aoi_dir / "forest_hist" / "forest_hist.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     (aoi_dir / "forest_hist" / "debug_density.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (aoi_dir / "species" / "species.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (aoi_dir / "species" / "species_preview.png").write_bytes(b"\x89PNG\r\n\x1a\n")   # local colour preview
     manifest = {"version": 2, "name": "Overall", "attribution": ATTR, **keys}
     (aoi_dir / "manifest.json").write_text(json.dumps(manifest))
     return aoi_dir, manifest
@@ -52,23 +61,37 @@ def _plan(tmp_path: Path):
 
 
 def test_stats_and_forest_hist_are_staged_with_their_keys(tmp_path: Path):
-    _aoi(tmp_path, stats=STATS, forest_hist=FOREST)
+    _aoi(tmp_path, stats=STATS, forest_hist=FOREST, species=SPECIES)
     plan1, info = _plan(tmp_path)
     staged = {k.split("/", 1)[1] for k in plan1}
     assert staged == {"manifest.json", "dtm/0_0.png", "stats/places.json", "stats/places.geojson",
-                      "forest_hist/forest_hist.png"}
+                      "forest_hist/forest_hist.png", "species/species.png"}
     m = json.loads(plan1["overall/manifest.json"])
-    assert m["stats"] == STATS and m["forest_hist"] == FOREST
+    assert m["stats"] == STATS and m["forest_hist"] == FOREST and m["species"] == SPECIES
     # attribution of the new sources survives into the public manifest (ATTRIBUTION / README are built from it)
     entries = export_data.attribution_entries(m["attribution"])
     assert any(e.startswith("Zensus 2022") for e in entries) and any(e.startswith("Marktstammdatenregister") for e in entries)
-    assert sorted(info["skippedPrivate"]) == ["forest_hist/debug_density.png", "stats/parcels_work.csv", "stats/stats_report.json"]
+    assert SPECIES_ATTR in entries and any(e.startswith("GBIF.org") for e in entries)
+    assert sorted(info["skippedPrivate"]) == ["forest_hist/debug_density.png", "species/species_preview.png",
+                                              "stats/parcels_work.csv", "stats/stats_report.json"]
+
+
+def test_species_key_with_wrong_format_or_bad_path(tmp_path: Path):
+    _aoi(tmp_path, species={**SPECIES, "format": "sle-species-v0"})
+    plan1, _ = _plan(tmp_path)
+    assert not [k for k in plan1 if "/species/" in k]
+    assert "species" not in json.loads(plan1["overall/manifest.json"])
+    for bad in ("species/missing.png", "../species.png", "forest_hist/forest_hist.png"):
+        _aoi(tmp_path / bad.replace("/", "_").replace(".", "_"), species={**SPECIES, "path": bad})
+        with pytest.raises(SystemExit):
+            export_data.plan_aoi(tmp_path / bad.replace("/", "_").replace(".", "_"), "overall", 17,
+                                 "https://example.invalid/", {}, {})
 
 
 def test_without_keys_nothing_from_those_folders_is_staged(tmp_path: Path):
     _aoi(tmp_path)
     plan1, _ = _plan(tmp_path)
-    assert not [k for k in plan1 if "/stats/" in k or "/forest_hist/" in k]
+    assert not [k for k in plan1 if "/stats/" in k or "/forest_hist/" in k or "/species/" in k]
 
 
 def test_stats_without_geometry_and_wrong_format_key(tmp_path: Path):
@@ -107,3 +130,5 @@ def test_real_overall_stats_stage_when_present():
     files = export_data.keyed_layer_files(src, dict(m))
     assert files["stats/"] == {"stats/places.json", "stats/places.geojson"}
     assert files["forest_hist/"] == {"forest_hist/forest_hist.png"}
+    if m.get("species"):
+        assert files["species/"] == {"species/species.png"}

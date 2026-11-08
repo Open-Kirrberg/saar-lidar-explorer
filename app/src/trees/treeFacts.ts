@@ -1,6 +1,6 @@
 /**
  * 🌳 Baum-Steckbrief — pure side (no three / DOM; plan „Orte im Vergleich“ §4, §8 Phase 0):
- *  - the single-tree allometry of `crown-allometry-v1` (TS twin of pipeline/stats.py `agb_kg` /
+ *  - the single-tree allometry of `crown-allometry-v2` (TS twin of pipeline/stats.py `agb_kg` /
  *    `biomass_range_t`; keep both in sync — tests/treesCard.test.ts pins the Python numbers),
  *  - the historic forest mask `sle-forest-hist-v1` (manifest key `forest_hist`): tolerant parse,
  *    point lookup and the German wording (contract „Historic forest mask“, app rule: estimate only),
@@ -9,7 +9,7 @@
  */
 import { TREE_STRIDE, treeId } from './treeData';
 
-// ---- crown-allometry-v1 (pipeline/stats.py) ---------------------------------------------------------
+// ---- crown-allometry-v2 (pipeline/stats.py; conifer = tree-group-v1 group 1) ---------------------------
 
 export const RHO_CONIFER = 0.42;
 export const RHO_OTHER = 0.6;

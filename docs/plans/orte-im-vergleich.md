@@ -1,6 +1,6 @@
 # 🌳 Orte im Vergleich: trees, parcels and green balance (living plan)
 
-- **Status:** 🚧 Phase 0 built and reviewed (stats pipeline, *Orte im Vergleich* panel, *Baum-Steckbrief*, historic forest mask); the public release waits for the user's go. SL land use (Q9) still pending.
+- **Status:** 🚧 Phase 0 built and reviewed (stats pipeline, *Orte im Vergleich* panel, *Baum-Steckbrief*, historic forest mask); Phase 1 built, reviewed and committed (2026-11-08); the public release waits for the user's go. SL land use (Q9) still pending; PV detection in the orthophoto deferred (user).
 - **Last updated:** 2026-11-08
 - **Origin:** user idea, 2026-11-07: make the LiDAR data more visible, add gamification and leaderboards between places, and later collect more data with the community.
 - **How to keep this alive:** update the status boxes in §8 and the open questions in §9. Add a dated line to §10 for every decision and to §11 for every change to this file. Once an item ships, its decisions move into an ADR and its format into `docs/data-contract.md` (contract first, [ADR 0004](../adr/0004-contract-first.md)); this file then links to them instead of repeating them.
@@ -134,7 +134,7 @@ Three layers, kept apart:
 ```ts
 {
   format: 'sle-stats-v1', generated, inputs: { lidar: { SL: 2025, RLP: '?' }, alkis, osm, zensus? },
-  method: { biomass: 'crown-allometry-v1', ortslage: 'bldg-buffer-50m-v1', ... },
+  method: { biomass: 'crown-allometry-v2', ortslage: 'bldg-buffer-50m-v1', ... },
   places: Array<{
     id, name_de, kind: 'gemarkung' | 'ortsteil', state: 'SL' | 'RLP', complete: boolean,
     area_ha, parcels, trees, crown_ha, agb_t: [lo, mid, hi],
@@ -180,12 +180,14 @@ The real hurdle is the community (Phase 2), not the data volume: accounts, GDPR,
 - [ ] Release through `scripts/release/` after review: export staging ready (`stats/`, `forest_hist/` + manifest keys, licence audit note in RELEASING.md); waits for the user's go
 
 ### Phase 1: richer attributes, still no server
-- [ ] Species probability from the DLR map (Q6, cross-check Thünen) per tree and per place
-- [ ] Forest-age class from the historic maps of 1840 and 1935
-- [ ] *Riesen von …*: the top trees per place
-- [ ] iNaturalist / GBIF species counts per place (third-party host → privacy dialog, ADR 0022)
-- [ ] Local collecting ("discovered x/y") and goals with progress bars
-- [ ] PV per place: detection on the full 20 cm DOP (roof areas only), calibrated against the MaStR municipality totals, plus roof potential from LoD2; aggregates only
+- [x] Species probability from the DLR map (Q6, cross-check Thünen) per tree and per place: manifest key `species` (contract „Tree species“), card row, `species` mix per place
+- [x] Forest-age class: from height + yield tables (`tree-age-height-v2`, no age above the table) and the 1935 forest share from the TK25 (1840 not classifiable, §10)
+- [x] *Riesen von …*: the top trees per place (`riesen-checked-v1`, species only when „wahrscheinlich“)
+- [x] iNaturalist / GBIF species counts per place: fetched at pipeline time (counts only, rarefied), so no third-party call and no privacy dialog in the app (ADR 0022)
+- [x] Local collecting ("discovered x/y") and goals (baseline → target; progress bars wait for a second epoch or community data)
+- [~] PV per place: roof potential from LoD2 (`roof-pv-potential-v2`) per place and municipality, used share against MaStR where the Gemeinde is complete (Bechhofen); **detection on the 20 cm DOP deferred** (user decision 2026-11-08)
+- [x] Review rounds 2–3 of the Phase 1 fixes (0 blockers/majors), committed 2026-11-08
+- [ ] Release with the user's go
 
 ### Phase 2: community pilot in Kirrberg (needs decisions)
 - [ ] Choose a backend (Q8) and write the ADR that replaces or extends 0022
@@ -226,6 +228,14 @@ The real hurdle is the community (Phase 2), not the data volume: accounts, GDPR,
 - **2026-11-08:** A Riesenbaum that is not in the 3D tree layer (above the 45 m cap or outside the tiles, `in_trees: false`) gets its own pin in 3D and on the minimap; phones show the short pin („🌲 60,9 m“).
 - **2026-11-08:** RLP places keep their raw counts (no correction factor) with the *andere Befliegung* badge, which names the measured ≈ 20 % offset (Q5).
 - **2026-11-08:** The panel is a card in the *Orte* drawer in the 🟢 Standard tier (between the walk-in zones and *Bekannte Orte*): it needs no tools and is the playful entry to the data. Places mostly outside the 3D area fly to their part inside and say so; the whole outline is on the map.
+- **2026-11-08:** No PV detection in the orthophoto for now (user). Phase 1 PV = MaStR municipality view + LoD2 roof potential.
+- **2026-11-08 (Phase 1 review):** A tree taller than the class-II end of its yield table gets **no age** (`tree-age-height-v2`, class `beyond`, „höher als die Ertragstafel“) instead of the clamped last table age; per place it is its own grey share and is left out of the median. The review found 14 % of all trees ≥ 8 m clamped and 56 % of the „sehr alt“ crown area came from them. We did not stretch the tables or the 2 m offset: the tables were not yet checked against the print.
+- **2026-11-08 (Phase 1 review):** Flat roofs count × 0.4 (row spacing, parapets, skylights), pitched roofs × 0.7 (`roof-pv-potential-v2`): v1 counted flat industrial roofs like pitched ones (Homburg 10.5 kWp per inhabitant); now 5.4–8.5.
+- **2026-11-08 (Phase 1 review):** A Riese shows a species only when it is „wahrscheinlich“ (p ≥ 50 %, no contradiction); a 10–40 % class on the most-viewed trees was noise (e.g. a 56 m „Lärche?“).
+- **2026-11-08 (Phase 1 review round 2):** Conifer / broadleaf of one tree = `tree-group-v1`: a „wahrscheinlich“ DLR class beats the DOP colour type (which read 79 % of the likely conifers as broadleaf); an unsure class that disagrees with the colour gives „Baum“. Used for the card title and ρ in `crown-allometry-v2` (place biomass 2–9 % lower).
+- **2026-11-08 (Phase 1 review round 2):** The start pose (and the pose after a reset) is treated like a fly-to arrival: no place counts until the camera moved 100 m. A Riese flown to from the list is **not** discovered by the flight (logged rule: fly-tos do not collect; the framed pose is ≥ 160 m away); the panel says to fly closer or tap the tree.
+- **2026-11-08 (Phase 1 review round 2):** Erle and „andere Laubbäume“ stay in the species mix but are flagged `weak` and hatched with „?“ (Thünen agreement 7 % / 6 %); hiding them would distort the other shares. The roof card leads with the usable area (`usable_m2`, ≈ 40 % of the roof area, the kWp base); the larger suitable area is a sub-line.
+- **2026-11-08 (Phase 1 review):** *Entsiegeln* is a deed counter (0 → 1,000 m², today's sealed area as a note), not a −0.03 % step on the sealed total. Automatic fly-tos do not collect, and after one no place counts until the camera moved 100 m (the framed arrival pose often hovers over the neighbour).
 
 ## 11. Changelog of this document
 
@@ -233,3 +243,5 @@ The real hurdle is the community (Phase 2), not the data volume: accounts, GDPR,
 - **2026-11-07:** Discipline ☀️ PV added (MaStR, DOP detection, LoD2 potential, privacy rule), with Q10–Q12.
 - **2026-11-07:** All open questions settled except Q13 (older LiDAR epochs, added); Phase 0 checklist updated. Ready to start Phase 0.
 - **2026-11-08:** Phase 0 built: boxes ticked except the release (waits for the user's go); status line, §4 forest wording, Q5 (border effect measured) and Q9 (SL WFS still 503) updated; five decisions logged in §10.
+- **2026-11-08:** Phase 1 review round 2 fixed: four decisions in §10 (tree group, start pose not a visit, weak species classes, usable roof area).
+- **2026-11-08:** Phase 1 built and first review fixed: §8 Phase 1 boxes, status line, five decisions in §10 (no DOP PV detection, age beyond the table, flat-roof factor, Riesen species, goals / collecting).

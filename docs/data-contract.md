@@ -4,7 +4,7 @@ The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (
 
 **Zones** (detailed places behind portals: castle, bakery, …) have their own binding contract: [zone-contract.md](zone-contract.md) (`sle-zone-v1`, [ADR 0029](adr/0029-zones-same-bundle-folder-layout.md)). Frames, proj4 and attribution rules below apply to zones unchanged.
 
-**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`, Orte im Vergleich `stats` and `forest_hist`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees", "Place statistics", "Historic forest mask"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid. **Revision 2.2 (Orte im Vergleich Phase 0, 2026-11-08):** adds the optional `stats` key (`sle-stats-v1`: `stats/places.json` + `stats/places.geojson`, [ADR 0049](adr/0049-orte-im-vergleich-places-only.md)) and the optional `forest_hist` key (`sle-forest-hist-v1`: `forest_hist/forest_hist.png`) — additive like `trees`: `version` stays 1/2, manifests without them stay valid, and the app hides the panel / the card row when a key is missing or invalid.
+**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`, Orte im Vergleich `stats` and `forest_hist`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees", "Place statistics", "Historic forest mask"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid. **Revision 2.2 (Orte im Vergleich Phase 0, 2026-11-08):** adds the optional `stats` key (`sle-stats-v1`: `stats/places.json` + `stats/places.geojson`, [ADR 0049](adr/0049-orte-im-vergleich-places-only.md)) and the optional `forest_hist` key (`sle-forest-hist-v1`: `forest_hist/forest_hist.png`) — additive like `trees`: `version` stays 1/2, manifests without them stay valid, and the app hides the panel / the card row when a key is missing or invalid. **Revision 2.3 (Orte im Vergleich Phase 1, 2026-11-08):** adds the optional `species` key (`sle-species-v1`: `species/species.png`, see "Tree species") — additive like `forest_hist`: `version` stays 1/2, manifests without it stay valid, and the tree card hides the species row when it is missing or invalid.
 
 ## Coordinate frames
 
@@ -626,11 +626,120 @@ forest_hist = {
 
 **App tolerance.** Missing `forest_hist`, a non-object, `format` ≠ `sle-forest-hist-v1`, a non-string `path`, `cellSize` not a positive number or `size` not two positive integers → absent (logged, not fatal). A 404, a decode error or an image whose size ≠ `size` → absent. Unknown epochs or fields are ignored; an epoch without a numeric `bit`/`noMapBit` is treated as unknown.
 
+**Future epochs (reserved bits).** A further classified map (e.g. the Preußische Generalstabskarte 1816–47, WMS layer `2`, if it ever proves classifiable) is added as a new `epochs` entry with the next free pair: forest bit 4, no-map bit 5 (then values up to 63 occur). Bits 0–3 keep their meaning, so old apps stay correct; apps must read the bits from `epochs`, never hard-code them. As of 2026-11-08 no such epoch exists (the Geoportal answered 503, the layer could not be inspected).
+
+**Stats area (work file, not published).** `historic_forest.py --stats` writes the same encoding for the stats bbox of *Orte im Vergleich* to `data/work/orte/forest_hist.png` + `forest_hist.json` (`entry` = an object in the manifest format above, plus `E0`, `N_top` of its grid; TK25 1935–40 only, the 1836–41 epoch `classified: false` and not fetched). It feeds the per-place forest-continuity share of `forest_age.py`; it is not a manifest key.
+
+### Tree age estimate (`tree-age-height-v2`, app rule, Phase 1)
+
+For the *Baum-Steckbrief* („Alter geschätzt“) and the per-place age classes (`pipeline/forest_age.py`, reference implementation `tree_age`). The app computes it itself from the tree's height (no new file); the full table is also in `data/work/orte/forest_age_by_place.json` `tree_age_rule`.
+
+- **Input:** tree height `h` (m, Trees layer or `tallest.h`) and a species group: from the `species` layer when present (`pine`, `spruce`, `douglas`, `larch`, `fir`, `beech`, `oak`, `birch`, `alder`, `other`), else from the tree `type` (`conifer`, `broadleaf`, `unknown`).
+- **Rule:** `h' = h − 2.0` (LiDAR tops are dominant trees, the tables list stand mean heights). For each yield table of the group (`beech` → beech; `oak` → oak; `spruce`, `fir`, `larch` → spruce; `pine` → pine; `douglas` → Douglas fir; `conifer` → spruce ∪ pine; `birch`, `alder`, `other`, `broadleaf` → beech ∪ oak; `unknown` → beech ∪ oak ∪ spruce) read the age at which the site-class curves I, II, III reach `h'`, linearly between the table points and from (0 y, 0 m). `lo` = min over tables of the class-I age, `mid` = median of the class-II ages, `hi` = max of the class-III ages; all rounded to 5 years. If `h'` is above the last value of a class-III curve, `hi` is that table's last age and `open_hi = true` („…+ Jahre“). **Beyond the table:** if `h'` is above the last value of the class-II curve of **any** table of the group, the tables cannot age the tree (the middle value would only repeat the table's last age): `beyond = true`, `lo = mid = hi = null`, class `beyond`, wording „nicht schätzbar: höher als die Ertragstafel“ (very good site or very old; height alone cannot tell). Exactly at the class-II end is still an estimate. No estimate below `h = 8 m`. *v1 (until 2026-11-08) clamped instead and reported the last table age („über 200 Jahre“), which made 14 % of all trees ≥ 8 m „sehr alt“ by construction.*
+- **Tables** (mean height m at age y, mäßige Durchforstung; rounded):
+
+| Table (source) | Ages | I | II | III |
+|---|---|---|---|---|
+| beech (Schober 1967) | 30 40 60 80 100 120 140 160 | 11 15 22 27 30.5 33 34.5 35.5 | 8.5 12 18.5 23.5 27 29.5 31 32 | 6 9 15 19.5 23 25.5 27 28 |
+| oak (Jüttner 1955) | 30 40 60 80 100 120 140 160 180 200 | 10.5 13.5 18.5 22.5 25.5 28 30 31.5 32.5 33.5 | 8 11 15.5 19.5 22.5 25 27 28.5 29.5 30.5 | 6 8.5 12.5 16 19 21.5 23.5 25 26 27 |
+| spruce (Wiedemann 1936/42) | 20 30 40 60 80 100 120 | 6.5 12 17 24.5 29.5 33 35 | 5 9.5 14 21 26 29.5 31.5 | 3.5 7.5 11 17.5 22 25.5 28 |
+| pine (Wiedemann 1943) | 20 40 60 80 100 120 140 | 7 15 20.5 24.5 27.5 29.5 31 | 5 12 17 21 23.5 25.5 27 | 3.5 9.5 13.5 17 19.5 21.5 23 |
+| douglas (Bergel 1985) | 20 40 60 80 100 | 10 23 32 38 42 | 8 19 27 33 37 | 6 15 22 27 31 |
+
+- **Class** by `mid`: `young` < 40 („jung“), `middle` 40–80 („mittelalt“), `old` 80–120 („alt“), `very_old` ≥ 120 („sehr alt“); `beyond` without `mid` („höher als die Ertragstafel (ohne Alter)“).
+- **UI rule (G7):** always a range with „Schätzung“ („etwa 55–85 Jahre, geschätzt aus der Höhe“), never a single year; add „gilt für Waldbäume; frei stehende Bäume sind meist älter“ outside forest. Example: a 22 m beech → 55 / 65 / 85 years, `middle`; a 40.7 m oak → `beyond` (no age, no „Schätzung“ chip, the reason instead).
+
+## 🌲 Tree species (`species`, optional)
+
+The dominant tree species of the forest per 10 m cell, from the DLR map *Tree Species Germany 2022*, for the species row of the *Baum-Steckbrief* („wahrscheinlich Buche (70 %)“) and the species mix per place ([plan „Orte im Vergleich“](plans/orte-im-vergleich.md) §4, Q6). Written by `pipeline/species.py` (`uv run python species.py all [aoi]`: fetch → compare → build → stats). `species` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid. It is an **estimate** (G7): a satellite classification of the stand around a tree, never a statement about one tree.
+
+**Source.** DLR EOC, *Tree Species Germany* 2022 (Wegler et al. 2025, *Int. J. Remote Sensing*, doi:10.1080/01431161.2025.2530236; data doi:10.15489/smh8w3j8i962), 10 m Cloud-Optimized GeoTIFF in EPSG:3035, **CC BY 4.0**. Sentinel-1/-2 time series + DEM, XGBoost; classes 0 pine, 1 spruce, 2 Douglas fir, 3 larch, 4 fir, 5 beech, 6 oak, 7 birch, 8 alder, 9 other (deciduous), 666 canopy cover loss; 999 = no data (outside the forest mask: gardens, streets and single trees in villages have no class). Only the window over the stats bbox `[orte]` + 200 m is read (HTTP range requests, cached under `data/raw/dlr-tree-species/`); the app never calls DLR at runtime ([ADR 0022](adr/0022-local-first-no-accounts.md)). Cross-check (not published as pixels): Thünen *Dominant Tree Species for Germany 2017/2018* (Blickensdörfer et al. 2024, doi:10.3220/DATA20221214084846, CC BY 4.0), see `crossCheck`.
+
+```ts
+species = {
+  format: 'sle-species-v1',              // anything else → the whole key is ignored
+  path: 'species/species.png',           // relative to the AOI dir: ONE 8-bit greyscale PNG for the whole AOI
+  encoding: 'u8-class',
+  cellSize: 10,                          // metres per pixel
+  size: { width: number, height: number },// = ceil(AOI width / 10) × ceil(AOI height / 10)
+  nodata: 255,
+  year: 2022,                            // reference year of the map
+  classes: Array<{
+    code: number,                        // pixel value 0–10
+    key: string,                         // 'pine' | 'spruce' | 'douglas_fir' | 'larch' | 'fir' | 'beech' | 'oak' | 'birch' | 'alder' | 'other_broadleaf' | 'canopy_loss'
+    label_de: string,                    // 'Kiefer' | 'Fichte' | 'Douglasie' | 'Lärche' | 'Tanne' | 'Buche' | 'Eiche' | 'Birke' | 'Erle' | 'andere Laubbäume' | 'Kronendachverlust (keine Art)'
+    group: 'conifer' | 'broadleaf' | 'none',
+    species: boolean,                    // false for canopy_loss: no species, no probability
+    f1?: number                          // class F1 (0…1, two decimals); present iff species
+  }>,
+  probability: { method: 'species-dlr-neighbourhood-v1', contradictionDivisor: 2, minPct: 10, maxPct: 90,
+                 likelyPct: 50, contradiction: 'type-conifer-in-broadleaf-class' },
+  accuracy: { overallF1: 0.89, perClass: 'classes[].f1', source: string, note_de: string },
+  crossCheck?: { against, attribution, area, n, agreePct, groupAgreePct,
+                 perClass: { [key]: { agreeOfDlrPct, dice } }, note_de },   // informative
+  method: 'dlr-nearest-25832-v1', generated: ISO-8601,   // informative
+  label_de: 'Baumart (Schätzung, 10-m-Raster)',
+  attribution: string,                   // also merged into the top-level `attribution`
+  source: string                         // informative: product + paper citation
+}
+```
+
+**Classes and F1** (Wegler et al. 2025, Table 4, XGBoost S2-S1-DEM; test samples of **pure** stands, so mixed stands, forest edges and single trees are less certain):
+
+| code | key | label_de | group | f1 |
+|---|---|---|---|---|
+| 0 | pine | Kiefer | conifer | 0.98 |
+| 1 | spruce | Fichte | conifer | 0.94 |
+| 2 | douglas_fir | Douglasie | conifer | 0.91 |
+| 3 | larch | Lärche | conifer | 0.96 |
+| 4 | fir | Tanne | conifer | 0.88 |
+| 5 | beech | Buche | broadleaf | 0.95 |
+| 6 | oak | Eiche | broadleaf | 0.76 |
+| 7 | birch | Birke | broadleaf | 0.90 |
+| 8 | alder | Erle | broadleaf | 0.89 |
+| 9 | other_broadleaf | andere Laubbäume | broadleaf | 0.76 |
+| 10 | canopy_loss | Kronendachverlust (keine Art) | none | — |
+
+The app takes codes, labels, groups and F1 from the manifest, not from this table.
+
+**Grid** (method `dlr-nearest-25832-v1`, same convention as "Historic forest mask"). Pixel `(px, py)` (row 0 = north) covers the 10 m square whose **centre** is `E = E0 + (px + 0.5) · 10`, `N = N0 + height − (py + 0.5) · 10`. Lookup of a point: `px = floor((E − E0) / 10)`, `py = floor((N0 + height − N) / 10)`; outside `0 … width−1 / 0 … height−1` → no data. Each cell takes the DLR pixel that **contains its centre** (exact ETRS89 UTM 32 → LAEA with pyproj, no resampling filter), so AOIs whose edges lie on the 10 m lattice share identical values where they overlap (the pipeline's stats-area raster equals the app raster inside the AOI). Decode as data (`createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' })` or a PNG decoder). Values: `0–9` species class, `10` canopy cover loss (DLR 666), `255` no data / not forest; any other value → no data. One file (≈ 75 KB for `overall`), loaded once when the tree card needs it.
+
+**Per-tree probability `species-dlr-neighbourhood-v1`.** The DLR map gives one class per cell and **no probabilities**, so the app shows a transparent heuristic, not a calibrated probability. For a tree at `(E, N)` with base type `t = type & 0x7F` from the Trees layer (0 unknown, 1 conifer, 2 broadleaf; other codes → 0; fill trees included):
+1. `(px, py)` by the lookup above; outside → **no species**. `c = value(px, py)`; if `c` is not a class with `species: true` (255, 10, unknown) → **no species**.
+2. Over the 3 × 3 block `px−1 … px+1, py−1 … py+1`: `n` = cells inside the raster (9; 6 on an edge; 4 in a corner), `k` = those whose value equals `c` (the centre counts, so `k ≥ 1`).
+3. `f = round(100 · f1(c))` as an integer (0.95 → 95).
+4. **Contradiction** `x` = `t == 1 && group(c) == 'broadleaf'`. One-sided on purpose: the DOP colour type "broadleaf" is no evidence against a conifer class (in pure 3 × 3 pine blocks of the stats area 93 % of the trees read "broadleaf", in spruce / Douglas fir blocks 50–59 %), while a "conifer" (dark) crown is rare in pure broadleaf blocks (≈ 3 %) and more common in dark conifer blocks (≈ 17 %).
+5. Integer arithmetic (identical in TS and Python): `num = k · f`, `den = n · (x ? 2 : 1)`, `pct = 10 · floor((num + 5 · den) / (10 · den))` (= `k/n · f` rounded half-up to 10 %), then `pct = min(90, max(10, pct))`. Never above 90 %: a 10 m stand class is never certain for one crown.
+6. **Wording:** `!x && pct ≥ 50` → „wahrscheinlich {label_de} ({pct} %)“, otherwise „{label_de}? unsicher ({pct} %)“; with `x` add that the crown colour reads as conifer. Always with „Schätzung“, the year 2022 and `attribution`. No species → „Baumart: keine Angabe (außerhalb der Waldkarte)“ or no row.
+
+**Tree group `tree-group-v1`** (conifer / broadleaf of one tree, Phase 1 review 2026-11-08). The DOP colour type alone reads most conifers as broadleaf (pure pine blocks: 93 % „broadleaf“; 79 % of the trees with a „wahrscheinlich“ conifer class have type 2), so wherever one tree's group matters (the *Baum-Steckbrief* title „🌲 Nadelbaum / 🌳 Laubbaum / 🌳 Baum“ and ρ in `crown-allometry-v2`) the species class wins. With `c`, `pct`, `x` from the steps above and `t` the base type: a class with `!x && pct ≥ 50` („wahrscheinlich“) → its group (`conifer` → 1, `broadleaf` → 2); a class that is „unsicher“ → `t` when `t` is that class's group, else **0** (no group: the two sources disagree); no class (outside, no data, canopy loss) → `t`. TS `treeGroup` (app/src/trees/treeSpecies.ts) and Python `species.tree_group` must agree (both test the same cases).
+
+Test vectors (pipeline `tests/test_species.py` checks the same; the TS port should too):
+
+| k | n | f | x | pct |
+|---|---|---|---|---|
+| 9 | 9 | 95 | false | 90 (95 → 100, capped) |
+| 6 | 9 | 95 | false | 60 (63.3) |
+| 1 | 2 | 90 | false | 50 (45, half-up) |
+| 3 | 4 | 76 | false | 60 (57) |
+| 9 | 9 | 76 | true | 40 (38) |
+| 1 | 9 | 76 | true | 10 (4.2 → 0, floor 10) |
+
+**Per place** (not in the manifest; stats input `data/work/orte/species_by_place.json`, `sle-species-by-place-v1`, local): per place the crown-area-weighted species mix of its trees (`crown-disc-v1`, trees assigned by `parcel-pip-v1` as in "Place statistics"), the dominant class, the number of trees with a species, the coverage (crown area with a species ÷ all crown area), the conifer share (DLR) next to the DOP colour-type conifer share, the mean probability and the DLR cell area per class inside the outline. `species_trees.npy` (u8 code, 255 none) and `species_prob_trees.npy` (u8 %, 0 none) are aligned with `trees.npz` for the *Riesen* list. Publishing any of it goes through `stats/places.json` (contract change there first); aggregates only (G1–G3).
+
+**Cross-check** (2026-11-08, stats bbox, 735,813 forest cells classified in both maps): exact class agreement 50.0 %, conifer/broadleaf agreement 88.3 %. Per DLR class (share of its cells that Thünen gives the same class): pine 38 %, spruce 79 %, Douglas fir 77 %, larch 19 %, beech 78 %, oak 59 %, birch 61 %, alder 7 %, other 6 %. The maps differ in year (2017/18 vs 2022: of the DLR canopy-loss cells, 8,659 were Thünen spruce) and in method (Thünen trains on the national forest inventory), so agreement is not accuracy. Largest disagreements: DLR pine is Douglas fir in Thünen for 37 % of its cells, larch for 25 %; DLR alder (7 % of the forest cells here, suspiciously many) is oak, beech or Douglas fir in Thünen for 80 %, DLR "other" is beech or oak for 58 %; beech ↔ oak confusion is 16–30 % both ways. So alder and "other" are the weakest classes here, and the app should not single out an alder or "other" tree. Details: `data/work/orte/species_crosscheck.json` (local).
+
+**Manifest + attribution.** The species step owns the whole `species` key (replaced on each run via `update_manifest`) and adds `Baumarten: DLR, Tree Species Germany 2022 (Wegler et al. 2025), CC BY 4.0, doi:10.15489/smh8w3j8i962, Daten bearbeitet (umprojiziert)` to the top-level `attribution` (CC BY 4.0 requires the credit and the note that the data were changed). No Thünen pixel is published, but the cross-check numbers (`crossCheck`, agreement per class) derive from it and ship with the manifest, so the step also merges `Abgleich Baumarten: Thünen-Institut, Dominant Tree Species for Germany 2017/2018 (Blickensdörfer et al. 2024), CC BY 4.0` into the top-level `attribution` when `crossCheck` is present, and the release credits it in NOTICE.md. The release export may publish the PNG (CC BY 4.0, same credit); it contains no personal data.
+
+**App tolerance.** Missing `species`, a non-object, `format` ≠ `sle-species-v1`, a non-string `path`, `cellSize` not a positive number, `size` not two positive integers or `classes` not an array → absent (logged, not fatal). A 404, a decode error or an image whose size ≠ `size` → absent. A class entry without a numeric `code`, or with `species: true` but no `f1` in `(0, 1]`, is skipped (its pixels read as no species). Unknown fields are ignored; a missing `probability` block uses the values above.
+
 ## 🏆 Place statistics (`stats`, optional, Orte im Vergleich)
 
-Aggregates per place (Gemarkung) for the leaderboard *Orte im Vergleich*: parcels, trees, canopy, biomass range, built-up area (*Ortslage*), green and sealed shares, inhabitants, tallest tree, PV totals per municipality. Written by `pipeline/stats.py`; plan: [docs/plans/orte-im-vergleich.md](plans/orte-im-vergleich.md); decision: [ADR 0049](adr/0049-orte-im-vergleich-places-only.md). `stats` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid and the app hides the panel.
+Aggregates per place (Gemarkung) for the leaderboard *Orte im Vergleich*: parcels, trees, canopy, biomass range, built-up area (*Ortslage*), green and sealed shares, inhabitants, tallest tree, PV totals per municipality; since Phase 1 also the *Riesen* (top trees), species mix, observed biodiversity, forest age and 1935 forest share, land use, roof PV potential and example goals. Written by `pipeline/stats.py`; plan: [docs/plans/orte-im-vergleich.md](plans/orte-im-vergleich.md); decision: [ADR 0049](adr/0049-orte-im-vergleich-places-only.md). `stats` is an optional top-level key (additive, valid in v1 and v2); manifests without it stay valid and the app hides the panel.
 
-**Privacy (G1–G3, binding).** Every published value is an aggregate over a **place** (or a municipality). The files contain **no** per-parcel, per-building or per-person value, no parcel id (`flstkennz`), no address and no owner data. Per-building PV detections and per-parcel intermediates stay in `data/work/orte/` and are never written under `app/public/data/`. **Minimum-size rule:** an aggregate that rests on fewer than **5** buildings (Ortslage, PV) or 5 parcels (place totals) is not published: the value is `null` and its field path is listed in the place's `suppressed`. A place with fewer than 5 parcels is left out entirely. The only published point is `tallest` (one tree per place); it is never inside the Ortslage and always ≥ 10 m inside the place outline. The stats step refuses to write a file with a parcel-id, owner, address or person key (matched by fragment) or a parcel-id- or address-like string value, and outline features with properties other than `{id, name_de}`.
+**Phase 1 additions (2026-11-08)** are additive inside `sle-stats-v1` (`format` and `version: 1` unchanged): new optional fields in `Place` (`riesen`, `species`, `biodiversity`, `forest_continuity_pct`, `forest_continuity`, `forest_age`, `nutzung`, `roof_potential`, `goals`), in `Municipality` (`roof_potential`, `pv.used_pct`, `pv.used_pct_reason_de`), at the top level (`labels_de`) and in `Input` / `Discipline` (`note_de`); the discipline `artenvielfalt` is `ready`. A Phase 0 reader ignores all of them. Every Phase 1 block comes from an optional pipeline input (`data/work/orte/*_by_place.json`): when that input is missing the field is `null` (or absent) and its source is not listed in `inputs`. **Phase 1 review fixes (2026-11-08, still additive):** `tree-age-height-v2` (trees taller than the yield table get no age: class `beyond`, `forest_age.trees_beyond`), `roof-pv-potential-v2` (flat roofs usable × 0.4), Riesen species only when „wahrscheinlich“, `Goal.note_de` and the `entsiegeln` goal as a deed counter; a reader that does not know `beyond` or `note_de` shows / ignores them as unknown keys. **Review round 2 (2026-11-08, still additive):** `crown-allometry-v2` (ρ from `tree-group-v1`, so biomass values change), `species.mix[].weak`, `roof_potential.usable_m2`.
+
+**Privacy (G1–G3, binding).** Every published value is an aggregate over a **place** (or a municipality). The files contain **no** per-parcel, per-building or per-person value, no parcel id (`flstkennz`), no address and no owner data. Per-building PV detections, per-building roof planes and per-parcel intermediates stay in `data/work/orte/` and are never written under `app/public/data/`. **Minimum-size rule:** an aggregate that rests on fewer than **5** buildings (Ortslage, PV, roof potential) or 5 parcels (place totals) is not published: the value is `null` and its field path is listed in the place's `suppressed`. A place with fewer than 5 parcels is left out entirely. The only published points are trees: `tallest` and the `riesen` list (≤ 10 per place, `riesen[0]` = `tallest`). Every one passed the `tallest-checked-v4` checks, so it is never inside the Ortslage (no garden tree is published by position) and always ≥ 10 m inside the place outline; they carry no parcel id. GBIF data enter only as counts per place (no record, coordinate or species name). The stats step refuses to write a file with a parcel-id, owner, address or person key (matched by fragment) or a parcel-id- or address-like string value, and outline features with properties other than `{id, name_de}`.
 
 **Stats extent ≠ AOI.** Statistics may cover a larger area than the 3D tiles (all nine places, including all of Zweibrücken) without publishing tiles for it. `extent` is the area whose inputs were processed; trees outside the AOI come from a stats-only `trees.py` run with the same method, so tree ids follow the Trees rule everywhere. One difference: the Trees layer drops every top above `max_height` (45 m); the stats run keeps tops up to the detector's CHM clip (60 m; a top at the clip is re-measured on the unclipped CHM and kept up to 75 m, see `tallest-checked-v4`) and counts a top above 45 m only when it passes the `tallest` plausibility checks (the stats area has real 50–61 m conifer stands). So a place's `tallest` tree is often **not** in the AOI's Trees layer (above 45 m, or outside the 3D tiles): `tallest.in_trees` says whether it is. When it is `false` the app draws its own marker at `tallest.E/N` (ground from the terrain) instead of looking the tree up by `id`. `aoi_share_pct` tells the app how much of a place it can show in 3D.
 
@@ -649,7 +758,7 @@ stats = {
 
 ### `stats/places.json`
 
-UTF-8 JSON, a few KB (target < 30 KB). All coordinates **EPSG:25832 metres `[E, N]`** (not the local frame). All paths relative to the AOI dir.
+UTF-8 JSON, compact (≈ 60 KB with the Phase 1 blocks, target < 80 KB, see **Size** below). All coordinates **EPSG:25832 metres `[E, N]`** (not the local frame). All paths relative to the AOI dir.
 
 ```ts
 Range = [lo: number, mid: number, hi: number]   // lo ≤ mid ≤ hi, an estimate (G7); the UI shows "lo–hi" and labels it „geschätzt“
@@ -669,11 +778,16 @@ Places = {
   disciplines: Discipline[],
   places: Place[],                        // sorted by name_de (de collation); NOT a ranking
   municipalities: Municipality[],
+  labels_de?: {                           // German labels for the keys used below (Phase 1); the app takes labels from here
+    species: Record<SpeciesKey, string>,  // 'beech' → 'Buche' … (the 10 species classes of "Tree species", no canopy_loss)
+    age_classes: Record<'young' | 'middle' | 'old' | 'very_old' | 'beyond', string>,   // 'jung (unter 40 Jahre)' … 'höher als die Ertragstafel (ohne Alter)'
+    nutzung: Record<NutzungGroup, string> // 'forest' → 'Wald und Gehölz' …
+  },
   attribution: string                     // '; '-joined verbatim entries of all inputs used (no duplicates)
 }
 ```
 
-**`inputs`** — one entry per source actually used; ids are free snake_case (`lidar_sl`, `lidar_rlp`, `alkis_sl`, `alkis_rlp`, `lod2_sl`, `lod2_rlp`, `dop_cir_sl`, `dop_rgbi_rlp`, `osm`, `zensus`, `mastr`, `imperviousness` …):
+**`inputs`** — one entry per source actually used; ids are free snake_case (`lidar_sl`, `lidar_rlp`, `alkis_sl`, `alkis_rlp`, `lod2_sl`, `lod2_rlp`, `dop_cir_sl`, `dop_rgbi_rlp`, `osm`, `zensus`, `mastr`, `imperviousness`; Phase 1: `species_dlr`, `gbif`, `hist_maps_sl` …):
 
 ```ts
 Input = {
@@ -683,11 +797,12 @@ Input = {
   retrieved: string,                      // ISO date of the download (cached copy)
   licence: string,                        // SPDX-like: 'dl-de/by-2-0', 'ODbL-1.0', 'CC-BY-4.0' …
   attribution: string,                    // verbatim Quellenvermerk, no ';' (ADR 0026 rules: retrieval year, trailing (<Layer>) tag)
-  url?: string                            // dataset URI (https://…)
+  url?: string,                           // dataset URI (https://…)
+  note_de?: string                        // extra licence note for the sources dialog (e.g. GBIF: contains iNaturalist CC BY-NC records)
 }
 ```
 
-The stats step also merges every `attribution` entry into the manifest's `attribution` string (as in "manifest.json"). Examples: `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0 (DOP20)` for the CIR DOP, `Zensus 2022, © Statistische Ämter des Bundes und der Länder, dl-de/by-2-0` (wording confirmed against the bundled description before release), `Marktstammdatenregister, © Bundesnetzagentur, dl-de/by-2-0`, `© OpenStreetMap-Mitwirkende, ODbL`.
+The stats step also merges every `attribution` entry into the manifest's `attribution` string (as in "manifest.json"). Examples: `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0 (DOP20)` for the CIR DOP, `Zensus 2022, © Statistische Ämter des Bundes und der Länder, dl-de/by-2-0` (wording confirmed against the bundled description before release), `Marktstammdatenregister, © Bundesnetzagentur, dl-de/by-2-0`, `© OpenStreetMap-Mitwirkende, ODbL`. Phase 1 (licences checked 2026-11-08): `species_dlr` = the "Tree species" credit (CC BY 4.0, also used for the Riesen species and the age estimate), `gbif` = `GBIF.org (<query date>) GBIF Occurrence Search, https://www.gbif.org` with licence `CC0-1.0 / CC-BY-4.0 / CC-BY-NC-4.0 (je Datensatz)` and the iNaturalist CC BY-NC note in `note_de` (only counts are published; GBIF prefers a DOI-backed derived-dataset citation for a public release, which needs a GBIF account: release decision), `hist_maps_sl` = `© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (Historische Karten)`. The yield tables of `tree-age-height-v2` are literature, cited in `method.forest_age.params.tables`.
 
 **`method`** — keyed by topic; the `id` is versioned and changes whenever the algorithm or a parameter that changes results changes (`-v1` → `-v2`). Ids in Phase 0:
 
@@ -695,7 +810,7 @@ The stats step also merges every `attribution` entry into the manifest's `attrib
 |---|---|---|
 | `assign` | `parcel-pip-v1` | trees and areas belong to the place whose parcels contain the tree top (point in polygon, `make_valid`, first match) |
 | `crown` | `crown-disc-v1` | crown area = Σ π r² of the place's trees; `crown_pct` = crown area ÷ place area (capped at 100) |
-| `biomass` | `crown-allometry-v1` | `D = 0.557 · (H · 2r)^0.809` cm; `AGB = 0.0673 · (ρ · D² · H)^0.976` kg; ρ = 0.42 conifer, 0.60 else; `lo = mid · 0.5`, `hi = mid · 2`; CO₂ = 1.8 × AGB |
+| `biomass` | `crown-allometry-v2` | `D = 0.557 · (H · 2r)^0.809` cm; `AGB = 0.0673 · (ρ · D² · H)^0.976` kg; ρ = 0.42 for a conifer, 0.60 else, the group by `tree-group-v1` ("Tree species": a „wahrscheinlich“ DLR class wins over the DOP colour type); `lo = mid · 0.5`, `hi = mid · 2`; CO₂ = 1.8 × AGB. v1 (until 2026-11-08) took the group from the colour type alone, which reads most conifers as broadleaf |
 | `ortslage` | `ortslage-bldg-buffer-50m-v1` | union of LoD2 footprints buffered 50 m, holes < 1 ha closed, clipped to the place; checked against OSM `landuse=residential` (overlap reported in `params`). Includes commercial, industrial and clinic sites and outlying plant buildings (e.g. a landfill), not only housing; the discipline texts say so |
 | `green` | `ndvi-cir-v1` | Ortslage cell is green when CHM ≥ 3 m **or** NDVI ≥ threshold (SL CIR WMS, RLP RGBI tiles); `canopy_pct` = CHM ≥ 3 m part only |
 | `sealed` | `sealed-v1` | Ortslage cell is sealed when it is not green, not OSM water, and a building (LoD2 mask), an OSM paved road (buffered by its `width` or road class) / parking / square / `area:highway`, or non-vegetated in the NDVI (< `ndvi_bare_max`, 0.08 on the SL scale; also catches unmapped yards and bare soil). Copernicus imperviousness is **not** used in v1 (`params.imperviousness`); adding it means `sealed-v2` |
@@ -703,6 +818,14 @@ The stats step also merges every `attribution` entry into the manifest's `attrib
 | `tallest` | `tallest-checked-v4` | highest non-fill tree that passes the plausibility checks (crown radius ≥ 2 m; CHM support, no single-cell spike or narrow tower top; a top at the detector's 60 m CHM clip is re-measured on the **unclipped** CHM (DSM − DTM) and must stay ≤ 75 m (`max_tree_m`; taller = mast, wind turbine, crane), and is rejected as `chm-clip` (the v3 rule) when no unclipped window can be read; **no line-shaped top** (cells ≥ 0.8 h within 8 m connected to the top have a principal-axis ratio ≤ 3: crane jibs, rotor blades and cables are long and thin); no LoD2 building within 5 m; no OSM pylon / mast / tower / chimney / **wind turbine** (`power=generator` + `generator:source=wind`) within **30 m**; terrain: DTM rises ≤ 3 m within 4 m of the top, so no gully bottom or bank foot under overhanging canopy; valley: mean DTM within 15 m ≤ 3 m above the top's ground, so no ravine bottom spanned by the canopy of both slopes) **and stands outside the Ortslage** (no garden tree is published by position, G1/G2) **and ≥ 10 m inside the place outline** (`edge_clear_m`; a top on the Gemarkung line may belong to the neighbour and must stay inside the 10 m-simplified outline); detector clip 60 m, see `params`. The height is the LiDAR CHM at the top cell (unclipped for tops at the clip), not a ground measurement. v3 (until 2026-11-07) rejected every top at the 60 m clip and knew no wind turbines nor line shapes |
 | `category` | `category-inhabitants-v1` | `category` = `'stadt'` from 5,000 inhabitants (`inhabitants`, grid estimate) on, else `'dorf'` |
 | `pv_mastr` | `mastr-municipality-v1` | MaStR PV units „in Betrieb“ per municipality key, balcony plants included |
+| `riesen` | `riesen-checked-v1` | up to **10** trees per place that pass every `tallest-checked-v4` check (incl. outside the Ortslage, ≥ 10 m inside the outline), picked greedily by height (h to 0.01 m descending, ties → lower id), each **≥ 20 m** (2D) from every tree picked before it, so one tall stand does not fill the list; `riesen[0]` is the `tallest` tree. At most 2,000 candidates are checked per place (the `tallest` budget) |
+| `species` | `species-dlr-crown-mix-v1` | per tree the DLR class of the 10 m cell under its top ("Tree species", `dlr-nearest-25832-v1`); per place the share of each class in the **crown area with a class** (Σ π r², `crown-disc-v1`, trees by `parcel-pip-v1`); `coverage_pct` = crown area with a class ÷ all crown area (village and garden trees lie outside the DLR forest mask); canopy loss is no class. `alder` and `other_broadleaf` entries carry `weak: true` (`params.weak`): the Thünen cross-check agrees with them for < 10 % of their cells here, so the app marks their shares as unsure |
+| `biodiversity` | `gbif-rarefied-v1` | GBIF occurrence search per place outline (simplified 20–80 m, `hasCoordinate`, no geospatial issue, `PRESENT`), facet counts only (`gbif-facets-v1`); `rarefied_500` = Hurlbert expected species in 500 random species-level records, interval ± 1.96 SD (Heck 1975, sampling noise only); `null` below 500 records |
+| `forest_age` | `tree-age-height-v2` | the "Tree age estimate" rule per tree (height − 2 m, yield tables, species from the DLR map, else the tree type); per place the classes of the middle estimate weighted by crown area of the trees ≥ 8 m, the trees taller than the class-II table end as their own class `beyond` (no age), and the median middle estimate of the trees **with** an age. v1 clamped such trees to the last table age |
+| `forest_continuity` | `hist-forest-crown-share-v1` | share of the crown area (inside the historic forest mask, with a map on every classified epoch) that stands on forest on **every** classified map; with one classified map (1935–40) it is a snapshot, not continuity; `null` when the mask covers < 50 % of the place's crown area |
+| `nutzung` | `alkis-nutzung-groups-v1` | ALKIS *tatsächliche Nutzung* per parcel (RLP WFS 519; SL WFS 414 pending) grouped by keyword (first match, `params.rule`) into 7 groups, shares of the official area |
+| `roof_potential` | `roof-pv-potential-v2` | LoD2 roof planes (true sloped area, tilt, facing): planes ≥ 10 m², tilt ≤ 60°, flat (< 10°) or facing E…S…W are suitable; usable = pitched suitable × 0.7 + **flat suitable × 0.4** (row spacing against self-shading, parapets, skylights; v1 used 0.7 for flat roofs too, ≈ 9–11 kWp per inhabitant in the industrial places); kWp = usable × 0.15 / 0.18 / 0.20 kWp/m² (no shading or statics check). `pv.used_pct` = MaStR building PV kWp ÷ potential (lo uses the hi potential), only for a municipality whose Gemarkungen are all processed |
+| `goals` | `goals-examples-v1` | the plan's §5 example goals per place with the published baseline; `progress` is `null` until a second LiDAR epoch or community data exists |
 
 ```ts
 Method = { id: string, label_de?: string, params?: Record<string, unknown> }   // params informative (thresholds, radii, ρ …)
@@ -721,11 +844,12 @@ Discipline = {
   unit: string,                           // display unit: '%', 'm', 'Bäume/Einw.', 'kWp/Einw.'
   higher_is_better: boolean,
   method: string,                         // a method id from `method`, e.g. 'ndvi-cir-v1'
-  ready: boolean                          // false → listed as „bald“, no board
+  ready: boolean,                         // false → listed as „bald“, no board
+  note_de?: string                        // caveat shown with the board (e.g. „Grober Hinweis, keine Messung …“)
 }
 ```
 
-Phase 0 list (pipeline may add more; Biomass is **never** a discipline, Q3):
+Phase 0 + 1 list (pipeline may add more; Biomass is **never** a discipline, Q3):
 
 | `id` | `measure` | `unit` | higher better | `method` | `ready` |
 |---|---|---|---|---|---|
@@ -736,7 +860,9 @@ Phase 0 list (pipeline may add more; Biomass is **never** a discipline, Q3):
 | `riesenbaum` | `tallest.h` | `m` | ✓ | `tallest-checked-v4` | ✓ |
 | `sonnenstaerkster-ort` | `pv.kwp_per_inhabitant` (scope `municipality`) | `kWp/Einw.` | ✓ | `mastr-municipality-v1` | ✓ |
 | `groesster-fortschritt` | — | — | ✓ | — | ✗ |
-| `artenvielfalt` | — | — | ✓ | — | ✗ |
+| `artenvielfalt` | `biodiversity.rarefied_500` | `Arten` | ✓ | `gbif-rarefied-v1` | ✓ (✗ without GBIF input: `measure`/`method` empty) |
+
+**`artenvielfalt` measures observations, not nature.** The value is effort-normalised (expected species among 500 random records), but it still depends on *what* people record: bird-list datasets lower it, insect- and plant-rich iNaturalist samples raise it, grid-generalised records can fall into a neighbouring place, and the ≤ 1 km-uncertainty variant reorders places (`method.biodiversity.params.caveats`). `description_de` says so and `note_de` carries the „grober Hinweis“ caveat; the app shows both with the board. Places with fewer than 500 species-level records have `rarefied_500: null` and `few_records: true` → „keine Daten“ (unranked).
 
 **Ranking rule (app).** A board ranks entries of its `scope` whose `measure` is a finite number; ties share a rank. Places with `complete: false` are listed below the board, unranked, marked „unvollständig“. `null` (suppressed or not available) shows „keine Daten“, unranked. `other-flight` places are ranked with a badge „andere Befliegung“, with the year mix from `lidar_epochs` when present (e.g. „andere Befliegung: 47 % 2022“).
 
@@ -778,8 +904,64 @@ Place = {
   tallest: null | { h: number, E: number, N: number, id: number, in_trees?: boolean },
                                           // id = stable tree id by the Trees rule; E, N = top cell centre;
                                           // in_trees: the AOI's Trees layer holds this id (false: above max_height or outside the tiles → own marker)
-  pv: null                                // Phase 0 always null (flag 'pv-municipality-only'); Phase 1: aggregates only, see below
+  pv: null,                               // Phase 0 always null (flag 'pv-municipality-only'); Phase 1: aggregates only, see below
+
+  // ---- Phase 1 (optional; null / absent when the input is missing) ----
+  riesen?: Array<{                        // riesen-checked-v1: ≤ 10 trees, h descending; riesen[0] = tallest
+    rank: number,                         // competition rank on the published h (45.1, 44.0, 44.0, 43.2 → 1, 2, 2, 4)
+    h: number, E: number, N: number,      // as tallest: CHM height (unclipped at the 60 m clip), top cell centre
+    id: number,                           // stable tree id by the Trees rule (no parcel id)
+    in_trees: boolean,                    // as tallest.in_trees: false → the app draws its own marker
+    species?: { key: SpeciesKey, p: number }   // DLR class at the top + species-dlr-neighbourhood-v1 probability, only when „wahrscheinlich“
+                                          // (p ≥ 50 %, no conifer-in-broadleaf contradiction; since 2026-11-08, before: 10–90 %);
+                                          // absent without a class, for canopy loss, for „unsicher“ classes and for 'alder' / 'other_broadleaf' (weakest classes here)
+  }>,
+  species?: null | {                      // species-dlr-crown-mix-v1 (null: < 5 trees with a class)
+    mix: Array<{ key: SpeciesKey, share_pct: number, weak?: true }>,   // share of the crown area with a class, descending (ties → lower class code); 0.0 entries dropped;
+                                          // weak: the class is unreliable here (alder, other_broadleaf; review 2026-11-08), absent otherwise
+    dominant: SpeciesKey,                 // = mix[0].key
+    method: 'species-dlr-crown-mix-v1',
+    coverage_pct: number,                 // crown area with a class ÷ all crown area of the place
+    conifer_pct: number,                  // DLR conifer classes in the mix
+    trees: number                         // trees with a class
+  },
+  biodiversity?: null | {                 // gbif-rarefied-v1: counts of GBIF records inside the outline (observations, not individuals)
+    species: number,                      // distinct species among the records
+    occurrences: number,                  // records
+    inat_share_pct: number | null,        // share of iNaturalist research-grade records
+    rarefied_500: number | null,          // expected species in 500 random records (whole species); the board measure
+    rarefied_500_range: Range | null,     // [−1.96 SD, value, +1.96 SD]
+    rarefied_150_range: Range | null,     // the same at 150 records (covers the small places, less discriminating)
+    few_records: boolean,                 // fewer than 500 species-level records → rarefied_500 null
+    years: [from: number, to: number] | null   // first and last record year
+  },
+  forest_continuity_pct?: number | null,  // hist-forest-crown-share-v1 (null: mask covers < 50 % of the crown area)
+  forest_continuity?: null | {
+    covered_pct: number,                  // share of the crown area inside the historic mask
+    epochs: number[],                     // classified map epochs used, e.g. [1935]
+    snapshot: boolean                     // true with one classified map: „laut Karte 1935–40 Wald“, never „seit“
+  },
+  forest_age?: null | {                   // tree-age-height-v2 (Schätzung)
+    trees: number,                        // trees ≥ 8 m with an estimate (beyond the table excluded)
+    trees_beyond?: number | null,         // trees ≥ 8 m taller than the class-II table end: no age (v2; absent/null from a v1 work file)
+    median_y: number | null,              // median middle estimate of the trees with an estimate, 5 years
+    classes_pct: { young: number, middle: number, old: number, very_old: number, beyond?: number }
+                                          // by crown area of all trees ≥ 8 m, sum ≈ 100; labels in labels_de.age_classes; readers keep unknown keys
+  },
+  nutzung?: null | {                      // alkis-nutzung-groups-v1; null while the land use is unknown (SL: WFS 414 pending)
+    source: 'alkis',
+    shares_pct: Record<NutzungGroup, number>   // forest, agriculture, garden_green, settlement, traffic, water, other
+  },
+  roof_potential?: null | {               // roof-pv-potential-v2 (Schätzung); null + suppressed 'roof_potential' below 5 buildings
+    buildings: number,                    // LoD2 buildings of the place
+    suitable_m2: number,                  // suitable roof area (true sloped area) BEFORE the usable factors, 100 m²
+    usable_m2?: number,                   // usable area = pitched suitable × 0.7 + flat suitable × 0.4 (the base of kwp), 100 m²; since 2026-11-08
+    kwp: Range                            // installable power, kWp
+  },
+  goals?: Goal[]                          // see "Goals"
 }
+SpeciesKey = 'pine' | 'spruce' | 'douglas_fir' | 'larch' | 'fir' | 'beech' | 'oak' | 'birch' | 'alder' | 'other_broadleaf'
+NutzungGroup = 'forest' | 'agriculture' | 'garden_green' | 'settlement' | 'traffic' | 'water' | 'other'
 Flag = 'other-flight'                     // LiDAR (≥ 1 % of the cells, or an RLP place) from another flight (RLP 2022 vs SL 2025, Q5); shares in `lidar_epochs`
      | 'cut-by-aoi'                       // outline reaches beyond `extent` or an input's coverage; totals are partial
      | 'pv-municipality-only'             // no own PV figure; the card shows the municipality's MaStR total
@@ -790,7 +972,7 @@ Flag = 'other-flight'                     // LiDAR (≥ 1 % of the cells, or an 
 
 Unknown flags are shown as plain text or ignored; the app must not fail on them. Values that are always estimates (`agb_t`, `co2_t`, PV `kwp`) are `Range`s and need no flag.
 
-**PV per place (Phase 1, reserved shape).** `pv = { source: 'dop-detect', buildings: number, with_pv: number, residential_with_pv_pct: number | null, kwp: Range, roof_potential_used_pct: number | null, method: string }`, aggregates only; `buildings < min_count` → `pv = null` + `suppressed: ['pv']`. Per-building detections are never published.
+**PV per place (reserved shape).** `pv = { source: 'dop-detect', buildings: number, with_pv: number, residential_with_pv_pct: number | null, kwp: Range, roof_potential_used_pct: number | null, method: string }`, aggregates only; `buildings < min_count` → `pv = null` + `suppressed: ['pv']`. Per-building detections are never published. **Not built** (user decision 2026-11-08: no PV detection in the orthophoto for now): Phase 1 PV is the MaStR municipality view plus `roof_potential` per place and municipality, so `pv` stays `null` with the flag `pv-municipality-only`.
 
 **`municipalities`** — MaStR is per municipality, not per Gemarkung (Q10):
 
@@ -809,10 +991,40 @@ Municipality = {
     kwp: number,                          // Σ gross power, kWp (register value, not an estimate)
     kwp_per_inhabitant: number | null,
     small_systems: number,                // units < 30 kWp (no coordinates in MaStR)
-    by_year?: Array<[year: number, systems: number, kwp: number]>   // commissioned per year
+    by_year?: Array<[year: number, systems: number, kwp: number]>,  // commissioned per year
+    used_pct?: Range | null,              // Phase 1: share of the roof potential in use (MaStR building PV ÷ roof_potential), 0.1 pp;
+                                          // null when not all Gemarkungen of the municipality are processed (small PV exists only per municipality)
+    used_pct_reason_de?: string | null    // one German line why used_pct is null (null when it is set)
+  },
+  roof_potential?: null | {               // Phase 1, roof-pv-potential-v2 summed over the processed places of the municipality
+    places: string[],                     // place ids it covers (not all Gemarkungen of the municipality)
+    suitable_m2: number,                  // 100 m²
+    kwp: Range,
+    complete: boolean                     // all Gemarkungen of the municipality processed (only then used_pct can be set)
   }
 }
 ```
+
+**Goals** (`goals-examples-v1`, plan §5, „Ziele“). Per place a list of example goals; the app shows them as goals with a baseline, never as a ranking, and draws no progress bar while `progress` is `null`:
+
+```ts
+Goal = {
+  id: string,                             // 'kronen-ortslage' | 'entsiegeln' | 'riesen-bestimmt' | 'hecke' (more may come)
+  title_de: string,                       // e.g. '+2 Prozentpunkte Kronenanteil in der Ortslage bis 2030'
+  metric: string | null,                  // dotted path into Place when the baseline is a published field ('ortslage.canopy_pct')
+  unit: string,                           // '%', 'm²', 'Bäume', 'm'
+  baseline: number | null,                // value at baseline_year; null = not measurable yet (e.g. hedges: no hedge layer)
+  baseline_year: number,                  // the place's lidar_epoch for measured baselines, else the year of `generated`
+  target: number | null,                  // = baseline + target_delta (rounded like the baseline); null when baseline is null
+  target_delta: number,                   // e.g. +2 (pp), −1000 (m²), +500 (m)
+  target_year: number,                    // 2030
+  measured_by: 'lidar' | 'community',     // next flight (impact) vs reported deeds (Phase 2, needs a backend and a partner, G5/G6)
+  progress: null,                         // 0…1 once a second epoch / community data exists; until then always null
+  note_de?: string                        // one German context line shown under the values (e.g. today's sealed area)
+}
+```
+
+Current list (in this order, a goal is left out when its baseline field is missing, e.g. no Ortslage): `kronen-ortslage` (+2 pp `ortslage.canopy_pct`, `lidar`), `entsiegeln` (1,000 m² unsealed in the Ortslage: a deed counter, baseline 0 m² → target 1,000 m², `community`; `note_de` gives today's sealed area `ortslage.area_ha` × `sealed_pct`, 100 m², for comparison — until 2026-11-08 the baseline was that sealed total, so the 1,000 m² step was an invisible 0.03 %), `riesen-bestimmt` (all `riesen` identified on site: species and girth; baseline 0, target = number of Riesen, `community`), `hecke` (500 m of new hedge, baseline `null`, `community`). Goals stay virtual (G5, [ADR 0021](adr/0021-quests-virtual-only.md)): no „go there“ prompt, no digging or planting advice at monuments or relict candidates.
 
 **Rounding (publish rounded values; the pipeline rounds, the app displays as is):**
 
@@ -828,6 +1040,13 @@ Municipality = {
 | `tallest.h` | 0.1 m; `tallest.E/N` exact cell centre (x.5) |
 | `lidar_epochs` pct | 0.1 percentage points |
 | `label`, `bbox`, `extent` | whole metres |
+| `riesen[].h` | 0.1 m; `E/N` exact cell centre (x.5); `rank` from the rounded h; `species.p` whole % (multiple of 10) |
+| `species.mix[].share_pct`, `coverage_pct`, `conifer_pct` | 0.1 percentage points |
+| `biodiversity.rarefied_500`, `*_range` | whole species (each bound) |
+| `forest_age.median_y` | 5 years; `classes_pct` 0.1 pp |
+| `roof_potential.suitable_m2`, `usable_m2` | 100 m²; `kwp` Range 2 significant digits |
+| `pv.used_pct` | each bound 0.1 percentage points |
+| `goals[].baseline`, `target` | as the source field (`%` 0.1, m² 100) |
 
 Rounding happens last; derived values (shares, per-inhabitant) are computed from unrounded numbers.
 
@@ -835,15 +1054,18 @@ Rounding happens last; derived values (shares, per-inhabitant) are computed from
 
 `FeatureCollection` (UTF-8), one feature per place in `places`, used to fly to a place and outline it (map and 3D). Coordinates **EPSG:25832 `[E, N]`, rounded to 1 m**, 2D only, **not clipped** to the AOI (the full place outline, also beyond `extent` if the parcels are known), **not densified**; the app drapes outlines like vectors where it has terrain and draws them 2D elsewhere. Geometry: dissolved union of the place's ALKIS parcels (`make_valid`), holes < 1 ha dropped, made into a clean coverage (each outline snapped within 2 m to the earlier ones and cut by them: the SL and RLP parcels overlap or leave sub-metre gaps along the state border), then coverage-simplified to `simplify_m` = **10 m**, so neighbours share their border without overlaps or gaps. `Polygon` or `MultiPolygon`; winding not guaranteed. Properties: `{ id: string /* = Place.id */, name_de: string }` only. Target < 150 KB for all places.
 
-**Size.** places.json ≈ 10–30 KB, places.geojson < 150 KB: small enough for the public release. The release export stages exactly these two files of `stats/`.
+**Size.** places.json is written as compact JSON (no indentation): ≈ 20 KB in Phase 0, ≈ 60 KB with the Phase 1 blocks (target **< 80 KB**); places.geojson < 150 KB: small enough for the public release. The release export stages exactly these two files of `stats/`.
 
-**App tolerance.** Missing `stats`, a non-object, `format` ≠ `sle-stats-v1` or a non-string `url` → absent (logged, not fatal). A 404 or a places.json whose `format` ≠ `sle-stats-v1` → panel hidden. Missing `geometry` or a 404 on it → no outlines; fly-to uses `label` and `bbox`. A place without a string `id` or `name_de` is skipped. A discipline whose `measure` does not resolve to a number for any entry shows „keine Daten“. Unknown fields, flags, topics, input ids and disciplines with unknown `scope` are ignored.
+**App tolerance.** Missing `stats`, a non-object, `format` ≠ `sle-stats-v1` or a non-string `url` → absent (logged, not fatal). A 404 or a places.json whose `format` ≠ `sle-stats-v1` → panel hidden. Missing `geometry` or a 404 on it → no outlines; fly-to uses `label` and `bbox`. A place without a string `id` or `name_de` is skipped. A discipline whose `measure` does not resolve to a number for any entry shows „keine Daten“. Unknown fields, flags, topics, input ids and disciplines with unknown `scope` are ignored. Phase 1 fields are all optional: a missing, `null` or malformed block hides its row; a `riesen` entry without finite `h`, `E`, `N` is skipped; an unknown species key, age class or land-use group without a `labels_de` entry is shown by its key or skipped; a `goals` entry without `title_de` is skipped.
+
+**UI rules for the Phase 1 values (G7).** Species, age, biodiversity, roof potential and the 1935 forest share are **estimates**: show „Schätzung“/„geschätzt“ and the range or probability (`kwp` as „lo–hi kWp“, Riesen species as „wahrscheinlich Douglasie (80 %)“ per the "Tree species" wording (only „wahrscheinlich“ classes are published for Riesen), age classes with „aus der Baumhöhe geschätzt“; the `beyond` share as „höher als die Ertragstafel (ohne Alter)“ in a neutral colour, never as old). The species mix covers only the forest part (`coverage_pct`); `weak` entries are marked as unsure (e.g. hatched, „?“, with the reason). The roof area next to `kwp` is `usable_m2` (the area the kWp rest on); `suitable_m2` is only shown as the larger area before the factors, labelled so. `forest_continuity` with `snapshot: true` reads „laut Karte 1935–40 Wald“, never „seit“. `biodiversity` reads as „gemeldete Beobachtungen“, never as the quality of nature. Credits come from `inputs` / `attribution` (DLR CC BY 4.0, GBIF).
 
 ## Other files
 
 - `app/public/data/pois.geojson`: WGS84 FeatureCollection of known sites. Properties: `id`, `name` (DE), `type` (`castle|palace|garden|bunker|burial_mound|cave|boundary_stone|mine|other`), `confidence` (`high|med|low`), `source` (URL), `note`.
 - User find markers are stored in the browser (localStorage key `sle.markers.v1`), exported as WGS84 GeoJSON with properties `id, title, note, category, created, E, N, h`.
 - Candidate review decisions (F15) are stored in the browser (localStorage key `sle.candidates.v1.<aoi>`), see "Candidates"; never in data files.
+- *Orte im Vergleich* collecting progress is stored in the browser (localStorage key `sle.orteCollect.v1`): `{ version: 1, riesen: { [treeId: string]: 'YYYY-MM-DD' }, places: { [placeId: string]: 'YYYY-MM-DD' } }`, ids and the date of the first discovery only (no position, no track); never sent anywhere ([ADR 0022](adr/0022-local-first-no-accounts.md)). Rules in `app/src/places/collect.ts`: a Riese counts within 150 m (3D) or when its *Baum-Steckbrief* opens; a place counts when the camera is over its outline below 1,500 m above ground, but not during a fly-to and not at the start or after a fly-to or reset until the camera moved 100 m from where it was (the start pose and the framed arrival pose are not a visit).
 - `app/public/data/shared/<id>/`: AOI-independent shared datasets (F19 reconstruction models), see "Shared datasets". Not part of any manifest.
 
 ## Public release (static hosting, 2026-11-02)

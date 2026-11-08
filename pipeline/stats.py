@@ -21,8 +21,9 @@ MIN_COUNT parcels is dropped.
 Methods (ids are versioned; the parameters are written into places.json `method[*].params`):
 - assign `parcel-pip-v1`: a tree belongs to the place whose ALKIS parcel contains its top (first match).
 - crown `crown-disc-v1`: crown area = Σ π r²; crown_pct = crown area / official place area (capped at 100).
-- biomass `crown-allometry-v1`: D = 0.557·(H·2r)^0.809 cm, AGB = 0.0673·(ρ·D²·H)^0.976 kg, ρ 0.42 conifer /
-  0.60 otherwise; published as [mid/2, mid, 2·mid] t (the plan's "can be wrong by a factor of 2", G7);
+- biomass `crown-allometry-v2`: D = 0.557·(H·2r)^0.809 cm, AGB = 0.0673·(ρ·D²·H)^0.976 kg, ρ 0.42 conifer /
+  0.60 otherwise, the group by species.tree_group (tree-group-v1: a „wahrscheinlich“ DLR class wins over the DOP
+  colour type, which reads most conifers as broadleaf; v1 used the colour type only); published as [mid/2, mid, 2·mid] t (the plan's "can be wrong by a factor of 2", G7);
   CO₂ = 1.8 × AGB (carbon share ≈ 0.5 × 44/12).
 - ortslage `ortslage-bldg-buffer-50m-v1`: union of LoD2 footprints buffered 50 m, holes < 1 ha closed, parts
   holding fewer than 3 buildings dropped (lone barns, huts), clipped to the place. Checked against OSM
@@ -46,6 +47,16 @@ Methods (ids are versioned; the parameters are written into places.json `method[
 - lidar_epoch: the flight year of the majority of the place's LiDAR cells; `lidar_epochs` lists the shares.
 - pv_mastr `mastr-municipality-v1`: MaStR PV units in operation per municipality; kWp per inhabitant uses the
   official Zensus 2022 municipality total (Regionaltabelle Bevölkerung), never the grid sum.
+
+Phase 1 (plan §4/§5/§8; every input optional, a missing work file leaves its block null and its source unlisted):
+- riesen `riesen-checked-v1`: up to 10 trees per place that pass the tallest-checked-v4 checks, picked by height,
+  each ≥ 20 m from the ones before (riesen[0] = tallest); DLR species {key, p} at the top (species.py arrays).
+- species `species-dlr-crown-mix-v1`: crown-weighted DLR class mix (species.py per-tree arrays, filtered with T).
+- biodiversity `gbif-rarefied-v1`: gbif_by_place.json counts; discipline 'artenvielfalt' ranks rarefied_500.
+- forest_age `tree-age-height-v2` + forest_continuity `hist-forest-crown-share-v1`: forest_age_by_place.json.
+- nutzung `alkis-nutzung-groups-v1`: nutzung_summary.json (places.py; SL pending while WFS 414 is down).
+- roof_potential `roof-pv-potential-v2`: roofs_by_place.json, per place and municipality (+ pv.used_pct).
+- goals `goals-examples-v1`: the plan's example goals with the published baseline, progress null.
 """
 from __future__ import annotations
 
@@ -86,6 +97,7 @@ DISCLAIMER_DE = ("Schätzungen aus Luftdaten (LiDAR, Luftbild) und offenen Stati
                  "Stadtteilangaben ab. Baumhöhen sind LiDAR-Messungen, nicht vor Ort geprüft. "
                  "Biomasse und CO₂ sind grobe Spannen.")
 SIMPLIFY_M = 10.0
+PLACES_JSON_MAX = 80 * 1024     # contract size target of places.json (compact JSON, Phase 1 blocks included)
 HOLE_MIN_M2 = 10_000.0          # outlines and Ortslage: holes below 1 ha are closed
 SLIVER_M2 = 500.0               # outline parts below this left over after removing overlaps are dropped
 SNAP_M = 2.0                    # outlines are snapped to their neighbours within this (SL/RLP parcel mismatch)
@@ -150,6 +162,31 @@ UNPAVED = {"unpaved", "gravel", "fine_gravel", "compacted", "dirt", "earth", "gr
 PAVED = {"paved", "asphalt", "concrete", "concrete:plates", "concrete:lanes", "paving_stones", "sett",
          "cobblestone", "unhewn_cobblestone", "metal", "bricks"}
 HAZARD_MAN_MADE = {"mast", "tower", "chimney", "communications_tower"}
+
+# --- Phase 1 (plan §4/§5/§8): species, Riesen, biodiversity, forest age/continuity, land use, roofs, goals --------
+# Work files of the Phase 1 steps (all optional: a missing file leaves its block null / its input unlisted).
+PHASE1_FILES = {"species": "species_by_place.json", "gbif": "gbif_by_place.json", "roofs": "roofs_by_place.json",
+                "forest_age": "forest_age_by_place.json", "nutzung": "nutzung_summary.json"}
+RIESEN = {"n": 10, "min_spacing_m": 20.0, "max_checks": 2000}   # = TALLEST max_candidates: the first pick is the v4 winner
+RIESEN_ID = "riesen-checked-v1"
+# The weakest DLR classes in the stats area (contract "Tree species", cross-check: alder 7 %, other 6 % agreement
+# with Thünen): the app must not single out such a tree, so a Riese never carries them.
+RIESEN_NO_SPECIES = ("alder", "other_broadleaf")
+SPECIES_MIX_ID = "species-dlr-crown-mix-v1"
+BIOMASS_ID = "crown-allometry-v2"
+# DLR classes the Thünen cross-check agrees with for < 10 % of their cells here: flagged `weak` in the mix.
+SPECIES_WEAK = RIESEN_NO_SPECIES
+BIODIV_ID = "gbif-rarefied-v1"
+BIODIV_N = 500
+FOREST_AGE_ID = "tree-age-height-v2"
+CONTINUITY_ID = "hist-forest-crown-share-v1"
+CONTINUITY_MIN_COVER_PCT = 50.0   # below this share of the crown area inside the historic mask → no value
+NUTZUNG_ID = "alkis-nutzung-groups-v1"
+NUTZUNG_GROUPS = ("forest", "agriculture", "garden_green", "settlement", "traffic", "water", "other")
+ROOF_ID = "roof-pv-potential-v2"
+GOALS_ID = "goals-examples-v1"
+GOAL_YEAR = 2030
+AGE_CLASSES = ("young", "middle", "old", "very_old", "beyond")   # beyond: taller than the yield table
 
 
 # =============================================================================================== pure helpers
@@ -467,6 +504,242 @@ def edge_reason(outline_boundary, e: float, n: float, p: Mapping[str, Any] = TAL
     return "place-edge" if shapely.distance(outline_boundary, shapely.Point(e, n)) < p["edge_clear_m"] else None
 
 
+# ============================================================================================ Phase 1 helpers
+def pick_top(h: np.ndarray, fill: np.ndarray, ids: np.ndarray, e: np.ndarray, n: np.ndarray,
+             check: Callable[[int], str | None], count: int = RIESEN["n"],
+             min_spacing_m: float = RIESEN["min_spacing_m"], max_checks: int = RIESEN["max_checks"]
+             ) -> tuple[list[int], dict[str, int]]:
+    """riesen-checked-v1 (pure): up to `count` highest non-fill trees whose `check(i)` is None, each at least
+    `min_spacing_m` from every tree picked before it (greedy by height, so one tall stand does not fill the list).
+    Order as pick_tallest: h (0.01 m) descending, ties → lower id; so the first pick is the tallest-checked-v4
+    winner. A candidate too close to an earlier pick is skipped without running `check` ('spacing'); at most
+    `max_checks` candidates are checked. Returns (indices in pick order, rejects)."""
+    h, e, n = (np.asarray(v, np.float64) for v in (h, e, n))
+    ids = np.asarray(ids)
+    idx = np.flatnonzero(~np.asarray(fill, bool))
+    order = idx[np.lexsort((ids[idx], -np.round(h[idx], 2)))]
+    picked: list[int] = []
+    rejects: dict[str, int] = {}
+    checks = 0
+    for i in order:
+        if len(picked) >= count or checks >= max_checks:
+            break
+        i = int(i)
+        if picked and float(np.min(np.hypot(e[picked] - e[i], n[picked] - n[i]))) < min_spacing_m:
+            rejects["spacing"] = rejects.get("spacing", 0) + 1
+            continue
+        checks += 1
+        why = check(i)
+        if why is None:
+            picked.append(i)
+        else:
+            rejects[why] = rejects.get(why, 0) + 1
+    return picked, rejects
+
+
+def competition_ranks(values: Sequence[float]) -> list[int]:
+    """1-based standard competition ranks of `values` already sorted descending: equal values share a rank and
+    the next rank skips (45.1, 44.0, 44.0, 43.2 → 1, 2, 2, 4). Pure."""
+    out: list[int] = []
+    for k, v in enumerate(values):
+        out.append(out[-1] if k and v == values[k - 1] else k + 1)
+    return out
+
+
+def round_riesen(rows: Sequence[Mapping[str, Any]]) -> list[dict]:
+    """Contract rounding of the Riesen list (pick order = h descending): h 0.1 m, E/N exact cell centres, rank by
+    competition ranking on the published h, species p as whole %."""
+    out = []
+    hs = [round_to(r["h"], 0.1) for r in rows]
+    for r, h, rank in zip(rows, hs, competition_ranks(hs)):
+        q = {"rank": rank, "h": h, "E": float(r["E"]), "N": float(r["N"]), "id": int(r["id"]),
+             "in_trees": bool(r.get("in_trees", False))}
+        if r.get("species"):
+            q["species"] = {"key": str(r["species"]["key"]), "p": int(r["species"]["p"])}
+        out.append(q)
+    return out
+
+
+def tree_species_entry(code: int, p: int, tree_type: int | None = None) -> dict | None:
+    """{key, p} of one Riese from species.py's per-tree arrays, only when the class is „wahrscheinlich“ (contract
+    "Tree species": p ≥ LIKELY_PCT and no conifer-in-broadleaf contradiction for `tree_type`). None for code 255 /
+    canopy loss / p 0, for the weak classes RIESEN_NO_SPECIES and for „unsicher“ classes: a 10–40 % class (a lone
+    centre cell) on the most-viewed trees was noise, e.g. a 56 m „Lärche? (40 %)“ (review 2026-11-08). Pure."""
+    import species as SP
+    c = int(code)
+    if c not in SP.F1_PCT or int(p) < SP.LIKELY_PCT:
+        return None
+    if tree_type is not None and SP.contradicts(c, int(tree_type)):
+        return None
+    key = SP.CLASS_BY_CODE[c][1]
+    return None if key in RIESEN_NO_SPECIES else {"key": key, "p": int(p)}
+
+
+def species_block(code: np.ndarray, r: np.ndarray, min_count: int = MIN_COUNT) -> dict | None:
+    """species-dlr-crown-mix-v1 (pure): crown-area-weighted (π r²) mix of the DLR classes of a place's trees
+    (code per tree as species.py writes it: 0–9 species, 255 none). `mix` sorted by share descending (ties → lower
+    class code), shares of the crown area **with** a species, 0.1 pp, entries that round to 0 dropped; `dominant`
+    = first entry; `coverage_pct` = crown area with a species ÷ all crown area; `conifer_pct` = DLR conifer
+    classes in the mix; entries of the SPECIES_WEAK classes carry `weak: True` (review 2026-11-08). None when fewer
+    than `min_count` trees have a species."""
+    import species as SP
+    code = np.asarray(code)
+    crown = math.pi * np.asarray(r, np.float64) ** 2
+    has = np.isin(code, list(SP.F1_PCT))
+    if int(has.sum()) < min_count:
+        return None
+    total, with_sp = float(crown.sum()), float(crown[has].sum())
+    if with_sp <= 0:
+        return None
+    raw = [(c, 100.0 * float(crown[code == c].sum()) / with_sp) for c in sorted(SP.F1_PCT)]
+    raw = sorted((x for x in raw if x[1] > 0), key=lambda x: (-x[1], x[0]))
+    mix = [{"key": SP.CLASS_BY_CODE[c][1], "share_pct": round_to(v, 0.1)} for c, v in raw]
+    mix = [{**m, "weak": True} if m["key"] in SPECIES_WEAK else m for m in mix if m["share_pct"]]
+    conifer = np.isin(code, [c[0] for c in SP.CLASSES if c[3] == "conifer"])
+    return {"mix": mix, "dominant": mix[0]["key"] if mix else None, "method": SPECIES_MIX_ID,
+            "coverage_pct": round_to(100.0 * with_sp / total, 0.1) if total else None,
+            "conifer_pct": round_to(100.0 * float(crown[conifer].sum()) / with_sp, 0.1),
+            "trees": int(has.sum())}
+
+
+def biodiversity_block(g: Mapping[str, Any] | None) -> dict | None:
+    """gbif-rarefied-v1 (pure): the published aggregate of one gbif_by_place.json place. `rarefied_500` = expected
+    species in BIODIV_N random species-level records (Hurlbert; null below BIODIV_N records → `few_records`), whole
+    species; ranges [lo, mid, hi] whole species; years [first, last]."""
+    if not g or g.get("occurrences") is None or g.get("species") is None:
+        return None
+
+    def rng(v):
+        return [round_to(float(x), 1) for x in v] if isinstance(v, (list, tuple)) and len(v) == 3 else None
+    r5 = rng(g.get("rarefied") if int(g.get("rarefy_n") or BIODIV_N) == BIODIV_N else None)
+    y = g.get("years") or {}
+    years = [int(y["first"]), int(y["last"])] if y.get("first") is not None and y.get("last") is not None else None
+    inat = (g.get("inaturalist") or {}).get("share_pct")
+    return {"species": int(g["species"]), "occurrences": int(g["occurrences"]),
+            "inat_share_pct": round_to(float(inat), 0.1) if inat is not None else None,
+            "rarefied_500": r5[1] if r5 else None, "rarefied_500_range": r5,
+            "rarefied_150_range": rng(g.get("rarefied_150")),
+            "few_records": r5 is None or "few-records" in (g.get("flags") or []), "years": years}
+
+
+def forest_blocks(fa: Mapping[str, Any] | None, epochs: Sequence[int] = (1935,),
+                  min_cover_pct: float = CONTINUITY_MIN_COVER_PCT, min_count: int = MIN_COUNT
+                  ) -> tuple[float | None, dict | None, dict | None]:
+    """(forest_continuity_pct, forest_continuity, forest_age) of one forest_age_by_place.json place (pure).
+    hist-forest-crown-share-v1: share of the crown area (inside the historic mask) that stood on forest on every
+    classified map; null when the mask covers < min_cover_pct of the crown area. One classified map is a snapshot
+    (`snapshot: true`), not continuity. tree-age-height-v2: age classes by crown area of the trees ≥ 8 m, with
+    `beyond` = trees taller than the class-II table end (no age); median of the middle estimates of the trees with an
+    age (5 years); `trees_beyond` counted apart. A v1 work file (no 'beyond' key) omits `beyond`."""
+    if not fa:
+        return None, None, None
+    fc = fa.get("forest_continuity") or {}
+    cont, cpct = None, None
+    if fc.get("covered_crown_pct") is not None:
+        cov = float(fc["covered_crown_pct"])
+        cont = {"covered_pct": round_to(cov, 0.1), "epochs": [int(e) for e in epochs], "snapshot": len(epochs) < 2}
+        if cov >= min_cover_pct and fc.get("forest_all_classified_pct") is not None:
+            cpct = round_to(float(fc["forest_all_classified_pct"]), 0.1)
+    age = None
+    cls = fa.get("age_class_share_pct_by_crown") or {}
+    if int(fa.get("trees_with_age") or 0) >= min_count and cls:
+        age = {"trees": int(fa["trees_with_age"]),
+               "trees_beyond": int(fa["trees_beyond_tables"]) if fa.get("trees_beyond_tables") is not None else None,
+               "median_y": int(round_to(float(fa["age_mid_median"]), 5)) if fa.get("age_mid_median") is not None else None,
+               "classes_pct": {k: round_to(float(cls.get(k, 0.0)), 0.1) for k in AGE_CLASSES
+                               if k in cls or k != "beyond"}}
+    return cpct, cont, age
+
+
+def nutzung_block(n: Mapping[str, Any] | None) -> dict | None:
+    """alkis-nutzung-groups-v1 (pure): land-use shares of the official area per group, 0.1 pp; None unless the
+    place's land use is known (`status: 'ok'`; the SL WFS 414 is pending)."""
+    if not n or n.get("status") != "ok" or not isinstance(n.get("share_pct"), Mapping):
+        return None
+    s = n["share_pct"]
+    return {"source": "alkis", "shares_pct": {k: round_to(float(s.get(k, 0.0)), 0.1) for k in NUTZUNG_GROUPS}}
+
+
+def roof_block(rp: Mapping[str, Any] | None, min_count: int = MIN_COUNT) -> tuple[dict | None, bool]:
+    """roof-pv-potential-v2 per place (pure): (block | None, suppressed). Suppressed (minimum-size rule) when the
+    place has fewer than `min_count` buildings or roofs.py suppressed it. suitable_m2 (before the usable factors) and
+    usable_m2 (the kWp base; only when the work file has it) to 100 m², kwp 2 sig. digits."""
+    if not rp:
+        return None, False
+    if int(rp.get("buildings") or 0) < min_count or rp.get("suppressed"):
+        return None, True
+    out = {"buildings": int(rp["buildings"]), "suitable_m2": round_to(float(rp["suitable_area_m2"]), 100)}
+    if rp.get("usable_area_m2") is not None:
+        out["usable_m2"] = round_to(float(rp["usable_area_m2"]), 100)
+    out["kwp"] = round_range(rp["kwp"])
+    return out, False
+
+
+def used_reason_de(rm: Mapping[str, Any]) -> str:
+    """German one-liner why a municipality's used roof share is not computable (pure)."""
+    tail = "Kleine PV-Anlagen meldet das Marktstammdatenregister nur je Gemeinde, daher kein genutzter Anteil."
+    miss = list(rm.get("missing_gemarkungen") or [])
+    if miss:
+        return (f"Dachflächen fehlen für {len(miss)} weitere Gemarkungen der Gemeinde ({', '.join(miss)}). " + tail)
+    return "Nicht alle Gemarkungen der Gemeinde sind erfasst. " + tail
+
+
+def municipality_roofs(rm: Mapping[str, Any] | None, kept: set[str]) -> tuple[dict | None, list | None, str | None]:
+    """(roof_potential, used_pct, used_pct_reason_de) of one roofs_by_place.json municipality (pure). used_pct is
+    a Range in 0.1 pp only when roofs.py could compute it (all Gemarkungen of the municipality processed)."""
+    if not rm or not rm.get("potential_places_kwp"):
+        return None, None, None
+    pot = {"places": [p for p in rm.get("places", []) if p in kept],
+           "suitable_m2": round_to(float(rm["suitable_area_places_m2"]), 100),
+           "kwp": round_range(rm["potential_places_kwp"]), "complete": bool(rm.get("complete"))}
+    u = rm.get("used_share_pct")
+    if isinstance(u, (list, tuple)) and len(u) == 3:
+        return pot, [round_to(float(v), 0.1) for v in u], None
+    return pot, None, used_reason_de(rm)
+
+
+def _goal(gid: str, title: str, metric: str | None, unit: str, baseline, baseline_year: int, delta: float,
+          measured_by: str, step: float, note_de: str | None = None) -> dict:
+    target = None if baseline is None else round_to(baseline + delta, step)
+    g = {"id": gid, "title_de": title, "metric": metric, "unit": unit, "baseline": baseline,
+         "baseline_year": int(baseline_year), "target": target, "target_delta": _num(delta),
+         "target_year": GOAL_YEAR, "measured_by": measured_by, "progress": None}
+    if note_de:
+        g["note_de"] = note_de
+    return g
+
+
+def _de_int(v: float) -> str:
+    return f"{int(round(v)):,}".replace(",", ".")
+
+
+def goals_for(p: Mapping[str, Any], generated_year: int) -> list[dict]:
+    """goals-examples-v1 (pure, on a rounded place): the plan's §5 example goals with the place's published
+    baseline. `progress` stays null until a second LiDAR epoch (measured_by 'lidar') or community data
+    (measured_by 'community', Phase 2) exists. Goals without a measurable baseline carry baseline/target null."""
+    out = []
+    o = p.get("ortslage") or {}
+    epoch = int(p.get("lidar_epoch") or generated_year)
+    if o.get("canopy_pct") is not None:
+        out.append(_goal("kronen-ortslage", f"+2 Prozentpunkte Kronenanteil in der Ortslage bis {GOAL_YEAR}",
+                         "ortslage.canopy_pct", "%", o["canopy_pct"], epoch, 2.0, "lidar", 0.1))
+    if o.get("sealed_pct") is not None and o.get("area_ha") is not None:
+        # A deed counter (m² unsealed since the baseline year, 0 → 1,000), not the sealed total: 1,000 m² of
+        # several km² would be an invisible 0.03 % step and is below what aerial data resolve (review 2026-11-08).
+        sealed_m2 = round_to(o["area_ha"] * 1e4 * o["sealed_pct"] / 100.0, 100)
+        out.append(_goal("entsiegeln", f"1.000 m² Fläche in der Ortslage entsiegeln bis {GOAL_YEAR}",
+                         None, "m²", 0, epoch, 1000.0, "community", 100,
+                         note_de=f"Zum Vergleich: heute etwa {_de_int(sealed_m2)} m² versiegelt "
+                                 f"({str(o['sealed_pct']).replace('.', ',')} % der Ortslage)"))
+    n_riesen = len(p.get("riesen") or [])
+    if n_riesen:
+        out.append(_goal("riesen-bestimmt", f"Alle {n_riesen} Riesen der Gemarkung bestimmt (Art, Stammumfang)",
+                         None, "Bäume", 0, generated_year, float(n_riesen), "community", 1))
+    out.append(_goal("hecke", f"500 m neue Hecke bis {GOAL_YEAR}", None, "m", None, generated_year, 500.0,
+                     "community", 1))
+    return out
+
+
 def chunk_tree_ids(buf: bytes, e_ll: float, n_ll: float) -> np.ndarray:
     """Stable ids (Trees rule) of the records of one sle-trees-v1 chunk whose lower-left corner is (e_ll, n_ll)."""
     from trees import decode_chunk, tree_ids
@@ -750,13 +1023,20 @@ def round_place(p: Mapping[str, Any]) -> dict:
         q["tallest"] = {"h": round_to(t["h"], 0.1), "E": float(t["E"]), "N": float(t["N"]), "id": int(t["id"])}
         if "in_trees" in t:
             q["tallest"]["in_trees"] = bool(t["in_trees"])
+    if "riesen" in p:
+        q["riesen"] = round_riesen(p["riesen"] or [])
+    # Phase 1 blocks come in already rounded (species_block, biodiversity_block, forest_blocks, nutzung_block,
+    # roof_block); goals are derived from the rounded place afterwards (goals_for).
     return q
 
 
-def disciplines() -> list[dict]:
-    def d(id_, name, emoji, desc, measure, unit, hib, method, ready=True, scope="place"):
-        return {"id": id_, "name_de": name, "emoji": emoji, "description_de": desc, "scope": scope,
-                "measure": measure, "unit": unit, "higher_is_better": hib, "method": method, "ready": ready}
+def disciplines(biodiversity_ready: bool = True) -> list[dict]:
+    def d(id_, name, emoji, desc, measure, unit, hib, method, ready=True, scope="place", note=None):
+        out = {"id": id_, "name_de": name, "emoji": emoji, "description_de": desc, "scope": scope,
+               "measure": measure, "unit": unit, "higher_is_better": hib, "method": method, "ready": ready}
+        if note:
+            out["note_de"] = note
+        return out
     return [
         d("gruenste-ortslage", "Grünste Ortslage", "🌳",
           "Anteil von Baumkronen und Grün (Luftbild, Nahinfrarot) in der bebauten Ortslage "
@@ -781,13 +1061,89 @@ def disciplines() -> list[dict]:
         d("groesster-fortschritt", "Größter Fortschritt", "📈",
           "Veränderung zwischen zwei Befliegungen (kommt, sobald eine zweite Befliegung vorliegt)", "", "", True, "",
           ready=False),
+        d("artenvielfalt", "Artenvielfalt", "🦋",
+          "Erwartete Artenzahl in 500 zufällig gezogenen Fundmeldungen (GBIF, u. a. iNaturalist): misst, was "
+          "beobachtet und gemeldet wurde, nicht die Qualität der Natur",
+          "biodiversity.rarefied_500", "Arten", True, BIODIV_ID, ready=biodiversity_ready,
+          note=("Grober Hinweis, keine Messung: hängt stark davon ab, wer wo beobachtet (Vogellisten senken den "
+                "Wert, Insektenfotos heben ihn). Orte mit weniger als 500 Meldungen: keine Daten."))
+        if biodiversity_ready else
         d("artenvielfalt", "Artenvielfalt", "🦋", "Beobachtete Arten je Ort (kommt in Phase 1)", "", "", True, "",
           ready=False),
     ]
 
 
+def phase1_methods(src: Mapping[str, Any] | None = None) -> dict:
+    """Method entries of the Phase 1 topics; `src` = the loaded Phase 1 work files (params copied from them)."""
+    src = src or {}
+    gb, rf, fa, nu = (src.get(k) or {} for k in ("gbif", "roofs", "forest_age", "nutzung"))
+    gp = gb.get("params") or {}
+    fh = fa.get("forest_hist") or {}
+    rule = fa.get("tree_age_rule") or {}
+    return {
+        "species": {"id": SPECIES_MIX_ID, "label_de": "Baumartenmischung nach Kronenfläche (DLR-Karte 2022, Schätzung)",
+                    "params": {"source": "DLR Tree Species Germany 2022, 10 m (contract 'Tree species')",
+                               "per_tree": "class of the 10 m cell under the tree top (dlr-nearest-25832-v1)",
+                               "weight": "crown area π r² (crown-disc-v1)", "assign": "parcel-pip-v1",
+                               "share_of": "crown area with a species class", "rounding_pct": 0.1,
+                               "coverage": "crown area with a species ÷ all crown area of the place",
+                               "no_class": "outside the DLR forest mask (village and garden trees) or canopy loss",
+                               "weak": {"classes": list(SPECIES_WEAK),
+                                        "why": "Thünen cross-check agrees with < 10 % of their cells here; shares unsure"},
+                               "min_trees": MIN_COUNT}},
+        "riesen": {"id": RIESEN_ID, "label_de": "Die höchsten geprüften Bäume je Gemarkung",
+                   "params": {"n": RIESEN["n"], "min_spacing_m": RIESEN["min_spacing_m"], "checks": TALLEST_ID,
+                              "order": "h desc (0.01 m), then id asc; greedy, each ≥ min_spacing_m from the earlier "
+                                       "picks", "rank": "competition ranking on the published h (0.1 m)",
+                              "species": "species-dlr-neighbourhood-v1 at the top (key, p %), only when "
+                                         "„wahrscheinlich“ (p ≥ 50 %, no contradiction); omitted for "
+                                         + ", ".join(RIESEN_NO_SPECIES) + ", „unsicher“ classes and trees without a "
+                                         "class",
+                              "max_checks": RIESEN["max_checks"]}},
+        "biodiversity": {"id": BIODIV_ID, "label_de": "Erwartete Artenzahl in 500 Fundmeldungen (GBIF, Rarefaction)",
+                         "params": {"source_method": gb.get("method", "gbif-facets-v1"),
+                                    "query_date": gb.get("query_date"), "rarefy_n": gp.get("rarefy_n", BIODIV_N),
+                                    "rarefy_n_small": gp.get("rarefy_n_small"),
+                                    "interval": "± 1.96 SD (Heck 1975, sampling noise only)",
+                                    "filters": (gb.get("source") or {}).get("filters"),
+                                    "geometry": (gb.get("source") or {}).get("geometry"),
+                                    "few_records": "fewer than rarefy_n species-level records → rarefied_500 null",
+                                    "caveats": gb.get("caveats"), "stored": "counts only, no record, coordinate "
+                                                                            "or species name"}},
+        "forest_age": {"id": FOREST_AGE_ID, "label_de": "Alter aus Baumhöhe und Ertragstafel (Schätzung)",
+                       "params": {"weight": "crown area π r² of the trees ≥ 8 m", "min_height_m": 8.0,
+                                  "median": "median of the middle estimates of the trees with an age, 5 years",
+                                  "beyond": "trees taller than the class-II end of their yield table get no age "
+                                            "(class 'beyond'; v1 reported the clamped last table age)",
+                                  "classes": (fa.get("params") or {}).get("age_classes"),
+                                  "species_source": fa.get("species_source"),
+                                  "tables": {k: v.get("source") for k, v in (rule.get("yield_tables") or {}).items()},
+                                  "tables_note": "rounded table values, not yet checked against the printed tables"}},
+        "forest_continuity": {"id": CONTINUITY_ID, "label_de": "Kronenfläche auf Wald der historischen Karten",
+                              "params": {"mask": fh.get("mask"), "mask_method": fh.get("method"),
+                                         "classified_epochs": [e.get("year") for e in fh.get("epochs", [])
+                                                               if e.get("classified")],
+                                         "min_cover_pct": CONTINUITY_MIN_COVER_PCT,
+                                         "snapshot": "one classified map is a snapshot („laut Karte 1935–40“), "
+                                                     "not continuity"}},
+        "nutzung": {"id": NUTZUNG_ID, "label_de": "Tatsächliche Nutzung (ALKIS), Anteile der amtlichen Fläche",
+                    "params": {"groups": list(NUTZUNG_GROUPS), "rule": nu.get("rule"),
+                               "status": {p.get("id"): p.get("status") for p in nu.get("places", [])}}},
+        "roof_potential": {"id": ROOF_ID, "label_de": "Für PV geeignete Dachflächen aus LoD2 (Schätzung)",
+                           "params": {**(rf.get("params") or {}), "suitable_m2_rounding": 100,
+                                      "suitable_m2": "suitable planes before the usable factors",
+                                      "usable_m2": "pitched suitable × setback + flat suitable × flat_usable (the kWp base)",
+                                      "used_pct": "MaStR Gebäude-PV kWp ÷ potential, only when all Gemarkungen of "
+                                                  "the municipality are processed"}},
+        "goals": {"id": GOALS_ID, "label_de": "Beispielziele je Gemarkung (Plan §5)",
+                  "params": {"target_year": GOAL_YEAR, "progress": "null until a second LiDAR epoch "
+                                                                  "(measured_by 'lidar') or community data exists"}},
+    }
+
+
 def methods(osm_check: Mapping[str, Any], ortslage_info: Mapping[str, Any], ndvi_table: bool,
-            border: Mapping[str, Any] | None, tall: Mapping[str, Any] | None = None) -> dict:
+            border: Mapping[str, Any] | None, tall: Mapping[str, Any] | None = None,
+            phase1: Mapping[str, Any] | None = None) -> dict:
     crown_params: dict[str, Any] = {"trees": "all trees with their top in the place (fill trees included); tops "
                                              f"above {APP_MAX_HEIGHT:g} m only when they pass the tallest checks",
                                     "cap_pct": 100}
@@ -800,8 +1156,10 @@ def methods(osm_check: Mapping[str, Any], ortslage_info: Mapping[str, Any], ndvi
         "assign": {"id": "parcel-pip-v1", "label_de": "Baum gehört zur Gemarkung des Flurstücks unter der Krone",
                    "params": {"predicate": "intersects", "tie": "first parcel"}},
         "crown": {"id": "crown-disc-v1", "label_de": "Kronenfläche als Kreisscheiben", "params": crown_params},
-        "biomass": {"id": "crown-allometry-v1", "label_de": "Biomasse aus Höhe und Kronendurchmesser (grob)",
+        "biomass": {"id": BIOMASS_ID, "label_de": "Biomasse aus Höhe und Kronendurchmesser (grob)",
                     "params": {"D_cm": "0.557*(H*2r)^0.809", "AGB_kg": "0.0673*(rho*D^2*H)^0.976",
+                               "group": "tree-group-v1: a „wahrscheinlich“ DLR class, else the DOP colour type "
+                                        "(contract 'Tree species'); v1 used the colour type only",
                                "rho_conifer": RHO_CONIFER, "rho_other": RHO_OTHER, "lo_factor": BIOMASS_LO,
                                "hi_factor": BIOMASS_HI, "co2_per_agb": CO2_PER_AGB}},
         "ortslage": {"id": "ortslage-bldg-buffer-50m-v1", "label_de": "Gebäude (LoD2) plus 50 m Puffer",
@@ -840,12 +1198,65 @@ def methods(osm_check: Mapping[str, Any], ortslage_info: Mapping[str, Any], ndvi
                      "params": {"status": "In Betrieb", "power": "Bruttoleistung (kWp)", "balcony": "included",
                                 "small_kw": 30, "per_inhabitant": "official Zensus 2022 municipality total",
                                 "by_year": f"years with < {MIN_COUNT} systems are carried into the next year"}},
+        **phase1_methods(phase1),
     }
 
 
 # =================================================================================================== I/O
 def load_json(name: str) -> dict:
     return json.loads((ORTE_DIR / name).read_text())
+
+
+def load_phase1(base: Path | None = None) -> dict[str, dict | None]:
+    """The Phase 1 work files (PHASE1_FILES) that exist in data/work/orte/, else None per key."""
+    base = base or ORTE_DIR
+    out: dict[str, dict | None] = {}
+    for k, name in PHASE1_FILES.items():
+        f = base / name
+        out[k] = json.loads(f.read_text()) if f.exists() else None
+        if out[k] is None:
+            print(f"  (no {name}: {k} left out)")
+    return out
+
+
+def phase1_by_place(ph1: Mapping[str, Any]) -> dict[str, dict]:
+    """Per-place lookups {key: {place id: entry}} of the Phase 1 files (+ 'roofs_muni' by AGS). Pure."""
+    def by_id(doc, field="places"):
+        v = (doc or {}).get(field) or []
+        if isinstance(v, Mapping):
+            return dict(v)
+        return {p["id"]: p for p in v if isinstance(p, Mapping) and "id" in p}
+    out = {k: by_id(ph1.get(k)) for k in PHASE1_FILES}
+    out["roofs_muni"] = {m["ags"]: m for m in ((ph1.get("roofs") or {}).get("municipalities") or []) if "ags" in m}
+    return out
+
+
+# Place fields filled from each Phase 1 file (an input is listed when at least one place got a value).
+PHASE1_FIELDS = {"species": ("species",), "gbif": ("biodiversity",), "roofs": ("roof_potential",),
+                 "forest_age": ("forest_age", "forest_continuity"), "nutzung": ("nutzung",)}
+
+
+def phase1_used(ph1: Mapping[str, Any], places: Sequence[Mapping[str, Any]]) -> dict:
+    """The loaded Phase 1 files whose data reached at least one place (→ inputs + attribution). Pure."""
+    return {k: v for k, v in ph1.items() if v and any(p.get(f) is not None for p in places
+                                                        for f in PHASE1_FIELDS[k])}
+
+
+def labels_de(ph1: Mapping[str, Any] | None = None) -> dict:
+    """German labels for the keys used in places.json (species, age classes, land-use groups)."""
+    import species as SP
+    nu = ((ph1 or {}).get("nutzung") or {}).get("groups") or {}
+    ages = {c["key"]: c["label_de"] for c in (((ph1 or {}).get("forest_age") or {}).get("params") or {})
+            .get("age_classes", []) if "key" in c}
+    return {
+        "species": {c[1]: c[2] for c in SP.CLASSES if c[4] is not None},
+        "age_classes": {k: ages.get(k, d) for k, d in zip(AGE_CLASSES, (
+            "jung (unter 40 Jahre)", "mittelalt (40–80 Jahre)", "alt (80–120 Jahre)", "sehr alt (über 120 Jahre)",
+            "höher als die Ertragstafel (ohne Alter)"))},
+        "nutzung": {k: (nu.get(k) or {}).get("label_de", d) for k, d in zip(NUTZUNG_GROUPS, (
+            "Wald und Gehölz", "Landwirtschaft", "Gärten, Parks, Friedhöfe", "Siedlung, Gewerbe, Sport", "Verkehr",
+            "Gewässer", "Sonstiges"))},
+    }
 
 
 def overpass_query(bbox: tuple[float, float, float, float]) -> str:
@@ -1061,7 +1472,8 @@ def first_attr(entries: Iterable[str], needle: str, default: str) -> str:
     return next((a for a in entries if needle in a), default)
 
 
-def build_inputs(gem_meta: dict, trees_meta: dict, inputs_json: dict, osm_meta: dict, regional_date: str) -> dict:
+def build_inputs(gem_meta: dict, trees_meta: dict, inputs_json: dict, osm_meta: dict, regional_date: str,
+                 phase1: Mapping[str, Any] | None = None) -> dict:
     def day(s: str | None) -> str:
         return (s or "")[:10] or dt.date.today().isoformat()
     t_attr = trees_meta.get("attribution", [])
@@ -1111,10 +1523,43 @@ def build_inputs(gem_meta: dict, trees_meta: dict, inputs_json: dict, osm_meta: 
                   "retrieved": day(inputs_json["sources"]["mastr"].get("export_date")), "licence": dl,
                   "attribution": mastr_attr, "url": "https://www.marktstammdatenregister.de/"},
     }
+    inp.update(phase1_inputs(phase1 or {}))
     for k, v in inp.items():
         if not v["attribution"] or ";" in v["attribution"]:
             raise ValueError(f"input {k}: attribution missing or contains ';'")
     return inp
+
+
+def phase1_inputs(used: Mapping[str, Any]) -> dict:
+    """Input entries of the Phase 1 sources actually used (`used` = the loaded work files whose data went into
+    places.json). Licences checked 2026-11-08: DLR CC BY 4.0; GBIF records CC0 / CC BY 4.0 / CC BY-NC 4.0 per
+    dataset (only counts are published); historic maps dl-de/by-2-0."""
+    def day(s: str | None) -> str:
+        return (s or "")[:10] or dt.date.today().isoformat()
+    import species as SP
+    out: dict[str, dict] = {}
+    sp, fa = used.get("species"), used.get("forest_age")
+    if sp or (fa and "DLR" in str(fa.get("species_source", ""))):   # species mix, Riesen species, age species
+        out["species_dlr"] = {"name_de": "Baumarten Deutschland 2022 (DLR, Sentinel-1/-2, 10 m)", "provider": "DLR",
+                              "year": 2022, "retrieved": day((sp or fa).get("generated")), "licence": "CC-BY-4.0",
+                              "attribution": (sp or {}).get("attribution") or SP.ATTRIBUTION_DLR,
+                              "url": "https://doi.org/10.15489/smh8w3j8i962"}
+    gb = used.get("gbif")
+    if gb:
+        attr = (gb.get("attribution") or [""])[0]
+        out["gbif"] = {"name_de": "GBIF-Fundmeldungen (nur Anzahlen je Gemarkung)", "provider": "GBIF",
+                       "year": None, "retrieved": day(gb.get("query_date") or gb.get("generated")),
+                       "licence": "CC0-1.0 / CC-BY-4.0 / CC-BY-NC-4.0 (je Datensatz)", "attribution": attr,
+                       "url": "https://www.gbif.org"}
+        if gb.get("attribution_note_de"):
+            out["gbif"]["note_de"] = gb["attribution_note_de"]
+    if fa and any((p.get("forest_continuity") or {}).get("covered_crown_pct") for p in fa.get("places", [])):
+        hist = next((a for a in fa.get("attribution", []) if "Historische Karten" in a),
+                    "© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0, Daten bearbeitet (Historische Karten)")
+        out["hist_maps_sl"] = {"name_de": "Historische Karten Saarland (TK25, Ausgaben 1935–40)", "provider": "LVGL-SL",
+                               "year": None, "retrieved": day(fa.get("generated")), "licence": "dl-de/by-2-0",
+                               "attribution": hist}
+    return out
 
 
 def ndvi_class_check(grid: Grid, geoms_ortslage, paved_all, table) -> dict:
@@ -1193,6 +1638,25 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
     T = {k: z[k] for k in z.files if k != "meta"}
     trees_meta = json.loads(str(z["meta"]))
     app_cap = float(trees_meta.get("params", {}).get("max_height", APP_MAX_HEIGHT))
+
+    # --- Phase 1 work files (optional) + per-tree species (aligned with trees.npz, filtered along with T) -----
+    ph1 = load_phase1()
+    print(f"Phase 1 inputs: {', '.join(k for k, v in ph1.items() if v) or 'none'}", flush=True)
+    sp_code, sp_prob = ORTE_DIR / "species_trees.npy", ORTE_DIR / "species_prob_trees.npy"
+    if ph1.get("species") and sp_code.exists() and sp_prob.exists():
+        c, pr_ = np.load(sp_code), np.load(sp_prob)
+        if c.shape == T["E"].shape and pr_.shape == T["E"].shape:
+            T["species"], T["species_p"] = c, pr_
+        else:
+            print(f"  ! species arrays ({c.shape}) do not match trees.npz ({T['E'].shape}): species.py stats "
+                  "must run after stats_trees.py; species left out", file=sys.stderr)
+            ph1["species"] = None
+    elif ph1.get("species"):
+        print("  ! species_by_place.json without per-tree arrays: species left out", file=sys.stderr)
+        ph1["species"] = None
+    ph1_by = phase1_by_place(ph1)
+    hist_epochs = [int(e["year"]) for e in ((ph1.get("forest_age") or {}).get("forest_hist") or {}).get("epochs", [])
+                   if e.get("classified")] or [1935]
 
     # --- buildings, Ortslage --------------------------------------------------------------------------------
     fps = load_buildings_footprints()
@@ -1286,7 +1750,17 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
 
     pidx = assign_points(T["E"], T["N"], p_geoms)
     t_place = np.where(pidx >= 0, p_place_arr[np.maximum(pidx, 0)], "")
-    agb = agb_kg(T["h"], T["r"], T["type"] == 1)
+    # crown-allometry-v2: ρ by tree-group-v1 (a „wahrscheinlich“ DLR class wins over the DOP colour type)
+    if "species" in T:
+        import species as SP
+        t_group = SP.tree_group(T["species"], T["species_p"], T["type"])
+    else:
+        t_group = np.asarray(T["type"]).astype(np.int64) & 0x7F
+    report["tree_group"] = {"conifer": int((t_group == 1).sum()), "broadleaf": int((t_group == 2).sum()),
+                            "none": int((t_group == 0).sum()),
+                            "colour_type_conifer": int(((np.asarray(T["type"]).astype(np.int64) & 0x7F) == 1).sum()),
+                            "source": "tree-group-v1" if "species" in T else "colour type (no species arrays)"}
+    agb = agb_kg(T["h"], T["r"], t_group == 1)
     crown = math.pi * T["r"].astype(np.float64) ** 2
     print(f"trees: {len(pidx)}, outside places {int((pidx < 0).sum())} [{time.time() - t0:.0f}s]", flush=True)
 
@@ -1380,12 +1854,21 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
             if in_orts[i]:
                 return "in-ortslage"
             return edge_reason(bnd, float(T["E"][i]), float(T["N"][i])) or plaus(i)
-        k, rejects = pick_tallest(T["h"][idx], T["fill"][idx], T["id"][idx], check)
+        # riesen-checked-v1: the tallest-checked-v4 winner plus the next checked trees ≥ 20 m apart
+        picks, rejects = pick_top(T["h"][idx], T["fill"][idx], T["id"][idx], T["E"][idx], T["N"][idx], check)
+        riesen = []
+        for k in picks:
+            i = int(idx[k])
+            row = {"h": float(T["h"][i]), "E": float(T["E"][i]), "N": float(T["N"][i]), "id": int(T["id"][i])}
+            row["in_trees"] = trees_layer_has(aoi_dir, row["E"], row["N"], row["id"])
+            if "species" in T:
+                sp_e = tree_species_entry(int(T["species"][i]), int(T["species_p"][i]), int(T["type"][i]))
+                if sp_e:
+                    row["species"] = sp_e
+            riesen.append(row)
         tallest = None
-        if k >= 0:
-            i = idx[k]
-            tallest = {"h": float(T["h"][i]), "E": float(T["E"][i]), "N": float(T["N"][i]), "id": int(T["id"][i])}
-            tallest["in_trees"] = trees_layer_has(aoi_dir, tallest["E"], tallest["N"], tallest["id"])
+        if riesen:
+            tallest = {k: riesen[0][k] for k in ("h", "E", "N", "id", "in_trees")}
             cw = grid.window((tallest["E"] - 0.5, tallest["N"] - 0.5, tallest["E"] + 0.5, tallest["N"] + 0.5), pad=20)
             ctx = tallest_context(grid.read(RASTER_DIR / "chm.tif", cw), grid.read(RASTER_DIR / "dtm.tif", cw),
                                   tallest["h"])
@@ -1408,8 +1891,19 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
             "area_ha": area_m2 / 1e4, "parcels": n_parcels, "trees": trees_n, "crown_ha": crown_m2 / 1e4,
             "crown_pct": share_pct(crown_m2, area_m2), "agb_t": agb_t, "co2_t": co2_t, "ortslage": ortslage,
             "inhabitants": inhabitants if inhabitants >= 1 else None, "trees_per_inhabitant": tpi,
-            "tallest": tallest, "pv": None,
+            "tallest": tallest, "pv": None, "riesen": riesen,
         }
+        # Phase 1 blocks (null when the work file is missing or has nothing for this place)
+        place["species"] = species_block(T["species"][sel_t], T["r"][sel_t]) if "species" in T else None
+        place["biodiversity"] = biodiversity_block(ph1_by["gbif"].get(pid))
+        (place["forest_continuity_pct"], place["forest_continuity"],
+         place["forest_age"]) = forest_blocks(ph1_by["forest_age"].get(pid), epochs=hist_epochs)
+        place["nutzung"] = nutzung_block(ph1_by["nutzung"].get(pid))
+        place["roof_potential"], roof_sup = roof_block(ph1_by["roofs"].get(pid))
+        if roof_sup:
+            place["suppressed"].append("roof_potential")
+        report["places"][pid]["riesen_rejects"] = rejects
+        report["places"][pid]["riesen_n"] = len(riesen)
         report["places"][pid].update({"lidar_coverage": round(lidar_cov, 5), "rlp_lidar_share": round(rlp_share, 4),
                                       "ndvi_coverage_ortslage": round(ndvi_cov, 5),
                                       "area_official_ha_places_py": pr.get("area_official_ha")})
@@ -1443,12 +1937,18 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
                    "systems": int(io["units"]), "kwp": int(round(io["kwp"])), "kwp_per_inhabitant": round_sig(kwp_pi),
                    "small_systems": int(m["lt_30kw"]["units"]), "by_year": by_year},
         })
+        if ph1.get("roofs"):
+            pot, used, why = municipality_roofs(ph1_by["roofs_muni"].get(m["ags"]), kept)
+            munis[-1]["roof_potential"] = pot
+            munis[-1]["pv"]["used_pct"] = used
+            munis[-1]["pv"]["used_pct_reason_de"] = why
         report.setdefault("municipalities", {})[m["ags"]] = {"official_population": pop, "regional_name": reg_name}
     munis.sort(key=lambda x: sort_key_de(x["name_de"]))
 
     # --- assemble -------------------------------------------------------------------------------------------
     inputs_json = load_json("inputs.json")
-    inputs = build_inputs(gmeta, trees_meta, inputs_json, osm_meta, regional_date)
+    used = phase1_used(ph1, places_raw)
+    inputs = build_inputs(gmeta, trees_meta, inputs_json, osm_meta, regional_date, used)
     attribution = merge_attribution("", [v["attribution"] for v in inputs.values()])
     places_raw.sort(key=lambda p: sort_key_de(p["name_de"]))
     border = (load_json("border_effect.json").get("summary") if (ORTE_DIR / "border_effect.json").exists() else None)
@@ -1462,21 +1962,32 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
             report["places"][p["id"]].setdefault("tallest_context", {})["in_published_outline"] = inside_pub
             if not inside_pub:
                 print(f"  ! {p['id']}: tallest tree lies outside its published outline", file=sys.stderr)
+        out_pub = [r["id"] for r in p.get("riesen") or []
+                   if not shape(f["geometry"]).contains(shapely.Point(r["E"], r["N"]))]
+        report["places"][p["id"]]["riesen_outside_published_outline"] = out_pub
+        if out_pub:
+            print(f"  ! {p['id']}: {len(out_pub)} Riesen lie outside the published outline", file=sys.stderr)
+    places_out = [round_place(p) for p in places_raw]
+    gen_year = int(generated[:4])
+    for q in places_out:
+        q["goals"] = goals_for(q, gen_year)
     doc = {
         "format": FORMAT, "version": VERSION, "generated": generated, "aoi": aoi_key, "crs": "EPSG:25832",
         "extent": extent, "geometry": {"url": "stats/places.geojson", "simplify_m": int(SIMPLIFY_M),
                                        "featureCount": len(feats_out)},
         "min_count": MIN_COUNT, "label_de": LABEL_DE, "disclaimer_de": DISCLAIMER_DE, "inputs": inputs,
         "method": methods(osm_check, orts_info, qtable is not None, border,
-                          {k: v for k, v in report["tall_trees"].items() if k != "at_clip_kept"}),
-        "disciplines": disciplines(),
-        "places": [round_place(p) for p in places_raw], "municipalities": munis, "attribution": attribution,
+                          {k: v for k, v in report["tall_trees"].items() if k != "at_clip_kept"}, ph1),
+        "disciplines": disciplines(biodiversity_ready="gbif" in used and any(
+            (q.get("biodiversity") or {}).get("rarefied_500") is not None for q in places_out)),
+        "labels_de": labels_de(ph1),
+        "places": places_out, "municipalities": munis, "attribution": attribution,
     }
     check_privacy(doc)
     check_outline_privacy(feats_out)
     out_dir = aoi_dir / "stats"
     out_dir.mkdir(parents=True, exist_ok=True)
-    pj = json.dumps(doc, ensure_ascii=False, sort_keys=True, indent=1) + "\n"
+    pj = json.dumps(doc, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"   # compact (size target)
     gj = json.dumps({"type": "FeatureCollection", "features": feats_out}, ensure_ascii=False, sort_keys=True,
                     separators=(",", ":")) + "\n"
     for name, text in (("places.json", pj), ("places.geojson", gj)):
@@ -1485,7 +1996,7 @@ def run(aoi_key: str, refresh_osm: bool = False, write_manifest: bool = True) ->
         tmp.replace(out_dir / name)
     print(f"wrote stats/places.json ({fmt_bytes(len(pj.encode()))}), stats/places.geojson "
           f"({fmt_bytes(len(gj.encode()))})")
-    for name, text, limit in (("places.json", pj, 30 * 1024), ("places.geojson", gj, 150 * 1024)):
+    for name, text, limit in (("places.json", pj, PLACES_JSON_MAX), ("places.geojson", gj, 150 * 1024)):
         if len(text.encode()) > limit:
             print(f"  ! {name} is above the contract target of {fmt_bytes(limit)}", file=sys.stderr)
     if write_manifest:
@@ -1541,6 +2052,72 @@ def _fmt(v, nd: int = 1) -> str:
     return f"{int(v):,}".replace(",", " ")
 
 
+def _rng(r, nd: int = 0) -> str:
+    return "–" if not r else f"{_fmt(r[0], nd)}–{_fmt(r[2], nd)}"
+
+
+def phase1_table(doc: dict, report: dict) -> list[str]:
+    """Review tables of the Phase 1 blocks (stats_table.md)."""
+    lab = (doc.get("labels_de") or {}).get("species", {})
+    L = ["", "Phase 1 per place: species mix (DLR 2022, crown-weighted; coverage = crown with a class), forest age "
+             "(crown-weighted classes young / middle / old / very old / beyond the table), 1935 forest share (null below 50 % mask cover)",
+         "", "| Place | Dominant | Top 3 | Coverage % | Conifer % | Age median y | Age classes % | 1935 forest % "
+             "(mask cover %) | Land use (forest / agri / settlement / traffic %) |",
+         "|---|---|---|---|---|---|---|---|---|"]
+    for p in doc["places"]:
+        sp = p.get("species") or {}
+        top3 = ", ".join(f"{lab.get(m['key'], m['key'])} {m['share_pct']:g}" for m in (sp.get("mix") or [])[:3]) or "–"
+        fa = p.get("forest_age") or {}
+        cls = fa.get("classes_pct") or {}
+        fc = p.get("forest_continuity") or {}
+        nu = (p.get("nutzung") or {}).get("shares_pct") or {}
+        L.append("| " + " | ".join([
+            p["name_de"], lab.get(sp.get("dominant"), "–"), top3, _fmt(sp.get("coverage_pct")),
+            _fmt(sp.get("conifer_pct")), _fmt(fa.get("median_y")),
+            " / ".join(_fmt(cls.get(k)) for k in AGE_CLASSES) if cls else "–",
+            f"{_fmt(p.get('forest_continuity_pct'))} ({_fmt(fc.get('covered_pct'))})",
+            " / ".join(_fmt(nu.get(k)) for k in ("forest", "agriculture", "settlement", "traffic")) if nu else "pending",
+        ]) + " |")
+    L += ["", "Biodiversity (GBIF counts; rarefied = expected species in 500 / 150 records, ± 1.96 SD) and roof PV "
+              "potential (LoD2)", "",
+          "| Place | Species | Records | iNat % | Rarefied 500 (range) | Rarefied 150 range | Years | Roof bldgs "
+          "| Suitable m² | kWp (lo–hi) |", "|---|---|---|---|---|---|---|---|---|---|"]
+    for p in doc["places"]:
+        b = p.get("biodiversity") or {}
+        rp = p.get("roof_potential") or {}
+        yrs = "–" if not b.get("years") else f"{b['years'][0]}–{b['years'][1]}"
+        L.append("| " + " | ".join([
+            p["name_de"], _fmt(b.get("species")), _fmt(b.get("occurrences")), _fmt(b.get("inat_share_pct")),
+            (f"{_fmt(b.get('rarefied_500'))} ({_rng(b.get('rarefied_500_range'))})" if b.get("rarefied_500") is not None
+             else ("few records" if b else "–")), _rng(b.get("rarefied_150_range")), yrs,
+            _fmt(rp.get("buildings")), _fmt(rp.get("suitable_m2")), _rng(rp.get("kwp"))]) + " |")
+    L += ["", "| Municipality | Roof potential kWp (lo–hi) | Places | Complete | PV used % (lo–mid–hi) | Reason |",
+          "|---|---|---|---|---|---|"]
+    for m in doc["municipalities"]:
+        rp, pv = m.get("roof_potential") or {}, m.get("pv") or {}
+        u = pv.get("used_pct")
+        L.append(f"| {m['name_de']} | {_rng(rp.get('kwp'))} | {', '.join(rp.get('places') or []) or '–'} | "
+                 f"{'yes' if rp.get('complete') else 'no'} | {'–' if not u else '–'.join(f'{v:g}' for v in u)} | "
+                 f"{pv.get('used_pct_reason_de') or ''} |")
+    L += ["", f"Riesen (riesen-checked-v1: top {RIESEN['n']} checked trees, ≥ {RIESEN['min_spacing_m']:g} m apart; "
+              "species = DLR class at the top, p %)", "",
+          "| Place | n | Heights m | Species (rank: key p) | in Trees | Rejects |", "|---|---|---|---|---|---|"]
+    for p in doc["places"]:
+        rs = p.get("riesen") or []
+        rp = report["places"].get(p["id"], {})
+        L.append("| " + " | ".join([
+            p["name_de"], str(len(rs)), ", ".join(f"{r['h']:g}" for r in rs) or "–",
+            ", ".join(f"{r['rank']}: {r['species']['key']} {r['species']['p']}" for r in rs if r.get("species")) or "–",
+            str(sum(1 for r in rs if r.get("in_trees"))), str(rp.get("riesen_rejects") or {})]) + " |")
+    L += ["", "Goals (goals-examples-v1; progress null until a second epoch / community data)", "",
+          "| Place | Goal | Baseline | Target | Unit | Measured by |", "|---|---|---|---|---|---|"]
+    for p in doc["places"]:
+        for g in p.get("goals") or []:
+            L.append(f"| {p['name_de']} | {g['title_de']} | {_fmt(g['baseline'])} ({g['baseline_year']}) | "
+                     f"{_fmt(g['target'])} ({g['target_year']}) | {g['unit']} | {g['measured_by']} |")
+    return L
+
+
 def stats_table(doc: dict, report: dict) -> str:
     lines = [f"# Orte im Vergleich: stats table ({doc['generated']}, AOI {doc['aoi']})", "",
              "| Place | State | Category | Area ha | Parcels | Trees | Crown % | AGB t (lo–hi) | Ortslage ha | Bldgs "
@@ -1563,6 +2140,7 @@ def stats_table(doc: dict, report: dict) -> str:
         pv = m["pv"] or {}
         lines.append(f"| {m['name_de']} | {m['ags']} | {_fmt(m['inhabitants'])} | {_fmt(pv.get('systems'))} | "
                      f"{_fmt(pv.get('kwp'))} | {_fmt(pv.get('kwp_per_inhabitant'), 2)} | {_fmt(pv.get('small_systems'))} |")
+    lines += phase1_table(doc, report)
     oc = doc["method"]["ortslage"]["params"]["osm_check"]
     lines += ["", "OSM landuse=residential check (per place): residential ha, % of it inside the Ortslage, "
               "% of the Ortslage that is OSM residential", ""]

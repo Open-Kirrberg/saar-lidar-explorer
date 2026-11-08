@@ -323,3 +323,32 @@ def test_clip_landuse_splits_and_drops():
     assert [(f["properties"]["oid"], f["properties"]["area_m2"]) for f in out] == [("in", 100), ("half", 100)]
     assert out[1]["properties"]["place"] == "kirrberg" and out[0]["properties"]["nutzart"] == "Wald"
     assert max(x for x, _ in out[1]["geometry"]["coordinates"][0]) == 100
+
+
+# --- land-use summary (Q9) ---------------------------------------------------------------------------
+
+def test_landuse_group_mapping_sl_and_rlp_class_texts():
+    cases = {"Laubholz": "forest", "Wald / Laubholz": "forest", "Laub- und Nadelholz": "forest", "Gehölz": "forest",
+             "Ackerland": "agriculture", "Landwirtschaft / Ackerland": "agriculture", "Grünland": "agriculture",
+             "Streuobstwiese": "agriculture", "Garten": "garden_green", "Park": "garden_green",
+             "Friedhof": "garden_green", "Spielplatz, Bolzplatz": "garden_green", "Parkplatz": "traffic",
+             "Parken": "traffic", "Straßenverkehr": "traffic", "Platz": "traffic", "Wohnbaufläche": "settlement",
+             "Industrie und Gewerbe": "settlement", "Campingplatz": "settlement", "Eis-, Rollschuhbahn": "settlement",
+             "Bach": "water", "Gewässer / Stehendes Gewässer": "water", "Modellfluggelände": "other",
+             "Naturnahe Fläche": "other", "Völlig Neues": "unmapped"}
+    for cls, group in cases.items():
+        assert P.landuse_group(cls) == group, cls
+
+
+def test_nutzung_summary_shares_and_pending():
+    props = {"id": "x", "name_de": "X", "state": "RLP", "parcel_source": "wfs519", "area_official_ha": 10.0,
+             "nutzung_m2": {"Laubholz": 40000.0, "Ackerland": 30000.0, "Wohnbaufläche": 20000.0, "Garten": 5000.0,
+                            "Unbekannt": 5000.0}}
+    s = P.nutzung_summary(props)
+    assert s["status"] == "ok" and s["landuse_total_ha"] == 10.0
+    assert s["share_pct"]["forest"] == 40.0 and s["share_pct"]["agriculture"] == 30.0
+    assert s["share_pct"]["settlement"] == 20.0 and s["share_pct"]["garden_green"] == 5.0
+    assert s["unmapped_ha"] == {"Unbekannt": 0.5}
+    pend = P.nutzung_summary({"id": "y", "name_de": "Y", "state": "SL", "parcel_source": "inspire-cp",
+                              "nutzung_m2": {}})
+    assert pend["status"] == "pending" and pend["share_pct"] is None and "414" in pend["note"]

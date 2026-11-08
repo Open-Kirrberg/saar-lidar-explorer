@@ -24,9 +24,10 @@ ADR 0043) are dropped from zone.json, `scene/` and every other file stay local; 
 a local path, the private material folder or an e-mail address, or a GLB with embedded images where the
 policy forbids them, aborts the export. zones/index.json lists only the staged zones.
 
-Orte im Vergleich (ADR 0049) and the historic forest mask: of `<aoi>/stats/` only the files the manifest key
-`stats` names (`places.json`, `places.geojson`) and of `<aoi>/forest_hist/` only the PNG of `forest_hist` are
-staged (`keyed_layer_files`); review reports and work files there never are. A key whose file is missing or
+Orte im Vergleich (ADR 0049), the historic forest mask and the tree species layer: of `<aoi>/stats/` only the
+files the manifest key `stats` names (`places.json`, `places.geojson`), of `<aoi>/forest_hist/` only the PNG of
+`forest_hist` and of `<aoi>/species/` only the PNG of `species` are staged (`keyed_layer_files`); review reports,
+previews and work files there never are. A key whose file is missing or
 whose JSON names a local path aborts; a key with another `format` is dropped with its folder.
 
 Idempotent: files are copied only when size/mtime differ, generated files only when their content
@@ -112,12 +113,14 @@ PRIVATE_AOI_FILES = re.compile(
     r"^(?:run\.json|report(?:_[^/]*)?\.html|eval(?:_[^/]*)?\.(?:json|md)|labels\.jsonl|fachbericht(?:_[^/]*)?(?:/.*|\.[a-z]+)?"
     r"|manifest\.json\.bak[^/]*|[^/]*\.sld-new/.*)$"
 )
-# Orte im Vergleich + historic forest (ADR 0049, data-contract „Place statistics“ / „Historic forest mask“):
+# Orte im Vergleich + historic forest + tree species (ADR 0049, data-contract „Place statistics“ / „Historic forest
+# mask“ / „Tree species“):
 # manifest key -> (folder, required format, path fields). Only the files the key names are public; the
 # pipeline's review reports and work files (stats_report.json etc. stay in data/work) are never staged.
 KEYED_LAYERS: Dict[str, Tuple[str, str, Tuple[str, ...]]] = {
     "stats": ("stats/", "sle-stats-v1", ("url", "geometry")),
     "forest_hist": ("forest_hist/", "sle-forest-hist-v1", ("path",)),
+    "species": ("species/", "sle-species-v1", ("path",)),   # DLR tree species 2022 (CC BY 4.0), contract „Tree species“
 }
 # Last line of defence: no staged AOI text file may still name a UXO class (case-insensitive).
 UXO_TEXT_SUFFIXES = (".json", ".geojson", ".html", ".md", ".txt", ".jsonl", ".csv", ".toml")

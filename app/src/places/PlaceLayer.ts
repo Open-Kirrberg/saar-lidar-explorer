@@ -6,7 +6,9 @@
  *    minimap focus: the dial zooms out briefly, the full-screen map fits it (Minimap.setFocus),
  *  - Riesenbaum pins per place in 3D (Labels3D: pin tip at the displayed ground + tree height, the
  *    tree itself is not exaggerated, see trees/TreeMaterial) and on the minimap. Phones get the short
- *    pin text („🌲 60,9 m“) so the label stays clear of the minimap dial.
+ *    pin text („🌲 60,9 m“) so the label stays clear of the minimap dial,
+ *  - the *Riesen* of the open place card (Phase 1): numbered dots on the minimap (✓ when discovered),
+ *    the one tapped in the list as a pin in 3D (crown top) and a highlighted dot.
  * Coordinates: EPSG:25832 → local frame via utmToWorld (x = E − E0, z = −(N − N0)); never raw UTM in float32.
  */
 import L from 'leaflet';
@@ -20,11 +22,12 @@ import { densifyLine } from '../vectors/drape';
 import type { LocalLine } from '../vectors/drape';
 import { DrapedLines } from '../vectors/DrapedLines';
 import { clipPolyline, fmtNum, giantPinText } from './placesData';
-import type { AoiRect, Outlines, Place } from './placesData';
+import type { AoiRect, Outlines, Place, Riese } from './placesData';
 
 const OUTLINE_RGB: [number, number, number] = [0.27, 0.95, 0.78]; // teal: distinct from parcel / OSM styles
 const OUTLINE_HEX = '#45f2c7';
 const PIN_GROUP = 'place-giants';
+const RIESE_GROUP = 'place-riesen';
 /** Same breakpoint as the shell's phone layout (shell.css). */
 const NARROW = '(max-width: 600px)';
 
@@ -45,6 +48,7 @@ export class PlaceLayer {
   private mapPins: L.LayerGroup | null = null;
   private mapOf: L.Map | null = null;
   private pinsFor: Place[] = [];
+  private mapRiesen: L.LayerGroup | null = null;
   private readonly narrow = typeof window.matchMedia === 'function' ? window.matchMedia(NARROW) : null;
   private readonly onNarrow = () => {
     if (this.pinsFor.length) this.setGiants([...this.pinsFor]);
@@ -176,6 +180,54 @@ export class PlaceLayer {
     this.pinsFor = [];
   }
 
+  /**
+   * Riesen of one place (the open card): numbered minimap dots (✓ = discovered) and, for `active`,
+   * a 3D pin at the crown top (true tree height, not exaggerated) plus a highlighted dot. null → none.
+   */
+  setRiesen(place: Place | null, active: Riese | null, discovered: (r: Riese) => boolean, onClick?: (r: Riese) => void): void {
+    this.clearRiesen();
+    if (!place || !place.riesen.length) return;
+    if (active) {
+      const el = document.createElement('div');
+      el.className = 'sle-pin sle-giant-pin sle-riese-pin';
+      el.innerHTML = `<span class="sle-pin-txt"></span><span class="sle-pin-stem"></span>`;
+      el.querySelector('.sle-pin-txt')!.textContent = `🌲 Nr. ${active.rank} · ${fmtNum(active.h, 1)} m`;
+      el.setAttribute('aria-label', `Riese Nr. ${active.rank} von ${place.name_de}: ${fmtNum(active.h, 1)} m`);
+      el.title = `Riese Nr. ${active.rank} von ${place.name_de}: ${fmtNum(active.h, 1)} m (LiDAR-Höhe, nicht vor Ort gemessen)`;
+      this.d.labels.set(`riese:${active.id ?? active.rank}`, RIESE_GROUP, active.E, active.N, el, { lift: active.h, maxDistance: 6000 });
+    }
+    const mm = this.map();
+    if (!mm) return;
+    this.mapRiesen = L.layerGroup().addTo(mm);
+    for (const r of place.riesen) {
+      const ll = utmToWgs84(r.E, r.N);
+      const on = !!active && active === r;
+      const found = discovered(r);
+      const label = `Riese Nr. ${r.rank} von ${place.name_de}: ${fmtNum(r.h, 1)} m${found ? ' (entdeckt)' : ''}`;
+      L.marker([ll.lat, ll.lon], {
+        icon: L.divIcon({
+          className: 'sle-giant-icon',
+          html: `<span class="sle-riese-dot${on ? ' on' : ''}${found ? ' found' : ''}">${found ? '✓' : r.rank}</span>`,
+          iconSize: on ? [24, 24] : [18, 18],
+          iconAnchor: on ? [12, 12] : [9, 9],
+        }),
+        keyboard: false,
+        bubblingMouseEvents: false,
+        zIndexOffset: on ? 500 : 300,
+        title: label,
+      })
+        .bindTooltip(label.replace(/[&<>"']/g, ''), { direction: 'top', offset: [0, -8] })
+        .on('click', () => onClick?.(r))
+        .addTo(this.mapRiesen);
+    }
+  }
+
+  private clearRiesen(): void {
+    this.d.labels.clearGroup(RIESE_GROUP);
+    this.mapRiesen?.remove();
+    this.mapRiesen = null;
+  }
+
   /** Per frame: ribbon bucket build / re-sampling while terrain streams. */
   update(camera: Camera, renderer: WebGLRenderer): void {
     this.outline?.update(camera, renderer);
@@ -189,6 +241,7 @@ export class PlaceLayer {
     if (mm) {
       this.mapOutline?.addTo(mm);
       this.mapPins?.addTo(mm);
+      this.mapRiesen?.addTo(mm);
       if (this.bounds) this.d.minimap()?.setFocus(this.bounds, { fit: false }); // remount (tier switch): no new peek
     }
   }
@@ -202,5 +255,6 @@ export class PlaceLayer {
     this.narrow?.removeEventListener?.('change', this.onNarrow);
     this.clearOutline();
     this.clearGiants();
+    this.clearRiesen();
   }
 }

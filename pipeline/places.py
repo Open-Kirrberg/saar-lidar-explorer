@@ -23,9 +23,12 @@ Outputs (data/work/orte/, work files, never published as is; G1/G2: only per-pla
 - gemarkungen.geojson   one outline per place + `meta` (stats bbox, tiles, excluded Gemarkungen, attribution)
 - flurstuecke.geojson.gz  parcels of the nine places (flstkennz, gemarkung, gemaschl, place, flaeche_m2, nutzung)
 - nutzung.geojson       RLP ALKIS land-use polygons clipped to the RLP places (nutzart, bez, place, area_m2)
+- nutzung_summary.json  land-use shares per place (forest, agriculture, gardens/parks, settlement, traffic, water,
+                        other; `landuse_group` maps the SL and RLP class texts); SL `pending` while 414 is down
+                        (`--summary-only` rewrites it from gemarkungen.geojson without network)
 and the `[orte]` stats bbox in aois.toml (outlines + 200 m, snapped outward to 1 km).
 
-Usage:  uv run python places.py [--no-nutzung] [--no-toml]
+Usage:  uv run python places.py [--no-nutzung] [--no-toml] [--sl-source auto|wfs414|inspire] [--summary-only]
 """
 from __future__ import annotations
 
@@ -411,6 +414,90 @@ def place_summary(place: Place, gemarkungen: Sequence[Mapping[str, Any]], parcel
         "lidar_epoch": LIDAR_EPOCH[place.state], "flags": place.flags, "outline": dict(info),
         **({"note": place.note} if place.note else {}),
     }
+
+
+# --- land-use summary per place (Q9) -----------------------------------------------------------------
+
+# ALKIS tatsächliche Nutzung (TNTXT class text, SL "Gruppe / Klasse" or RLP "Klasse") → summary group. First match
+# of a keyword in the lower-cased class text wins, so the order matters (e.g. "Gartenland" before "Land").
+LANDUSE_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("traffic", ("parkplatz", "parken", "parkhaus")),            # before "park" (garden_green)
+    ("settlement", ("camping", "caravan", "wochenend", "rollschuh")),   # before "platz", "bahn" (traffic)
+    ("other", ("modellflug",)),                                   # before "flug" (traffic)
+    ("water", ("bach", "graben", "teich", "speicherbecken", "fluss", "gewässer", "stehendes", "kanal",
+               "hafenbecken")),
+    ("forest", ("laubholz", "nadelholz", "wald", "gehölz", "forstwirtschaft")),
+    ("garden_green", ("garten", "grünanlage", "park", "friedhof", "kleingarten", "spielplatz")),
+    ("agriculture", ("acker", "grünland", "streuobst", "obst", "landwirtschaft", "brachland", "gärtnerei",
+                     "weingarten", "baumschule", "heide", "moor", "sumpf")),
+    ("traffic", ("verkehr", "fahrweg", "fußweg", "radweg", "rad- und fußweg", "parkplatz", "parken", "platz",
+                 "eisenbahn", "bahn", "fußgängerzone", "flug", "schiff", "verkehrsübungsplatz")),
+    ("settlement", ("wohn", "gebäude- und freifläche", "industrie", "gewerbe", "handel", "produktion", "handwerk",
+                    "bildung", "soziales", "sicherheit", "gesundheit", "öffentliche", "regierung", "religiös",
+                    "kultur", "versorgung", "deponie", "abfall", "lager", "tankstelle", "restauration",
+                    "beherbergung", "logistik", "kraftwerk", "heizwerk", "wasserwerk", "kläranlage", "bank",
+                    "dienstleistung", "freie berufe", "ausstellung", "funk", "sport", "schwimmen", "freizeit",
+                    "wochenend", "camping", "caravan", "eis-", "mischnutzung", "bergbau", "tagebau", "halde",
+                    "umspann", "betriebsfläche")),
+    ("other", ("naturnah", "vegetationslos", "unland", "historische anlage", "modellflug", "fels", "sand")),
+)
+LANDUSE_LABELS_DE = {"forest": "Wald und Gehölz", "agriculture": "Landwirtschaft", "garden_green": "Gärten, Parks, "
+                     "Friedhöfe", "settlement": "Siedlung, Gewerbe, Sport", "traffic": "Verkehr", "water": "Gewässer",
+                     "other": "Sonstiges", "unmapped": "nicht zugeordnet"}
+
+
+def landuse_group(cls: str) -> str:
+    """ALKIS land-use class text → summary group (LANDUSE_GROUPS; 'unmapped' when no keyword matches). Pure."""
+    t = cls.lower()
+    for group, keys in LANDUSE_GROUPS:
+        if any(k in t for k in keys):
+            return group
+    return "unmapped"
+
+
+def nutzung_summary(props: Mapping[str, Any]) -> dict[str, Any]:
+    """One place's `nutzung_m2` (class → m², from TNTXT) → shares per group in % of the land-use total. Pure."""
+    nutz = props.get("nutzung_m2") or {}
+    total = sum(nutz.values())
+    groups: dict[str, float] = {g: 0.0 for g in LANDUSE_LABELS_DE if g != "unmapped"}
+    unmapped: dict[str, float] = {}
+    for cls, a in nutz.items():
+        g = landuse_group(cls)
+        if g == "unmapped":
+            unmapped[cls] = unmapped.get(cls, 0.0) + a
+        else:
+            groups[g] += a
+    out: dict[str, Any] = {"id": props["id"], "name_de": props["name_de"], "state": props["state"],
+                           "source": props.get("parcel_source")}
+    if total <= 0:
+        out.update(status="pending", share_pct=None, area_ha=None,
+                   note="no land use: SL parcels came from the INSPIRE fallback (WFS 414 down); rerun "
+                        "`places.py --sl-source wfs414` when 414 answers")
+        return out
+    out.update(status="ok", landuse_total_ha=round(total / 1e4, 1),
+               official_area_ha=props.get("area_official_ha"),
+               share_pct={g: round(100 * v / total, 1) for g, v in groups.items()},
+               area_ha={g: round(v / 1e4, 1) for g, v in groups.items()},
+               unmapped_ha={k: round(v / 1e4, 2) for k, v in sorted(unmapped.items(), key=lambda kv: -kv[1])})
+    return out
+
+
+def write_nutzung_summary(gj: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    """data/work/orte/nutzung_summary.json from gemarkungen.geojson (aggregates per place only, G1/G2)."""
+    gj = gj or json.loads((ORTE_WORK / "gemarkungen.geojson").read_text())
+    places = [nutzung_summary(f["properties"]) for f in gj["features"]]
+    out = {"format": "sle-orte-nutzung-v1", "generated": date.today().isoformat(),
+           "source": "ALKIS tatsächliche Nutzung per parcel (TNTXT of the ALKIS-vereinfacht WFS: SL 414, RLP 519), "
+                     "summed per place in places.py (nutzung_m2)",
+           "groups": {g: {"label_de": LANDUSE_LABELS_DE[g],
+                          "keywords": [kw for gg, ks in LANDUSE_GROUPS if gg == g for kw in ks]}
+                      for g in LANDUSE_LABELS_DE if g != "unmapped"},
+           "rule": "first matching keyword in LANDUSE_GROUPS order (lower-cased class text)",
+           "attribution": gj.get("meta", {}).get("attribution", []),
+           "sl_parcel_source": gj.get("meta", {}).get("sl_parcel_source"),
+           "places": places}
+    write_json(ORTE_WORK / "nutzung_summary.json", out)
+    return out
 
 
 def write_json(path: Path, obj: Any, *, gz: bool = False) -> int:
@@ -823,6 +910,8 @@ def run(*, nutzung: bool = True, write_toml: bool = True, sl_source: str = "auto
           f"{fmt_bytes(n_parcels)}")
     print(f"  stats bbox {bbox} = {w / 1000:.0f} x {h / 1000:.0f} km = {w * h / 1e6:.0f} km², "
           f"{meta['tiles_total']} tiles; needed SL {meta['tiles_needed']['SL']}, RLP {meta['tiles_needed']['RLP']}")
+    summ = write_nutzung_summary({"meta": meta, "features": place_feats})
+    print("  nutzung_summary.json: " + ", ".join(f"{p['id']} {p['status']}" for p in summ["places"]))
     if write_toml:
         AOIS_TOML.write_text(set_section_bbox(AOIS_TOML.read_text(), AOI_KEY, bbox,
                                               "written by places.py: 9 place outlines + 200 m, 1 km grid"))
@@ -836,7 +925,13 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--no-toml", action="store_true", help="do not write the stats bbox into aois.toml")
     ap.add_argument("--sl-source", choices=("auto", "wfs414", "inspire"), default="auto",
                     help="SL parcels: WFS 414 (land use included), INSPIRE fallback, or auto (414, else INSPIRE)")
+    ap.add_argument("--summary-only", action="store_true",
+                    help="only rewrite nutzung_summary.json from the existing gemarkungen.geojson (no network)")
     a = ap.parse_args(argv)
+    if a.summary_only:
+        for p in write_nutzung_summary()["places"]:
+            print(f"  {p['id']:22s} {p['status']:8s} {p.get('share_pct')}")
+        return
     run(nutzung=not a.no_nutzung, write_toml=not a.no_toml, sl_source=a.sl_source)
 
 

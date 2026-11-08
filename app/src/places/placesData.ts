@@ -5,6 +5,8 @@
  * decision: ADR 0049 (places only, estimates as ranges).
  */
 
+import { speciesWording } from '../trees/treeSpecies';
+
 export const STATS_FORMAT = 'sle-stats-v1';
 
 /**
@@ -12,6 +14,12 @@ export const STATS_FORMAT = 'sle-stats-v1';
  * `window.dispatchEvent(new CustomEvent(PLACE_OPEN_EVENT, { detail: { id } }))`.
  */
 export const PLACE_OPEN_EVENT = 'sle:place-open';
+
+/**
+ * Window event the Baum-Steckbrief dispatches on every open: `{ id, E, N }` of the tree. The panel
+ * counts a Riese as discovered (local collecting, collect.ts).
+ */
+export const TREE_CARD_OPEN_EVENT = 'sle:tree-card-open';
 
 /** Manifest key `stats` (contract „Manifest key“). */
 export interface ManifestStats {
@@ -36,6 +44,8 @@ export interface Discipline {
   higher_is_better: boolean;
   method: string;
   ready: boolean;
+  /** Caveat shown with the board (e.g. Artenvielfalt: „Grober Hinweis, keine Messung …“). */
+  note_de?: string | null;
 }
 
 export interface Ortslage {
@@ -52,6 +62,81 @@ export interface Tallest {
   N: number;
   id: number | null;
   in_trees: boolean;
+}
+
+/** One of the *Riesen* (riesen-checked-v1): ≤ 10 per place, h descending, `riesen[0]` = `tallest`. */
+export interface Riese {
+  rank: number;
+  h: number;
+  E: number;
+  N: number;
+  id: number | null;
+  /** false → not in the AOI's Trees layer (above 45 m or outside the tiles): own marker. */
+  in_trees: boolean;
+  /** DLR class at the top + species-dlr-neighbourhood-v1 probability (%); null without a shown class. */
+  species: { key: string; p: number } | null;
+}
+
+export interface PlaceSpecies {
+  /** `weak`: the class is unreliable here (alder, other broadleaf; Thünen cross-check < 10 %), shown as unsure. */
+  mix: Array<{ key: string; share_pct: number; weak: boolean }>;
+  dominant: string | null;
+  coverage_pct: number | null;
+  conifer_pct: number | null;
+  trees: number | null;
+}
+
+export interface Biodiversity {
+  species: number | null;
+  occurrences: number | null;
+  inat_share_pct: number | null;
+  rarefied_500: number | null;
+  rarefied_500_range: Range | null;
+  rarefied_150_range: Range | null;
+  few_records: boolean;
+  years: [number, number] | null;
+}
+
+export interface ForestContinuity {
+  covered_pct: number | null;
+  epochs: number[];
+  snapshot: boolean;
+}
+
+export interface ForestAgeStats {
+  /** Trees ≥ 8 m with an age estimate. */
+  trees: number | null;
+  /** Trees taller than the yield table (tree-age-height-v2: no age); null in v1 files. */
+  trees_beyond: number | null;
+  /** Median of the estimates (trees beyond the table excluded). */
+  median_y: number | null;
+  /** By crown area, keys young / middle / old / very_old / beyond (unknown keys kept, labels from labels_de). */
+  classes_pct: Array<[key: string, pct: number]>;
+}
+
+export interface RoofPotential {
+  buildings: number | null;
+  /** Suitable planes before the usable factors (larger than the area the kWp rest on). */
+  suitable_m2: number | null;
+  /** Usable area (the kWp base); null in files before 2026-11-08. */
+  usable_m2: number | null;
+  kwp: Range | null;
+}
+
+export interface Goal {
+  id: string;
+  title_de: string;
+  metric: string | null;
+  unit: string;
+  baseline: number | null;
+  baseline_year: number | null;
+  target: number | null;
+  target_delta: number | null;
+  target_year: number | null;
+  measured_by: 'lidar' | 'community' | null;
+  progress: number | null;
+  /** One German context line (e.g. today's sealed area next to the „entsiegeln“ deed counter). */
+  note_de: string | null;
 }
 
 export interface Place {
@@ -80,6 +165,17 @@ export interface Place {
   inhabitants: number | null;
   trees_per_inhabitant: number | null;
   tallest: Tallest | null;
+  // ---- Phase 1 (all optional: empty / null when the block is missing or malformed) ----
+  riesen: Riese[];
+  species: PlaceSpecies | null;
+  biodiversity: Biodiversity | null;
+  forest_continuity_pct: number | null;
+  forest_continuity: ForestContinuity | null;
+  forest_age: ForestAgeStats | null;
+  /** Land-use shares (ALKIS), file order; null while unknown (SL: WFS 414 pending). */
+  nutzung: Array<[group: string, pct: number]> | null;
+  roof_potential: RoofPotential | null;
+  goals: Goal[];
   /** The raw object (the ranking resolves `measure` paths on it; unknown fields stay ignored). */
   raw: Record<string, unknown>;
 }
@@ -90,6 +186,16 @@ export interface MunicipalityPv {
   kwp: number | null;
   kwp_per_inhabitant: number | null;
   small_systems: number | null;
+  /** Phase 1: share of the roof potential in use (Range, pp), null with a reason. */
+  used_pct: Range | null;
+  used_pct_reason_de: string | null;
+}
+
+export interface MunicipalityRoof {
+  places: string[];
+  suitable_m2: number | null;
+  kwp: Range | null;
+  complete: boolean;
 }
 
 export interface Municipality {
@@ -99,7 +205,15 @@ export interface Municipality {
   places: string[];
   inhabitants: number | null;
   pv: MunicipalityPv | null;
+  roof_potential: MunicipalityRoof | null;
   raw: Record<string, unknown>;
+}
+
+/** German labels from `labels_de` (Phase 1); missing keys fall back to the key. */
+export interface PlaceLabels {
+  species: Record<string, string>;
+  age_classes: Record<string, string>;
+  nutzung: Record<string, string>;
 }
 
 export interface PlacesData {
@@ -115,6 +229,11 @@ export interface PlacesData {
   rlpTreeRatio: number | null;
   /** Method labels by id (for the card's „Methode“ hints). */
   methodLabels: Record<string, string>;
+  labels: PlaceLabels;
+  /** Extra licence notes of the inputs (`inputs[*].note_de`, e.g. GBIF: iNaturalist CC BY-NC). */
+  inputNotes: string[];
+  /** Input ids present in `inputs` (credits per block: 'species_dlr', 'gbif' …). */
+  inputIds: string[];
 }
 
 // ---- small guards -------------------------------------------------------------------------------
@@ -176,6 +295,7 @@ function parseDiscipline(v: unknown): Discipline | null {
     higher_is_better: v.higher_is_better !== false,
     method: str(v.method) ?? '',
     ready: v.ready === true,
+    note_de: str(v.note_de),
   };
 }
 
@@ -202,6 +322,101 @@ function parseTallest(v: unknown): Tallest | null {
 function parseEpochs(v: unknown): Array<[number, number]> {
   if (!Array.isArray(v)) return [];
   return v.filter((e): e is [number, number] => numTuple(e, 2) !== null) as Array<[number, number]>;
+}
+
+function parseRiese(v: unknown): Riese | null {
+  if (!isObj(v)) return null;
+  const h = num(v.h);
+  const E = num(v.E);
+  const N = num(v.N);
+  if (h === null || E === null || N === null) return null; // contract: a riesen entry without finite h, E, N is skipped
+  const sp = isObj(v.species) && str(v.species.key) && num(v.species.p) !== null ? { key: v.species.key as string, p: v.species.p as number } : null;
+  return { rank: num(v.rank) ?? 0, h, E, N, id: num(v.id), in_trees: v.in_trees === true, species: sp };
+}
+
+function parseRiesen(v: unknown): Riese[] {
+  if (!Array.isArray(v)) return [];
+  const out = v.map(parseRiese).filter((r): r is Riese => r !== null);
+  out.forEach((r, i) => {
+    if (!(r.rank >= 1)) r.rank = i > 0 && out[i - 1].h === r.h ? out[i - 1].rank : i + 1;
+  });
+  return out;
+}
+
+function parseSpeciesMix(v: unknown): PlaceSpecies | null {
+  if (!isObj(v) || !Array.isArray(v.mix)) return null;
+  const mix = v.mix
+    .filter((m): m is Obj => isObj(m) && !!str(m.key) && num(m.share_pct) !== null && (m.share_pct as number) > 0)
+    .map((m) => ({ key: m.key as string, share_pct: m.share_pct as number, weak: m.weak === true }));
+  if (!mix.length) return null;
+  return { mix, dominant: str(v.dominant) ?? mix[0].key, coverage_pct: num(v.coverage_pct), conifer_pct: num(v.conifer_pct), trees: num(v.trees) };
+}
+
+function parseBiodiversity(v: unknown): Biodiversity | null {
+  if (!isObj(v)) return null;
+  const years = numTuple(v.years, 2) as [number, number] | null;
+  return {
+    species: num(v.species),
+    occurrences: num(v.occurrences),
+    inat_share_pct: num(v.inat_share_pct),
+    rarefied_500: num(v.rarefied_500),
+    rarefied_500_range: range(v.rarefied_500_range),
+    rarefied_150_range: range(v.rarefied_150_range),
+    few_records: v.few_records === true,
+    years,
+  };
+}
+
+function parseForestContinuity(v: unknown): ForestContinuity | null {
+  if (!isObj(v)) return null;
+  const epochs = Array.isArray(v.epochs) ? v.epochs.filter((e): e is number => typeof e === 'number' && Number.isFinite(e)) : [];
+  return { covered_pct: num(v.covered_pct), epochs, snapshot: v.snapshot !== false || epochs.length < 2 };
+}
+
+const AGE_ORDER = ['young', 'middle', 'old', 'very_old', 'beyond'];
+
+function parseForestAge(v: unknown): ForestAgeStats | null {
+  if (!isObj(v)) return null;
+  const cp = isObj(v.classes_pct) ? v.classes_pct : {};
+  const classes = Object.entries(cp)
+    .filter((e): e is [string, number] => num(e[1]) !== null)
+    .sort((a, b) => (AGE_ORDER.indexOf(a[0]) + 1 || 99) - (AGE_ORDER.indexOf(b[0]) + 1 || 99));
+  if (!classes.length && num(v.median_y) === null) return null;
+  return { trees: num(v.trees), trees_beyond: num(v.trees_beyond), median_y: num(v.median_y), classes_pct: classes };
+}
+
+function parseNutzung(v: unknown): Array<[string, number]> | null {
+  if (!isObj(v) || !isObj(v.shares_pct)) return null;
+  const out = Object.entries(v.shares_pct).filter((e): e is [string, number] => num(e[1]) !== null);
+  return out.length ? out : null;
+}
+
+function parseRoof(v: unknown): RoofPotential | null {
+  if (!isObj(v)) return null;
+  const kwp = range(v.kwp);
+  const suitable = num(v.suitable_m2);
+  if (!kwp && suitable === null) return null;
+  return { buildings: num(v.buildings), suitable_m2: suitable, usable_m2: num(v.usable_m2), kwp };
+}
+
+function parseGoal(v: unknown): Goal | null {
+  if (!isObj(v)) return null;
+  const title = str(v.title_de);
+  if (!title) return null; // contract: a goals entry without title_de is skipped
+  return {
+    id: str(v.id) ?? '',
+    title_de: title,
+    metric: str(v.metric),
+    unit: str(v.unit) ?? '',
+    baseline: num(v.baseline),
+    baseline_year: num(v.baseline_year),
+    target: num(v.target),
+    target_delta: num(v.target_delta),
+    target_year: num(v.target_year),
+    measured_by: v.measured_by === 'lidar' || v.measured_by === 'community' ? v.measured_by : null,
+    progress: num(v.progress),
+    note_de: str(v.note_de),
+  };
 }
 
 export function parsePlace(v: unknown): Place | null {
@@ -237,6 +452,15 @@ export function parsePlace(v: unknown): Place | null {
     inhabitants: num(v.inhabitants),
     trees_per_inhabitant: num(v.trees_per_inhabitant),
     tallest: parseTallest(v.tallest),
+    riesen: parseRiesen(v.riesen),
+    species: parseSpeciesMix(v.species),
+    biodiversity: parseBiodiversity(v.biodiversity),
+    forest_continuity_pct: num(v.forest_continuity_pct),
+    forest_continuity: parseForestContinuity(v.forest_continuity),
+    forest_age: parseForestAge(v.forest_age),
+    nutzung: parseNutzung(v.nutzung),
+    roof_potential: parseRoof(v.roof_potential),
+    goals: Array.isArray(v.goals) ? v.goals.map(parseGoal).filter((g): g is Goal => g !== null) : [],
     raw: v,
   };
 }
@@ -253,9 +477,22 @@ export function parseMunicipality(v: unknown): Municipality | null {
         kwp: num(v.pv.kwp),
         kwp_per_inhabitant: num(v.pv.kwp_per_inhabitant),
         small_systems: num(v.pv.small_systems),
+        used_pct: range(v.pv.used_pct),
+        used_pct_reason_de: str(v.pv.used_pct_reason_de),
       }
     : null;
-  return { id, name_de: name, state: str(v.state) ?? '', places: strArr(v.places), inhabitants: num(v.inhabitants), pv, raw: v };
+  const rp = isObj(v.roof_potential) ? v.roof_potential : null;
+  const roof = rp ? { places: strArr(rp.places), suitable_m2: num(rp.suitable_m2), kwp: range(rp.kwp), complete: rp.complete === true } : null;
+  return {
+    id,
+    name_de: name,
+    state: str(v.state) ?? '',
+    places: strArr(v.places),
+    inhabitants: num(v.inhabitants),
+    pv,
+    roof_potential: roof && (roof.kwp || roof.suitable_m2 !== null) ? roof : null,
+    raw: v,
+  };
 }
 
 /** Parse `stats/places.json`; null when it is not an `sle-stats-v1` object (→ panel hidden). */
@@ -278,6 +515,11 @@ export function parsePlacesFile(v: unknown): PlacesData | null {
     const be = isObj(crown) && isObj(crown.params) ? crown.params.rlp_border_effect : null;
     if (isObj(be)) rlpTreeRatio = num(be.trees_per_ha_canopy_rlp_over_sl);
   }
+  const lab = isObj(v.labels_de) ? v.labels_de : {};
+  const strMap = (x: unknown): Record<string, string> =>
+    isObj(x) ? Object.fromEntries(Object.entries(x).filter((e): e is [string, string] => typeof e[1] === 'string')) : {};
+  const inputs = isObj(v.inputs) ? v.inputs : {};
+  const inputNotes = [...new Set(Object.values(inputs).map((i) => (isObj(i) ? str(i.note_de) : null)).filter((n): n is string => !!n))];
   return {
     generated: str(v.generated) ?? '',
     label_de: str(v.label_de) ?? 'Orte im Vergleich',
@@ -288,6 +530,9 @@ export function parsePlacesFile(v: unknown): PlacesData | null {
     municipalities,
     rlpTreeRatio,
     methodLabels,
+    labels: { species: strMap(lab.species), age_classes: strMap(lab.age_classes), nutzung: strMap(lab.nutzung) },
+    inputNotes,
+    inputIds: Object.keys(inputs),
   };
 }
 
@@ -675,4 +920,86 @@ export function clipPolyline(xz: ArrayLike<number>, xMin: number, xMax: number, 
   }
   if (cur) out.push(cur);
   return out.filter((l) => l.length >= 4 && (l[0] !== l[l.length - 2] || l[1] !== l[l.length - 1] || l.length > 4));
+}
+
+// ---- Phase 1 display helpers ---------------------------------------------------------------------------------
+
+/**
+ * Share of a place inside the 3D area, worded the same everywhere (toast, card note): 0.1 pp like the
+ * published `aoi_share_pct` („1,3 %“, not „1 %“ in one place and „1,3 %“ in the other).
+ */
+export function fmtShare(pct: number): string {
+  return `${fmtNum(Math.round(pct * 10) / 10)} %`;
+}
+
+/** The note for a place mostly outside the 3D area (card and fly-to use the same text). */
+export function outsideNote(title: string, pct: number): string {
+  return `Nur ${fmtShare(pct)} der ${title} liegen im 3D-Gebiet: Flug zu diesem Teil, der ganze Umriss steht auf der Karte.`;
+}
+
+/** German label of a key from `labels_de` (contract: unknown keys are shown by their key). */
+export const labelOf = (map: Record<string, string>, key: string): string => map[key] ?? key;
+
+/** Riese species wording (contract „Tree species“): „wahrscheinlich Douglasie (80 %)“ / „Lärche? unsicher (40 %)“. */
+export function rieseSpeciesText(labels: PlaceLabels, sp: { key: string; p: number }, likelyPct = 50): string {
+  return speciesWording(labelOf(labels.species, sp.key), sp.p, sp.p >= likelyPct);
+}
+
+/** Fixed colours per species key (legend text carries the meaning; colour is a second channel only). */
+export const SPECIES_COLORS: Record<string, string> = {
+  pine: '#5fae74',
+  spruce: '#2f7553',
+  douglas_fir: '#8fd6b0',
+  larch: '#c4dd8c',
+  fir: '#3f9a9a',
+  beech: '#e5ab4c',
+  oak: '#b8713f',
+  birch: '#f3e3a3',
+  alder: '#a2916a',
+  other_broadleaf: '#8d8d8d',
+};
+
+export const NUTZUNG_COLORS: Record<string, string> = {
+  forest: '#4f9d69',
+  agriculture: '#d9c26a',
+  garden_green: '#9fd88a',
+  settlement: '#c98a7a',
+  traffic: '#9a9a9a',
+  water: '#5aa4e0',
+  other: '#6c6c6c',
+};
+
+export const AGE_COLORS: Record<string, string> = { young: '#c9e8a0', middle: '#8ccf7e', old: '#4f9d69', very_old: '#2f6a47', beyond: '#9aa0a6' };
+
+/**
+ * Baseline/target bar of a goal (no progress bar: `progress` is null until a second flight or
+ * community data exists). Honest scale from 0: `%` goals on 0–100, others on 0–max(baseline, target).
+ * Fractions 0…1; null when the baseline or target is not known.
+ */
+export function goalBar(g: Pick<Goal, 'baseline' | 'target' | 'unit'>): { base: number; target: number } | null {
+  if (g.baseline === null || g.target === null) return null;
+  const max = g.unit === '%' ? 100 : Math.max(g.baseline, g.target);
+  if (!(max > 0)) return null;
+  const f = (v: number) => Math.min(1, Math.max(0, v / max));
+  return { base: f(g.baseline), target: f(g.target) };
+}
+
+/** Value + unit of a goal number („32,9 %“, „475.100 m²“, „10 Bäume“). */
+export function fmtGoalValue(v: number | null, unit: string): string {
+  if (v === null) return 'noch nicht messbar';
+  return unit === '%' ? `${fmtNum(v)} %` : `${fmtNum(v)}${unit ? ` ${unit}` : ''}`;
+}
+
+/** Riesen inside the 3D area (the only ones one can fly to): the denominator of „Riesen entdeckt“. */
+export function riesenInAoi(places: readonly Pick<Place, 'id' | 'riesen'>[], r: AoiRect): Array<{ place: string; riese: Riese }> {
+  const out: Array<{ place: string; riese: Riese }> = [];
+  const seen = new Set<number>();
+  for (const p of places) {
+    for (const riese of p.riesen) {
+      if (riese.id === null || seen.has(riese.id) || !inAoiRect(r, riese.E, riese.N)) continue;
+      seen.add(riese.id);
+      out.push({ place: p.id, riese });
+    }
+  }
+  return out;
 }

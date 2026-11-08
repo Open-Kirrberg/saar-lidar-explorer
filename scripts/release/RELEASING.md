@@ -102,19 +102,32 @@ Size report: `../_release/data-size-report.txt`. What it does:
   staged zone file names a local path (`/Users/…`), the private material folder or an e-mail address (GLBs:
   their JSON chunk incl. node names and extras) or a GLB embeds images where the policy forbids them (bakery:
   no textures, ADR 0042). Run the `bh-datenschutz` checklist first and tick it in the release notes.
-- **Orte im Vergleich + historic forest** ([ADR 0049](../../docs/adr/0049-orte-im-vergleich-places-only.md),
-  contract „Place statistics“ / „Historic forest mask“): of `overall/stats/` only `places.json` + `places.geojson`
-  (manifest key `stats`, `sle-stats-v1`) and of `overall/forest_hist/` only `forest_hist.png` (key `forest_hist`,
-  `sle-forest-hist-v1`) are staged; review reports and work files there never are. A key naming a missing file, a
+- **Orte im Vergleich + historic forest + tree species** ([ADR 0049](../../docs/adr/0049-orte-im-vergleich-places-only.md),
+  contract „Place statistics“ / „Historic forest mask“ / „Tree species“): of `overall/stats/` only `places.json` +
+  `places.geojson` (manifest key `stats`, `sle-stats-v1`), of `overall/forest_hist/` only `forest_hist.png` (key
+  `forest_hist`, `sle-forest-hist-v1`) and of `overall/species/` only `species.png` (key `species`, `sle-species-v1`)
+  are staged; review reports and work files there never are. A key naming a missing file, a
   path outside its folder or a JSON naming a local path **aborts**; a key with another `format` is dropped with its
   folder. **Licence audit** (record in `AUDIT.md`): aggregates per Gemarkung / Gemeinde only (no parcel, building or
   owner data; groups < 5 suppressed), derived from ALKIS, LiDAR DGM/DOM, DOP20 RGB/CIR/RGBI and LoD2 of
   GeoBasis-DE/LVGL-SL and GeoBasis-DE/LVermGeoRP (dl-de/by-2-0, Daten bearbeitet), OSM (ODbL), **Zensus 2022**
   (© Statistische Ämter des Bundes und der Länder, dl-de/by-2-0) and the **Marktstammdatenregister**
   (© Bundesnetzagentur, dl-de/by-2-0); the forest mask from the historic maps of GeoBasis-DE/LVGL-SL
-  (dl-de/by-2-0, Daten bearbeitet). All credits are in the manifest `attribution` and thus in `ATTRIBUTION` /
-  README. Publishing them needs the user's go (plan „Orte im Vergleich“ §8, last Phase 0 box); with
-  `--zones-only` these keys are not shipped (see above: publish `stats/`, `forest_hist/` and the two manifest keys).
+  (dl-de/by-2-0, Daten bearbeitet). **Tree species** (`species/species.png` and the species / age values in
+  `places.json`): DLR EOC *Tree Species Germany* 2022 (Wegler et al. 2025, doi:10.15489/smh8w3j8i962), **CC BY 4.0**:
+  publishing the reprojected PNG is allowed with the credit and the note „Daten bearbeitet (umprojiziert)“ (both in
+  the manifest `attribution`); no personal data. **Thünen cross-check** (`species.crossCheck` in the manifest:
+  agreement numbers only, no Thünen pixel): Thünen-Institut, Dominant Tree Species for Germany 2017/2018 (Blickensdörfer et al. 2024, doi:10.3220/DATA20221214084846), **CC BY 4.0**; the
+  credit „Abgleich Baumarten: Thünen-Institut …“ is in `crossCheck.attribution` and the manifest `attribution` (audited
+  2026-11-08, Phase 1 review round 2). **Artenvielfalt** (`biodiversity` in `places.json`): only counts
+  per place from the GBIF occurrence search (`GBIF.org (<query date>) GBIF Occurrence Search`), no record,
+  coordinate or species name; the records are CC0 / CC BY 4.0 / CC BY-NC 4.0 (iNaturalist research grade is mostly
+  CC BY-NC: counts of them are facts, not a copy of the records, and the `note_de` says so). GBIF asks for a
+  DOI-backed *derived dataset* citation for published results; registering one needs a GBIF account — decide before
+  the release (tick in `AUDIT.md`). The yield tables of the age estimate are literature values (cited, not copied
+  as a dataset). All credits are in the manifest `attribution` and thus in `ATTRIBUTION` / README. Publishing them needs the user's go (plan „Orte im Vergleich“ §8, last Phase 0 box); with
+  `--zones-only` these keys are not shipped (see above: publish `stats/`, `forest_hist/`, `species/` and the three
+  manifest keys).
 - Both: `.nojekyll`, `README.md` (contents, licences, the **candidates are unverified hypotheses** note,
   „Schauen, nicht graben“), `ATTRIBUTION`, `index.html` landing page linking to the app.
 

@@ -3,7 +3,8 @@
  * Optional additive keys: `vectors` (F10/F12), `rgb` image layers → `imageLayers` (F13/F14),
  * `layers.bldg` mask (R0.7), `models.buildings` (F11), `xyz.hist_*` (F14), `candidates` (F15),
  * `pointclouds` (F16), `trees` (V2.4, parsed in trees/treeData.ts), `stats` (Orte im Vergleich,
- * parsed in places/placesData.ts), `forest_hist` (Baum-Steckbrief, parsed in trees/treeFacts.ts).
+ * parsed in places/placesData.ts), `forest_hist` (Baum-Steckbrief, parsed in trees/treeFacts.ts),
+ * `species` (Baum-Steckbrief Baumart, parsed in trees/treeSpecies.ts).
  */
 import { parseManifestStats } from '../places/placesData';
 import type { ManifestStats } from '../places/placesData';
@@ -11,6 +12,8 @@ import { parseTrees } from '../trees/treeData';
 import type { ManifestTrees } from '../trees/treeData';
 import { parseForestHist } from '../trees/treeFacts';
 import type { ManifestForestHist } from '../trees/treeFacts';
+import { parseSpecies } from '../trees/treeSpecies';
+import type { ManifestSpecies } from '../trees/treeSpecies';
 
 export type HeightEncoding = 'terrarium';
 export type LayerEncoding = 'u8';
@@ -143,6 +146,8 @@ export interface Manifest {
   stats?: ManifestStats;
   /** Optional historic forest mask ('sle-forest-hist-v1', Baum-Steckbrief); see "Historic forest mask" in docs/data-contract.md. */
   forest_hist?: ManifestForestHist;
+  /** Optional tree species grid ('sle-species-v1', DLR, Baum-Steckbrief); see "Tree species" in docs/data-contract.md. */
+  species?: ManifestSpecies;
   /**
    * Resolution levels fine → coarse, contiguous from level 0 (always ≥ 1 entry after
    * validateManifest; v1 manifests and v2 manifests without valid coarse levels give [level 0]).
@@ -962,6 +967,9 @@ export function validateManifest(m: unknown): Manifest {
   const forestHist = parseForestHist((x as { forest_hist?: unknown }).forest_hist);
   if (forestHist) out.forest_hist = forestHist;
   else delete out.forest_hist;
+  const species = parseSpecies((x as { species?: unknown }).species);
+  if (species) out.species = species;
+  else delete out.species;
   return out;
 }
 

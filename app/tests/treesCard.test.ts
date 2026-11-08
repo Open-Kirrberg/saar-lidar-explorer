@@ -18,7 +18,7 @@ import {
 import { pickTreeRows, rayCylinder, rayHitsBox } from '../src/trees/treePick';
 import type { PickOptions, PickRay } from '../src/trees/treePick';
 
-describe('treeAllometry (crown-allometry-v1, twin of pipeline/stats.py)', () => {
+describe('treeAllometry (crown-allometry-v2, twin of pipeline/stats.py)', () => {
   // Reference numbers from pipeline/stats.py `agb_kg` + `biomass_range_t` (2026-11-08):
   //   uv run python -c "from stats import agb_kg, biomass_range_t; ..."
   const cases = [

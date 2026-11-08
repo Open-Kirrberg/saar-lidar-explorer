@@ -21,7 +21,11 @@ and Rheinland-Pfalz under **Datenlizenz Deutschland – Namensnennung – 2.0** 
 OpenStreetMap under **ODbL 1.0**; the place statistics *Orte im Vergleich* (`overall/stats/`) also derive from
 **Zensus 2022** (© Statistische Ämter des Bundes und der Länder) and the **Marktstammdatenregister** (© Bundesnetzagentur),
 both dl-de/by-2-0, and the historic forest mask (`overall/forest_hist/`) from the historic maps of GeoBasis-DE/LVGL-SL
-(dl-de/by-2-0); see the README and `ATTRIBUTION` of those repositories.
+(dl-de/by-2-0). The tree species layer (`overall/species/`) and the species / age values of the place statistics derive
+from **DLR EOC, Tree Species Germany 2022** (Wegler et al. 2025, doi:10.15489/smh8w3j8i962), **CC BY 4.0**, Daten
+bearbeitet (umprojiziert); the per-class agreement numbers in the manifest (`species.crossCheck`, no pixels)
+from the **Thünen-Institut, Dominant Tree Species for Germany 2017/2018 (Blickensdörfer et al. 2024, doi:10.3220/DATA20221214084846)**, **CC BY 4.0**; the *Artenvielfalt* counts from the **GBIF** occurrence search (GBIF.org, counts only; records
+CC0 / CC BY 4.0 / CC BY-NC 4.0, incl. iNaturalist). See the README and `ATTRIBUTION` of those repositories.
 
 > **Schauen, nicht graben.** The app shows hypotheses from terrain data, not finds. Archaeological sites are protected
 > (SDschG Saarland, DSchG Rheinland-Pfalz); no digging or detector use, report finds to the Landesdenkmalamt.

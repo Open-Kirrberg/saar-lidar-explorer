@@ -612,7 +612,13 @@ def test_disciplines_match_contract():
     assert d["wenigsten-beton"]["higher_is_better"] is False
     assert d["sonnenstaerkster-ort"]["scope"] == "municipality"
     assert d["sonnenstaerkster-ort"]["measure"] == "pv.kwp_per_inhabitant"
-    assert not d["groesster-fortschritt"]["ready"] and not d["artenvielfalt"]["ready"]
+    assert not d["groesster-fortschritt"]["ready"]
+    a = d["artenvielfalt"]
+    assert a["ready"] and a["measure"] == "biodiversity.rarefied_500" and a["higher_is_better"]
+    assert a["method"] == "gbif-rarefied-v1" and a["unit"] == "Arten" and a["scope"] == "place"
+    assert "nicht die Qualität der Natur" in a["description_de"] and a["note_de"]   # observations, not nature
+    off = {x["id"]: x for x in S.disciplines(biodiversity_ready=False)}["artenvielfalt"]
+    assert not off["ready"] and off["measure"] == ""
     assert all("agb" not in x["measure"] and "co2" not in x["measure"] for x in d.values())  # biomass never ranked
     m = S.methods({}, {"parts": 1}, True, None)
     ready_methods = {x["method"] for x in d.values() if x["ready"]}
@@ -622,10 +628,13 @@ def test_disciplines_match_contract():
 def test_method_ids_are_the_contract_ids():
     m = S.methods({}, {}, False, {"trees_per_ha_canopy_rlp_over_sl": 1.2, "canopy_cover_diff": -0.03})
     assert {k: v["id"] for k, v in m.items()} == {
-        "assign": "parcel-pip-v1", "crown": "crown-disc-v1", "biomass": "crown-allometry-v1",
+        "assign": "parcel-pip-v1", "crown": "crown-disc-v1", "biomass": "crown-allometry-v2",
         "ortslage": "ortslage-bldg-buffer-50m-v1", "green": "ndvi-cir-v1", "sealed": "sealed-v1",
         "inhabitants": "zensus-grid-area-v1", "tallest": "tallest-checked-v4", "pv_mastr": "mastr-municipality-v1",
-        "category": "category-inhabitants-v1"}
+        "category": "category-inhabitants-v1", "species": "species-dlr-crown-mix-v1", "riesen": "riesen-checked-v1",
+        "biodiversity": "gbif-rarefied-v1", "forest_age": "tree-age-height-v2",
+        "forest_continuity": "hist-forest-crown-share-v1", "nutzung": "alkis-nutzung-groups-v1",
+        "roof_potential": "roof-pv-potential-v2", "goals": "goals-examples-v1"}
     json.dumps(m)  # serialisable
 
 
@@ -667,3 +676,228 @@ def test_label_point_inside():
     x, y = S.label_point(u)
     assert u.contains(Point(x, y))
     assert math.isfinite(x) and math.isfinite(y)
+
+
+# ================================================================================ Phase 1 (riesen, species …)
+def _grid_trees(h, e, n=None, fill=None, ids=None):
+    h = np.asarray(h, float)
+    k = h.size
+    return (h, np.zeros(k, bool) if fill is None else np.asarray(fill, bool),
+            np.arange(k) + 100 if ids is None else np.asarray(ids), np.asarray(e, float),
+            np.zeros(k) if n is None else np.asarray(n, float))
+
+
+def test_pick_top_orders_by_height_then_id_and_keeps_min_spacing():
+    #            0     1     2     3     4     5
+    h, fill, ids, e, n = _grid_trees([50.0, 49.0, 48.0, 48.0, 47.0, 46.0], [0, 10, 100, 200, 205, 300],
+                                     ids=[9, 8, 7, 3, 2, 1])
+    picks, rej = S.pick_top(h, fill, ids, e, n, lambda i: None, count=10, min_spacing_m=20.0)
+    # 1 is 10 m from 0 → skipped; 2 and 3 have equal h → lower id (3) first; 4 is 5 m from 3 → skipped
+    assert picks == [0, 3, 2, 5] and rej == {"spacing": 2}
+    hs = h[picks]
+    assert all(a >= b for a, b in zip(hs, hs[1:]))                  # ordering: height descending
+    pts = np.c_[e[picks], n[picks]]
+    d = np.hypot(*(pts[:, None, :] - pts[None, :, :]).transpose(2, 0, 1))
+    assert d[~np.eye(len(picks), dtype=bool)].min() >= 20.0          # min spacing between all listed trees
+
+
+def test_pick_top_spacing_is_exact_at_the_threshold_and_measured_in_2d():
+    h, fill, ids, e, n = _grid_trees([50.0, 49.0, 48.0], [0, 12, 0], n=[0, 16, 19.99])
+    picks, rej = S.pick_top(h, fill, ids, e, n, lambda i: None, min_spacing_m=20.0)
+    assert picks == [0, 1] and rej == {"spacing": 1}                 # (12, 16) is exactly 20 m: kept
+
+
+def test_pick_top_first_pick_is_pick_tallest_and_count_limits():
+    rng = np.random.default_rng(3)
+    h = np.round(rng.uniform(20, 50, 300), 1)
+    fill = rng.random(300) < 0.1
+    ids = rng.permutation(300)
+    e, n = rng.uniform(0, 500, 300), rng.uniform(0, 500, 300)
+    bad = set(rng.choice(300, 60, replace=False).tolist())
+    check = lambda i: "spike" if i in bad else None  # noqa: E731
+    picks, _ = S.pick_top(h, fill, ids, e, n, check, count=10)
+    i, _ = S.pick_tallest(h, fill, ids, check)
+    assert picks[0] == i and len(picks) == 10
+    assert not any(fill[picks]) and not (set(picks) & bad)
+
+
+def test_pick_top_skips_spacing_without_running_the_check_and_respects_max_checks():
+    calls = []
+    h, fill, ids, e, n = _grid_trees([50.0, 49.0, 48.0, 47.0], [0, 5, 100, 200])
+
+    def check(i):
+        calls.append(i)
+        return "terrain" if i == 2 else None
+    picks, rej = S.pick_top(h, fill, ids, e, n, check)
+    assert picks == [0, 3] and calls == [0, 2, 3] and rej == {"spacing": 1, "terrain": 1}
+    picks2, _ = S.pick_top(h, fill, ids, e, n, lambda i: "spike", max_checks=2)
+    assert picks2 == []
+
+
+def test_competition_ranks_share_ties():
+    assert S.competition_ranks([45.1, 44.0, 44.0, 43.2]) == [1, 2, 2, 4]
+    assert S.competition_ranks([]) == [] and S.competition_ranks([7.0]) == [1]
+
+
+def test_round_riesen_rounds_and_ranks_on_published_heights():
+    rows = [{"h": 50.04, "E": 1.5, "N": 2.5, "id": 1, "in_trees": np.True_, "species": {"key": "douglas_fir", "p": 80}},
+            {"h": 49.96, "E": 31.5, "N": 2.5, "id": 2},                  # rounds to 50.0 as well → shared rank 1
+            {"h": 49.0, "E": 61.5, "N": 2.5, "id": 3, "in_trees": False}]
+    out = S.round_riesen(rows)
+    assert [r["rank"] for r in out] == [1, 1, 3] and [r["h"] for r in out] == [50.0, 50.0, 49.0]
+    assert out[0] == {"rank": 1, "h": 50.0, "E": 1.5, "N": 2.5, "id": 1, "in_trees": True,
+                      "species": {"key": "douglas_fir", "p": 80}}
+    assert "species" not in out[1] and out[1]["in_trees"] is False and type(out[0]["in_trees"]) is bool
+    q = S.round_place(_raw_place(riesen=rows))
+    assert q["riesen"] == out
+    assert "riesen" not in S.round_place(_raw_place())
+
+
+def test_tree_species_entry_omits_no_class_and_weak_classes():
+    assert S.tree_species_entry(2, 80) == {"key": "douglas_fir", "p": 80}
+    assert S.tree_species_entry(5, 50) == {"key": "beech", "p": 50}
+    assert S.tree_species_entry(5, 40) is None and S.tree_species_entry(3, 10) is None   # „unsicher“: left out
+    assert S.tree_species_entry(5, 60, tree_type=1) is None             # conifer crown in a broadleaf class
+    assert S.tree_species_entry(2, 60, tree_type=2) == {"key": "douglas_fir", "p": 60}  # one-sided rule
+    assert S.tree_species_entry(255, 0) is None                         # outside the DLR forest mask
+    assert S.tree_species_entry(10, 0) is None                          # canopy loss: no species
+    assert S.tree_species_entry(8, 70) is None and S.tree_species_entry(9, 70) is None   # alder / other: weak
+    assert S.tree_species_entry(5, 0) is None
+
+
+def test_species_block_mix_order_rounding_and_coverage():
+    # crown radii: beech (5) 2× r=2 → 8π; oak (6) r=2 → 4π; pine (0) r=2 → 4π; no class r=4 → 16π
+    code = np.array([5, 5, 6, 0, 255], np.uint8)
+    r = np.array([2.0, 2.0, 2.0, 2.0, 4.0])
+    b = S.species_block(code, r, min_count=1)
+    assert b["mix"] == [{"key": "beech", "share_pct": 50}, {"key": "pine", "share_pct": 25},
+                        {"key": "oak", "share_pct": 25}]                 # tie oak/pine → lower class code (pine 0)
+    assert b["dominant"] == "beech" and b["method"] == "species-dlr-crown-mix-v1"
+    assert b["coverage_pct"] == 50 and b["conifer_pct"] == 25 and b["trees"] == 4
+    assert S.species_block(code, r) is None                             # < 5 trees with a species → null
+    weak = S.species_block(np.array([5, 8, 9], np.uint8), np.ones(3), min_count=1)
+    assert {m["key"]: m.get("weak", False) for m in weak["mix"]} == {"beech": False, "alder": True,
+                                                                     "other_broadleaf": True}
+    tiny = S.species_block(np.array([5] * 2000 + [6], np.uint8), np.ones(2001), min_count=1)
+    assert [m["key"] for m in tiny["mix"]] == ["beech"]                 # 0.05 % rounds to 0 → dropped
+    canopy_loss = S.species_block(np.array([10] * 9, np.uint8), np.ones(9), min_count=1)
+    assert canopy_loss is None                                          # canopy loss is not a species
+
+
+def test_biodiversity_block_rounding_and_few_records():
+    g = {"id": "x", "occurrences": 1316, "species": 429, "rarefied": [212.0, 226.9, 241.7], "rarefy_n": 500,
+         "rarefied_150": [86.5, 96.5, 106.49], "years": {"first": 1990, "last": 2026},
+         "inaturalist": {"occurrences": 287, "share_pct": 21.84}, "flags": []}
+    b = S.biodiversity_block(g)
+    assert b == {"species": 429, "occurrences": 1316, "inat_share_pct": 21.8, "rarefied_500": 227,
+                 "rarefied_500_range": [212, 227, 242], "rarefied_150_range": [86, 96, 106],
+                 "few_records": False, "years": [1990, 2026]}
+    few = S.biodiversity_block({**g, "rarefied": None, "flags": ["few-records"], "occurrences": 326})
+    assert few["rarefied_500"] is None and few["rarefied_500_range"] is None and few["few_records"]
+    assert S.biodiversity_block(None) is None and S.biodiversity_block({"id": "x"}) is None
+
+
+def test_forest_blocks_cover_threshold_snapshot_and_age():
+    fa = {"trees_with_age": 45491, "age_mid_median": 93, "age_class_share_pct_by_crown":
+          {"young": 6.14, "middle": 22.1, "old": 27.2, "very_old": 44.56},
+          "forest_continuity": {"covered_crown_pct": 87.94, "forest_all_classified_pct": 48.44}}
+    pct, cont, age = S.forest_blocks(fa)
+    assert pct == 48.4 and cont == {"covered_pct": 87.9, "epochs": [1935], "snapshot": True}
+    assert age == {"trees": 45491, "trees_beyond": None, "median_y": 95,
+                   "classes_pct": {"young": 6.1, "middle": 22.1, "old": 27.2, "very_old": 44.6}}   # v1 file: no beyond
+    v2 = {**fa, "trees_beyond_tables": 9000, "age_class_share_pct_by_crown":
+          {"young": 6.14, "middle": 22.1, "old": 27.2, "very_old": 9.0, "beyond": 35.56}}
+    a2 = S.forest_blocks(v2)[2]
+    assert a2["trees_beyond"] == 9000 and a2["classes_pct"] == {"young": 6.1, "middle": 22.1, "old": 27.2,
+                                                                "very_old": 9.0, "beyond": 35.6}
+    low = {**fa, "forest_continuity": {"covered_crown_pct": 6.4, "forest_all_classified_pct": 12.0}}
+    pct2, cont2, _ = S.forest_blocks(low)
+    assert pct2 is None and cont2["covered_pct"] == 6.4                # mask covers too little → no value
+    assert S.forest_blocks(fa, epochs=(1840, 1935))[1]["snapshot"] is False
+    assert S.forest_blocks({**fa, "trees_with_age": 3})[2] is None      # minimum count
+    assert S.forest_blocks(None) == (None, None, None)
+
+
+def test_nutzung_block_only_for_known_land_use():
+    ok = {"status": "ok", "share_pct": {"forest": 29.04, "agriculture": 46.5, "settlement": 15.66}}
+    b = S.nutzung_block(ok)
+    assert b["source"] == "alkis" and list(b["shares_pct"]) == list(S.NUTZUNG_GROUPS)
+    assert b["shares_pct"]["forest"] == 29 and b["shares_pct"]["settlement"] == 15.7 and b["shares_pct"]["water"] == 0
+    assert S.nutzung_block({"status": "pending", "share_pct": None}) is None and S.nutzung_block(None) is None
+
+
+def test_roof_block_suppression_and_rounding():
+    rp = {"buildings": 2293, "suitable_area_m2": 128060, "kwp": [13445.3, 16134.3, 17927.0], "suppressed": []}
+    b, sup = S.roof_block(rp)
+    assert not sup and b == {"buildings": 2293, "suitable_m2": 128100, "kwp": [13000, 16000, 18000]}
+    b2, _ = S.roof_block({**rp, "usable_area_m2": 80164})                # usable = the kWp base (review 2026-11-08)
+    assert b2["usable_m2"] == 80200 and b2["suitable_m2"] == 128100
+    assert S.roof_block({**rp, "buildings": 4}) == (None, True)          # < 5 buildings → null + suppressed
+    assert S.roof_block({**rp, "suppressed": ["kwp"]}) == (None, True)
+    assert S.roof_block(None) == (None, False)
+    p = S.apply_min_count(_raw_place(suppressed=["roof_potential"], roof_potential=None))
+    assert p["suppressed"] == ["roof_potential"]
+
+
+def test_municipality_roofs_used_share_and_reason():
+    rm = {"ags": "07340203", "places": ["bechhofen", "other"], "potential_places_kwp": [11885.9, 14263.0, 15847.8],
+          "suitable_area_places_m2": 113199, "missing_gemarkungen": [], "complete": True,
+          "used_share_pct": [11.24, 12.36, 14.96]}
+    pot, used, why = S.municipality_roofs(rm, {"bechhofen"})
+    assert pot == {"places": ["bechhofen"], "suitable_m2": 113200, "kwp": [12000, 14000, 16000], "complete": True}
+    assert used == [11.2, 12.4, 15] and why is None
+    _, used2, why2 = S.municipality_roofs({**rm, "complete": False, "used_share_pct": None,
+                                           "missing_gemarkungen": ["Ixheim", "Rimschweiler"]}, {"bechhofen"})
+    assert used2 is None and "2 weitere Gemarkungen" in why2 and "Ixheim" in why2
+    _, used3, why3 = S.municipality_roofs({**rm, "complete": False, "used_share_pct": None}, set())
+    assert used3 is None and why3.startswith("Nicht alle Gemarkungen")
+    assert S.municipality_roofs(None, set()) == (None, None, None)
+    S.check_privacy({"r": why2})
+
+
+def test_goals_baseline_target_and_null_progress():
+    q = S.round_place(_raw_place(riesen=[{"h": 40, "E": 1.5, "N": 1.5, "id": i} for i in range(3)]))
+    gs = {g["id"]: g for g in S.goals_for(q, 2026)}
+    assert list(gs) == ["kronen-ortslage", "entsiegeln", "riesen-bestimmt", "hecke"]
+    k = gs["kronen-ortslage"]
+    assert k["metric"] == "ortslage.canopy_pct" and k["baseline"] == 32.9 and k["target"] == 34.9
+    assert k["baseline_year"] == q["lidar_epoch"] and k["target_year"] == 2030 and k["measured_by"] == "lidar"
+    e = gs["entsiegeln"]                       # deed counter 0 → 1,000 m²; context 166.7 ha × 28.5 % = 475 095 m²
+    assert e["baseline"] == 0 and e["target"] == 1000 and e["unit"] == "m²" and e["metric"] is None
+    assert e["note_de"] == "Zum Vergleich: heute etwa 475.100 m² versiegelt (28,5 % der Ortslage)"
+    assert "note_de" not in gs["hecke"]
+    assert gs["riesen-bestimmt"]["target"] == 3 and gs["riesen-bestimmt"]["baseline"] == 0
+    assert gs["hecke"]["baseline"] is None and gs["hecke"]["target"] is None and gs["hecke"]["target_delta"] == 500
+    assert all(g["progress"] is None for g in gs.values())
+    bare = S.goals_for(S.round_place(_raw_place(ortslage=None)), 2026)
+    assert [g["id"] for g in bare] == ["hecke"]
+    S.check_privacy({"goals": list(gs.values())})
+
+
+def test_phase1_lookups_used_inputs_and_labels():
+    ph1 = {"species": {"places": {"a": {"x": 1}}, "generated": "2026-11-08T00:55:32Z",
+                       "attribution": "Baumarten: DLR, Tree Species Germany 2022 (Wegler et al. 2025), CC BY 4.0"},
+           "gbif": {"places": [{"id": "a"}], "query_date": "2026-11-08",
+                    "attribution": ["GBIF.org (2026-11-08) GBIF Occurrence Search, https://www.gbif.org"],
+                    "attribution_note_de": "enthält iNaturalist-Beobachtungen"},
+           "roofs": {"places": [{"id": "a"}], "municipalities": [{"ags": "1"}]}, "forest_age": None, "nutzung": None}
+    by = S.phase1_by_place(ph1)
+    assert by["species"] == {"a": {"x": 1}} and by["gbif"] == {"a": {"id": "a"}} and by["roofs_muni"] == {"1": {"ags": "1"}}
+    assert by["forest_age"] == {} and by["nutzung"] == {}
+    used = S.phase1_used(ph1, [{"species": {"mix": []}, "biodiversity": None, "roof_potential": None}])
+    assert set(used) == {"species"}                                     # only sources whose data reached a place
+    inp = S.phase1_inputs({**used, "gbif": ph1["gbif"]})
+    assert set(inp) == {"species_dlr", "gbif"}
+    assert inp["species_dlr"]["licence"] == "CC-BY-4.0" and inp["species_dlr"]["retrieved"] == "2026-11-08"
+    assert inp["gbif"]["attribution"].startswith("GBIF.org") and inp["gbif"]["note_de"]
+    assert all(";" not in v["attribution"] for v in inp.values())
+    lab = S.labels_de(None)
+    assert lab["species"]["douglas_fir"] == "Douglasie" and "canopy_loss" not in lab["species"]
+    assert list(lab["age_classes"]) == list(S.AGE_CLASSES) and list(lab["nutzung"]) == list(S.NUTZUNG_GROUPS)
+    S.check_privacy(lab)
+
+
+def test_load_phase1_missing_files_are_none(tmp_path):
+    (tmp_path / "gbif_by_place.json").write_text('{"places": []}')
+    ph1 = S.load_phase1(tmp_path)
+    assert ph1["gbif"] == {"places": []} and ph1["species"] is None and set(ph1) == set(S.PHASE1_FILES)

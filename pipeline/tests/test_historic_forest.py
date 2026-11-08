@@ -124,3 +124,68 @@ def test_published_mask_follows_contract(aoi):
     assert by_year[1840]["classified"] is False and not (v[v != 255] & 1).any()   # unknown epoch: bit never set
     assert by_year[1935]["bit"] == 1 and by_year[1935]["noMapBit"] == 3
     assert e["attribution"] in m["attribution"]
+
+
+# --- stats area (blockwise, `--stats`) -----------------------------------------------------------------------------
+
+def test_stats_blocks_on_global_grid():
+    b = HF.stats_blocks((375000, 5453000, 387000, 5471000))
+    es, ns = sorted({e for e, _ in b}), sorted({n for _, n in b})
+    assert es[0] == 374000 and es[-1] == 386000 and ns[0] == 5452000 and ns[-1] == 5470000
+    assert all(e % 2000 == 0 and n % 2000 == 0 for e, n in b) and len(b) == 7 * 10
+    assert HF.stats_blocks((378000, 5460000, 384000, 5468000)) == [(e, n) for n in range(5460000, 5468000, 2000)
+                                                                   for e in range(378000, 384000, 2000)]
+
+
+def test_assemble_window_places_neighbours_north_up():
+    B, M = HF.STATS_BLOCK_M, HF.STATS_MARGIN_M
+    nb, win = HF.block_window(2000, 4000)
+    assert win == (2000 - M, 4000 - M, 4000 + M, 6000 + M) and len(nb) == 9 and (2000, 4000) in nb
+
+    def blk(val):
+        a = np.zeros((B, B, 4), np.uint8)
+        a[..., 0] = val
+        a[..., 3] = 255
+        a[0, 0, 1] = 7          # marks the NW corner pixel of each block
+        return a
+
+    imgs = {k: None for k in nb}
+    imgs[(2000, 4000)] = blk(10)        # centre
+    imgs[(2000, 6000)] = blk(20)        # north neighbour
+    imgs[(4000, 4000)] = blk(30)        # east neighbour
+    w = HF.assemble_window(imgs, win)
+    assert w.shape == (B + 2 * M, B + 2 * M, 4)
+    assert w[M, M, 0] == 10 and w[M, M, 1] == 7            # centre's NW pixel at (margin, margin)
+    assert w[M - 1, M, 0] == 20                             # row above the centre comes from the north block
+    assert w[M + 5, M + B, 0] == 30                         # first column east of the centre: east block
+    assert w[M + B + 5, M + 5, 3] == 0                      # missing south block → transparent
+
+
+def test_classify_blocks_has_no_seam_at_block_edges():
+    """A symbol field straddling a block edge is found on both sides and gives one connected forest patch."""
+    rng = np.random.default_rng(1)
+    B = HF.STATS_BLOCK_M
+    blocks = [(0, 0), (B, 0)]
+    om = HF.omega_template(1.0)
+    canvas = np.clip(0.93 + 0.12 * rng.random((B, 2 * B)), 0, 1).astype(np.float32)   # textured paper
+    k = om.shape[0] // 2
+    for r in range(B // 2 - 300, B // 2 + 300, 60):
+        for c in range(B - 400, B + 400, 60):
+            canvas[r - k:r + k + 1, c - k:c + k + 1] = np.minimum(canvas[r - k:r + k + 1, c - k:c + k + 1], om)
+    rgb = (canvas * 230).astype(np.uint8)
+
+    def get(b):
+        a = np.zeros((B, B, 4), np.uint8)
+        a[..., :3] = rgb[:, b[0]:b[0] + B, None]
+        a[..., 3] = 255
+        return a
+
+    res = HF.classify_blocks(blocks, get, (0, 0, 2 * B, B))
+    f = res["forest"]
+    row = (B // 2) // HF.CELL_M
+    assert f[row, (B - 300) // HF.CELL_M] and f[row, (B + 300) // HF.CELL_M]
+    assert f[row, B // HF.CELL_M - 1] and f[row, B // HF.CELL_M]      # both sides of the seam
+    assert not f[20, 20]                                                # blank paper away from the field
+    from scipy import ndimage as ndi
+    assert ndi.label(f)[1] == 1
+    assert (res["value"] != HF.NODATA).all()

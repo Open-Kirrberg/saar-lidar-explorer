@@ -1,6 +1,7 @@
 """Historic forest mask `forest_hist` (contract "Historic forest mask"): where the historic maps show forest.
 
-Usage:  uv run python historic_forest.py <aoi> [--sample N] [--no-manifest]
+Usage:  uv run python historic_forest.py <aoi> [--no-manifest]
+        uv run python historic_forest.py --stats [--workers 2]     # stats area `orte` (no app tiles, work files only)
 
 Input: the 1 m RGBA mosaics that historic.py keeps in data/work/<aoi>/hist_<year>.tif (WMS SL Historische Karten,
 LVGL-SL). Output: one u8 PNG on a 5 m grid over the AOI, `forest_hist/forest_hist.png`, plus the manifest key
@@ -22,6 +23,15 @@ Method `hist-forest-symbols-v1`:
   boundaries and names, but **no area signature for forest** (checked on crops of named forests such as the
   Vierherrenwald and of today's old forests; the paper tint separates today's forest from open land only with
   AUC 0.55–0.74, confounded by sheet edges and hachure density). So 1840 is `classified: false` and bit 0 stays 0.
+
+Stats area (`--stats`, Orte im Vergleich Phase 1): the nine places reach far beyond the AOI `overall`, so the TK25
+1935–40 is fetched for the stats bbox (data/work/orte/gemarkungen.geojson meta.stats_bbox) as 2 km GetMap blocks on
+the global 2 km grid (1 m/px, cached under data/raw/historic/orte/ with AOI-independent names, so the blocks the AOI
+`overall` already has are linked, not refetched); only blocks touching a place outline + 300 m are requested. Symbols
+are detected per block on a window with STATS_MARGIN_M of the neighbouring blocks (no seams: only peaks in the core
+are kept), the density and mask are then computed once on the whole 5 m grid with the same parameters. Output: a
+work mask data/work/orte/forest_hist.png + forest_hist.json (`entry` in the manifest format, plus E0 / N_top of the
+grid), read by forest_age.py; nothing is published under app/public/data/.
 
 Licence: the maps are dl-de/by-2-0 (LVGL-SL, WMS id 2597); this derived mask carries the same Quellenvermerk.
 """
@@ -329,12 +339,169 @@ def run(aoi_key: str, write_manifest: bool = True) -> dict[str, Any]:
     return {"entry": entry, "report": report, "forest": forest, "nomap": nomap, "value": v}
 
 
+# =================================================================================================== stats area
+STATS_BLOCK_M = 2000
+STATS_MARGIN_M = 250
+STATS_OUTLINE_BUFFER_M = 300
+
+
+def stats_blocks(bbox: Sequence[float], block: int = STATS_BLOCK_M) -> list[tuple[int, int]]:
+    """Lower-left corners (E, N) of the global `block` grid cells covering `bbox` (minE, minN, maxE, maxN). Pure."""
+    e0, n0, e1, n1 = bbox
+    return [(e, n) for n in range(int(math.floor(n0 / block) * block), int(math.ceil(n1 / block) * block), block)
+            for e in range(int(math.floor(e0 / block) * block), int(math.ceil(e1 / block) * block), block)]
+
+
+def block_window(e: int, n: int, block: int = STATS_BLOCK_M, margin: int = STATS_MARGIN_M
+                 ) -> tuple[list[tuple[int, int]], tuple[int, int, int, int]]:
+    """Neighbour blocks needed for the window of block (e, n) and the window (minE, minN, maxE, maxN). Pure."""
+    win = (e - margin, n - margin, e + block + margin, n + block + margin)
+    nb = [(e + dx * block, n + dy * block) for dy in (1, 0, -1) for dx in (-1, 0, 1)]
+    return nb, win
+
+
+def assemble_window(blocks: Mapping[tuple[int, int], np.ndarray | None], win: Sequence[int],
+                    block: int = STATS_BLOCK_M) -> np.ndarray:
+    """RGBA window (1 m/px, row 0 = north) cut from a 3 × 3 neighbourhood of block images; missing blocks are
+    transparent. Pure."""
+    w0, s0, w1, n1 = (int(v) for v in win)
+    out = np.zeros((n1 - s0, w1 - w0, 4), np.uint8)
+    for (be, bn), img in blocks.items():
+        if img is None:
+            continue
+        # block covers E be…be+block, N bn…bn+block; row 0 of the image = N bn+block
+        e_lo, e_hi = max(be, w0), min(be + block, w1)
+        n_lo, n_hi = max(bn, s0), min(bn + block, n1)
+        if e_lo >= e_hi or n_lo >= n_hi:
+            continue
+        out[n1 - n_hi:n1 - n_lo, e_lo - w0:e_hi - w0] = img[bn + block - n_hi:bn + block - n_lo, e_lo - be:e_hi - be]
+    return out
+
+
+def classify_blocks(blocks: Sequence[tuple[int, int]], get, bbox: Sequence[int]) -> dict[str, Any]:
+    """TK25 symbol detection over 2 km blocks (`get(block) -> RGBA`), stitched into one 5 m mask over `bbox`
+    (row 0 = north edge bbox[3]). Blocks not in `blocks` count as no data. Returns value (u8 contract bits, 255
+    outside the fetched blocks), symbols (global px rows/cols), forest, nomap, covered, density."""
+    wanted = set(blocks)
+    e0, n_top = int(bbox[0]), int(bbox[3])
+    shape_c = (math.ceil((bbox[3] - bbox[1]) / CELL_M), math.ceil((bbox[2] - bbox[0]) / CELL_M))
+    pts_all = []
+    valid_cells = np.zeros(shape_c, np.float64)
+    count_cells = np.zeros(shape_c, np.float64)
+    cache: dict[tuple[int, int], np.ndarray | None] = {}
+    for b in sorted(blocks, key=lambda t: (t[1], t[0])):
+        nb, win = block_window(*b)
+        imgs = {}
+        for k in nb:
+            if k not in cache:
+                cache[k] = get(k) if k in wanted else None
+            imgs[k] = cache[k]
+        rgba = assemble_window(imgs, win)
+        lum = rgba[..., :3].astype(np.float32).mean(-1)
+        valid = rgba[..., 3] > 0
+        pk = detect_symbols(paper_normalised(lum), valid)
+        m = STATS_MARGIN_M
+        core = (pk[:, 0] >= m) & (pk[:, 0] < m + STATS_BLOCK_M) & (pk[:, 1] >= m) & (pk[:, 1] < m + STATS_BLOCK_M)
+        # window px (row, col) → global grid px (row from n_top, col from e0)
+        pts_all.append(np.c_[pk[core, 0] + (n_top - win[3]), pk[core, 1] + (win[0] - e0)])
+        cv = valid[m:m + STATS_BLOCK_M, m:m + STATS_BLOCK_M]
+        r0, c0 = (n_top - (b[1] + STATS_BLOCK_M)) // CELL_M, (b[0] - e0) // CELL_M
+        frac = cell_fraction(cv)
+        r1, c1 = r0 + frac.shape[0], c0 + frac.shape[1]
+        rr0, cc0 = max(r0, 0), max(c0, 0)
+        rr1, cc1 = min(r1, shape_c[0]), min(c1, shape_c[1])
+        if rr0 < rr1 and cc0 < cc1:
+            valid_cells[rr0:rr1, cc0:cc1] += frac[rr0 - r0:rr1 - r0, cc0 - c0:cc1 - c0]
+            count_cells[rr0:rr1, cc0:cc1] += 1
+        for k in [k for k in cache if k[1] < b[1] - STATS_BLOCK_M]:   # blocks run S → N: rows two below are done
+            cache.pop(k, None)
+    pts = np.vstack(pts_all) if pts_all else np.zeros((0, 2), np.int64)
+    inside = (pts[:, 0] >= 0) & (pts[:, 0] < shape_c[0] * CELL_M) & (pts[:, 1] >= 0) & (pts[:, 1] < shape_c[1] * CELL_M)
+    pts = pts[inside]
+    dens = density_per_ha(pts, (shape_c[0] * CELL_M, shape_c[1] * CELL_M))
+    covered = count_cells > 0
+    nomap = ~covered | (valid_cells < 0.5)
+    forest = clean_mask((dens >= DENSITY_MIN) & ~nomap)
+    v = encode({1935: forest, 1840: None}, {1935: nomap, 1840: None}, shape_c)
+    v[~covered] = NODATA
+    return {"value": v, "symbols": pts, "forest": forest, "nomap": nomap, "covered": covered, "density": dens}
+
+
+def run_stats(workers: int = 2) -> dict[str, Any]:
+    """TK25 1935–40 forest mask over the stats bbox (module docstring, „Stats area“)."""
+    import shapely
+    from shapely.geometry import box as sbox, shape
+
+    from common import RAW_DIR
+    from historic import HIST_LAYERS, HIST_WMS
+    from ortho import WmsClient, cache_name, run_pool, wms_getmap_url
+    orte = WORK_DIR / "orte"
+    gj = json.loads((orte / "gemarkungen.geojson").read_text())
+    bbox = [int(v) for v in gj["meta"]["stats_bbox"]]
+    area = shapely.union_all([shape(f["geometry"]) for f in gj["features"]]).buffer(STATS_OUTLINE_BUFFER_M)
+    blocks = [b for b in stats_blocks(bbox) if area.intersects(sbox(b[0], b[1], b[0] + STATS_BLOCK_M,
+                                                                     b[1] + STATS_BLOCK_M))]
+    layer = HIST_LAYERS["hist_1935"]["layer"]
+    raw = RAW_DIR / "historic" / "orte"
+    prime = wms_getmap_url(HIST_WMS, layer, (bbox[0], bbox[1], bbox[0] + 500, bbox[1] + 500), 16, 16,
+                           version="1.1.1")
+    client = WmsClient(raw, cookies=True, share_glob="historic/*", prime_url=prime)
+    t0 = time.time()
+
+    def get(b: tuple[int, int]) -> np.ndarray:
+        bb = (b[0], b[1], b[0] + STATS_BLOCK_M, b[1] + STATS_BLOCK_M)
+        url = wms_getmap_url(HIST_WMS, layer, bb, STATS_BLOCK_M, STATS_BLOCK_M, version="1.1.1")
+        return client.image(url, cache_name(f"L{layer}", bb, STATS_BLOCK_M), (STATS_BLOCK_M, STATS_BLOCK_M))
+
+    run_pool(get, blocks, min(workers, 3))   # download (or link) every block once; images re-read from the cache
+    print(f"  TK25 1935–40: {len(blocks)} blocks, {client.requests} requests, cached {client.cached}, "
+          f"linked {client.linked} [{time.time() - t0:.0f}s]", flush=True)
+    e0, n_top = bbox[0], bbox[3]
+    res = classify_blocks(blocks, get, bbox)
+    v, pts, forest, nomap, covered = res["value"], res["symbols"], res["forest"], res["nomap"], res["covered"]
+    nbytes = write_png(orte / "forest_hist.png", v)
+    generated = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    acc_path = WORK_DIR / "overall" / "forest_hist_accuracy.json"
+    accuracy = json.loads(acc_path.read_text()) if acc_path.exists() else {}
+    entry = {
+        "format": FORMAT, "path": "forest_hist.png", "encoding": "u8-bits", "cellSize": CELL_M,
+        "size": {"width": int(v.shape[1]), "height": int(v.shape[0])}, "nodata": NODATA,
+        "epochs": [{"year": 1840, "bit": 0, "noMapBit": 2, "key": "hist_1840", "label_de": EPOCHS[1840]["label_de"],
+                    "map_de": EPOCHS[1840]["map_de"], "classified": False,
+                    "note_de": EPOCHS[1840]["note"] + "; für das Statistikgebiet nicht abgerufen"},
+                   {"year": 1935, "bit": 1, "noMapBit": 3, "key": "hist_1935", "label_de": EPOCHS[1935]["label_de"],
+                    "map_de": EPOCHS[1935]["map_de"], "classified": True, "note_de": EPOCHS[1935]["note"],
+                    **({"accuracy": {**accuracy["1935"], "sample": accuracy["1935"].get("sample", "") +
+                                     " (measured on the AOI overall)"}} if "1935" in accuracy else {})}],
+        "method": METHOD, "generated": generated, "label_de": "Historischer Wald (Schätzung)",
+        "attribution": ATTRIBUTION_HIST,
+        "source": "WMS SL Historische Karten (Geoportal Saarland, WMS-ID 2597), Layer 5",
+    }
+    report = {"entry": entry, "E0": e0, "N_top": n_top, "bbox": bbox, "blocks": len(blocks),
+              "symbols": int(len(pts)), "requests": client.requests, "cached": client.cached,
+              "linked": client.linked, "bytes": nbytes,
+              "forest_pct": round(100 * float(forest[covered & ~nomap].mean()), 1) if (covered & ~nomap).any()
+              else None, "covered_pct": round(100 * float(covered.mean()), 1),
+              "seconds": round(time.time() - t0, 1)}
+    (orte / "forest_hist.json").write_text(json.dumps(report, indent=1, ensure_ascii=False) + "\n")
+    print(f"wrote data/work/orte/forest_hist.png ({fmt_bytes(nbytes)}), {len(pts)} symbols, forest "
+          f"{report['forest_pct']} % of the covered map area [{report['seconds']}s]")
+    return report
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("aoi")
+    ap.add_argument("aoi", nargs="?")
     ap.add_argument("--no-manifest", action="store_true")
+    ap.add_argument("--stats", action="store_true", help="TK25 1935–40 mask over the stats bbox (work files)")
+    ap.add_argument("--workers", type=int, default=2, help="parallel WMS requests in --stats (max 3)")
     args = ap.parse_args()
-    run(args.aoi, write_manifest=not args.no_manifest)
+    if args.stats:
+        run_stats(args.workers)
+    elif args.aoi:
+        run(args.aoi, write_manifest=not args.no_manifest)
+    else:
+        ap.error("give an AOI or --stats")
 
 
 if __name__ == "__main__":

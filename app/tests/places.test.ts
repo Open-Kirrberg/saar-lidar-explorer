@@ -3,19 +3,40 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../src/data/manifest';
 import {
+  ARRIVAL_MOVE_M,
+  COLLECT_KEY,
+  clearCollect,
+  armCollectGate,
+  collectGate,
+  collectProgress,
+  emptyCollect,
+  isDiscovered,
+  loadCollect,
+  markPlace,
+  markRiese,
+  newCollectGate,
+  riesenNear,
+  saveCollect,
+} from '../src/places/collect';
+import type { KV } from '../src/places/collect';
+import {
   aoiRect,
   boardFor,
   clipPolyline,
   clipRingToRect,
+  fmtGoalValue,
   fmtRange,
+  fmtShare,
   fmtValue,
   frameBox,
   framedPose,
   giantPinText,
+  goalBar,
   inAoiRect,
   insideFocus,
   otherFlight,
   otherFlightNote,
+  outsideNote,
   parseManifestStats,
   parseOutlines,
   parsePlacesFile,
@@ -23,6 +44,8 @@ import {
   placeTitle,
   rankBoard,
   resolveMeasure,
+  riesenInAoi,
+  rieseSpeciesText,
   unionBox,
 } from '../src/places/placesData';
 import type { Discipline, Place } from '../src/places/placesData';
@@ -381,6 +404,23 @@ describe('geometry helpers', () => {
 const REAL = join(import.meta.dirname, '../public/data/overall/stats/places.json');
 const REAL_GEO = join(import.meta.dirname, '../public/data/overall/stats/places.geojson');
 describe.skipIf(!existsSync(REAL))('real overall stats (local data)', () => {
+  it('parses the Phase 1 blocks of every place', () => {
+    const data = parsePlacesFile(JSON.parse(readFileSync(REAL, 'utf8')))!;
+    for (const p of data.places) {
+      expect(p.riesen.length).toBeGreaterThan(0);
+      expect(p.riesen[0].h).toBe(p.tallest!.h);
+      for (const g of p.goals) expect(g.progress).toBeNull();
+    }
+    const art = data.disciplines.find((d) => d.id === 'artenvielfalt');
+    if (art) {
+      expect(art.ready).toBe(true);
+      const b = boardFor(data, art)!;
+      expect(b.ranked.length).toBeGreaterThan(0);
+      expect(art.note_de).toBeTruthy();
+    }
+    expect(data.labels.species.beech).toBe('Buche');
+  });
+
   it('parses all places, boards every ready discipline, outlines for every place', () => {
     const data = parsePlacesFile(JSON.parse(readFileSync(REAL, 'utf8')))!;
     expect(data).not.toBeNull();
@@ -393,5 +433,251 @@ describe.skipIf(!existsSync(REAL))('real overall stats (local data)', () => {
       const o = parseOutlines(JSON.parse(readFileSync(REAL_GEO, 'utf8')));
       for (const p of data.places) expect(o.has(p.id)).toBe(true);
     }
+  });
+});
+
+// ---- Phase 1 ---------------------------------------------------------------------------------------------------
+
+const PHASE1 = {
+  ...FILE,
+  labels_de: {
+    species: { beech: 'Buche', douglas_fir: 'Douglasie', larch: 'Lärche' },
+    age_classes: { young: 'jung', middle: 'mittelalt', old: 'alt', very_old: 'sehr alt' },
+    nutzung: { forest: 'Wald und Gehölz' },
+  },
+  inputs: { gbif: { name_de: 'GBIF', note_de: 'enthält iNaturalist (CC BY-NC 4.0)' }, species_dlr: { name_de: 'DLR' } },
+  disciplines: [
+    ...FILE.disciplines.filter((d) => d.id !== 'artenvielfalt'),
+    { id: 'artenvielfalt', name_de: 'Artenvielfalt', emoji: '🦋', description_de: 'misst Beobachtungen', scope: 'place', measure: 'biodiversity.rarefied_500', unit: 'Arten', higher_is_better: true, method: 'gbif-rarefied-v1', ready: true, note_de: 'Grober Hinweis, keine Messung.' },
+  ],
+  places: [
+    place('kirrberg', {
+      riesen: [
+        { rank: 1, h: 47.9, E: 380946.5, N: 5461352.5, id: 3490862440, in_trees: false },
+        { rank: 2, h: 46.7, E: 380924.5, N: 5461393.5, id: 3489420689, in_trees: false, species: { key: 'larch', p: 10 } },
+        { rank: 3, h: 46.7, E: 390000.5, N: 5461393.5, id: 7, in_trees: true, species: { key: 'douglas_fir', p: 80 } },
+        { h: 'tall', E: 1, N: 2 },
+        { h: 44, E: 380000.5, N: 5462000.5, id: 8, in_trees: true, species: { key: 9 } },
+      ],
+      species: { mix: [{ key: 'beech', share_pct: 35.1 }, { key: 'oak', share_pct: 0 }, { key: 3, share_pct: 2 }, { key: 'alder', share_pct: 6.4, weak: true }], dominant: 'beech', coverage_pct: 78.1, conifer_pct: 24.8, trees: 37003, method: 'species-dlr-crown-mix-v1' },
+      biodiversity: { species: 429, occurrences: 1316, inat_share_pct: 21.8, rarefied_500: 227, rarefied_500_range: [212, 227, 242], rarefied_150_range: [86, 96, 106], few_records: false, years: [1990, 2026] },
+      forest_continuity_pct: 44.8,
+      forest_continuity: { covered_pct: 100, epochs: [1935], snapshot: true },
+      forest_age: { trees: 45491, trees_beyond: 9000, median_y: 95, classes_pct: { beyond: 26.0, very_old: 18.6, young: 6.1, middle: 22.1, old: 27.2 } },
+      nutzung: null,
+      roof_potential: { buildings: 2293, kwp: [13000, 16000, 18000], suitable_m2: 128000, usable_m2: 80200 },
+      goals: [
+        { id: 'kronen-ortslage', title_de: '+2 Prozentpunkte', metric: 'ortslage.canopy_pct', unit: '%', baseline: 32.9, baseline_year: 2025, target: 34.9, target_delta: 2, target_year: 2030, measured_by: 'lidar', progress: null },
+        { id: 'hecke', title_de: '500 m neue Hecke', metric: null, unit: 'm', baseline: null, baseline_year: 2026, target: null, target_delta: 500, target_year: 2030, measured_by: 'community', progress: null },
+        { id: 'no-title', unit: 'm' },
+      ],
+    }),
+    place('moersbach', {
+      biodiversity: { species: 120, occurrences: 326, rarefied_500: null, rarefied_500_range: null, rarefied_150_range: [70, 80, 90], few_records: true, years: null },
+      nutzung: { source: 'alkis', shares_pct: { forest: 29, agriculture: 46.5, bad: 'x' } },
+      roof_potential: 'broken',
+      species: { mix: 'broken' },
+      forest_age: { classes_pct: {} },
+      riesen: 'nope',
+    }),
+  ],
+  municipalities: [
+    { id: 'bechhofen', name_de: 'Bechhofen', places: ['bechhofen'], pv: { systems: 214, kwp: 1825, used_pct: [11.2, 12.4, 14.9], used_pct_reason_de: null }, roof_potential: { complete: true, kwp: [12000, 14000, 16000], places: ['bechhofen'], suitable_m2: 113200 } },
+    { id: 'homburg', name_de: 'Homburg', places: ['kirrberg'], pv: { systems: 2959, kwp: 45364, used_pct: null, used_pct_reason_de: 'Nicht alle Gemarkungen erfasst.' }, roof_potential: { complete: false, kwp: [3, 2, 1] } },
+  ],
+};
+
+describe('Phase 1 blocks of places.json (contract „Place statistics“, tolerant)', () => {
+  const data = parsePlacesFile(PHASE1)!;
+  const k = data.places.find((p) => p.id === 'kirrberg')!;
+  const m = data.places.find((p) => p.id === 'moersbach')!;
+
+  it('riesen: entries without finite h/E/N skipped, species only with a string key and a number', () => {
+    expect(k.riesen.map((r) => r.rank)).toEqual([1, 2, 3, 4]);
+    expect(k.riesen[0].species).toBeNull();
+    expect(k.riesen[1].species).toEqual({ key: 'larch', p: 10 });
+    expect(k.riesen[3]).toMatchObject({ h: 44, id: 8, species: null }); // rank derived from the order
+    expect(m.riesen).toEqual([]);
+  });
+
+  it('species mix drops 0 / malformed entries; broken blocks read as null', () => {
+    expect(k.species).toEqual({ mix: [{ key: 'beech', share_pct: 35.1, weak: false }, { key: 'alder', share_pct: 6.4, weak: true }], dominant: 'beech', coverage_pct: 78.1, conifer_pct: 24.8, trees: 37003 });
+    expect(m.species).toBeNull();
+    expect(m.roof_potential).toBeNull();
+    expect(m.forest_age).toBeNull();
+  });
+
+  it('age classes in class order, continuity as a snapshot, roof potential, goals without title skipped', () => {
+    expect(k.forest_age!.classes_pct.map(([c]) => c)).toEqual(['young', 'middle', 'old', 'very_old', 'beyond']);
+    expect(k.forest_age!.trees_beyond).toBe(9000);
+    expect(k.forest_continuity).toEqual({ covered_pct: 100, epochs: [1935], snapshot: true });
+    expect(k.forest_continuity_pct).toBe(44.8);
+    expect(k.roof_potential).toEqual({ buildings: 2293, suitable_m2: 128000, usable_m2: 80200, kwp: [13000, 16000, 18000] });
+    expect(k.goals.map((g) => g.id)).toEqual(['kronen-ortslage', 'hecke']);
+    expect(k.goals[0]).toMatchObject({ measured_by: 'lidar', progress: null, baseline: 32.9, target: 34.9 });
+  });
+
+  it('biodiversity, few records, land use', () => {
+    expect(k.biodiversity).toMatchObject({ rarefied_500: 227, rarefied_500_range: [212, 227, 242], few_records: false, years: [1990, 2026] });
+    expect(m.biodiversity).toMatchObject({ rarefied_500: null, few_records: true, rarefied_150_range: [70, 80, 90], years: null });
+    expect(m.nutzung).toEqual([
+      ['forest', 29],
+      ['agriculture', 46.5],
+    ]);
+    expect(k.nutzung).toBeNull();
+  });
+
+  it('municipality used share and roof potential (invalid ranges → null)', () => {
+    const b = data.municipalities.find((x) => x.id === 'bechhofen')!;
+    const h = data.municipalities.find((x) => x.id === 'homburg')!;
+    expect(b.pv!.used_pct).toEqual([11.2, 12.4, 14.9]);
+    expect(b.roof_potential).toMatchObject({ complete: true, kwp: [12000, 14000, 16000] });
+    expect(h.pv!.used_pct).toBeNull();
+    expect(h.pv!.used_pct_reason_de).toBe('Nicht alle Gemarkungen erfasst.');
+    expect(h.roof_potential).toBeNull();
+  });
+
+  it('labels, input notes, the Artenvielfalt board with its caveat', () => {
+    expect(data.labels.species.beech).toBe('Buche');
+    expect(data.inputNotes).toEqual(['enthält iNaturalist (CC BY-NC 4.0)']);
+    const art = data.disciplines.find((d) => d.id === 'artenvielfalt')!;
+    expect(art.note_de).toBe('Grober Hinweis, keine Messung.');
+    const board = boardFor(data, art)!;
+    expect(board.ranked.map((e) => e.item.id)).toEqual(['kirrberg']);
+    expect(board.noData.map((e) => e.item.id)).toEqual(['moersbach']); // few records → „keine Daten“
+  });
+
+  it('Riese species wording (contract: wahrscheinlich ≥ 50 %, else unsicher; unknown keys by key)', () => {
+    expect(rieseSpeciesText(data.labels, { key: 'douglas_fir', p: 80 })).toBe('wahrscheinlich Douglasie (80 %)');
+    expect(rieseSpeciesText(data.labels, { key: 'larch', p: 40 })).toBe('Lärche? unsicher (40 %)');
+    expect(rieseSpeciesText(data.labels, { key: 'fir', p: 50 })).toBe('wahrscheinlich fir (50 %)');
+  });
+
+  it('Riesen in the 3D area only (denominator of „Riesen entdeckt“)', () => {
+    const r = { E0: 378000, N0: 5460000, E1: 384000, N1: 5468000 };
+    expect(riesenInAoi(data.places, r).map((x) => x.riese.id)).toEqual([3490862440, 3489420689, 8]);
+  });
+});
+
+describe('phone toast fix: one rounding for the 3D share', () => {
+  it('fmtShare keeps 0.1 pp like the card', () => {
+    expect(fmtShare(1.3)).toBe('1,3 %');
+    expect(fmtShare(1.2999)).toBe('1,3 %');
+    expect(fmtShare(6.8)).toBe('6,8 %');
+    expect(fmtShare(48.25)).toBe('48,3 %');
+    expect(outsideNote('Gemarkung Zweibrücken', 1.3)).toBe('Nur 1,3 % der Gemarkung Zweibrücken liegen im 3D-Gebiet: Flug zu diesem Teil, der ganze Umriss steht auf der Karte.');
+  });
+});
+
+describe('goal bars (baseline / target, no progress)', () => {
+  it('percent goals on 0–100, others on 0–max; null without a baseline', () => {
+    const pct = goalBar({ baseline: 32.9, target: 34.9, unit: '%' })!;
+    expect(pct.base).toBeCloseTo(0.329, 12);
+    expect(pct.target).toBeCloseTo(0.349, 12);
+    expect(goalBar({ baseline: 0, target: 10, unit: 'Bäume' })).toEqual({ base: 0, target: 1 });
+    expect(goalBar({ baseline: 475100, target: 474100, unit: 'm²' })!.target).toBeCloseTo(474100 / 475100, 9);
+    expect(goalBar({ baseline: null, target: null, unit: 'm' })).toBeNull();
+    expect(goalBar({ baseline: 0, target: 0, unit: 'm' })).toBeNull();
+    expect(fmtGoalValue(475100, 'm²')).toBe('475.100 m²');
+    expect(fmtGoalValue(32.9, '%')).toBe('32,9 %');
+    expect(fmtGoalValue(null, 'm')).toBe('noch nicht messbar');
+  });
+});
+
+describe('local collecting (collect.ts, localStorage only)', () => {
+  const memKV = (): KV & { data: Map<string, string> } => {
+    const data = new Map<string, string>();
+    return { data, getItem: (k) => data.get(k) ?? null, setItem: (k, v) => void data.set(k, v), removeItem: (k) => void data.delete(k) };
+  };
+
+  it('round-trips through storage and ignores junk', () => {
+    const kv = memKV();
+    const s = emptyCollect();
+    expect(markRiese(s, 3490862440, new Date('2026-11-08T10:00:00Z'))).toBe(true);
+    expect(markRiese(s, 3490862440)).toBe(false);
+    expect(markPlace(s, 'kirrberg', new Date('2026-11-08T10:00:00Z'))).toBe(true);
+    expect(saveCollect(kv, s)).toBe(true);
+    const back = loadCollect(kv);
+    expect(back).toEqual({ version: 1, riesen: { '3490862440': '2026-11-08' }, places: { kirrberg: '2026-11-08' } });
+    expect(isDiscovered(back, 3490862440)).toBe(true);
+    expect(isDiscovered(back, null)).toBe(false);
+    kv.setItem(COLLECT_KEY, JSON.stringify({ version: 1, riesen: { abc: '2026-01-01', '12': 'yesterday', '13': '2026-01-02' }, places: { 'Bad Id': '2026-01-01', ok: '2026-01-01' } }));
+    expect(loadCollect(kv)).toEqual({ version: 1, riesen: { '13': '2026-01-02' }, places: { ok: '2026-01-01' } });
+    kv.setItem(COLLECT_KEY, '{not json');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(loadCollect(kv)).toEqual(emptyCollect());
+    kv.setItem(COLLECT_KEY, JSON.stringify({ version: 2 }));
+    expect(loadCollect(kv)).toEqual(emptyCollect());
+    expect(clearCollect(kv)).toEqual(emptyCollect());
+    expect(kv.data.has(COLLECT_KEY)).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('survives a throwing or missing storage (private mode)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const bad: KV = {
+      getItem: () => {
+        throw new Error('denied');
+      },
+      setItem: () => {
+        throw new Error('quota');
+      },
+    };
+    expect(loadCollect(bad)).toEqual(emptyCollect());
+    expect(saveCollect(bad, emptyCollect())).toBe(false);
+    expect(saveCollect(null, emptyCollect())).toBe(false);
+    expect(clearCollect(bad)).toEqual(emptyCollect());
+    expect(loadCollect(undefined)).toEqual(emptyCollect());
+    warn.mockRestore();
+  });
+
+  it('discovers Riesen within 150 m (3D: horizontal + height above ground vs tree height)', () => {
+    const rs = [
+      { id: 1, E: 1000, N: 1000, h: 45 },
+      { id: 2, E: 1200, N: 1000, h: 30 },
+      { id: null, E: 1000, N: 1000, h: 45 },
+    ];
+    expect(riesenNear(rs, { E: 1000, N: 1000, agl: 100 }).map((r) => r.id)).toEqual([1]); // 55 m above the top
+    expect(riesenNear(rs, { E: 1100, N: 1000, agl: 60 }).map((r) => r.id)).toEqual([1, 2]);
+    expect(riesenNear(rs, { E: 1000, N: 1000, agl: 300 })).toEqual([]); // flying high over it does not count
+    expect(riesenNear(rs, { E: Number.NaN, N: 1000, agl: 50 })).toEqual([]);
+  });
+
+  it('progress counts only ids of the current lists', () => {
+    const s = emptyCollect();
+    markRiese(s, 1);
+    markRiese(s, 99); // no longer published
+    markPlace(s, 'kirrberg');
+    expect(collectProgress(s, [1, 2, 3], ['kirrberg', 'homburg'])).toEqual({ riesen: [1, 3], places: [1, 2] });
+  });
+
+  it('automatic fly-tos do not collect; places only after moving away from the arrival point', () => {
+    // review 2026-11-08: tapping Zweibrücken flew over / ended above Kirrberg and counted it as visited
+    const g = newCollectGate();
+    expect(collectGate(g, false, { E: 0, N: 0 })).toEqual({ riesen: true, places: false }); // start pose = arrival
+    expect(collectGate(g, false, { E: 0, N: ARRIVAL_MOVE_M })).toEqual({ riesen: true, places: true }); // flew away
+    expect(collectGate(g, true, { E: 500, N: 0 })).toEqual({ riesen: false, places: false }); // fly-to running
+    expect(collectGate(g, false, { E: 1000, N: 0 })).toEqual({ riesen: true, places: false }); // arrived
+    expect(g.arrival).toEqual({ E: 1000, N: 0 });
+    expect(collectGate(g, false, { E: 1000 + ARRIVAL_MOVE_M / 2, N: 0 }).places).toBe(false);
+    expect(collectGate(g, false, { E: 1000, N: ARRIVAL_MOVE_M })).toEqual({ riesen: true, places: true }); // moved
+    expect(g.arrival).toBeNull();
+    // a flight that started and ended between two ticks is still seen (the frame loop sets `flew`)
+    g.flew = true;
+    expect(collectGate(g, false, { E: 5000, N: 0 }).places).toBe(false);
+    expect(collectGate(g, false, { E: Number.NaN, N: 0 }).places).toBe(false);
+  });
+
+  it('the start pose and a reset are not a visit (review 2026-11-08: every reload collected Homburg)', () => {
+    const g = newCollectGate();
+    // pose not known yet: nothing counts and the gate stays armed
+    expect(collectGate(g, false, { E: Number.NaN, N: Number.NaN })).toEqual({ riesen: false, places: false });
+    expect(collectGate(g, false, { E: 381000, N: 5464000 }).places).toBe(false); // default start (Homburg)
+    expect(g.arrival).toEqual({ E: 381000, N: 5464000 });
+    for (let i = 0; i < 5; i++) expect(collectGate(g, false, { E: 381000 + i * 10, N: 5464000 }).places).toBe(false);
+    expect(collectGate(g, false, { E: 381000 + ARRIVAL_MOVE_M, N: 5464000 }).places).toBe(true); // user flew 100 m
+    armCollectGate(g); // reset in the panel
+    expect(collectGate(g, false, { E: 381100, N: 5464000 }).places).toBe(false);
+    expect(collectGate(g, false, { E: 381100, N: 5464000 + ARRIVAL_MOVE_M }).places).toBe(true);
   });
 });

@@ -7,10 +7,15 @@
  *   lock) a click picks the tree under the crosshair. Touch: a tap (≤ 12 px) after the double-tap
  *   window (a double tap still zooms). Far forest (crown < ≈ 2.5 px) is never picked, so a click
  *   there still captures the mouse. Off while Markieren / Messen own taps and inside zones.
- * - Card (German): type, height, crown, trunk / biomass / CO₂ as ranges labelled „Schätzung“
- *   (crown-allometry-v1, treeFacts.ts), historic forest from `forest_hist` (estimate wording of the
- *   contract), Gemarkung by point in `stats/places.geojson` with a link to its „Orte im Vergleich“
- *   card, Riesenbaum note, tree id. No parcel or owner data (G3).
+ * - Card (German): type (Nadel- / Laubbaum by tree-group-v1: a „wahrscheinlich“ species class beats the DOP
+ *   colour type; „Baum“ when an unsure class and the colour disagree), height, crown, trunk / biomass / CO₂ as ranges labelled „Schätzung“
+ *   (crown-allometry-v2, treeFacts.ts), species from the DLR grid `species` („wahrscheinlich Buche
+ *   (70 %)“, species-dlr-neighbourhood-v1) and the height-based age class (tree-age-height-v2, both
+ *   treeSpecies.ts), historic forest from `forest_hist` (estimate wording of the contract), Gemarkung
+ *   by point in `stats/places.geojson` with a link to its „Orte im Vergleich“ card, Riesenbaum /
+ *   Riese note, tree id. No parcel or owner data (G3).
+ * - Opening a card dispatches `TREE_CARD_OPEN_EVENT` (`{ id, E, N }`): the places panel counts a
+ *   Riese as discovered (local collecting, places/collect.ts).
  * - The selected tree gets a small pin above its crown (Labels3D, same exaggeration rule).
  */
 import { Raycaster, Vector2 } from 'three';
@@ -18,7 +23,7 @@ import { el } from '../shell/dom';
 import { clearOf } from '../shell/layout';
 import type { FeatureHost } from '../shell/types';
 import { isTyping } from '../ui/keys';
-import { PLACE_OPEN_EVENT, parseOutlines, parsePlacesFile, placeTitle } from '../places/placesData';
+import { PLACE_OPEN_EVENT, TREE_CARD_OPEN_EVENT, parseOutlines, parsePlacesFile, placeTitle } from '../places/placesData';
 import type { Outlines, PlacesData } from '../places/placesData';
 import {
   fmtDbh,
@@ -32,6 +37,8 @@ import {
   validForestValues,
 } from './treeFacts';
 import type { ManifestForestHist, PickedTree } from './treeFacts';
+import { ageGroup, speciesAt, speciesPixel, speciesWording, treeAge, treeGroup } from './treeSpecies';
+import type { ManifestSpecies } from './treeSpecies';
 import type { TreeLayer } from './TreeLayer';
 import './treeCard.css';
 
@@ -39,6 +46,9 @@ const SEL_GROUP = 'tree-card';
 const SEL_ID = 'tree-card:sel';
 const PICK_MAX_M = 1500;
 const DOUBLE_TAP_MS = 300;
+
+/** German names of the yield tables (tree-age-height-v2). */
+const TABLE_DE: Record<string, string> = { beech: 'Buche', oak: 'Eiche', spruce: 'Fichte', pine: 'Kiefer', douglas: 'Douglasie' };
 
 interface ForestMask {
   fh: ManifestForestHist;
@@ -52,28 +62,49 @@ async function fetchJson(url: string): Promise<unknown | null> {
   return text.trimStart().startsWith('{') ? (JSON.parse(text) as unknown) : null; // Vite answers 404s with index.html
 }
 
-/** Decode the forest PNG as data (contract: no colour management); null on any mismatch. */
+/** Decode an 8-bit greyscale data PNG (contract: no colour management) into one value per pixel. */
+async function loadU8Png(url: string, size: { width: number; height: number }): Promise<Uint8Array> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith('image/')) throw new Error(`not an image (${blob.type})`);
+  const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+  const { width, height } = size;
+  if (bmp.width !== width || bmp.height !== height) throw new Error(`size ${bmp.width}×${bmp.height} ≠ ${width}×${height}`);
+  const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(width, height) : Object.assign(document.createElement('canvas'), { width, height });
+  const g = canvas.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
+  if (!g) throw new Error('no 2D context');
+  g.drawImage(bmp, 0, 0);
+  bmp.close();
+  const rgba = g.getImageData(0, 0, width, height).data;
+  const values = new Uint8Array(width * height);
+  for (let i = 0; i < values.length; i++) values[i] = rgba[4 * i];
+  return values;
+}
+
+/** The forest mask; null on any mismatch (the card then shows no historic forest). */
 async function loadForestMask(baseUrl: string, fh: ManifestForestHist): Promise<ForestMask | null> {
   try {
-    const res = await fetch(baseUrl + fh.path);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const blob = await res.blob();
-    if (!blob.type.startsWith('image/')) throw new Error(`not an image (${blob.type})`);
-    const bmp = await createImageBitmap(blob, { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
-    const { width, height } = fh.size;
-    if (bmp.width !== width || bmp.height !== height) throw new Error(`size ${bmp.width}×${bmp.height} ≠ ${width}×${height}`);
-    const canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(width, height) : Object.assign(document.createElement('canvas'), { width, height });
-    const g = canvas.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
-    if (!g) throw new Error('no 2D context');
-    g.drawImage(bmp, 0, 0);
-    bmp.close();
-    const rgba = g.getImageData(0, 0, width, height).data;
-    const values = new Uint8Array(width * height);
-    for (let i = 0; i < values.length; i++) values[i] = rgba[4 * i];
+    const values = await loadU8Png(baseUrl + fh.path, fh.size);
     if (!validForestValues(values, fh.nodata)) throw new Error('values outside 0–15 / nodata');
     return { fh, values };
   } catch (err) {
     console.warn('[trees] forest_hist not loaded (card shows no historic forest):', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+interface SpeciesGrid {
+  sp: ManifestSpecies;
+  values: Uint8Array;
+}
+
+/** The DLR species grid; null on a 404 / decode error / size mismatch (contract tolerance: no species row). */
+async function loadSpeciesGrid(baseUrl: string, sp: ManifestSpecies): Promise<SpeciesGrid | null> {
+  try {
+    return { sp, values: await loadU8Png(baseUrl + sp.path, sp.size) };
+  } catch (err) {
+    console.warn('[trees] species not loaded (card shows no species):', err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -116,6 +147,9 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
     })());
   let forestP: Promise<ForestMask | null> | null = null;
   const forest = () => (forestP ??= manifest.forest_hist ? loadForestMask(terrain.baseUrl, manifest.forest_hist) : Promise.resolve(null));
+  let speciesP: Promise<SpeciesGrid | null> | null = null;
+  const speciesGrid = () => (speciesP ??= manifest.species ? loadSpeciesGrid(terrain.baseUrl, manifest.species) : Promise.resolve(null));
+  const aoiFrame = { E0: origin.E0, N0: origin.N0, heightM: manifest.size.height * manifest.cellSize };
 
   // ---- card -------------------------------------------------------------------------------------------
   const card = el('section', { class: 'sle-tree-card', role: 'dialog', 'aria-label': 'Baum-Steckbrief' });
@@ -160,6 +194,7 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
   window.addEventListener('resize', place);
 
   let current: PickedTree | null = null;
+  let loaded: { places: { data: PlacesData; outlines: Outlines } | null; forest: ForestMask | null; species: SpeciesGrid | null } | null = null;
   let renderSeq = 0;
 
   const close = () => {
@@ -175,14 +210,32 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
   const row = (label: string, value: Node | string, hint?: string, ...extra: Array<Node | string>) =>
     el('div', { class: 'sle-tree-kv' }, el('dt', { text: label, title: hint }), el('dd', {}, value, ...extra));
 
-  const render = (t: PickedTree, ctxData: { places: { data: PlacesData; outlines: Outlines } | null; forest: ForestMask | null } | null) => {
-    const a = treeAllometry(t.h, t.r, t.kind === 1);
+  const render = (
+    t: PickedTree,
+    ctxData: { places: { data: PlacesData; outlines: Outlines } | null; forest: ForestMask | null; species: SpeciesGrid | null } | null,
+  ) => {
+    // Species first: the tree group (title, wood density) follows a „wahrscheinlich“ class, not the DOP colour
+    // type alone, which reads most conifers as broadleaf (tree-group-v1, review 2026-11-08).
+    const sg = ctxData?.species ?? null;
+    const ts = sg ? speciesAt(sg.sp, sg.values, aoiFrame, t.E, t.N, t.kind) : null;
+    const speciesPending = !!manifest.species && !ctxData;
+    const group = speciesPending ? 0 : treeGroup(ts, t.kind);
+    const groupFromSpecies = !!ts && ts.likely;
+    const a = treeAllometry(t.h, t.r, group === 1);
     const xBtn = el('button', { type: 'button', class: 'sle-tree-x', 'aria-label': 'Steckbrief schließen', title: 'Schließen (Esc)', text: '×' });
     xBtn.addEventListener('click', close);
     const chips = el('div', { class: 'sle-tree-chips' });
     if (t.fill) chips.append(el('span', { class: 'sle-tree-chip fill', text: 'geschätzte Position', title: 'Zusammengewachsene Nadelbaumkronen wurden rechnerisch aufgeteilt: kein Beleg für genau diesen Einzelbaum' }));
     const out: Node[] = [
-      el('header', {}, el('h2', { text: `${t.kind === 1 ? '🌲' : '🌳'} ${treeTypeLabel(t.kind)}` }), xBtn),
+      el(
+        'header',
+        {},
+        el('h2', {
+          text: `${group === 1 ? '🌲' : '🌳'} ${treeTypeLabel(group)}`,
+          title: groupFromSpecies ? 'Nach der Baumart-Karte (Schätzung)' : group ? 'Nach der Luftbildfarbe – oft unsicher' : 'Nadel- oder Laubbaum: unsicher',
+        }),
+        xBtn,
+      ),
       chips,
     ];
     // Gemarkung + Riesenbaum
@@ -190,10 +243,17 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
     const placeId = pd ? placeIdAt(pd.outlines, t.E, t.N) : null;
     const pl = placeId ? (pd!.data.places.find((p) => p.id === placeId) ?? null) : null;
     const giantOf = pd?.data.places.find((p) => p.tallest && p.tallest.id === t.id) ?? null;
+    const rieseOf = giantOf ? null : (pd?.data.places.find((p) => p.riesen.some((r) => r.id === t.id)) ?? null);
     if (giantOf) {
       chips.append(el('span', { class: 'sle-tree-chip giant', text: '🏆 Riesenbaum' }));
       out.push(el('p', { class: 'sle-tree-giant', text: `Riesenbaum der ${placeTitle(giantOf)}: der höchste geprüfte Baum dieser Gemarkung (LiDAR-Höhe, nicht vor Ort gemessen).` }));
+    } else if (rieseOf) {
+      const r = rieseOf.riesen.find((x) => x.id === t.id)!;
+      chips.append(el('span', { class: 'sle-tree-chip giant', text: `🌲 Riese Nr. ${r.rank}` }));
+      out.push(el('p', { class: 'sle-tree-giant', text: `Einer der ${rieseOf.riesen.length} Riesen der ${placeTitle(rieseOf)} (Platz ${r.rank}, LiDAR-Höhe, nicht vor Ort gemessen).` }));
     }
+    // Opening the card counts the Riese as discovered (places panel, only on this device).
+    if (giantOf || rieseOf) out.push(el('p', { class: 'sle-tree-note', text: '✓ Bei „Riesen entdeckt“ gezählt (nur auf diesem Gerät).' }));
     if (!chips.childElementCount) chips.remove();
 
     const dl = el('dl', { class: 'sle-tree-kvs' });
@@ -204,6 +264,54 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
       row('Biomasse', fmtMassRange(a.agbKg), 'Oberirdische Trockenmasse, grob (Faktor 2 nach unten und oben)', ' ', est()),
       row('CO₂', fmtMassRange(a.co2Kg), 'CO₂-Äquivalent ≈ 1,8 × Biomasse', ' ', est()),
     );
+    // Species (DLR grid) and the height-based age (both estimates, G7)
+    let speciesSrc: string | null = null;
+    let speciesKey: string | null = null;
+    let inForestMap: boolean | null = null; // null: no species layer → unknown whether the tree stands in forest
+    if (manifest.species) {
+      if (!ctxData) dl.append(row('Baumart', el('span', { class: 'sle-dim', text: 'lädt …' })));
+      else if (sg) {
+        const year = sg.sp.year ? ` ${sg.sp.year}` : '';
+        const at = speciesPixel(sg.sp, aoiFrame, t.E, t.N);
+        const raw = at ? sg.values[at.py * sg.sp.size.width + at.px] : sg.sp.nodata;
+        inForestMap = raw !== sg.sp.nodata && sg.sp.classes.has(raw);
+        if (ts) {
+          speciesKey = ts.key;
+          const sub: string[] = [`Satellitenkarte${year}, 10-m-Raster: Bestand um den Baum, nicht dieser eine Baum`];
+          if (ts.contra) sub.push('die Kronenfarbe wirkt eher wie ein Nadelbaum');
+          if (ts.key === 'alder' || ts.key === 'other_broadleaf') sub.push('diese Klasse ist hier oft unsicher');
+          dl.append(
+            row(
+              'Baumart',
+              el('span', { text: speciesWording(ts.label_de, ts.pct, ts.likely) }),
+              `${sg.sp.label_de}: Anteil gleicher Zellen im 3 × 3-Umfeld × Klassengüte (F1), höchstens 90 %`,
+              ' ',
+              est(),
+              el('span', { class: 'sle-tree-sub' }, sub.join(' · ')),
+            ),
+          );
+        } else {
+          const cls = sg.sp.classes.get(raw);
+          const why = cls && !cls.species ? `Waldkarte${year}: Kronendachverlust` : 'außerhalb der Waldkarte';
+          dl.append(row('Baumart', el('span', { class: 'sle-dim', text: `keine Angabe (${why})` }), 'Die Satellitenkarte kennt nur Waldflächen; Gärten, Straßen und Einzelbäume im Ort haben keine Art'));
+        }
+        speciesSrc = `Baumart: ${sg.sp.attribution || 'DLR, Tree Species Germany, CC BY 4.0'}.${sg.sp.accuracyNote ? ` ${sg.sp.accuracyNote}.` : ''} Wahrscheinlichkeit: Umfeld × Klassengüte, keine geeichte Wahrscheinlichkeit.`;
+      }
+    }
+    const age = treeAge(t.h, ageGroup(speciesKey, t.kind));
+    if (age && (ctxData || !manifest.species)) {
+      const tables = age.tables.map((x) => TABLE_DE[x] ?? x).join(', ');
+      const tip = 'tree-age-height-v2: Höhe − 2 m, abgelesen an Ertragstafeln (Bonität I–III); nur eine grobe Klasse, keine Jahreszahl';
+      if (age.beyond) {
+        // Taller than the yield table reaches: no age (the table's last age would only be a clamp).
+        const sub = [`der Baum ist höher, als die Ertragstafel (${tables}) reicht – sehr guter Standort oder sehr alt, aus der Höhe allein nicht zu trennen`];
+        dl.append(row('Alter', el('span', { class: 'sle-dim', text: age.label_de }), tip, el('span', { class: 'sle-tree-sub' }, sub.join(' · '))));
+      } else {
+        const sub = [`aus der Baumhöhe geschätzt (Ertragstafel ${tables})`];
+        if (inForestMap !== true) sub.push('gilt für Waldbäume; frei stehende Bäume sind meist älter');
+        dl.append(row('Alter', el('span', { text: age.label_de }), tip, ' ', est(), el('span', { class: 'sle-tree-sub' }, sub.join(' · '))));
+      }
+    }
     // Historic forest
     const fm = ctxData?.forest ?? null;
     let forestSrc: string | null = null;
@@ -238,12 +346,14 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
     dl.append(row('Baum-Nr.', String(t.id), 'Aus der Lage der Kronenspitze (1-m-Zelle); kann sich bei einer neuen Befliegung ändern'));
     out.push(dl);
     const notes = [
-      'Höhe und Krone aus LiDAR (Kronenhöhenmodell), nicht vor Ort gemessen. Baumtyp aus der Luftbildfarbe – oft unsicher.',
-      'Stamm, Biomasse und CO₂ grob aus Höhe und Krone geschätzt.',
+      'Höhe und Krone aus LiDAR (Kronenhöhenmodell), nicht vor Ort gemessen. Nadel- oder Laubbaum aus der Baumart-Karte, wenn sie die Art für wahrscheinlich hält, sonst aus der Luftbildfarbe (oft unsicher); widersprechen sich beide, steht nur „Baum“.',
+      'Stamm, Biomasse und CO₂ grob aus Höhe und Krone geschätzt (Holzdichte nach Nadel- oder Laubbaum).',
     ];
     if (t.fill) out.push(el('p', { class: 'sle-tree-note warn', text: 'Position geschätzt: zusammengewachsene Nadelbaumkronen wurden rechnerisch aufgeteilt – nicht als Beleg für genau diesen Baum verwenden.' }));
     const src = el('details', { class: 'sle-tree-src' }, el('summary', { text: 'Quellen und Methode' }), el('p', { text: notes.join(' ') }));
     src.addEventListener('toggle', () => place());
+    if (speciesSrc) src.append(el('p', { text: speciesSrc }));
+    if (age) src.append(el('p', { text: 'Alter: Höhe − 2 m an Ertragstafeln abgelesen (Schober 1967, Jüttner 1955, Wiedemann 1936/42 und 1943, Bergel 1985; gerundete Werte), Spanne über die Bonitäten I–III. Höher als die Tafel (Bonität II) reicht: kein Alter.' }));
     if (forestSrc) src.append(el('p', { text: forestSrc }));
     out.push(src);
     card.replaceChildren(...out);
@@ -253,15 +363,18 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
     current = t;
     pickX = screenX;
     const seq = ++renderSeq;
-    render(t, null);
+    render(t, loaded); // context data already in from an earlier card: no „lädt …“ flash
     card.hidden = false;
     card.scrollTop = 0;
     place();
     const pin = el('div', { class: 'sle-tree-sel', 'aria-hidden': 'true' }, el('span', { text: '▼' }));
     services.labels.set(SEL_ID, SEL_GROUP, t.E, t.N, pin, { lift: t.h + 0.5, maxDistance: 3000 });
-    void Promise.all([places(), forest()]).then(([p, f]) => {
+    window.dispatchEvent(new CustomEvent(TREE_CARD_OPEN_EVENT, { detail: { id: t.id, E: t.E, N: t.N } }));
+    if (loaded) return;
+    void Promise.all([places(), forest(), speciesGrid()]).then(([p, f, sg]) => {
+      loaded = { places: p, forest: f, species: sg };
       if (seq !== renderSeq || current !== t) return;
-      render(t, { places: p, forest: f });
+      render(t, loaded);
       place();
     });
   };
