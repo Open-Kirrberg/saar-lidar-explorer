@@ -14,7 +14,8 @@ One decision per file. **Accepted ADRs are never edited**, except the status lin
 | [0055](0055-global-grid-tile-ownership-central-overview.md) | Global 1 km grid (origin E 300 000 / N 5 400 000), tile ownership by largest share, chunk presence bitmap, central overview levels, one session origin (manifest v3) | Accepted | 2026-11-08 | v2 levels anchored per AOI (for v3 places) |
 | [0056](0056-slim-formats-live-relief.md) | Slim formats: WebP lossless data, AVIF visual layers, live hillshade/slope/LRM/VAT, no DSM, 2D OSM, derived parcel lines, no AVIF fallback | Accepted | 2026-11-08 | |
 | [0057](0057-overview-coverage-height-plausibility-place-local-inputs.md) | Overview `coverage` bitmap + filler instead of a no-data marker, local height plausibility rule `h-plausible-v1`, v3 places typed from their own orthophoto only | Accepted | 2026-11-08 | 100 m height floor (S2) |
-| [0058](0058-actions-builds-place-cache-catalog-bundle.md) | Place and catalog builds in Actions: pinned reusable workflow, raw + finished-build caches, optional Geoportal steps, catalog data bundle as a release asset | Proposed | 2026-11-08 | |
+| [0058](0058-actions-builds-place-cache-catalog-bundle.md) | Place and catalog builds in Actions: pinned reusable workflow, raw + finished-build caches, optional Geoportal steps, catalog data bundle as a release asset | Accepted | 2026-11-08 | |
+| [0059](0059-places-with-one-state-sources.md) | Places with sources from one state only: neighbour services best effort, no foreign historic maps, calibrated RLP orthophoto | Accepted | 2026-11-09 | |
 | **🛠️ Rendering & UI stack** | | | | |
 | [0005](0005-custom-terrain-engine.md) | Custom three.js terrain engine (Giro3D = plan B) | Accepted | 2026-11-01 | |
 | [0006](0006-leaflet-minimap.md) | Leaflet 1.9.4 for the 2D map | Accepted | 2026-11-01 | |

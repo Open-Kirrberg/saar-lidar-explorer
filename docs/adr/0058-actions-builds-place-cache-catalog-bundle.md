@@ -1,6 +1,6 @@
 # 0058 · 🏗️ Place and catalog builds in GitHub Actions: pinned reusable workflow, cached builds, catalog data bundle
 
-- **Status:** Proposed · 2026-11-08 (S3, prepared locally; becomes Accepted when the user pushes the new repositories)
+- **Status:** Accepted · 2026-11-09 (repositories pushed 2026-11-08; prepared locally in S3)
 - **Origin:** [plan „Orte skalieren“](../plans/orte-skalieren.md) §4.4, §7, §8, §9 S3 · user, 2026-11-08: repos `ort-vorlage`, `ort-homburg`, `orte-katalog` under Open-Kirrberg · builds on [0052](0052-one-repo-per-municipality-central-catalog.md), [0053](0053-relict-candidates-opt-in-new-places.md), [0055](0055-global-grid-tile-ownership-central-overview.md)
 
 ## Context
