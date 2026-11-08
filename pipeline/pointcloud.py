@@ -1,7 +1,8 @@
 """F16: classified ALS 2025 point clouds for focus areas → `sle-pts-v1` tiles (contract "Point clouds").
 
-Focus areas are defined once in aois.toml (`[[defaults.pointclouds]]`); an AOI writes every area whose bbox lies
-fully inside it. Per area:
+Focus areas are defined once in aois.toml (`[[defaults.pointclouds]]`); a v1/v2 AOI writes every area whose bbox lies
+fully inside it, a v3 place every area whose bbox centre lies in one of its present tiles (contract rule 6, so
+exactly one place owns an area; its bbox may reach beyond the place's rectangle). Per area:
   1. the 1 km LVGL LAZ tiles `3dm_32_{E}_{N}_1_SL_2025_050.laz` touching the bbox are range-extracted from the
      county ZIP on the LVGL Nextcloud share (like fetch.py does for the DGM) and cached in data/raw/laz/;
   2. read with laspy + lazrs (the LAZ carry no CRS: EPSG:25832, heights DHHN2016), clipped to the half-open bbox,
@@ -32,8 +33,8 @@ from pathlib import Path
 
 import numpy as np
 
-from common import (APP_DATA, ATTRIBUTION_SL, RAW_DIR, SL_RAW, WORK_DIR, AOI, fmt_bytes, load_aoi,
-                    swap_dir, update_manifest)
+from common import (ATTRIBUTION_SL, RAW_DIR, SL_RAW, WORK_DIR, AOI, fmt_bytes, load_aoi, swap_dir,
+                    update_manifest)
 
 FORMAT = "sle-pts-v1"
 TILE_SIZE = 100  # m
@@ -95,12 +96,50 @@ def parse_areas(raw: list[dict]) -> list[FocusArea]:
     return out
 
 
+def area_belongs(aoi: AOI, area: FocusArea) -> bool:
+    """v3 place: the bbox centre lies in a present tile (rule 6; tiles are half-open, so a centre on a tile edge
+    belongs to the tile east/north of it). v1/v2 rectangle: the bbox lies fully inside the AOI."""
+    e0, n0, e1, n1 = area.bbox
+    if aoi.is_place:
+        from grid import tile_of_point
+        return aoi.present(*tile_of_point((e0 + e1) / 2, (n0 + n1) / 2))
+    return e0 >= aoi.e0 and n0 >= aoi.n0 and e1 <= aoi.e1 and n1 <= aoi.n1
+
+
 def areas_for_aoi(aoi: AOI, path: Path = Path(__file__).resolve().parent / "aois.toml") -> list[FocusArea]:
     import tomllib
     cfg = tomllib.loads(path.read_text())
     raw = cfg.get(aoi.key, {}).get("pointclouds", cfg.get("defaults", {}).get("pointclouds", []))
-    return [a for a in parse_areas(raw)
-            if a.bbox[0] >= aoi.e0 and a.bbox[1] >= aoi.n0 and a.bbox[2] <= aoi.e1 and a.bbox[3] <= aoi.n1]
+    return [a for a in parse_areas(raw) if area_belongs(aoi, a)]
+
+
+def covering_window(aoi: AOI, name: str, bbox, margin: int = 2) -> tuple[np.ndarray, int, int] | None:
+    """(array, E_west, N_top) of the 1 m work raster `name.tif` over bbox ± margin metres: from this AOI's own work
+    raster when it covers the window, else from the `cache_from` AOI's or any other AOI's work raster that does
+    (same sources and fill, so the heights agree). None when no work raster covers it. Used by v3 places, whose
+    focus areas may reach beyond the place rectangle."""
+    import rasterio
+    from rasterio.windows import from_bounds
+    e0, n0, e1, n1 = bbox[0] - margin, bbox[1] - margin, bbox[2] + margin, bbox[3] + margin
+    own = WORK_DIR / aoi.key / f"{name}.tif"
+    pref = [own]
+    if aoi.cache_from:
+        pref.append(WORK_DIR / aoi.cache_from / f"{name}.tif")
+    paths = pref + sorted(p for p in WORK_DIR.glob(f"*/{name}.tif") if p not in pref)
+    for path in paths:
+        if not path.exists():
+            continue
+        with rasterio.open(path) as ds:
+            b, t = ds.bounds, ds.transform
+            if (t.a, t.b, t.d, t.e) != (1.0, 0.0, 0.0, -1.0) or b.left > e0 or b.bottom > n0 or b.right < e1 \
+                    or b.top < n1 or (t.c % 1) or (t.f % 1):
+                continue
+            win = from_bounds(e0, n0, e1, n1, t).round_offsets().round_lengths()
+            arr = ds.read(1, window=win)
+            if name == "dtm" and not np.isfinite(arr).all():
+                continue
+            return arr, int(e0), int(n1)
+    return None
 
 
 def laz_name(e: int, n: int) -> str:
@@ -273,7 +312,7 @@ def write_area(aoi: AOI, area: FocusArea, pts: dict[str, np.ndarray], sampler, c
     (previous output untouched) when there are no points or no tile survives the height filter."""
     if len(pts["e"]) == 0:
         return None
-    out_dir = (root or APP_DATA / aoi.key / "pointclouds") / area.id
+    out_dir = (root or aoi.data_dir / "pointclouds") / area.id
     staging = out_dir.with_name(area.id + ".tmp")
     if staging.exists():
         shutil.rmtree(staging)
@@ -358,6 +397,28 @@ def evaluate(area: FocusArea, pts: dict[str, np.ndarray], agl_cm: np.ndarray, ch
     return rep
 
 
+def place_area_inputs(aoi: AOI, area: FocusArea):
+    """DTM sampler and (bldg-masked) CHM window for an area of a v3 place: window-read around the area bbox, which
+    may reach beyond the place rectangle (`covering_window`). Without a covering DTM the place's own DTM is used
+    edge-clamped (agl near the outside edge degrades; warned); without a covering CHM the forest stats are skipped."""
+    from heights import DtmSampler
+    w = covering_window(aoi, "dtm", area.bbox)
+    if w is None:
+        print(f"  ! {area.id}: no work DTM covers the area – agl from the place DTM, edge-clamped", file=sys.stderr)
+        sampler = DtmSampler.from_geotiff(WORK_DIR / aoi.key / "dtm.tif", aoi.e0, aoi.n1)
+    else:
+        sampler = DtmSampler(w[0].astype(np.float64), w[1], w[2])
+    c = covering_window(aoi, "chm", area.bbox, margin=0)
+    chm = None
+    if c is not None:
+        arr = np.nan_to_num(c[0].astype(np.float32), nan=0.0)
+        b = covering_window(aoi, "bldg", area.bbox, margin=0)
+        if b is not None and b[0].shape == arr.shape:  # LoD2 footprints: CHM ≥ 3 m there is a roof, not canopy
+            arr = np.where(b[0] > 0, 0.0, arr)
+        chm = (arr, c[1], c[2])
+    return sampler, chm
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("aoi")
@@ -365,12 +426,13 @@ def main():
     args = ap.parse_args()
     aoi = load_aoi(args.aoi)
     t0 = time.time()
-    aoi_dir = APP_DATA / aoi.key
+    aoi_dir = aoi.data_dir
     areas = areas_for_aoi(aoi)
     if not (aoi_dir / "manifest.json").exists():
         sys.exit(f"{aoi_dir}/manifest.json missing – run build first")
     if not areas:
-        print(f"AOI {aoi.key}: no point-cloud focus area lies inside it")
+        print(f"AOI {aoi.key}: no point-cloud focus area " +
+              ("has its bbox centre in a present tile" if aoi.is_place else "lies inside it"))
         if (aoi_dir / "pointclouds").exists():
             shutil.rmtree(aoi_dir / "pointclouds")
         update_manifest(aoi_dir, {}, remove=["pointclouds"])
@@ -408,8 +470,11 @@ def main():
         if missing:
             print(f"  ! {area.id}: LAZ missing {missing} – area left incomplete", file=sys.stderr)
         pts = read_area_points(area, files) if files else {"e": np.empty(0)}
+        a_sampler, a_chm = sampler, chm
+        if aoi.is_place and len(pts["e"]):
+            a_sampler, a_chm = place_area_inputs(aoi, area)
         # write_area only replaces the area's previous tiles once the new ones are complete
-        written = write_area(aoi, area, pts, sampler, chm) if len(pts["e"]) else None
+        written = write_area(aoi, area, pts, a_sampler, a_chm) if len(pts["e"]) else None
         if written is None:
             prev = previous_entry(prev_section, area.id, aoi_dir)
             if prev is None:

@@ -354,9 +354,10 @@ def v3_layer_entry(key: str, path: str) -> dict:
     return e
 
 
-# v3: heights below this are source errors, not terrain (two SL 2025 tiles, 343_5457 and 327_5485, hold ≈ 100
-# pixels of 0 / −0.26 m; the lowest real terrain of the catalog area is ≈ 137 m at the Moselle). Treated as no data.
-MIN_VALID_HEIGHT_M = 50.0
+# v3: heights below this are source errors, not terrain (SL 2025 tiles 343_5457 and 327_5485 hold ≈ 100–200
+# pixels between −0.26 and 100 m, holes of a few hundred px; the lowest real terrain of the catalog area is ≈ 137 m
+# at the Moselle). Treated as no data (nearest fill, mask 1).
+MIN_VALID_HEIGHT_M = 100.0
 
 
 def fill_heights(sl: np.ndarray, rlp: np.ndarray, off: float) -> tuple[np.ndarray, np.ndarray]:

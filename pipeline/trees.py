@@ -17,6 +17,9 @@ Method (details + plot check in README "Trees"):
 5. Conifer fill (ADR 0030): oversized conifer crowns are split by k-means into crowns of the expected size; the
    extra trees carry the FILL flag (estimated position, not a measured top).
 Output: `trees/{i}_{j}.bin` per level-0 chunk, manifest key `trees`, report `data/work/<aoi>/trees.json`.
+v3 places (contract "Many places (v3, S2)", rules 2 + 6): detection runs on the whole rectangle (absent tiles give
+the crowns at the border their real neighbourhood), then only trees whose top cell centre lies in a present tile
+are kept, i.e. only the present chunks get a file and a `trees.chunks` entry.
 """
 from __future__ import annotations
 
@@ -36,7 +39,7 @@ from rasterio.windows import from_bounds
 from scipy import ndimage
 from skimage.segmentation import watershed
 
-from common import APP_DATA, WORK_DIR, AOI, fmt_bytes, load_aoi, swap_dir, update_manifest
+from common import WORK_DIR, AOI, fmt_bytes, load_aoi, swap_dir, update_manifest
 
 FORMAT = "sle-trees-v1"
 METHOD = "chm-lmf-watershed"
@@ -170,9 +173,12 @@ def classify(bright: np.ndarray, p: Params) -> np.ndarray:
 
 
 def chunk_trees(chm: np.ndarray, sm: np.ndarray, dtm: np.ndarray, ortho: np.ndarray | None,
-                tops_r: np.ndarray, tops_c: np.ndarray, box: tuple[int, int, int, int], p: Params) -> Trees:
+                tops_r: np.ndarray, tops_c: np.ndarray, box: tuple[int, int, int, int], p: Params,
+                zero_ortho_nodata: bool = False) -> Trees:
     """Crowns + attributes for the tops inside `box` = (r0, r1, c0, c1) (AOI cells, half-open).
-    The watershed runs on the box plus APRON with every top in that window as a marker."""
+    The watershed runs on the box plus APRON with every top in that window as a marker.
+    `zero_ortho_nodata` (v3 places, whose `ortho_1m` work raster is 0 outside the present tiles): RGB (0, 0, 0)
+    cells are left out of the crown brightness instead of darkening it (a crown without valid cells → unknown)."""
     r0, r1, c0, c1 = box
     H, W = sm.shape
     wr0, wr1, wc0, wc1 = max(0, r0 - APRON), min(H, r1 + APRON), max(0, c0 - APRON), min(W, c1 + APRON)
@@ -190,9 +196,16 @@ def chunk_trees(chm: np.ndarray, sm: np.ndarray, dtm: np.ndarray, ortho: np.ndar
     raw = chm[wr0:wr1, wc0:wc1]
     h = ndimage.maximum_filter(raw, size=3, mode="nearest")[tr, tc]  # smoothing lowers peaks: use raw 3×3 max
     if ortho is not None:
-        o = ortho[:, wr0:wr1, wc0:wc1].astype(np.float64).mean(axis=0)
+        ow = ortho[:, wr0:wr1, wc0:wc1]
+        o = ow.astype(np.float64).mean(axis=0)
         s = np.bincount(lab.ravel(), weights=o.ravel(), minlength=n + 1)[1:]
-        bright = s / np.maximum(area, 1.0)
+        if zero_ortho_nodata:
+            valid = ow.any(axis=0).ravel().astype(np.float64)
+            cnt = np.bincount(lab.ravel(), weights=valid, minlength=n + 1)[1:]
+            with np.errstate(invalid="ignore", divide="ignore"):
+                bright = np.where(cnt > 0, s / np.maximum(cnt, 1.0), np.nan)
+        else:
+            bright = s / np.maximum(area, 1.0)
         bright[area == 0] = np.nan
     else:
         bright = np.full(n, np.nan)
@@ -351,13 +364,53 @@ def read_covering(aoi: AOI, name: str, bands=None) -> tuple[np.ndarray | None, s
     return None, None
 
 
+def read_ortho(aoi: AOI) -> tuple[np.ndarray | None, str | None, bool]:
+    """RGB (3, H, W) u8 of the AOI from the `ortho_1m.tif` work rasters, plus the source names and whether cells are
+    missing. A 4-band raster (v3 places: band 4 = alpha, 0 = tile not present in that place, RGB black there)
+    contributes only its alpha > 0 cells; the remaining cells are filled from the next covering raster (own AOI
+    first, then the others as in `read_covering`). Cells no raster fills stay (0, 0, 0) and the third value is
+    True, so `chunk_trees` must treat black as no data (`zero_ortho_nodata`). A 3-band own raster gives exactly the
+    old result."""
+    own = WORK_DIR / aoi.key / "ortho_1m.tif"
+    paths = [own] + sorted(p for p in WORK_DIR.glob("*/ortho_1m.tif") if p != own)
+    out, need, srcs = None, None, []
+    for path in paths:
+        if not path.exists():
+            continue
+        with rasterio.open(path) as ds:
+            b = ds.bounds
+            if b.left > aoi.e0 or b.bottom > aoi.n0 or b.right < aoi.e1 or b.top < aoi.n1 or ds.res != (1.0, 1.0) \
+                    or ds.count < 3:
+                continue
+            win = from_bounds(aoi.e0, aoi.n0, aoi.e1, aoi.n1, ds.transform).round_offsets().round_lengths()
+            rgb = ds.read([1, 2, 3], window=win)
+            valid = ds.read(4, window=win) > 0 if ds.count >= 4 else np.ones(rgb.shape[1:], bool)
+        if out is None:
+            if valid.all():
+                return rgb, path.parent.name, False
+            out, need = np.zeros_like(rgb), np.ones(rgb.shape[1:], bool)
+        take = need & valid
+        if take.any():
+            out[:, take] = rgb[:, take]
+            need &= ~take
+            srcs.append(path.parent.name)
+        if not need.any():
+            break
+    if not srcs:
+        return None, None, False
+    return out, "+".join(srcs), bool(need.any())
+
+
 def _take(t: Trees, m) -> Trees:
     return Trees(*(getattr(t, f)[m] for f in Trees.__dataclass_fields__))
 
 
 def detect(dsm: np.ndarray, dtm: np.ndarray, bldg: np.ndarray | None, ortho: np.ndarray | None, aoi: AOI,
-           p: Params, workers: int = 4, timings: dict | None = None) -> dict[tuple[int, int], Trees]:
-    """Pure core: AOI rasters (row 0 = north) → trees per level-0 chunk (i, j), binned by the top cell."""
+           p: Params, workers: int = 4, timings: dict | None = None, zero_ortho_nodata: bool = False
+           ) -> dict[tuple[int, int], Trees]:
+    """Pure core: AOI rasters (row 0 = north) → trees per level-0 chunk (i, j), binned by the top cell.
+    Every chunk of the rectangle is processed (a v3 place filters afterwards with `own_chunks`, so fill trees of a
+    top in an absent tile that land in a present one are kept, see `fill_conifers`)."""
     timings = {} if timings is None else timings
     t1 = time.time()
     chm, sm = smooth_chm(dsm, dtm, bldg, p)
@@ -371,7 +424,8 @@ def detect(dsm: np.ndarray, dtm: np.ndarray, bldg: np.ndarray | None, ortho: np.
 
     def one(ij):
         i, j = ij
-        return chunk_trees(chm, sm, dtm, ortho, tops_r, tops_c, (j * cs, (j + 1) * cs, i * cs, (i + 1) * cs), p)
+        return chunk_trees(chm, sm, dtm, ortho, tops_r, tops_c, (j * cs, (j + 1) * cs, i * cs, (i + 1) * cs), p,
+                           zero_ortho_nodata)
 
     with ThreadPoolExecutor(max_workers=workers) as ex:
         parts = list(ex.map(one, jobs))
@@ -387,6 +441,20 @@ def detect(dsm: np.ndarray, dtm: np.ndarray, bldg: np.ndarray | None, ortho: np.
     results = {(int(kk % nx), int(kk // nx)): _take(alltr, key == kk) for kk in np.unique(key)}
     timings["crowns"] = round(time.time() - t1, 1)
     return results
+
+
+def own_chunks(aoi: AOI, results: dict[tuple[int, int], Trees]) -> dict[tuple[int, int], Trees]:
+    """Contract rule 6 (v3): a place keeps the trees whose top cell centre lies in a present tile. Trees are binned
+    by the chunk of their cell and a level-0 chunk lies in exactly one tile, so this keeps the present chunks.
+    v1/v2 rectangle AOIs keep everything."""
+    if not aoi.is_place:
+        return results
+    return {k: t for k, t in results.items() if aoi.chunk_present(*k)}
+
+
+def published_area_ha(aoi: AOI) -> float:
+    """Area the trees are published for: the rectangle, or the present tiles of a v3 place (1 km² = 100 ha each)."""
+    return len(aoi.owned) * 100.0 if aoi.is_place else aoi.width * aoi.height / 1e4
 
 
 def encode_all(aoi: AOI, results: dict[tuple[int, int], Trees]) -> dict[tuple[int, int], bytes]:
@@ -408,13 +476,18 @@ def run(aoi: AOI, p: Params, workers: int = 4) -> dict:
         dsm = ds.read(1)
     assert dtm.shape == (aoi.height, aoi.width), dtm.shape
     bldg, bldg_src = read_covering(aoi, "bldg")
-    ortho, ortho_src = read_covering(aoi, "ortho_1m", bands=[1, 2, 3])
+    ortho, ortho_src, ortho_gaps = read_ortho(aoi)
     timings = {"read": round(time.time() - t0, 1)}
 
-    results = detect(dsm, dtm, bldg, ortho, aoi, p, workers, timings)
+    results = detect(dsm, dtm, bldg, ortho, aoi, p, workers, timings, zero_ortho_nodata=aoi.is_place or ortho_gaps)
     del dsm
+    n_all = sum(int(t.row.size) for t in results.values())
+    results = own_chunks(aoi, results)
+    if aoi.is_place:
+        n_own = sum(int(t.row.size) for t in results.values())
+        print(f"v3 place: {n_own} of {n_all} trees have the top cell in one of the {len(aoi.owned)} present tiles")
 
-    aoi_dir = APP_DATA / aoi.key
+    aoi_dir = aoi.data_dir
     staging = aoi_dir / ".trees.staging"
     if staging.exists():
         shutil.rmtree(staging)
@@ -461,7 +534,7 @@ def run(aoi: AOI, p: Params, workers: int = 4) -> dict:
     attribution = [ATTRIBUTION_DOP_SL] if ortho is not None else []
     update_manifest(aoi_dir, {"trees": entry}, attribution=attribution)
     timings["total"] = round(time.time() - t0, 1)
-    area_ha = aoi.width * aoi.height / 1e4
+    area_ha = published_area_ha(aoi)
     report = {"aoi": aoi.key, "count": count, "counts": counts, "fill": n_fill, "chunks": len(chunks), "bytes": nbytes,
               "size": fmt_bytes(nbytes), "per_ha": round(count / area_ha, 1),
               "height_pct": {q: round(float(np.percentile(h, q)), 1) for q in (5, 50, 95)} if count else {},

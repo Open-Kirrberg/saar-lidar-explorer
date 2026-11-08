@@ -169,7 +169,8 @@ def test_focus_areas_config():
 
 
 # --------------------------------------------------------------------------- generated data
-_KNOWN = [k for k in tomllib.loads(AOIS_TOML.read_text()) if k != "defaults"]
+_CFG = tomllib.loads(AOIS_TOML.read_text())
+_KNOWN = [k for k in _CFG if k != "defaults" and "place" not in _CFG[k]]   # v3 places: test_pointcloud_v3.py
 AOIS = sorted(k for k in _KNOWN if (APP_DATA / k / "manifest.json").exists()
               and "pointclouds" in json.loads((APP_DATA / k / "manifest.json").read_text()))
 

@@ -244,7 +244,9 @@ def test_client_retries_non_image_answer_and_primes_once(tmp_path, monkeypatch):
 
 
 # ------------------------------------------------------------------------------------------- generated output
-_KNOWN = [k for k in tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text()) if k != "defaults"]
+# v1/v2 rectangle AOIs only; v3 places are checked in tests/test_ortho_v3.py / test_place_v3.py
+_KNOWN = [k for k, v in tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text()).items()
+          if k != "defaults" and not v.get("place") and not v.get("group")]
 
 
 def _built(key):

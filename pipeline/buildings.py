@@ -22,6 +22,11 @@ Outputs (docs/data-contract.md "Models" + "Building mask"):
 - `relief/bldg/{i}_{j}.png`: u8 0/255, cell centre inside a GroundSurface footprint, dilated 1 cell (3 × 3).
 - manifest: `models.buildings`, `layers.bldg` (+ mirrored into the informative `levels[0].layers`) and the LoD2
   attribution entries. Report: `data/work/<aoi>/buildings.json` (counts, sizes, ground height vs DTM).
+
+v3 places (contract "Many places (v3, S2)", rules 2 + 6): only buildings whose footprint centroid lies in a present
+tile are meshed (so neighbouring places never draw one twice), glb files and `models.buildings.chunks` exist only
+for present chunks, and the `bldg` layer is `relief/bldg/{i}_{j}.webp` (WebP lossless, fixed range 0–1) for the
+present chunks only. The work raster `bldg.tif` still covers the whole rectangle (trees/detect/pointcloud read it).
 """
 from __future__ import annotations
 
@@ -47,7 +52,7 @@ import numpy as np
 from lxml import etree
 from scipy import ndimage
 
-from common import APP_DATA, AOI, RAW_DIR, WORK_DIR, fmt_bytes, http_open, load_aoi, update_manifest
+from common import AOI, RAW_DIR, WORK_DIR, fmt_bytes, http_open, load_aoi, update_manifest
 
 LOD2_RAW = RAW_DIR / "lod2"
 SL_FOLDER = "OD_Gebäudemodelle_LoD2_gml_LK"
@@ -59,6 +64,7 @@ ATTRIBUTION_LOD2_RLP = "© GeoBasis-DE/LVermGeoRP (2026), dl-de/by-2-0, www.lver
 LABEL_DE = "Gebäude (LoD2)"
 MODEL_PATH = "models/buildings/{i}_{j}.glb"
 MASK_PATH = "relief/bldg/{i}_{j}.png"
+MASK_PATH_V3 = "relief/bldg/{i}_{j}.webp"   # v3 places: WebP lossless (contract "Slim formats (v3)")
 
 SURF_OTHER, SURF_WALL, SURF_ROOF = 0, 1, 2
 # CityGML boundary surface (local name) → _SURFACE class; GroundSurface is handled separately (footprint, not meshed)
@@ -179,6 +185,38 @@ def rasterize_mask(geoms: Iterable[Any], e0: float, n_top: float, width: int, he
     if dilate:
         m = ndimage.binary_dilation(m.astype(bool), structure=np.ones((3, 3), bool)).astype(np.uint8)
     return m[1:-1, 1:-1]
+
+
+def in_present_tile(aoi: AOI, e: float, n: float) -> bool:
+    """Contract rule 6 (v3): the point lies in a tile the place publishes. Always True for v1/v2 rectangle AOIs
+    (their selection rule is "footprint intersects the AOI", see `select_buildings`)."""
+    if not aoi.is_place:
+        return True
+    from grid import tile_of_point
+    return aoi.present(*tile_of_point(e, n))
+
+
+def select_buildings(buildings: Iterable[Building], aoi: AOI) -> list[Building]:
+    """Buildings this AOI meshes: v3 place → footprint centroid in a present tile (rule 6); v1/v2 → footprint
+    intersects the AOI rectangle (the building then goes whole into the chunk of its centroid, clamped)."""
+    if aoi.is_place:
+        out = []
+        for b in buildings:
+            c = b.footprint.centroid
+            if in_present_tile(aoi, c.x, c.y):
+                out.append(b)
+        return out
+    from shapely.geometry import box
+    aoi_box = box(aoi.e0, aoi.n0, aoi.e1, aoi.n1)
+    return [b for b in buildings if b.footprint.intersects(aoi_box)]
+
+
+def mask_chunks(aoi: AOI) -> list[tuple[int, int]]:
+    """Level-0 chunks (i, j) that get a `bldg` image, row-major from the north: every chunk of a v1/v2 rectangle,
+    only the present chunks of a v3 place (rule 2)."""
+    cs = aoi.chunk_size
+    nx, ny = aoi.width // cs, aoi.height // cs
+    return [(i, j) for j in range(ny) for i in range(nx) if not aoi.is_place or aoi.chunk_present(i, j)]
 
 
 # =========================================================================== CityGML parsing
@@ -756,7 +794,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--no-rlp", action="store_true")
     args = ap.parse_args(argv)
     aoi = load_aoi(args.aoi)
-    aoi_dir = APP_DATA / aoi.key
+    aoi_dir = aoi.data_dir
     mpath = aoi_dir / "manifest.json"
     dtm_path = WORK_DIR / aoi.key / "dtm.tif"
     if not mpath.exists() or not dtm_path.exists():
@@ -782,10 +820,10 @@ def main(argv: list[str] | None = None) -> None:
     print(f"parsed SL {sl_stats['buildings']} buildings ({sl_stats['files']} tiles), RLP {len(rlp)} "
           f"({rlp_stats['files']} tiles, {rlp_dups} SL duplicates dropped) in {timings['parse']}s")
 
-    from shapely.geometry import box
-    aoi_box = box(aoi.e0, aoi.n0, aoi.e1, aoi.n1)
     everything = sl + rlp
-    in_aoi = [b for b in everything if b.footprint.intersects(aoi_box)]
+    in_aoi = select_buildings(everything, aoi)
+    if aoi.is_place:
+        print(f"v3 place: {len(in_aoi)} buildings with the footprint centroid in the {len(aoi.owned)} present tiles")
 
     # --- meshes ------------------------------------------------------------------------------------
     t = time.time()
@@ -800,6 +838,7 @@ def main(argv: list[str] | None = None) -> None:
     for b in in_aoi:
         c = b.footprint.centroid
         key = chunk_of(c.x, c.y, aoi.e0, aoi.n1, nx, ny, cs)
+        assert not aoi.is_place or aoi.chunk_present(*key), (b.id, key)   # rule 2: centroid tile is present
         mb = builders.setdefault(key, MeshBuilder())
         if mb.add_building(b, aoi.e0, aoi.n0, z_at=dtm_s.z):
             per_chunk_buildings[key] = per_chunk_buildings.get(key, 0) + 1
@@ -826,9 +865,15 @@ def main(argv: list[str] | None = None) -> None:
     out_mask = aoi_dir / "relief" / "bldg"
     if out_mask.exists():
         shutil.rmtree(out_mask)
-    for j in range(ny):
-        for i in range(nx):
-            save_png(out_mask / f"{i}_{j}.png", (mask[j * cs:(j + 1) * cs, i * cs:(i + 1) * cs] * 255).astype(np.uint8))
+    mask_bytes = 0
+    for i, j in mask_chunks(aoi):
+        tile = (mask[j * cs:(j + 1) * cs, i * cs:(i + 1) * cs] * 255).astype(np.uint8)
+        if aoi.is_place:   # fixed range 0–1 (rule 5): u8 255 = 1; bit-exact round trip asserted by the encoder
+            from encode import save_webp_lossless
+            mask_bytes += save_webp_lossless(out_mask / f"{i}_{j}.webp", tile)
+        else:
+            save_png(out_mask / f"{i}_{j}.png", tile)
+            mask_bytes += (out_mask / f"{i}_{j}.png").stat().st_size
     import rasterio
     from rasterio.transform import from_origin
     (WORK_DIR / aoi.key).mkdir(parents=True, exist_ok=True)
@@ -837,8 +882,10 @@ def main(argv: list[str] | None = None) -> None:
                        compress="deflate") as ds:
         ds.write(mask, 1)
     timings["mask"] = round(time.time() - t, 1)
-    save_preview(aoi, mask)
-    print(f"bldg mask: {int(mask.sum())} cells ({mask.mean() * 100:.2f} % of the AOI)")
+    if not aoi.is_place:   # docs/previews/ holds the curated AOI previews only
+        save_preview(aoi, mask)
+    print(f"bldg mask: {int(mask.sum())} cells ({mask.mean() * 100:.2f} % of the rectangle), "
+          f"{len(mask_chunks(aoi))} chunk images, {fmt_bytes(mask_bytes)}")
 
     # --- checks + manifest -------------------------------------------------------------------------
     offsets = ground_offsets(in_aoi, dtm_path, aoi)
@@ -863,7 +910,7 @@ def main(argv: list[str] | None = None) -> None:
     models_entry = {"path": MODEL_PATH, "chunks": chunks, "frame": "local", "featureCount": sum(used.values()),
                     "label_de": LABEL_DE, "attribution": "; ".join(attribution),
                     "source": " + ".join(src) + f", abgerufen {today}"}
-    bldg_entry = {"path": MASK_PATH, "encoding": "u8", "min": 0, "max": 1, "label_de": "Gebäudemaske",
+    bldg_entry = {"path": MASK_PATH_V3 if aoi.is_place else MASK_PATH, "encoding": "u8", "min": 0, "max": 1, "label_de": "Gebäudemaske",
                   "description": "Zellmitte in LoD2-Grundfläche, um 1 m erweitert (Kronen über Gebäuden ausblenden)"}
     patch: dict[str, Any] = {"layers": {"bldg": bldg_entry}, "models": {"buildings": models_entry}}
     cur = json.loads(mpath.read_text())  # re-read right before the write (other steps may run concurrently)
@@ -877,7 +924,7 @@ def main(argv: list[str] | None = None) -> None:
     report = {"aoi": aoi.key, "date": today, "sl": sl_stats, "rlp": {**rlp_stats, "sl_duplicates_dropped": rlp_dups},
               "buildings_in_aoi": len(in_aoi), "meshed": used, "chunks": len(sizes), "triangles": total_tris,
               "vertices": total_verts, "glb_bytes": sum(sizes.values()), "glb_max_bytes": max(sizes.values(), default=0),
-              "mask_cells": int(mask.sum()), "ground_vs_dtm": offsets,
+              "mask_cells": int(mask.sum()), "mask_bytes": mask_bytes, "ground_vs_dtm": offsets,
               "wall_skirts": {"lowered_walls": skirted, "capped_gap_gt_0_5m": capped,
                               "buildings_with_gap_gt_0_5m": len(capped_ids), "gap_building_ids": capped_ids[:50], "margin_m": WALL_SKIRT_MARGIN,
                               "max_drop_m": WALL_SKIRT_MAX}, "spot_checks": spots, "timings": timings}
