@@ -14,7 +14,8 @@ The reusable workflow `.github/workflows/build-place.yml` and the local dry run
   (`raw_key` = fetch set + source versions, `build_key` = pipeline version + ref + owned tiles + build options).
 - `build` runs the v3 place steps with `SLE_APP_DATA`, `SLE_WORK_DIR`, `SLE_AOIS_EXTRA` set. Required steps fail
   the build; the Geoportal steps (`cadastre`, `historic`) are optional: on a service outage the site ships without
-  parcels / historic maps and the report says so.
+  parcels / historic maps and the report says so. Steps whose only source covers one state (`STATE_ONLY_STEPS`:
+  historic maps = Saarland) are reported "not applicable" for a place in another state (S4, Zweibrücken).
 - `stage` adds the community content (`inhalte/`, `aktionen/`, unchanged; not read by the app before S5), `.nojekyll`,
   `ATTRIBUTION.txt` and a small German landing page.
 - `check` enforces the hosting limits (file < 100 MB, site ≤ 1 GB), the contract identity (v3, place id / AGS, presence
@@ -63,6 +64,9 @@ SOURCE_VERSIONS = {
     "osm": "Overpass, cached per query",
 }
 RAW_LAYOUT = "raw-v1"   # bump when the raw cache layout under data/raw changes
+# Steps whose only source covers one state (S4): historic maps come from the WMS "SL Historische Karten" (Geoportal
+# Saarland); a place in another state skips the step instead of requesting empty images.
+STATE_ONLY_STEPS = {"historic": "SL"}
 
 # Hosting limits (GitHub Pages): one file < 100 MB, published site ≤ 1 GB; warn above WARN_SITE_BYTES.
 MAX_FILE_BYTES = 100 * 1000 * 1000
@@ -396,6 +400,18 @@ def make_plan(ort_path: Path, catalog_src: str, app_data: Path, work: Path) -> P
                 str(entry.get("status")), warnings)
 
 
+def skip_reason(step: str, ort: Ort, has_areas: bool) -> str | None:
+    """Why `step` does not run for this place (None = it runs). Pure."""
+    if step == "pois" and not ort.relict_candidates:
+        return "no relict candidates (ADR 0053)"
+    if step == "pointcloud" and not has_areas:
+        return "no point-cloud areas"
+    only = STATE_ONLY_STEPS.get(step)
+    if only and ort.state != only:
+        return f"source covers {only} only, place is in {ort.state}"
+    return None
+
+
 def step_env(plan: Plan) -> dict[str, str]:
     env = dict(os.environ)
     env.update({"SLE_AOIS_EXTRA": str(plan.aoi_file.resolve()), "SLE_APP_DATA": str(plan.app_data.resolve()),
@@ -411,10 +427,13 @@ def run_build(plan: Plan, workers: int, only: Sequence[str] | None = None) -> di
     for name, script, required in STEPS:
         if only and name not in only:
             continue
-        if name == "pois" and not plan.ort.relict_candidates:
-            continue
-        if name == "pointcloud" and not plan.areas:
-            shutil.rmtree(plan.site / "pointclouds", ignore_errors=True)   # never a stale opt-out area
+        why = skip_reason(name, plan.ort, bool(plan.areas))
+        if why:
+            if name == "pointcloud":
+                shutil.rmtree(plan.site / "pointclouds", ignore_errors=True)   # never a stale opt-out area
+            if name in STATE_ONLY_STEPS:
+                report["steps"].append({"step": name, "status": f"not applicable ({why})", "seconds": 0, "exit": 0})
+                print(f"=== {name}: not applicable ({why})", flush=True)
             continue
         args = [sys.executable, script, plan.ort.key] if name != "pois" else [sys.executable, script]
         if name == "build":

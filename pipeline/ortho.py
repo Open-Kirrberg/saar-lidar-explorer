@@ -17,6 +17,8 @@ Usage:  uv run python ortho.py <aoi> [--workers 3]
   present tile (`ortho/levels/1/{i}_{j}.avif`); no levels ≥ 2 (those come from the central overview). The raw
   cache of the covering rectangle AOI (`cache_from`, e.g. homburg-gemeinde) is read and extended in place: cache
   names are bbox-based and every 1 km aligned place chunk is a chunk of that rectangle (`map_chunk_index`).
+- v3 work raster `ortho_src.tif` (1 m, u8: 0 none, 1 SL, 2 RLP per cell; S4) lets trees.py calibrate the darker
+  RLP DOP20 before its colour thresholds. It is not published.
 - Raw responses are cached in data/raw/ortho/<aoi>/{sl,rlp}/ (named by bbox; identical files from another AOI's
   cache are hard-linked instead of downloaded again). Work: data/work/<aoi>/ortho_1m.tif, ortho.json.
 
@@ -156,6 +158,21 @@ def composite_over(layers: list[np.ndarray], background: tuple[int, int, int] = 
         cov += wgt
     out += np.asarray(background, np.float32) * (1.0 - cov)[..., None]
     return np.clip(np.rint(out), 0, 255).astype(np.uint8), cov
+
+
+SRC_NONE, SRC_SL, SRC_RLP = 0, 1, 2   # `ortho_src.tif` cell codes (v3 work raster, read by trees.py)
+
+
+def source_cells(layers: list[np.ndarray]) -> np.ndarray:
+    """1 m source code per cell of a 0.5 m chunk composited "SL over RLP": SRC_SL where the SL layer covers the
+    2 × 2 block (mean alpha ≥ 128), else SRC_RLP where the RLP layer (second layer, if any) does, else SRC_NONE. S4:
+    trees.py maps the darker RLP DOP20 onto the SL brightness before its colour thresholds (pure)."""
+    def cover(a: np.ndarray) -> np.ndarray:
+        h, w = a.shape[:2]
+        return a[..., 3].reshape(h // 2, 2, w // 2, 2).astype(np.float32).mean(axis=(1, 3)) >= 128
+    sl = cover(layers[0])
+    rlp = cover(layers[1]) if len(layers) > 1 else np.zeros_like(sl)
+    return np.where(sl, SRC_SL, np.where(rlp, SRC_RLP, SRC_NONE)).astype(np.uint8)
 
 
 def downsample2(rgb: np.ndarray) -> np.ndarray:
@@ -399,11 +416,35 @@ def write_geotiff_rgb(path: Path, img: np.ndarray, e0: float, n_top: float, px: 
             dst.colorinterp = [ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha]
 
 
+def write_geotiff_u8(path: Path, img: np.ndarray, e0: float, n_top: float, px: float) -> None:
+    """H×W uint8 → single-band GeoTIFF (EPSG:25832, deflate)."""
+    import rasterio
+    from rasterio.transform import from_origin
+    path.parent.mkdir(parents=True, exist_ok=True)
+    h, w = img.shape
+    with rasterio.open(path, "w", driver="GTiff", width=w, height=h, count=1, dtype="uint8", crs="EPSG:25832",
+                       transform=from_origin(e0, n_top, px, px), compress="deflate", tiled=True) as dst:
+        dst.write(img, 1)
+
+
 def save_preview(path: Path, img: np.ndarray, max_side: int = 2000) -> None:
     f = max(1, math.ceil(max(img.shape[:2]) / max_side))
     small = block_mean_rgb(img[..., :3], f) if f > 1 else img[..., :3]
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(small, "RGB").save(path, "JPEG", quality=85)
+
+
+def ortho_source(date: str, sl_used: bool, rlp_used: bool) -> tuple[str, list[str]]:
+    """(`layers.ortho.source`, attribution) for the services whose pixels are in the image. SL TrueDOP20 is the
+    primary source; RLP DOP20 fills its gaps. S4: a v3 place without a single SL pixel (an RLP-only place such as
+    Zweibrücken) names and attributes RLP only. Pure."""
+    sl = f"WMS SL DOP20 2025 (Layer {SL_DOP_LAYER}, TrueDOP20, Geoportal Saarland), abgerufen {date}"
+    rlp = f"WMS RP DOP20 (Layer {RLP_DOP_LAYER}, LVermGeo RLP), abgerufen {date}"
+    if not sl_used:
+        return rlp, [ATTRIBUTION_DOP_RLP]
+    if rlp_used:
+        return f"{sl}; Lücken: {rlp}", [ATTRIBUTION_DOP_SL, ATTRIBUTION_DOP_RLP]
+    return sl, [ATTRIBUTION_DOP_SL]
 
 
 def run_pool(fn: Callable, items: list, workers: int) -> list:
@@ -447,6 +488,7 @@ def main() -> None:
     stage_root = out / ".ortho.staging"
     shutil.rmtree(stage_root, ignore_errors=True)
     mosaic = np.zeros((aoi.height, aoi.width, 3), np.uint8)   # 1 m, for coarse levels + preview + work tif
+    src_mosaic = np.zeros((aoi.height, aoi.width), np.uint8) if v3 else None   # S4: per-cell DOP source
 
     def do_chunk(ij: tuple[int, int]) -> dict[str, Any]:
         i, j = ij
@@ -464,7 +506,9 @@ def main() -> None:
         rlp_px = int(((a_sl[..., 3] < 255) & (layers[-1][..., 3] > 0)).sum()) if len(layers) > 1 else 0
         nbytes = save_image(stage_root / rel / f"{i}_{j}.{fmt}", rgb, fmt, quality)
         mosaic[j * cs:(j + 1) * cs, i * cs:(i + 1) * cs] = downsample2(rgb)
-        return {"i": i, "j": j, "slCoverage": round(sl_cov, 6), "rlpPx": rlp_px,
+        if src_mosaic is not None:
+            src_mosaic[j * cs:(j + 1) * cs, i * cs:(i + 1) * cs] = source_cells(layers)
+        return {"i": i, "j": j, "slCoverage": round(sl_cov, 6), "rlpPx": rlp_px, "slPx": int((a_sl[..., 3] > 0).sum()),
                 "nodataPx": int((cov < 0.5).sum()), "bytes": nbytes}
 
     stats = run_pool(do_chunk, items, args.workers)
@@ -477,11 +521,7 @@ def main() -> None:
           f"{rlp.cached}; RLP-filled px {n_rlp}, remaining nodata px {n_nodata} ({t_fetch:.0f}s)", flush=True)
 
     date = meta["firstFetched"]
-    src = f"WMS SL DOP20 2025 (Layer {SL_DOP_LAYER}, TrueDOP20, Geoportal Saarland), abgerufen {date}"
-    attribution = [ATTRIBUTION_DOP_SL]
-    if n_rlp:
-        src += f"; Lücken: WMS RP DOP20 (Layer {RLP_DOP_LAYER}, LVermGeo RLP), abgerufen {date}"
-        attribution.append(ATTRIBUTION_DOP_RLP)
+    src, attribution = ortho_source(date, any(s["slPx"] for s in stats) or not v3, bool(n_rlp))
     entry0 = {"path": f"{rel}/{{i}}_{{j}}.{fmt}", "encoding": "rgb", "format": fmt, "pixelsPerChunk": ORTHO_PPC,
               "kind": "image", "label_de": "Luftbild (DOP20)", "attribution": "; ".join(attribution), "source": src}
     t = time.time()
@@ -495,10 +535,13 @@ def main() -> None:
     swap_dir(stage_root / rel, out / rel)
     shutil.rmtree(stage_root, ignore_errors=True)
     write_image_layer_manifest(out, "ortho", entry0, coarse, attribution=attribution,
-                               drop_attribution=[] if n_rlp else [ATTRIBUTION_DOP_RLP])
+                               drop_attribution=[a for a in (ATTRIBUTION_DOP_SL, ATTRIBUTION_DOP_RLP)
+                                                 if a not in attribution])
     # v3: alpha band = presence, so a covering-raster reader never takes black absent tiles for imagery
     work = np.dstack([mosaic, presence_raster(aoi).astype(np.uint8) * 255]) if v3 else mosaic
     write_geotiff_rgb(WORK_DIR / aoi.key / "ortho_1m.tif", work, aoi.e0, n_top, 1.0)
+    if src_mosaic is not None:
+        write_geotiff_u8(WORK_DIR / aoi.key / "ortho_src.tif", src_mosaic, aoi.e0, n_top, 1.0)
     save_preview(PREVIEW_DIR / f"{aoi.key}_ortho.jpg", mosaic)
     total = sum(p.stat().st_size for p in (out / rel).rglob("*") if p.is_file())
     report = {"aoi": aoi.key, "chunks": len(stats), "level0Bytes": l0_bytes, "totalBytes": total,

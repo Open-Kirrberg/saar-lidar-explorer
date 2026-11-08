@@ -45,7 +45,7 @@ AOIS_EXTRA_ENV = "SLE_AOIS_EXTRA"
 
 # Pipeline version written to `build.pipeline` of v3 manifests (the catalog CI compares neighbours). Bump it when
 # a change alters published bytes of a v3 place (encoders, relief parameters, fill rules).
-PIPELINE_VERSION = "0.9.1"
+PIPELINE_VERSION = "0.9.2"
 
 SSL_CTX = ssl.create_default_context(cafile=certifi.where())
 
@@ -98,6 +98,7 @@ class AOI:
     relict_candidates: bool = True                  # ADR 0053: v3 places publish candidates only on opt-in
     cache_from: str | None = None                   # aois.toml `cache_from`: a rectangle AOI whose raw download
                                                     # caches cover this one (reuse them instead of fetching again)
+    state: str | None = None                        # v3 place: catalog `state` ("SL" | "RP"); None for rectangles
 
     def cache_aoi(self) -> "AOI | None":
         """The covering rectangle AOI named by `cache_from` (None if unset). Its raw caches (OSM, ortho, WMS,
@@ -279,7 +280,7 @@ def _load_place(key: str, a: Mapping[str, Any]) -> AOI:
     aoi = AOI(key, a.get("name", meta["places"][place]["name_de"]), e0, n0, e1, n1, int(a["buffer_m"]),
               a["county"], 500, fmt=3, place=place, ags=meta["places"][place]["ags"], owned=frozenset(tiles),
               out=a.get("out"), relict_candidates=bool(a.get("relict_candidates", False)),
-              cache_from=a.get("cache_from"))
+              cache_from=a.get("cache_from"), state=meta["places"][place].get("state", "SL"))
     if not 100 <= aoi.buffer_m <= 1000:
         sys.exit(f"AOI {key}: v3 places need 100 <= buffer_m <= 1000")
     return aoi

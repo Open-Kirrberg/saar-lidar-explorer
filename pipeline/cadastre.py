@@ -621,6 +621,36 @@ def fetch_area(aoi: AOI) -> tuple[Bbox, Path]:
     return own, CADASTRE_RAW / aoi.key
 
 
+# HTTP/network errors (urllib.error.URLError ⊂ OSError), ExceptionReports / garbage (ValueError), paging mismatch
+SERVICE_ERRORS = (OSError, ValueError, RuntimeError)
+
+
+def fetch_state(state: str, home: str | None, fetch: Callable[[], Any]) -> tuple[Any, str | None]:
+    """(result, error) of one state's WFS fetch. The WFS of a v3 place's own state (`home`) is required: its errors
+    propagate (place.py then ships the site without parcels). The neighbour state's WFS is best effort (S4: an RLP
+    place must not lose all parcels because the Saarland WFS answers 503): on a service error → (None, message)
+    and the place is published without the neighbour's border parcels. `home` None (v1/v2 AOIs): both required."""
+    if home is None or state == home:
+        return fetch(), None
+    try:
+        return fetch(), None
+    except SERVICE_ERRORS as e:
+        return None, f"{type(e).__name__}: {str(e)[:200]}"
+
+
+def source_v3(sl_fetched: str | None, rlp_fetched: str | None, missing: Iterable[str]) -> str:
+    """`vectors.flurstuecke.source` of a v3 place: the services whose parcels are published (SL first, as for
+    v1/v2), plus a note per neighbour service that failed. Pure."""
+    parts = []
+    if sl_fetched is not None:
+        parts.append(f"ALKIS Saarland, WFS SL ALKIS Vereinfacht (abgerufen {sl_fetched})")
+    if rlp_fetched is not None:
+        parts.append(f"ALKIS Rheinland-Pfalz, WFS RP ALKIS Vereinfacht (abgerufen {rlp_fetched})")
+    names = {"SL": "ALKIS Saarland (WFS SL ALKIS Vereinfacht)", "RP": "ALKIS Rheinland-Pfalz (WFS RP ALKIS Vereinfacht)"}
+    parts += [f"{names[m]} beim Build nicht erreichbar: Flurstücke jenseits der Landesgrenze fehlen" for m in missing]
+    return "; ".join(parts)
+
+
 def write_geojson(path: Path, fc: Mapping[str, Any]) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     data = json.dumps(fc, ensure_ascii=False, separators=(",", ":")).encode()
@@ -636,11 +666,20 @@ def main(aoi_key: str) -> None:
     v3 = aoi.is_place
     bbox: Bbox = (aoi.e0, aoi.n0, aoi.e1, aoi.n1)
     fetch_bbox, cache = fetch_area(aoi)
-    print(f"cadastre {aoi.key}: SL WFS 414 + RLP WFS 519, bbox {fetch_bbox} (cache {cache})")
-    sl_parcels = fetch_type("Flurstueck", fetch_bbox, cache, get=http_get)
-    punkte = fetch_type("FlurstueckPunkt", fetch_bbox, cache, get=http_get)
-    rlp_parcels = fetch_type("Flurstueck", fetch_bbox, cache, get=http_get, url=rlp_wfs_url, parse=parse_gml_page,
-                             suffix=".gml", cache_prefix="rlp_")
+    home = aoi.state if v3 else None
+    print(f"cadastre {aoi.key}: SL WFS 414 + RLP WFS 519, bbox {fetch_bbox} (cache {cache})"
+          + (f", own state {home} required, neighbour best effort" if home else ""))
+    sl, sl_err = fetch_state("SL", home, lambda: (fetch_type("Flurstueck", fetch_bbox, cache, get=http_get),
+                                                  fetch_type("FlurstueckPunkt", fetch_bbox, cache, get=http_get)))
+    sl_parcels, punkte = sl if sl is not None else ([], [])
+    rlp_parcels, rlp_err = fetch_state("RP", home, lambda: fetch_type(
+        "Flurstueck", fetch_bbox, cache, get=http_get, url=rlp_wfs_url, parse=parse_gml_page, suffix=".gml",
+        cache_prefix="rlp_"))
+    rlp_parcels = rlp_parcels if rlp_parcels is not None else []
+    missing = [st for st, err in (("SL", sl_err), ("RP", rlp_err)) if err]
+    for st, err in (("SL", sl_err), ("RP", rlp_err)):
+        if err:
+            print(f"  ! {st} WFS unavailable ({err}): {aoi.key} ships without the {st} border parcels", flush=True)
     print(f"  SL: {len(sl_parcels)} parcels, {len(punkte)} label points; RLP: {len(rlp_parcels)} parcels")
 
     if v3:
@@ -649,6 +688,8 @@ def main(aoi_key: str) -> None:
         # RLP attribution only when an RLP parcel is published for this place (the cache bbox may hold many)
         rlp_kennz = {clean((f.get("properties") or {}).get("FLSTKENNZ")) for f in rlp_parcels} - {None}
         rlp_used = any(f["properties"]["flstkennz"] in rlp_kennz for f in poly_fc["features"])
+        sl_used = len(poly_fc["features"]) > sum(f["properties"]["flstkennz"] in rlp_kennz
+                                                 for f in poly_fc["features"])
         stale = aoi_dir / "vectors" / "flurstuecke.geojson"
         if stale.exists():
             stale.unlink()  # `lines: 'derived'`: the app derives boundaries from the polygons
@@ -668,18 +709,27 @@ def main(aoi_key: str) -> None:
         feature_count = stats["lines"]
     n_labels = write_geojson(aoi_dir / "vectors" / "flurstuecke_labels.geojson", label_fc)
     n_polys = write_geojson(aoi_dir / "vectors" / "flurstuecke_polygons.geojson", poly_fc)
-    fetched = json.loads((cache_subdir(cache, "Flurstueck", fetch_bbox) / "hits.json").read_text()).get("fetched", "")
-    source = f"ALKIS Saarland, WFS SL ALKIS Vereinfacht (abgerufen {fetched})"
-    rlp_attr = [ATTRIBUTION_ALKIS_RLP] if rlp_used else []
-    if rlp_used:
-        rlp_fetched = json.loads((cache_subdir(cache, "rlp_Flurstueck", fetch_bbox) / "hits.json").read_text())["fetched"]
-        source += f"; ALKIS Rheinland-Pfalz, WFS RP ALKIS Vereinfacht (abgerufen {rlp_fetched})"
+    def fetched(prefix: str) -> str:
+        return json.loads((cache_subdir(cache, prefix + "Flurstueck", fetch_bbox) / "hits.json").read_text()
+                          ).get("fetched", "")
+    if v3:
+        # S4: attribute and name only the states whose parcels are published (an RLP place may hold no SL parcel)
+        sl_used = sl_used and sl_err is None
+        source = source_v3(fetched("") if sl_used else None, fetched("rlp_") if rlp_used else None, missing)
+        attribution = [a for a, used in ((ATTRIBUTION_ALKIS_SL, sl_used), (ATTRIBUTION_ALKIS_RLP, rlp_used)) if used]
+        dropped = [a for a in (ATTRIBUTION_ALKIS_SL, ATTRIBUTION_ALKIS_RLP) if a not in attribution]
+    else:
+        source = f"ALKIS Saarland, WFS SL ALKIS Vereinfacht (abgerufen {fetched('')})"
+        if rlp_used:
+            source += f"; ALKIS Rheinland-Pfalz, WFS RP ALKIS Vereinfacht (abgerufen {fetched('rlp_')})"
+        attribution = [ATTRIBUTION_ALKIS_SL, *([ATTRIBUTION_ALKIS_RLP] if rlp_used else [])]
+        dropped = [] if rlp_used else [ATTRIBUTION_ALKIS_RLP]
     update_manifest(
         aoi_dir,
         {"vectors": {"flurstuecke": manifest_entry(featureCount=feature_count, source=source, v3=v3)}},
         merge=["vectors"],
-        attribution=[ATTRIBUTION_ALKIS_SL, *rlp_attr],
-        drop_attribution=[] if rlp_used else [ATTRIBUTION_ALKIS_RLP],
+        attribution=attribution,
+        drop_attribution=dropped,
     )
     print("  " + ", ".join(f"{k}={v}" for k, v in stats.items()))
     print(("  " if v3 else f"  flurstuecke.geojson {fmt_bytes(n_lines)}, ") +

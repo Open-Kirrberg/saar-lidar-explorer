@@ -81,7 +81,7 @@ def test_template_and_homburg_ort_files_parse():
     """The ort.toml files of the sibling repos (if checked out next to the explorer) follow sle-ort-v1."""
     root = PIPE.parents[1]
     found = 0
-    for repo in ("ort-vorlage", "ort-homburg"):
+    for repo in ("ort-vorlage", "ort-homburg", "ort-zweibruecken"):
         f = root / repo / "ort.toml"
         if f.exists():
             o = place.load_ort(f)

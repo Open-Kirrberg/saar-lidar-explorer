@@ -15,7 +15,8 @@ Method (details + plot check in README "Trees"):
    the height (crown-width model); exact ties are broken by the lower flat index (deterministic).
 3. Crowns = marker-controlled watershed on −CHM (per 500 m chunk + apron), limited to CHM ≥ max(2 m,
    `crown_frac` · top height); crown radius = √(area / π).
-4. Type from crown colour in the (summer) DOP: conifers are darker; see `classify`.
+4. Type from crown colour in the (summer) DOP: conifers are darker; see `classify`. v3 places map cells from the
+   darker RLP DOP20 onto the SL brightness first (`RLP_DOP_CALIB`, `ortho_src.tif`, S4).
 5. Conifer fill (ADR 0030): oversized conifer crowns are split by k-means into crowns of the expected size; the
    extra trees carry the FILL flag (estimated position, not a measured top).
 Output: `trees/{i}_{j}.bin` per level-0 chunk, manifest key `trees`, report `data/work/<aoi>/trees.json`.
@@ -54,6 +55,13 @@ FILL = 0x80  # type flag: fill tree (position estimated inside a merged conifer 
 TYPE_LABELS_DE = {"unknown": "Baum", "conifer": "Nadelbaum", "broadleaf": "Laubbaum"}
 APRON = 24  # m of neighbouring CHM around a chunk for the watershed (crowns ≤ ≈ 12 m radius)
 ATTRIBUTION_DOP_SL = "© GeoBasis-DE/LVGL-SL (2026), dl-de/by-2-0 (DOP20)"  # = ortho.py
+# S4: the RLP DOP20 is much darker than the SL TrueDOP20 that `Params.dark` / `light` were set on (Zweibrücken, an
+# RLP-only place, came out 71 % conifer against 15 % in the DLR 2022 species map). Cells a v3 place took from the
+# RLP DOP (`ortho_src.tif` = 2, ortho.py) get b' = k · b + c on R, G, B alike before the crown mean: the mean/std fit
+# of `stats_trees.py calibrate` on crowns seen in both DOPs (2026-11-08, 62 237 crowns in 14 border tiles, type
+# agreement 0.16 raw → 0.85 leave-one-tile-out). Pinned here so Actions builds (no data/work) use the same numbers.
+RLP_DOP_CALIB = (1.13902, 22.0928)
+SRC_RLP = 2   # = ortho.SRC_RLP
 
 
 @dataclass(frozen=True)
@@ -374,6 +382,31 @@ def read_covering(aoi: AOI, name: str, bands=None) -> tuple[np.ndarray | None, s
     return None, None
 
 
+def calibrate_rlp_cells(rgb: np.ndarray, src: np.ndarray, calib: tuple[float, float] = RLP_DOP_CALIB
+                        ) -> tuple[np.ndarray, int]:
+    """(RGB (3, H, W) u8 with the RLP cells mapped onto the SL brightness, number of mapped cells). Black (no data)
+    cells stay black. Same rounding as stats_trees.rlp_rgba_fix. Pure."""
+    m = (src == SRC_RLP) & rgb.any(axis=0)
+    n = int(m.sum())
+    if not n:
+        return rgb, 0
+    k, c = calib
+    out = rgb.copy()
+    out[:, m] = np.clip(np.rint(rgb[:, m].astype(np.float32) * k + c), 0, 255).astype(np.uint8)
+    return out, n
+
+
+def read_ortho_src(aoi: AOI) -> np.ndarray | None:
+    """v3 place: its own `ortho_src.tif` (per-cell DOP source, ortho.py), None when absent or another grid."""
+    path = WORK_DIR / aoi.key / "ortho_src.tif"
+    if not aoi.is_place or not path.exists():
+        return None
+    with rasterio.open(path) as ds:
+        if ds.width != aoi.width or ds.height != aoi.height or ds.res != (1.0, 1.0):
+            return None
+        return ds.read(1)
+
+
 def read_ortho(aoi: AOI) -> tuple[np.ndarray | None, str | None, bool]:
     """RGB (3, H, W) u8 of the AOI from the `ortho_1m.tif` work rasters, plus the source names and whether cells are
     missing. A 4-band raster (v3 places: band 4 = alpha, 0 = tile not present in that place, RGB black there)
@@ -485,6 +518,11 @@ def run(aoi: AOI, p: Params, workers: int = 4) -> dict:
     assert dtm.shape == (aoi.height, aoi.width), dtm.shape
     bldg, bldg_src = read_covering(aoi, "bldg")
     ortho, ortho_src, ortho_gaps = read_ortho(aoi)
+    n_rlp_cal = 0
+    src = read_ortho_src(aoi) if ortho is not None else None
+    if src is not None:
+        ortho, n_rlp_cal = calibrate_rlp_cells(ortho, src)
+        print(f"RLP DOP cells mapped onto the SL brightness (k {RLP_DOP_CALIB[0]}, c {RLP_DOP_CALIB[1]}): {n_rlp_cal}")
     timings = {"read": round(time.time() - t0, 1)}
 
     results = detect(dsm, dtm, bldg, ortho, aoi, p, workers, timings, zero_ortho_nodata=aoi.is_place or ortho_gaps)
@@ -536,7 +574,9 @@ def run(aoi: AOI, p: Params, workers: int = 4) -> dict:
         "version": METHOD_VERSION,
         "generated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "params": {k: v for k, v in asdict(p).items() if k != "extra"},
-        "inputs": {"chm": "DOM1 − DGM1 (ALS 2025, leaf-off)", "bldg": bldg_src, "ortho": ortho_src},
+        "inputs": {"chm": "DOM1 − DGM1 (ALS 2025, leaf-off)", "bldg": bldg_src, "ortho": ortho_src,
+                   **({"rlpDopCalibration": {"k": RLP_DOP_CALIB[0], "c": RLP_DOP_CALIB[1], "cells": n_rlp_cal}}
+                      if n_rlp_cal else {})},
         "label_de": "Bäume (aus Kronenhöhenmodell)",
     }
     attribution = [ATTRIBUTION_DOP_SL] if ortho is not None else []
