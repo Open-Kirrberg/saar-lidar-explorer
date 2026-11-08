@@ -453,6 +453,35 @@ All registered as shell features in `src/shell/builtins.ts` (see *Shell*).
   - The ⓘ button at the start of the footer reopens it.
   - Footer attribution = manifest attribution + OpenStreetMap + Flurstücke (© GeoBasis-DE/LVGL-SL, dl-de/by-2-0) + POI sources.
 
+## Viele Orte: Katalog-Modus (S2, contract 3.0) 🗺️
+
+**Two modes.** Without `VITE_CATALOG_URL` (or with `?aoi=…` in the URL) the app is the single-AOI
+app as before; a single v3 manifest (`?aoi=ort-homburg`) loads there too (absent tiles of its
+`presence` are holes in the quadtree, never errors). With `VITE_CATALOG_URL=<url of catalog.json>`
+(e.g. `VITE_CATALOG_URL=data/fixture-v3/catalog.json pnpm dev …`) it opens the catalog
+(`sle-catalog-v1`) and overview (`sle-overview-v1`) and streams places around the camera
+(≤ 8 km load, > 12 km drop, ≤ 3 manifests in flight, CORS without credentials). A failing catalog
+falls back to single-AOI mode; a failing place counts as „stats“.
+
+**Pieces.** `data/globalGrid.ts` (grid constants, tile ids, global addresses, presence bitmaps),
+`data/catalog.ts`, `data/overview.ts`, v3 in `data/manifest.ts` (`stripAvif`), `terrain/sources.ts`
+(`AoiResolver` / `CatalogResolver`: level 0–1 from the tile owner's manifest, ≥ 2 from the
+overview; `none` = hole (parent keeps those quadrants via `uQuadMask`), `pending` = stop refining),
+`catalog/` (session manifest, `PlaceManager`, outlines, per-place trees + buildings).
+**One frame:** the session manifest covers the session rectangle (overview bbox ∪ 3D places,
+aligned at the top level); its SW corner is the one float64 origin and `ctx.manifest.origin`.
+Place content sits in a Group at `(E0 − Es, 0, −(N0 − Ns))`; OSM lines are built directly in the
+session frame and clipped to each place's tiles. hRef = catalog `height_ref_m`.
+
+**Derived relief (v3 `derived`).** `vat` = live `rvt-vat-combined-v1` in the terrain shader (alt
+source 9) from `svf` + `opns_pos` and the per-fragment gradient; TS reference `terrain/liveVat.ts`
+(unit-tested). `hillshade`/`slope`/`slrm` map to the live modes (`relief.ts adaptPreset`, slrm →
+live-lrm r = 20). Canopy and `dsmAt` = DTM + CHM (`terrain/canopyChm.ts`) when there is no `dsm`.
+**AVIF:** the decode worker probes once; without AVIF all `.avif` layers are dropped and a German
+hint is shown once (no fallback files). **Vectors:** `densified: false` OSM is densified ≤ 2 m;
+`flurstuecke.lines: 'derived'` → boundary lines from the polygons (`vectors/parcelEdges.ts`).
+**Minimap:** outlines + names of all catalog places, per-place `xyz.vat` tiles stacked.
+
 ## Wege & Flurstücke (F10, F12)
 
 `src/vectors/`, registered in `shell/builtins.ts`; card *Wege* (OSM in 3D), hidden without `vectors.osm`. Since V2.1 Flurstücke are **not drawn in 3D** (no lines, no Flurnummern, no `F` key); their data still loads for the local parcel lookup, and the 2D WMS overlay stays on the minimap. Parcel-line and label notes below are historical.
@@ -730,6 +759,11 @@ pnpm run perf:gltf -- --url 'http://127.0.0.1:5241/?aoi=overall'    # baeckerei-
   It hands the frames back to the castle after `step` hooks (the castle's review clock held them, which hid the hitch before).
 
 ## Known gaps
+
+- **Katalog-Modus (S2):** no Bäume/Gebäude switches (the stored prefs are honoured), no tree card
+  for place trees, no per-place candidates/POIs/zones/point clouds/historic layers yet; parcel
+  lookup only via the owning place's polygons; lossy layers are not marked „≈“ in probes; live VAT
+  phone GPU cost and Safari/Firefox AVIF not measured.
 
 - Messen (F17): no editing of finished measurements (delete + redraw); no measurement import; the rubber band is a straight (not draped) preview; the area is horizontal only (no 3D surface area). Exports are not written by the Export button in automated checks (GeoJSON content was checked via `measurementsToGeoJSON`).
 - Verdachtsflächen (F15): the optional `candidates.mask` class raster is not rendered (outlines/circles only); N/P does not switch the relief preset per class; *Bekannte Orte* (`pois/PoiPanel.ts`) still fly with the old, not exaggeration-aware `flyToSite` (one-line switch to `flyToSiteExag`). Precision of the rule-set-2 coarse candidates is unknown (2 inspected by eye). The mask raster is not drawn. Clicking a candidate circle or a point-cloud outline on the minimap no longer also triggers the map's click-to-fly (`bubblingMouseEvents: false`, v1.0.1; verified by code path, not clicked in a browser).

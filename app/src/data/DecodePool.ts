@@ -51,6 +51,19 @@ export class DecodePool {
     return r;
   }
 
+  private avif: Promise<boolean> | null = null;
+
+  /**
+   * Can this browser decode AVIF? Probed once in a decode worker (contract "Slim formats"); without
+   * AVIF every `.avif` layer counts as absent (`stripAvif`).
+   */
+  avifSupported(): Promise<boolean> {
+    this.avif ??= this.post({ type: 'probe-avif', id: this.nextId++ })
+      .then((r) => r.type === 'probed' && r.avif)
+      .catch(() => false);
+    return this.avif;
+  }
+
   /**
    * Box-blur `data` off the main thread. `data` is transferred (unusable afterwards). With
    * `crop` = [x, y, w, h] only that window of the result is returned.

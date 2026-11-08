@@ -72,7 +72,8 @@ export class BuildingLayer extends Group {
 
   constructor(
     private readonly models: BuildingModels,
-    private readonly terrain: Terrain,
+    /** Terrain (or, in catalog mode, a place view: its manifest + the shared terrain uniforms). */
+    private readonly terrain: Pick<Terrain, 'manifest' | 'uniforms'>,
     private readonly baseUrl: string,
     readonly opts: BuildingLayerOptions = DEFAULT_BUILDING_OPTIONS,
   ) {

@@ -60,6 +60,14 @@ uniform int uOvlBlend;             // see relief.ts BlendMode
 
 uniform int uValuePass;
 
+// S2 (contract "Derived relief modes"): live VAT `rvt-vat-combined-v1` from svf + opns_pos.
+uniform sampler2D uVatSvf;         // per chunk: svf u8 with 1-texel apron
+uniform sampler2D uVatOpn;         // per chunk: opns_pos u8 with 1-texel apron
+uniform float uHasVatIn;           // 1 = both inputs resident
+uniform vec2 uVatSvfRange;
+uniform vec2 uVatOpnRange;
+uniform int uQuadMask;             // per chunk: quadrants drawn by finer children (partial parent) → discard
+
 uniform float uExag;
 uniform float uShadeZ;             // extra z-factor for shading only
 uniform float uSunAz;              // radians, clockwise from north
@@ -158,6 +166,38 @@ bool sourceValue1(vec2 g, out float v) {
   return true;
 }
 
+// RVT 'VAT combined' preset p = (slope max °, opns min °, opns max °, svf min). Mirrors
+// terrain/liveVat.ts vatPreset() exactly, incl. rvt's in-place overlay (full strength).
+float vatPreset(float hs, float slopeDeg, float svf, float opns, vec4 p) {
+  float r = 0.5 * (1.0 - clamp(slopeDeg / p.x, 0.0, 1.0)) + 0.5 * hs;    // slope, luminosity 50 %
+  float o = clamp((opns - p.y) / (p.z - p.y), 0.0, 1.0);
+  r = r > 0.5 ? 1.0 - (1.0 - 2.0 * (r - 0.5)) * (1.0 - o) : 2.0 * r * o;  // positive openness, overlay
+  float v = clamp((svf - p.w) / (1.0 - p.w), 0.0, 1.0);
+  return 0.75 * r + 0.25 * v * r;                                         // svf, multiply 25 %
+}
+
+// Live VAT from the true-height gradient g (per metre; x east, y south), fixed sun 315° / 35°.
+bool liveVatValue(vec2 g, vec2 uv, out float v) {
+  v = 0.0;
+  if (uHasVatIn < 0.5) return false;
+  float slopeDeg = degrees(atan(length(g)));
+  float hs = clamp(hillshadeDirs(normalize(vec3(-g.x, 1.0, -g.y)), radians(315.0), radians(35.0), 1), 0.0, 1.0);
+  float svf = mix(uVatSvfRange.x, uVatSvfRange.y, texture(uVatSvf, uv).r);
+  float opns = mix(uVatOpnRange.x, uVatOpnRange.y, texture(uVatOpn, uv).r);
+  v = 0.5 * vatPreset(hs, slopeDeg, svf, opns, vec4(50.0, 68.0, 93.0, 0.7))
+    + 0.5 * vatPreset(hs, slopeDeg, svf, opns, vec4(15.0, 85.0, 91.0, 0.9));
+  return true;
+}
+
+// Stand-in source of a slot whose layer this chunk's source does not carry: 1 live slope,
+// 9 live VAT (derived `rvt-vat-combined-v1`), else none (→ fallback hillshade).
+bool altValue(int alt, vec2 g, vec2 uv, out float v) {
+  v = 0.0;
+  if (alt == 1) return sourceValue1(g, v);
+  if (alt == 9) return liveVatValue(g, uv, v);
+  return false;
+}
+
 // Returns false where the source has no data here (layer not loaded yet etc.).
 bool sourceValue(int src, float h, vec2 g, float hs, vec2 uv, out float v) {
   v = 0.0;
@@ -169,17 +209,17 @@ bool sourceValue(int src, float h, vec2 g, float hs, vec2 uv, out float v) {
     return true;
   }
   if (src == 3) {
-    if (uHasLayerA < 0.5) return uLayerAAlt == 1 && sourceValue1(g, v);
+    if (uHasLayerA < 0.5) return altValue(uLayerAAlt, g, uv, v);
     v = mix(uLayerARange.x, uLayerARange.y, texture(uLayerA, uv).r);
     return true;
   }
   if (src == 4) {
-    if (uHasLayerB < 0.5) return uLayerBAlt == 1 && sourceValue1(g, v);
+    if (uHasLayerB < 0.5) return altValue(uLayerBAlt, g, uv, v);
     v = mix(uLayerBRange.x, uLayerBRange.y, texture(uLayerB, uv).r);
     return true;
   }
   if (src == 7) {
-    if (uHasLayerC < 0.5) return uLayerCAlt == 1 && sourceValue1(g, v);
+    if (uHasLayerC < 0.5) return altValue(uLayerCAlt, g, uv, v);
     v = mix(uLayerCRange.x, uLayerCRange.y, texture(uLayerC, uv).r);
     return true;
   }
@@ -241,6 +281,12 @@ vec3 blendColor(vec3 b, vec3 o, int mode) {
 }
 
 void main() {
+  if (uQuadMask != 0) {
+    // Partial parent: quadrant (a, b) split at the chunk's half (owned pixels 0.5 … n + 0.5).
+    float split = 0.5 * uChunkSize + 0.5;
+    int q = (vPx.x >= split ? 1 : 0) + (vPx.y >= split ? 2 : 0);
+    if ((uQuadMask & (1 << q)) != 0) discard;
+  }
   float h;
   vec2 g;
   sampleHeight(uHeight, vPx, h, g);

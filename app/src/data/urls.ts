@@ -7,6 +7,8 @@
  *   VITE_DATA_URL    root of the AOI datasets, pois.geojson and data/shared/   (manifest.ts dataRootUrl)
  *   VITE_AOIS        comma list of the AOIs the deployment has (e.g. `overall`); default: all known
  *   VITE_VIEWER_URL  castle viewer URL (relative ones resolve against the page); `off` hides the handover
+ *   VITE_CATALOG_URL catalog `sle-catalog-v1` (absolute, or relative to the page): catalog mode (S2,
+ *                    many places) unless the URL has `?aoi=`; unset → single-AOI mode as before
  *   VITE_IMPRESSUM_URL  optional Impressum page (http(s); relative ones resolve against the page),
  *                    linked in „Über & Datenschutz“; unset → no Impressum link (no default)
  */
@@ -83,6 +85,27 @@ export function impressumUrl(raw: string | undefined = env().VITE_IMPRESSUM_URL,
     const u = href ? new URL(v, href) : new URL(v);
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
     if (u.username || u.password) return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Catalog URL for catalog mode (S2): `VITE_CATALOG_URL` resolved against the page, or null when
+ * unset/invalid or when `?aoi=` asks for single-AOI mode (contract "Many places", session modes).
+ */
+export function catalogUrl(
+  raw: string | undefined = env().VITE_CATALOG_URL,
+  href: string | undefined = pageHref(),
+  search: string = typeof location !== 'undefined' ? location.search : '',
+): string | null {
+  const v = raw?.trim();
+  if (!v) return null;
+  if (new URLSearchParams(search).has('aoi')) return null;
+  try {
+    const u = href ? new URL(v, href) : new URL(v);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
     return u.href;
   } catch {
     return null;

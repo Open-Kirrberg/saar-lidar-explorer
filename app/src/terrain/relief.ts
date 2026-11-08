@@ -477,3 +477,38 @@ export const IMAGE_PRESETS: Preset[] = [
     mixLabel: 'Karte ↔ Relief',
   },
 ];
+
+/** Live key a v3 `derived` method stands for (contract "Derived relief modes"); VAT is not a live key. */
+export const DERIVED_LIVE_KEY: Readonly<Record<string, string>> = {
+  'live-hillshade': 'live-hillshade',
+  'live-slope': 'live-slope',
+  'live-lrm': 'live-lrm',
+};
+
+/**
+ * A preset for a manifest whose baked `slrm` / `slope` / `hillshade` became v3 `derived` live
+ * modes: keys that are not valid displays but derived with a live method are replaced by that live
+ * key (`slrm` → `live-lrm`, taking `params.radius_m` as the preset's LRM radius, contract: "presets
+ * that used slrm use live-lrm with r = 20"). Unchanged when nothing needs mapping.
+ */
+export function adaptPreset(
+  p: Preset,
+  isValid: (key: string) => boolean,
+  derived: Readonly<Record<string, { method: string; params?: Record<string, unknown> }>> | undefined,
+): Preset {
+  if (!derived) return p;
+  let radius = p.lrmRadius;
+  const map = (key: string): string => {
+    if (isValid(key)) return key;
+    const d = derived[key];
+    const live = d ? DERIVED_LIVE_KEY[d.method] : undefined;
+    if (!live) return key;
+    const r = d!.params?.radius_m;
+    if (live === 'live-lrm' && typeof r === 'number' && r > 0 && radius === undefined) radius = r;
+    return live;
+  };
+  const base = map(p.base);
+  const overlay = p.overlay ? { ...p.overlay, key: map(p.overlay.key) } : null;
+  if (base === p.base && (!p.overlay || overlay!.key === p.overlay.key)) return p;
+  return { ...p, base, overlay, ...(radius !== undefined ? { lrmRadius: radius } : {}) };
+}

@@ -17,6 +17,8 @@ import { formatParcel } from './labels';
 import { PointIndex, SegmentIndex, findParcelLabel } from './spatial';
 import { STYLES } from './styles';
 import { ParcelPolygonIndex } from './parcelPolygons';
+import { initCatalogVectors } from './catalogVectors';
+import { tileClipFor } from './parcelEdges';
 import { loadLineLayer, loadParcelPolygons, loadPointLayer } from './vectorLoader';
 import './vectors.css';
 
@@ -74,6 +76,7 @@ export interface VectorLayersApi {
 
 /** Returns null (and adds no UI) when the manifest has no vector layers. */
 export function initVectorLayers(ctx: AppContext, panel: HTMLElement): VectorLayersApi | null {
+  if (ctx.catalog) return initCatalogVectors(ctx, ctx.catalog, panel); // S2: per-place files, session frame
   const vec = ctx.manifest.vectors;
   if (!vec?.osm && !vec?.flurstuecke) return null;
   const { terrain, camera, renderer, scene, manifest } = ctx;
@@ -138,13 +141,17 @@ export function initVectorLayers(ctx: AppContext, panel: HTMLElement): VectorLay
     return osmLoading;
   }
 
+  // v3 (S2): derived parcel lines are clipped to the present tiles (polygons are not clipped).
+  const clip = manifest.presence ? tileClipFor({ E0: origin.E0, N0: origin.N0, H: manifest.size.height }, manifest.presence, origin) : undefined;
   let parcelLoading: Promise<ParcelData | null> | null = null;
   function loadParcels(): Promise<ParcelData | null> {
     const layer = vec!.flurstuecke!;
     parcelLoading ??= (async () => {
       try {
         const [lineData, pts] = await Promise.all([
-          loadLineLayer(base + layer.path, origin, 'parcel', bucketSize, fallbackH),
+          layer.lines === 'derived'
+            ? loadLineLayer(base + layer.polygons!, origin, 'parcel', bucketSize, fallbackH, { derive: 'polygon-edges', ...(clip ? { clip } : {}) })
+            : loadLineLayer(base + layer.path, origin, 'parcel', bucketSize, fallbackH),
           loadPointLayer(base + layer.labels, origin),
         ]);
         let boundaries: SegmentIndex | null = null;

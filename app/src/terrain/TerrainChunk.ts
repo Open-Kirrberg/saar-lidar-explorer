@@ -17,6 +17,7 @@ import {
 } from 'three';
 import type { ShaderMaterial } from 'three';
 import type { ImageEdges } from './imageApron';
+import type { ChunkSource } from './sources';
 import type { GridSpec } from '../data/grid';
 import { cellSizeOf, heightImageSize, heightPixelOrigin } from '../data/grid';
 import { chunkGpuBytes, imageGpuBytes } from './budget';
@@ -137,6 +138,14 @@ export class TerrainChunk {
   private slotB: string | null = null;
   /** Lens slot C (V2.5 Relikt-Blick). */
   private slotC: string | null = null;
+  /** Inputs of the live VAT (`rvt-vat-combined-v1`): svf and opns_pos layer keys, when a slot uses it. */
+  private vatSvf: string | null = null;
+  private vatOpn: string | null = null;
+  /**
+   * The source that published this chunk (S2): base URL, paths and layers of its level, its own
+   * (i, j), derived modes. Set by Terrain when the chunk is created.
+   */
+  src!: ChunkSource;
   private lowpassTex: DataTexture | null = null;
   /** Radius key the current low-pass was built for ('' = none). */
   lowpassKey = '';
@@ -186,6 +195,10 @@ export class TerrainChunk {
       uHasLowpass: { value: 0 },
       uSkirtDepth: { value: 10 },
       uLodColor: { value: new Color(1, 1, 1) },
+      uQuadMask: { value: 0 },
+      uVatSvf: { value: DUMMY_U8 },
+      uVatOpn: { value: DUMMY_U8 },
+      uHasVatIn: { value: 0 },
     };
     const material = createChunkMaterial(shared, this.uniforms);
     // Geometry is assigned by setLod(); start with an empty placeholder.
@@ -385,6 +398,26 @@ export class TerrainChunk {
     if (this.slotA === key || this.slotB === key) this.bindLayers(this.slotA, this.slotB);
     if (this.slotC === key) this.bindLens(key);
     if (key === BLDG_KEY) this.bindBuildingMask();
+    if (key === this.vatSvf || key === this.vatOpn) this.bindVatInputs(this.vatSvf, this.vatOpn);
+  }
+
+  /**
+   * Bind the live-VAT inputs (svf, opns_pos u8 apron textures) used by any slot whose stand-in is
+   * the derived VAT on this chunk; uHasVatIn = 1 only when both are resident.
+   */
+  bindVatInputs(svf: string | null, opn: string | null): void {
+    this.vatSvf = svf;
+    this.vatOpn = opn;
+    const ts = svf ? this.layerTextures.get(svf) : undefined;
+    const to = opn ? this.layerTextures.get(opn) : undefined;
+    this.uniforms.uVatSvf.value = ts ?? DUMMY_U8;
+    this.uniforms.uVatOpn.value = to ?? DUMMY_U8;
+    this.uniforms.uHasVatIn.value = ts && to ? 1 : 0;
+  }
+
+  /** Quadrants (bit a + 2b) drawn by finer children: discarded here (partial parent, S2). */
+  setQuadMask(mask: number): void {
+    this.uniforms.uQuadMask.value = mask;
   }
 
   /** R0.7: hand the `bldg` mask (if resident) to the canopy shader, which drops canopy over buildings. */

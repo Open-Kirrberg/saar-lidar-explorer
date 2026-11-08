@@ -9,6 +9,8 @@ import { chunkUrl } from '../data/manifest';
 import { DecodePool } from '../data/DecodePool';
 import { heightImageSize } from '../data/grid';
 import { HeightQuery } from '../terrain/HeightQuery';
+import { CHM_KEY, dsmFromChm } from '../terrain/canopyChm';
+import { buildLayerApron } from '../terrain/layerApron';
 import { runLimited } from './limit';
 import type { Terrain } from '../terrain/Terrain';
 import type { LevelHeight } from './profile';
@@ -28,7 +30,8 @@ export class MeasureHeights {
   constructor(private readonly terrain: Terrain) {
     const m = terrain.manifest;
     this.dtm = new HeightQuery(terrain.grid, m.chunks.nx, m.chunks.ny);
-    this.dsm = m.height.dsm ? new HeightQuery(terrain.grid, m.chunks.nx, m.chunks.ny) : null;
+    // v3: no dsm file — DSM = DTM + CHM (contract "No dsm in v3"), see load().
+    this.dsm = terrain.hasCanopyData() ? new HeightQuery(terrain.grid, m.chunks.nx, m.chunks.ny) : null;
   }
 
   get hasDsm(): boolean {
@@ -115,15 +118,32 @@ export class MeasureHeights {
     const id = `${kind}:${i}_${j}`;
     const running = this.loading.get(id);
     if (running) return running;
-    const m = this.terrain.manifest;
-    const src = kind === 'dtm' ? m.height.dtm : m.height.dsm!;
     const q = kind === 'dtm' ? this.dtm : this.dsm!;
     const failed = kind === 'dtm' ? this.failedDtm : this.failedDsm;
     const p = (async () => {
       try {
+        // S2: the chunk's source (single-AOI manifest, or the owning place in catalog mode).
+        const src = this.terrain.resolver.resolve(0, i, j);
+        if (typeof src === 'string') throw new Error(`no source (${src})`);
+        const url = (path: string) => chunkUrl(src.baseUrl, path, src.i, src.j);
         this.pool ??= new DecodePool(1);
-        const { data, width } = await this.pool.decodeHeights(chunkUrl(this.terrain.baseUrl, src.path, i, j));
-        if (width !== heightImageSize(this.terrain.grid)) throw new Error(`${width}px`);
+        const side = heightImageSize(this.terrain.grid);
+        const dsm = src.level.height.dsm;
+        const chm = src.level.layers[CHM_KEY];
+        if (kind === 'dsm' && !dsm) {
+          if (!src.v3 || !chm) throw new Error('no dsm / chm');
+          // v3: DSM = DTM + CHM (CHM edge-clamped at the chunk border: no neighbours here).
+          await this.load('dtm', i, j);
+          const dtm = this.dtm.chunk(i, j);
+          if (!dtm) throw new Error('dtm missing');
+          const r = await this.pool.decodeU8(url(chm.path));
+          const n = this.terrain.grid.chunkSize;
+          if (r.width !== n || r.height !== n) throw new Error(`chm ${r.width}px`);
+          q.add(i, j, dsmFromChm(dtm, buildLayerApron(r.data, n, () => undefined).data, chm.min, chm.max));
+          return;
+        }
+        const { data, width } = await this.pool.decodeHeights(url(kind === 'dtm' ? src.level.height.dtm.path : dsm!.path));
+        if (width !== side) throw new Error(`${width}px`);
         q.add(i, j, data);
       } catch (err) {
         failed.add(`${i}_${j}`);

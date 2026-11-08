@@ -1,5 +1,7 @@
 /**
- * Manifest types + loader for docs/data-contract.md (v2; v1 manifests load as a single level).
+ * Manifest types + loader for docs/data-contract.md (v1, v2 and v3; v1 manifests load as a single
+ * level). v3 (Revision 3.0, S2 many places): `grid`, `presence`, `place`, `derived`, `lossy` u8
+ * layers, AVIF/WebP files, no `dsm`, 2D OSM (`densified: false`) and derived parcel lines.
  * Optional additive keys: `vectors` (F10/F12), `rgb` image layers → `imageLayers` (F13/F14),
  * `layers.bldg` mask (R0.7), `models.buildings` (F11), `xyz.hist_*` (F14), `candidates` (F15),
  * `pointclouds` (F16), `trees` (V2.4, parsed in trees/treeData.ts), `stats` (Orte im Vergleich,
@@ -7,6 +9,8 @@
  * `species` (Baum-Steckbrief Baumart, parsed in trees/treeSpecies.ts), `stats_levels` (S1 leaderboard
  * levels, parsed in places/placesData.ts; `kind: 'stats-only'` manifests are rejected as terrain AOIs).
  */
+import type { Bitmap } from './globalGrid';
+import { decodeBitmap, isAligned, isGlobalGrid, TILE_M } from './globalGrid';
 import { parseManifestStats, parseStatsLevels } from '../places/placesData';
 import type { ManifestStats, StatsLevels } from '../places/placesData';
 import { parseTrees } from '../trees/treeData';
@@ -33,7 +37,20 @@ export interface LayerSource {
   unit?: string;
   label_de?: string;
   description?: string;
+  /** v3: lossy file (AVIF); excluded from exact value readouts. */
+  lossy?: boolean;
 }
+
+/** v3 derived relief mode (`derived.<key>`, contract "Derived relief modes"). */
+export interface DerivedMode {
+  method: DerivedMethod;
+  inputs?: string[];
+  params?: Record<string, unknown>;
+  unit?: string;
+  label_de: string;
+}
+export type DerivedMethod = 'live-hillshade' | 'live-slope' | 'live-lrm' | 'rvt-vat-combined-v1';
+export const DERIVED_METHODS: readonly DerivedMethod[] = ['live-hillshade', 'live-slope', 'live-lrm', 'rvt-vat-combined-v1'];
 
 /**
  * Colour image layer (contract "Image layers", F13/F14): `encoding: 'rgb'` entries of `layers` /
@@ -43,7 +60,7 @@ export interface LayerSource {
 export interface ImageLayerSource {
   path: string; // template with {i}, {j}; {level} already substituted
   encoding: 'rgb';
-  format: 'webp' | 'jpg' | 'png';
+  format: 'webp' | 'jpg' | 'png' | 'avif';
   /** Pixels per chunk side: 1000 (0.5 m/px at level 0) or 500. */
   pixelsPerChunk: number;
   kind: 'image';
@@ -114,8 +131,22 @@ export interface ManifestLevel {
 }
 
 export interface Manifest {
-  /** 1 or 2. */
+  /** 1, 2 or 3. */
   version: number;
+  /** v3: `grid` is the global grid and the rectangle is aligned at 1 km (placeable in catalog mode). */
+  gridOk?: boolean;
+  /** v3: `place` (catalog id + AGS). */
+  place?: { id: string; ags: string };
+  /**
+   * v3: decoded tile presence (w × h 1 km tiles of the rectangle); undefined = every tile present.
+   * An invalid `presence` sets `presenceInvalid` and leaves this undefined ("all present", single-AOI rule).
+   */
+  presence?: Bitmap;
+  presenceInvalid?: boolean;
+  /** v3: derived relief modes (unknown methods / missing inputs dropped). */
+  derived?: Record<string, DerivedMode>;
+  /** v3: `build.pipeline` version string (informative). */
+  pipeline?: string;
   aoi: string;
   name: string;
   crs: string;
@@ -172,6 +203,8 @@ export interface VectorLayer {
    * Either way the app uses z per coordinate when it is present and finite.
    */
   heights?: 'baked';
+  /** v3 OSM: false = 2D original vertices (0.1 m), clipped to present tiles; the app densifies to ≤ 2 m. */
+  densified?: boolean;
 }
 
 export interface ManifestVectors {
@@ -181,7 +214,7 @@ export interface ManifestVectors {
    * + optional `polygons` (relative path to Polygon/MultiPolygon FeatureCollection for
    * point-in-polygon parcel lookup; 2D, not densified, not clipped). Absent → label-nearest fallback.
    */
-  flurstuecke?: VectorLayer & { labels: string; polygons?: string };
+  flurstuecke?: VectorLayer & { labels: string; polygons?: string; lines?: 'derived' };
 }
 
 /** OSM feature properties in `vectors.osm` (LineString / MultiLineString). */
@@ -220,9 +253,9 @@ export interface ParcelPolygonProps {
   flaeche_m2?: number; // amtliche Fläche (ALKIS), m²
 }
 
-function parseVectorLayer(key: string, v: unknown): VectorLayer | undefined {
+function parseVectorLayer(key: string, v: unknown, pathOptional = false): VectorLayer | undefined {
   const x = v as Partial<Record<keyof VectorLayer, unknown>> | null;
-  if (!x || typeof x !== 'object' || typeof x.path !== 'string' || !x.path) {
+  if (!x || typeof x !== 'object' || ((typeof x.path !== 'string' || !x.path) && !pathOptional)) {
     console.warn(`[manifest] vectors.${key}: missing path, ignored`);
     return undefined;
   }
@@ -231,12 +264,13 @@ function parseVectorLayer(key: string, v: unknown): VectorLayer | undefined {
     return undefined;
   }
   return {
-    path: x.path,
+    path: typeof x.path === 'string' ? x.path : '',
     crs: 'EPSG:25832',
     featureCount: typeof x.featureCount === 'number' && Number.isFinite(x.featureCount) ? x.featureCount : 0,
     label_de: typeof x.label_de === 'string' ? x.label_de : '',
     source: typeof x.source === 'string' ? x.source : '',
     ...(x.heights === 'baked' ? { heights: 'baked' as const } : {}),
+    ...(x.densified === false ? { densified: false } : {}),
   };
 }
 
@@ -250,14 +284,21 @@ export function parseVectors(v: unknown): ManifestVectors | undefined {
     if (osm) out.osm = osm;
   }
   if (raw.flurstuecke !== undefined) {
-    const fl = parseVectorLayer('flurstuecke', raw.flurstuecke);
+    // v3: `lines: 'derived'` → no `path`, `polygons` required (boundary lines derived in the app).
+    const derivedLines = (raw.flurstuecke as { lines?: unknown } | null)?.lines === 'derived';
+    const fl = parseVectorLayer('flurstuecke', raw.flurstuecke, derivedLines);
     const labels = (raw.flurstuecke as { labels?: unknown }).labels;
     const polygons = (raw.flurstuecke as { polygons?: unknown }).polygons;
     if (polygons !== undefined && (typeof polygons !== 'string' || !polygons)) {
       console.warn('[manifest] vectors.flurstuecke.polygons: not a path, ignored');
     }
-    if (fl && typeof labels === 'string' && labels) {
-      out.flurstuecke = { ...fl, labels, ...(typeof polygons === 'string' && polygons ? { polygons } : {}) };
+    const hasPolygons = typeof polygons === 'string' && !!polygons;
+    if (fl && derivedLines && !hasPolygons) {
+      console.warn("[manifest] vectors.flurstuecke: lines 'derived' without polygons, ignored");
+    } else if (fl && typeof labels === 'string' && labels) {
+      out.flurstuecke = {
+        ...fl, labels, ...(hasPolygons ? { polygons: polygons as string } : {}), ...(derivedLines ? { lines: 'derived' as const } : {}),
+      };
     } else if (fl) console.warn('[manifest] vectors.flurstuecke: missing labels, ignored');
   }
   return out.osm || out.flurstuecke ? out : undefined;
@@ -265,14 +306,52 @@ export function parseVectors(v: unknown): ManifestVectors | undefined {
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
+/** Is `path` an `.avif` file (by extension, ignoring a query)? */
+export function isAvifPath(path: string): boolean {
+  return /\.avif(?:$|[?#])/i.test(path);
+}
+
+/** Lower-case file extension of a path ('' if none). */
+export function pathExt(path: string): string {
+  return (/\.([a-z0-9]+)(?:$|[?#])/i.exec(path)?.[1] ?? '').toLowerCase();
+}
+
+/**
+ * Data u8 layers that must decode bit-exact (contract "Slim formats"): never AVIF. Visual u8
+ * layers (svf, openness, vat …) may be AVIF (lossy).
+ */
+export const DATA_U8_KEYS: readonly string[] = ['chm', 'mask', 'bldg'];
+
+/**
+ * Format rules for a u8 layer entry (every version): `format`, if present, must match the
+ * extension; data layers (`chm`, `mask`, `bldg`) must not be AVIF; an AVIF visual layer counts as
+ * `lossy`. Returns the (possibly flagged) entry or undefined (dropped, logged).
+ */
+export function checkU8Layer(key: string, x: LayerSource, where = `layers.${key}`): LayerSource | undefined {
+  const ext = pathExt(x.path);
+  const fmt = (x as { format?: unknown }).format;
+  if (fmt !== undefined && (typeof fmt !== 'string' || fmt.toLowerCase() !== ext)) {
+    console.warn(`[manifest] ${where}: format ${String(fmt)} does not match .${ext}, ignored`);
+    return undefined;
+  }
+  if (ext === 'avif') {
+    if (DATA_U8_KEYS.includes(key)) {
+      console.warn(`[manifest] ${where}: data layer must not be AVIF, ignored`);
+      return undefined;
+    }
+    return x.lossy ? x : { ...x, lossy: true };
+  }
+  return x;
+}
+
 function parseHeightSource(v: unknown, level: number): HeightSource | undefined {
   const x = v as Partial<HeightSource> | null;
   if (!x || typeof x !== 'object' || typeof x.path !== 'string' || !x.path) return undefined;
-  if (x.encoding !== 'terrarium') return undefined;
+  if (x.encoding !== 'terrarium' || isAvifPath(x.path)) return undefined;
   return { path: x.path.replaceAll('{level}', String(level)), encoding: 'terrarium', apron: isNum(x.apron) ? x.apron : 1 };
 }
 
-const IMAGE_FORMATS = ['webp', 'jpg', 'png'] as const;
+const IMAGE_FORMATS = ['webp', 'jpg', 'png', 'avif'] as const;
 
 /**
  * Tolerant parse of one `encoding: 'rgb'` layer entry; undefined (with a warning) when malformed
@@ -326,7 +405,10 @@ function nonImageLayers(v: unknown): Record<string, LayerSource> {
   const out: Record<string, LayerSource> = {};
   if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
   for (const [key, raw] of Object.entries(v as Record<string, unknown>)) {
-    if (!isRgbEntry(raw)) out[key] = raw as LayerSource;
+    if (isRgbEntry(raw)) continue;
+    const x = raw as LayerSource;
+    const ok = x && typeof x === 'object' && typeof x.path === 'string' ? checkU8Layer(key, x) : x;
+    if (ok) out[key] = ok;
   }
   return out;
 }
@@ -341,7 +423,8 @@ function parseLayerSources(v: unknown, level: number): Record<string, LayerSourc
       console.warn(`[manifest] levels[${level}].layers.${key}: malformed, ignored`);
       continue;
     }
-    out[key] = { ...x, path: x.path.replaceAll('{level}', String(level)) } as LayerSource;
+    const ok = checkU8Layer(key, { ...x, path: x.path.replaceAll('{level}', String(level)) } as LayerSource, `levels[${level}].layers.${key}`);
+    if (ok) out[key] = ok;
   }
   return out;
 }
@@ -934,11 +1017,12 @@ export function validateManifest(m: unknown): Manifest {
   if (!x || typeof x !== 'object') fail('not an object');
   // Contract „Gemeinde level“: a stats-only manifest (e.g. AOI `saarland`) is never a terrain AOI.
   if ((x as { kind?: unknown }).kind === 'stats-only') fail('stats-only manifest (no terrain), not an AOI to fly');
-  if (x.version !== 1 && x.version !== 2) fail(`unsupported version ${String(x.version)}`);
+  if (x.version !== 1 && x.version !== 2 && x.version !== 3) fail(`unsupported version ${String(x.version)}`);
   if (!x.origin || !Number.isFinite(x.origin.E0) || !Number.isFinite(x.origin.N0)) fail('origin');
   if (!x.size || !x.chunks || !x.chunkSize) fail('size/chunks/chunkSize');
   if (!x.height?.dtm?.path) fail('height.dtm.path');
   if (x.height!.dtm.encoding !== 'terrarium') fail('height.dtm.encoding must be terrarium');
+  if (isAvifPath(x.height!.dtm.path)) fail('height.dtm must not be AVIF');
   // `rgb` image layers (F13/F14) are split off so `layers` keeps only data (u8) entries.
   const top = {
     ...(x as Manifest),
@@ -947,7 +1031,7 @@ export function validateManifest(m: unknown): Manifest {
     imageLayers: parseImageLayers(x.layers, 0),
   };
   // v1: single level. v2: `levels` (fine → coarse); a v1 manifest carrying `levels` is not trusted.
-  const rawLevels = x.version === 2 ? (x as { levels?: unknown }).levels : undefined;
+  const rawLevels = x.version === 2 || x.version === 3 ? (x as { levels?: unknown }).levels : undefined;
   const models = parseModels((x as { models?: unknown }).models, top.chunks);
   const out: Manifest = {
     ...top,
@@ -978,7 +1062,113 @@ export function validateManifest(m: unknown): Manifest {
   const species = parseSpecies((x as { species?: unknown }).species);
   if (species) out.species = species;
   else delete out.species;
+  if (x.version === 3) applyV3(out, x as Record<string, unknown>);
+  else {
+    // v1/v2 keep their meaning: v3-only keys are not trusted there.
+    delete out.presence;
+    delete out.derived;
+    delete out.place;
+    delete out.gridOk;
+    delete out.presenceInvalid;
+  }
   return out;
+}
+
+/**
+ * v3 keys (contract "Manifest version: 3"): `grid` + 1 km alignment → `gridOk`, `presence` (decoded;
+ * invalid → `presenceInvalid`, treated as all present here), `place`, `derived`, `build.pipeline`;
+ * a stray `height.dsm` is ignored (v3 has none: canopy = DTM + CHM).
+ */
+function applyV3(out: Manifest, raw: Record<string, unknown>): void {
+  const cs = out.cellSize ?? 1;
+  const W = out.size.width * cs;
+  const H = out.size.height * cs;
+  out.gridOk = isGlobalGrid(raw.grid) && isAligned(out.origin.E0, out.origin.N0, W, H, TILE_M);
+  if (!out.gridOk) console.warn('[manifest] v3: grid missing/invalid or rectangle not aligned at 1 km (no placement)');
+  const tilesW = W / TILE_M;
+  const tilesH = H / TILE_M;
+  if (raw.presence !== undefined) {
+    const p = Number.isInteger(tilesW) && Number.isInteger(tilesH)
+      ? decodeBitmap(raw.presence, { w: tilesW, h: tilesH }, (m) => console.warn(`[manifest] presence: ${m}`))
+      : null;
+    if (p) out.presence = p;
+    else {
+      delete out.presence;
+      out.presenceInvalid = true;
+      console.warn('[manifest] presence invalid → every tile treated as present');
+    }
+  } else delete out.presence;
+  const pl = raw.place as { id?: unknown; ags?: unknown } | undefined;
+  if (pl && typeof pl === 'object' && typeof pl.id === 'string' && typeof pl.ags === 'string') out.place = { id: pl.id, ags: pl.ags };
+  else delete out.place;
+  const derived = parseDerived(raw.derived, out.layers);
+  if (derived) out.derived = derived;
+  else delete out.derived;
+  const b = raw.build as { pipeline?: unknown } | undefined;
+  if (b && typeof b === 'object' && typeof b.pipeline === 'string') out.pipeline = b.pipeline;
+  if (out.height.dsm) {
+    console.warn('[manifest] v3 carries no dsm; height.dsm ignored (canopy = DTM + CHM)');
+    out.height = { dtm: out.height.dtm };
+    out.levels[0] = { ...out.levels[0], height: out.height };
+  }
+}
+
+/**
+ * v3 `derived`: entries with a known method and a label; `inputs` must all be level-0 u8 layers
+ * (else the entry is ignored). Unknown methods are ignored.
+ */
+export function parseDerived(v: unknown, layers: Record<string, LayerSource>): Record<string, DerivedMode> | undefined {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const out: Record<string, DerivedMode> = {};
+  for (const [key, raw] of Object.entries(v as Record<string, unknown>)) {
+    const x = raw as Partial<Record<keyof DerivedMode, unknown>> | null;
+    if (!x || typeof x !== 'object' || !DERIVED_METHODS.includes(x.method as DerivedMethod)) {
+      console.warn(`[manifest] derived.${key}: unknown method ${String(x?.method)}, ignored`);
+      continue;
+    }
+    let inputs: string[] | undefined;
+    if (x.inputs !== undefined) {
+      if (!Array.isArray(x.inputs) || !x.inputs.every((k) => typeof k === 'string' && layers[k]?.encoding === 'u8')) {
+        console.warn(`[manifest] derived.${key}: inputs ${JSON.stringify(x.inputs)} are not layers, ignored`);
+        continue;
+      }
+      inputs = x.inputs as string[];
+    }
+    if (x.method === 'rvt-vat-combined-v1' && !(inputs?.includes('svf') && inputs.includes('opns_pos'))) {
+      console.warn(`[manifest] derived.${key}: rvt-vat-combined-v1 needs inputs svf + opns_pos, ignored`);
+      continue;
+    }
+    out[key] = {
+      method: x.method as DerivedMethod,
+      ...(inputs ? { inputs } : {}),
+      ...(x.params && typeof x.params === 'object' && !Array.isArray(x.params) ? { params: x.params as Record<string, unknown> } : {}),
+      ...(typeof x.unit === 'string' ? { unit: x.unit } : {}),
+      label_de: typeof x.label_de === 'string' && x.label_de ? x.label_de : key,
+    };
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Browsers without AVIF (contract "Slim formats"): every `.avif` layer counts as absent — u8 layers
+ * and `rgb` images at every level; `derived` entries whose inputs vanished are dropped. Returns the
+ * number of removed entries (> 0 → show the hint once).
+ */
+export function stripAvif(m: Manifest): number {
+  let n = 0;
+  const strip = (layers: Record<string, LayerSource>, images?: Record<string, ImageLayerSource>) => {
+    for (const [k, l] of Object.entries(layers)) if (isAvifPath(l.path)) { delete layers[k]; n++; }
+    for (const [k, l] of Object.entries(images ?? {})) if (l.format === 'avif' || isAvifPath(l.path)) { delete images![k]; n++; }
+  };
+  strip(m.layers, m.imageLayers);
+  for (const lv of m.levels) {
+    if (lv.layers !== m.layers) strip(lv.layers, lv.imageLayers !== m.imageLayers ? lv.imageLayers : undefined);
+  }
+  if (m.derived) {
+    for (const [k, d] of Object.entries(m.derived)) if (d.inputs?.some((i) => !m.layers[i])) delete m.derived[k];
+    if (!Object.keys(m.derived).length) delete m.derived;
+  }
+  return n;
 }
 
 async function tryFetchManifest(baseUrl: string): Promise<Manifest | null> {

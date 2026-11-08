@@ -50,10 +50,30 @@ async function decode(url: string, kind: 'terrarium' | 'u8'): Promise<WorkerResp
   return { type: 'decoded', id: 0, kind, width, height, data };
 }
 
+/** A tiny (2 × 2 px, 311 bytes) AVIF still image for the support probe. */
+const AVIF_PROBE =
+  'AAAAIGZ0eXBhdmlmAAAAAGF2aWZtaWYxbWlhZk1BMUIAAADybWV0YQAAAAAAAAAoaGRscgAAAAAAAAAAcGljdAAAAAAAAAAAAAAAAGxpYmF2aWYAAAAADnBpdG0AAAAAAAEAAAAeaWxvYwAAAABEAAABAAEAAAABAAABGgAAAB0AAAAoaWluZgAAAAAAAQAAABppbmZlAgAAAAABAABhdjAxQ29sb3IAAAAAamlwcnAAAABLaXBjbwAAABRpc3BlAAAAAAAAAAIAAAACAAAAEHBpeGkAAAAAAwgICAAAAAxhdjFDgQ0MAAAAABNjb2xybmNseAACAAIAAYAAAAAXaXBtYQAAAAAAAAABAAEEAQKDBAAAACVtZGF0EgAKCBgANogQEAwgMg8f8D///8WfhwB8+ErK42A=';
+
+async function probeAvif(): Promise<boolean> {
+  try {
+    const bin = atob(AVIF_PROBE);
+    const bytes = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+    const bmp = await createImageBitmap(new Blob([bytes], { type: 'image/avif' }), { colorSpaceConversion: 'none', premultiplyAlpha: 'none' });
+    const ok = bmp.width > 0 && bmp.height > 0;
+    bmp.close();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 scope.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
   const msg = ev.data;
   try {
-    if (msg.type === 'decode') {
+    if (msg.type === 'probe-avif') {
+      scope.postMessage({ type: 'probed', id: msg.id, avif: await probeAvif() });
+    } else if (msg.type === 'decode') {
       const out = await decode(msg.url, msg.kind);
       out.id = msg.id;
       scope.postMessage(out, [out.data.buffer]);

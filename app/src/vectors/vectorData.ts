@@ -10,6 +10,8 @@ import type { ParcelLabelProps } from '../data/manifest';
 import { buildBuckets, extractLines } from './drape';
 import type { Origin, SegmentBucket } from './drape';
 import { parseParcelPoints } from './labels';
+import { clipLinesToTiles, densifyLines, polygonEdgeLines } from './parcelEdges';
+import type { TileClip } from './parcelEdges';
 import { buildParcelPolygons, parcelPolygonTransferables } from './parcelPolygons';
 import type { ParcelPolygonData } from './parcelPolygons';
 import { osmStyleOf, parcelStyleOf } from './styles';
@@ -40,9 +42,26 @@ export interface Timings {
 
 const styleFor = (k: LineStyleKind) => (k === 'osm' ? osmStyleOf : parcelStyleOf);
 
+/** v3 options (S2): derive parcel lines from a polygon file; clip to a place's present tiles. */
+export interface LineOptions {
+  /** The file is the `flurstuecke.polygons` file (`lines: 'derived'`): boundary lines from its rings. */
+  derive?: 'polygon-edges';
+  /** Keep only the parts inside these tiles (cut exactly at the tile edges). */
+  clip?: TileClip;
+}
+
 /** FeatureCollection → buckets (`bucketSize` m, keyed like terrain chunks). Unknown heights → `fallbackH`, `missing`. */
-export function buildLineLayer(fc: unknown, origin: Origin, style: LineStyleKind, bucketSize: number, fallbackH: number): LineLayerData {
-  const lines = extractLines(fc, origin, styleFor(style));
+export function buildLineLayer(
+  fc: unknown,
+  origin: Origin,
+  style: LineStyleKind,
+  bucketSize: number,
+  fallbackH: number,
+  opts: LineOptions = {},
+): LineLayerData {
+  let lines = opts.derive === 'polygon-edges' ? polygonEdgeLines(fc, origin, styleFor(style)({})) : extractLines(fc, origin, styleFor(style));
+  if (opts.clip) lines = clipLinesToTiles(lines, opts.clip);
+  if (opts.derive === 'polygon-edges') lines = densifyLines(lines, 2);
   const buckets = buildBuckets(lines, () => NaN, bucketSize, fallbackH).filter((b) => b.count > 0);
   let segmentCount = 0;
   let bakedEnds = 0;
@@ -86,7 +105,7 @@ export function parseGeoJsonText(text: string): unknown {
 // ---- worker protocol ---------------------------------------------------------------------------
 
 export type VectorRequest =
-  | { id: number; kind: 'lines'; url: string; origin: Origin; style: LineStyleKind; bucketSize: number; fallbackH: number }
+  | { id: number; kind: 'lines'; url: string; origin: Origin; style: LineStyleKind; bucketSize: number; fallbackH: number; opts?: LineOptions }
   | { id: number; kind: 'points'; url: string; origin: Origin }
   | { id: number; kind: 'polygons'; url: string };
 
@@ -105,7 +124,7 @@ export async function handleVectorRequest(req: VectorRequest, fetchText: (url: s
     const fc = parseGeoJsonText(text);
     const t2 = performance.now();
     if (req.kind === 'lines') {
-      const data = buildLineLayer(fc, req.origin, req.style, req.bucketSize, req.fallbackH);
+      const data = buildLineLayer(fc, req.origin, req.style, req.bucketSize, req.fallbackH, req.opts);
       const timings = { fetchMs: t1 - t0, parseMs: t2 - t1, buildMs: performance.now() - t2 };
       return { res: { id: req.id, ok: true, kind: 'lines', data, timings, bytes: text.length }, transfer: lineTransferables(data) };
     }

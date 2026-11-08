@@ -4,7 +4,7 @@
  * thread if the worker cannot be created or crashes.
  */
 import { fetchText, handleVectorRequest } from './vectorData';
-import type { LineLayerData, LineStyleKind, PointLayerData, Timings, VectorRequest, VectorResponse } from './vectorData';
+import type { LineLayerData, LineOptions, LineStyleKind, PointLayerData, Timings, VectorRequest, VectorResponse } from './vectorData';
 import type { Origin } from './drape';
 import type { ParcelPolygonData } from './parcelPolygons';
 
@@ -69,8 +69,9 @@ export async function loadLineLayer(
   style: LineStyleKind,
   bucketSize: number,
   fallbackH: number,
+  opts?: LineOptions,
 ): Promise<LineLayerData> {
-  const res = await request({ kind: 'lines', url: abs(url), origin: { E0: origin.E0, N0: origin.N0 }, style, bucketSize, fallbackH });
+  const res = await request({ kind: 'lines', url: abs(url), origin: { E0: origin.E0, N0: origin.N0 }, style, bucketSize, fallbackH, ...(opts ? { opts } : {}) });
   if (!res.ok) throw new Error(res.error);
   if (res.kind !== 'lines') throw new Error('unexpected response');
   logTimings(`${style} lines`, res.timings, res.bytes);

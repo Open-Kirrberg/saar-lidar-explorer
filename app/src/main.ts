@@ -5,7 +5,10 @@ import type { FlyToOptions } from './controls/DroneController';
 import { TouchController } from './controls/TouchController';
 import type { NavigationMode } from './controls/TouchController';
 import { DecodePool } from './data/DecodePool';
-import { loadManifest } from './data/manifest';
+import { loadManifest, stripAvif } from './data/manifest';
+import { catalogUrl } from './data/urls';
+import { openCatalogSession, startPlace } from './catalog';
+import type { CatalogSession } from './catalog';
 import type { Manifest } from './data/manifest';
 import { utmToWorld, worldToUtm } from './geo';
 import { getLocate } from './locate';
@@ -13,6 +16,7 @@ import { bindHash, createStore, hashDisplayPatch, normDeg, parseHash } from './s
 import type { AppState, Store } from './state';
 import { createSky } from './terrain/Sky';
 import { installTrees } from './trees';
+import { installPlaceContent } from './catalog/placeContent';
 import { Terrain } from './terrain/Terrain';
 import type { StreamStats } from './terrain/Terrain';
 import { resolveStartAoi } from './ui/startAoi';
@@ -69,7 +73,12 @@ export interface AppContext {
   ready?: boolean;
   /** V2.6b: zone portals + enter/exit (src/zones/runtime/feature.ts); set while the feature is mounted. */
   zones?: ZonesApi;
+  /** S2 catalog mode (many places): catalog, overview, place manifests; absent in single-AOI mode. */
+  catalog?: CatalogSession;
 }
+
+/** Shown once when the browser cannot decode AVIF (contract "Slim formats", ADR 0056). */
+export const AVIF_HINT_DE = 'Dieser Browser kann AVIF nicht anzeigen – Luftbild und einige Reliefansichten fehlen.';
 
 declare global {
   interface Window {
@@ -82,15 +91,36 @@ const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)
 
 async function main(): Promise<void> {
   const loading = $('#loading');
+  // Decode workers first: the AVIF probe decides which `.avif` layers exist (S2, ADR 0056).
+  const pool = new DecodePool();
+  const avif = await pool.avifSupported();
+  let avifMissing = false;
+  const noteAvif = () => {
+    avifMissing = true;
+  };
+  // S2: catalog mode when VITE_CATALOG_URL is set and the URL has no ?aoi= (contract "Many places").
+  let catalog: CatalogSession | undefined;
+  const catUrl = catalogUrl();
+  if (catUrl) {
+    try {
+      const h = parseHash(location.hash);
+      catalog = await openCatalogSession(catUrl, { avif, start: h ? { E: h.E, N: h.N } : undefined, onAvifMissing: noteAvif });
+    } catch (err) {
+      console.warn(`[catalog] ${String(err)} → single-AOI mode`);
+    }
+  }
   let loaded;
   try {
-    loaded = await loadManifest(await resolveStartAoi()); // F9: 'overall' if present, ?aoi= wins
+    loaded = catalog
+      ? { manifest: catalog.manifest, baseUrl: catalog.baseUrl, fellBack: false }
+      : await loadManifest(await resolveStartAoi()); // F9: 'overall' if present, ?aoi= wins
   } catch (err) {
     loading.textContent = String(err instanceof Error ? err.message : err);
     loading.classList.add('error');
     return;
   }
   const { manifest, baseUrl, fellBack } = loaded;
+  if (!catalog && !avif && stripAvif(manifest) > 0) noteAvif();
   const origin = manifest.origin;
 
   // ---- renderer / scene -------------------------------------------------------------------
@@ -105,8 +135,9 @@ async function main(): Promise<void> {
   const sky = createSky(30000);
   scene.add(sky);
 
-  const pool = new DecodePool();
-  const terrain = new Terrain(manifest, baseUrl, pool);
+  // Catalog mode: one session origin (= manifest.origin of the session rectangle), places placed by
+  // their offset through the resolver, one hRef = catalog height_ref_m.
+  const terrain = new Terrain(manifest, baseUrl, pool, catalog ? { resolver: catalog.resolver, hRef: catalog.hRef } : {});
   terrain.imageAnisotropy = renderer.capabilities.getMaxAnisotropy();
   terrain.renderer = renderer; // GPU apron patches for image layers (seam fix), all tiers
   scene.add(terrain);
@@ -147,8 +178,9 @@ async function main(): Promise<void> {
   );
 
   // ---- initial pose: URL hash or AOI centre ----------------------------------------------------
-  const cx = manifest.size.width / 2;
-  const cz = -manifest.size.height / 2;
+  const startW = catalog ? utmToWorld(catalog.start.E, catalog.start.N, origin) : null;
+  const cx = startW ? startW.x : manifest.size.width / 2;
+  const cz = startW ? startW.z : -manifest.size.height / 2;
   const fromHash = parseHash(location.hash);
   // Overlay/forest live in Terrain; mirror them into the store (URL hash) and back (R0.6).
   bindDisplayState(store, terrain);
@@ -229,12 +261,13 @@ async function main(): Promise<void> {
     terrainStats: () => terrain.streamStats(),
     touch,
     setNavigationMode: (mode) => touch.setNavigationMode(mode),
-    flyTo: createRefinedFlyTo(controller, terrain, origin), // re-aims when finer terrain arrives (F9)
+    flyTo: catalogFlyTo(catalog, createRefinedFlyTo(controller, terrain, origin)), // re-aims when finer terrain arrives (F9)
     step: (frames = 1, dt = 1 / 60) => {
       for (let i = 0; i < frames; i++) frame(dt);
       window.dispatchEvent(new Event('sle:step')); // rAF-driven overlays (Labels3D) refresh too
     },
   };
+  if (catalog) ctx.catalog = catalog;
   window.sle = ctx;
   // v2 shell: HUD, action bar, drawers, dialogs, „© Quellen“ and the tier-gated feature registry
   // (minimap, places, markers, OSM paths, buildings … see src/shell/builtins.ts).
@@ -245,9 +278,30 @@ async function main(): Promise<void> {
     loadProgress: () => ({ progress: loadProgress, done: loadDone }),
     areaNote: `Gebiet: ${manifest.name}${fellBack ? ' (Fixture – angeforderte Daten nicht gefunden)' : ''}`,
   });
+  if (avifMissing) ctx.shell.toast(AVIF_HINT_DE);
+  let avifShown = avifMissing;
+  if (catalog) {
+    const places = catalog.places;
+    places.onChange(() => {
+      if (avifMissing && !avifShown) {
+        avifShown = true;
+        ctx.shell.toast(AVIF_HINT_DE);
+      }
+    });
+    // Places around the camera: ≤ 8 km load, > 12 km drop (planned twice a second).
+    let acc = 0;
+    ctx.onFrame((dt) => {
+      acc += dt;
+      if (acc < 0.5) return;
+      acc = 0;
+      const s = store.get();
+      places.update(s.E, s.N);
+    });
+  }
   registerZones(ctx); // V2.6b: zone portals (Standard), loading screen, enter / leave
   registerPlaceStats(ctx); // 🏆 Orte im Vergleich: card in the „Orte“ drawer (Standard, when manifest.stats)
   installTutorial(ctx); // V2.9 first-flight tutorial: 🟢 Standard, once per profile (ADR 0038)
+  installPlaceContent(ctx); // S2 catalog mode: per-place trees + buildings at their offsets (no-op otherwise)
   installTrees(ctx); // V2.4 CHM trees: 🟢 Standard feature `trees`, updated via ctx.onFrame (app/README „Bäume“)
   registerLens(ctx); // V2.5: game look + Relikt-Blick lens (src/lens, ADR 0035)
 
@@ -327,3 +381,13 @@ async function main(): Promise<void> {
 }
 
 void main();
+
+/** Catalog mode: a fly-to target loads its place first (contract "Which places load"). */
+function catalogFlyTo(catalog: CatalogSession | undefined, inner: AppContext['flyTo']): AppContext['flyTo'] {
+  if (!catalog) return inner;
+  return (E, N, opts) => {
+    const p = startPlace(catalog.catalog, E, N);
+    if (p) void catalog.places.ensure(p.id);
+    return inner(E, N, opts);
+  };
+}

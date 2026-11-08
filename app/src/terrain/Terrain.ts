@@ -16,6 +16,7 @@ import type { DecodePool } from '../data/DecodePool';
 import type { GridSpec } from '../data/grid';
 import { cellToWorld, heightImageSize } from '../data/grid';
 import { assembleRegion, clampOutside, lowpassWindow } from '../data/lowpassRegion';
+import type { DataTexture } from 'three';
 import type { ImageLayerSource, LayerSource, Manifest, ManifestLevel } from '../data/manifest';
 import { chunkUrl } from '../data/manifest';
 import { adaptThreshold, clampBudget, DEFAULT_BUDGET, MiB, planEviction } from './budget';
@@ -39,6 +40,10 @@ import { imageTiers, resampleStrip, resizeTarget, screenPxPerMetre, tierFor } fr
 import type { Side } from './imageApron';
 import { APRON_NEIGHBOURS, buildLayerApron } from './layerApron';
 import { selectNodes } from './quadtree';
+import type { NodeStatus } from './quadtree';
+import { AoiResolver } from './sources';
+import { CHM_KEY, dsmFromChm } from './canopyChm';
+import type { ChunkSource, SourceResolver } from './sources';
 import { BLDG_KEY, TerrainChunk } from './TerrainChunk';
 import { createSharedUniforms } from './TerrainMaterial';
 import type { SharedTerrainUniforms } from './TerrainMaterial';
@@ -155,6 +160,18 @@ const LIVE_SRC: Record<string, number> = {
 
 /** Stand-in shader source for a layer missing on a coarse level (1 = live slope, −1 = none/hillshade). */
 const LAYER_ALT: Record<string, number> = { slope: 1 };
+/** Stand-in source id of the live VAT (`rvt-vat-combined-v1`, `altValue()` in terrain.frag.glsl). */
+const ALT_VAT = 9;
+/** Inputs of the live VAT (contract "Derived relief modes"). */
+const VAT_INPUTS = ['svf', 'opns_pos'] as const;
+
+/** Construction options (S2 many places). */
+export interface TerrainOptions {
+  /** Which source serves a node (default: the one manifest, `AoiResolver`). */
+  resolver?: SourceResolver;
+  /** hRef of the exaggeration rule (catalog mode: catalog `height_ref_m`; default: heightRange.min). */
+  hRef?: number;
+}
 
 interface Job {
   id: string;
@@ -278,12 +295,17 @@ export class Terrain extends Group {
     return n;
   }
 
+  /** Which source serves a node (single-AOI: the manifest; catalog mode: places + overview). */
+  readonly resolver: SourceResolver;
+
   constructor(
     readonly manifest: Manifest,
     readonly baseUrl: string,
     private readonly pool: DecodePool,
+    opts: TerrainOptions = {},
   ) {
     super();
+    this.resolver = opts.resolver ?? new AoiResolver(manifest, baseUrl);
     this.name = 'Terrain';
     const apron = manifest.height.dtm.apron ?? 1;
     const cs0 = manifest.cellSize ?? 1;
@@ -304,7 +326,11 @@ export class Terrain extends Group {
     this.grid = this.levelGrids[0];
     this.heights = new LevelHeights(this.levelGrids.map((g, k) => new HeightQuery(g, this.levels[k].chunks.nx, this.levels[k].chunks.ny)));
     this.canopyHeights = new HeightQuery(this.grid, manifest.chunks.nx, manifest.chunks.ny);
-    this.uniforms = createSharedUniforms(manifest.heightRange.min, manifest.chunkSize);
+    this.uniforms = createSharedUniforms(opts.hRef ?? manifest.heightRange.min, manifest.chunkSize);
+    const svf = manifest.layers.svf;
+    const opn = manifest.layers.opns_pos;
+    if (svf) this.uniforms.uVatSvfRange.value.set(svf.min, svf.max);
+    if (opn) this.uniforms.uVatOpnRange.value.set(opn.min, opn.max);
     const cs = manifest.chunkSize;
     this.allowedSpacings = pixelSpacings(cs);
     const pick = (want: number[]) => want.filter((s) => cs % s === 0);
@@ -335,7 +361,7 @@ export class Terrain extends Group {
    * Failed chunks are reported but do not reject.
    */
   async load(cx: number, cz: number, onProgress?: (p: TerrainLoadProgress) => void): Promise<TerrainLoadProgress> {
-    const roots = rootNodes(this.levels);
+    const roots = rootNodes(this.levels).filter((r) => this.nodeStatus(r) === 'ok');
     const progress: TerrainLoadProgress = { loaded: 0, total: roots.length, failed: 0 };
     const count = () => {
       progress.loaded = roots.filter((r) => this.chunks.has(nodeKey(r.level, r.i, r.j))).length;
@@ -404,18 +430,50 @@ export class Terrain extends Group {
     }
   }
 
-  private layerSource(level: number, key: string | null): LayerSource | undefined {
-    return key ? this.levels[level]?.layers[key] : undefined;
+  /** Source state of a node (S2): 'ok', 'none' (no source) or 'pending' (owner still loading). */
+  private nodeStatus(n: { level: number; i: number; j: number }): NodeStatus {
+    const r = this.resolver.resolve(n.level, n.i, n.j);
+    return typeof r === 'string' ? r : 'ok';
   }
 
-  /** `rgb` image layer `key` at `level` (F13/F14), if that level carries it. */
-  private imageSource(level: number, key: string | null): ImageLayerSource | undefined {
-    return key ? this.levels[level]?.imageLayers?.[key] : undefined;
+  /** u8 layer `key` of the source that published chunk `c` (at c's level). */
+  private layerSource(c: TerrainChunk, key: string | null): LayerSource | undefined {
+    return key ? c.src.level.layers[key] : undefined;
   }
 
-  /** Does `level` carry display layer `key` (u8 or image)? */
-  private hasSource(level: number, key: string | null): boolean {
-    return !!(this.layerSource(level, key) || this.imageSource(level, key));
+  /** `rgb` image layer `key` (F13/F14) of chunk `c`'s source, if it carries it. */
+  private imageSource(c: TerrainChunk, key: string | null): ImageLayerSource | undefined {
+    return key ? c.src.level.imageLayers?.[key] : undefined;
+  }
+
+  /** Does chunk `c`'s source carry display layer `key` (u8 or image) as a file? */
+  private hasSource(c: TerrainChunk, key: string | null): boolean {
+    return !!(this.layerSource(c, key) || this.imageSource(c, key));
+  }
+
+  /**
+   * Is display key `key` drawn as the live VAT on chunk `c`? (contract "Derived relief modes": a
+   * baked layer wins; else `derived[key]` = rvt-vat-combined-v1 whose inputs are layers of c's
+   * source and have not failed.)
+   */
+  private usesLiveVat(c: TerrainChunk, key: string | null): boolean {
+    if (!key || this.hasSource(c, key)) return false;
+    const d = c.src.derived?.[key];
+    if (!d || d.method !== 'rvt-vat-combined-v1') return false;
+    for (const k of VAT_INPUTS) if (!c.src.level.layers[k] || c.layerFailed.has(k)) return false;
+    return true;
+  }
+
+  /** Stand-in shader source of slot key `key` on chunk `c` (−1 = none: the slot's layer is bound). */
+  private altFor(c: TerrainChunk, key: string | null): number {
+    if (!key || this.hasSource(c, key)) return -1;
+    if (this.usesLiveVat(c, key)) return ALT_VAT;
+    return LAYER_ALT[key] ?? -1;
+  }
+
+  /** URL of chunk `c`'s file for path template `path` (its source's base URL and own (i, j)). */
+  private srcUrl(c: { src: ChunkSource }, path: string): string {
+    return chunkUrl(c.src.baseUrl, path, c.src.i, c.src.j);
   }
 
   /** Same-level neighbour (di, dj) of `c`'s u8 layer `key`, if resident. */
@@ -499,13 +557,13 @@ export class Terrain extends Group {
       id: `img:${c.key}:${key}`,
       priority,
       run: async () => {
-        const img = this.imageSource(c.level, key);
+        const img = this.imageSource(c, key);
         const cur = c.imageInfo(key)?.size;
         if (!img || !cur || this.chunks.get(c.key) !== c) return;
         const target = resizeTarget(this.tiers(img), cur, c.imageNeedPx, pressure);
         if (target === null) return;
         try {
-          const bmp = await this.fetchImage(chunkUrl(this.baseUrl, img.path, c.i, c.j), target, img.pixelsPerChunk);
+          const bmp = await this.fetchImage(this.srcUrl(c, img.path), target, img.pixelsPerChunk);
           if (this.chunks.get(c.key) === c && c.imageInfo(key)?.size === cur) this.installImage(c, key, bmp, true);
           else bmp.close();
         } catch (err) {
@@ -522,14 +580,15 @@ export class Terrain extends Group {
       priority,
       run: async () => {
         if (this.chunks.has(key) || this.failed.has(key)) return;
-        const lv = this.levels[n.level];
+        const src = this.resolver.resolve(n.level, n.i, n.j);
+        if (typeof src === 'string') return; // none / pending: never a request (S2)
         const g = this.levelGrids[n.level];
         try {
-          const { data, width } = await this.pool.decodeHeights(chunkUrl(this.baseUrl, lv.height.dtm.path, n.i, n.j));
+          const { data, width } = await this.pool.decodeHeights(this.srcUrl({ src }, src.level.height.dtm.path));
           const expected = heightImageSize(g);
           if (width !== expected) throw new Error(`${width}px, expected ${expected}`);
           if (this.chunks.has(key)) return;
-          this.addChunk(n, data);
+          this.addChunk(n, data, src);
         } catch (err) {
           this.failed.add(key);
           console.error(`[terrain] dtm ${key}: ${String(err)}`);
@@ -538,7 +597,7 @@ export class Terrain extends Group {
     };
   }
 
-  private addChunk(n: NodeId, data: Float32Array): TerrainChunk {
+  private addChunk(n: NodeId, data: Float32Array, src: ChunkSource): TerrainChunk {
     const lv = this.levels[n.level];
     const g = this.levelGrids[n.level];
     const chunk = new TerrainChunk(
@@ -551,6 +610,7 @@ export class Terrain extends Group {
       nodeRect(lv, n.i, n.j, this.aoi),
       aoiPixelMax(lv, n.i, n.j, g.apron, this.aoi),
     );
+    chunk.src = src;
     chunk.configureSkirts(this.skirtSpacings);
     chunk.lastUsed = this.frame;
     chunk.mesh.visible = false;
@@ -567,18 +627,18 @@ export class Terrain extends Group {
       priority,
       run: async () => {
         if (chunk.hasLayer(key) || this.chunks.get(chunk.key) !== chunk) return;
-        const img = this.imageSource(chunk.level, key);
-        const src = img ? undefined : this.layerSource(chunk.level, key);
+        const img = this.imageSource(chunk, key);
+        const src = img ? undefined : this.layerSource(chunk, key);
         if (!img && !src) return;
         try {
           if (img) {
             const size = this.imageDecodeSize(chunk, img);
-            const bmp = await this.fetchImage(chunkUrl(this.baseUrl, img.path, chunk.i, chunk.j), size, img.pixelsPerChunk);
+            const bmp = await this.fetchImage(this.srcUrl(chunk, img.path), size, img.pixelsPerChunk);
             if (this.chunks.get(chunk.key) === chunk && !chunk.hasLayer(key)) this.installImage(chunk, key, bmp);
             else bmp.close();
             return;
           }
-          const { data, width, height } = await this.pool.decodeU8(chunkUrl(this.baseUrl, src!.path, chunk.i, chunk.j));
+          const { data, width, height } = await this.pool.decodeU8(this.srcUrl(chunk, src!.path));
           const n = chunk.grid.chunkSize;
           if (width !== n || height !== n) throw new Error(`${width}×${height}px, expected ${n}²`);
           if (this.chunks.get(chunk.key) === chunk) this.installLayer(chunk, key, data);
@@ -595,11 +655,28 @@ export class Terrain extends Group {
       id: `dsm:${chunk.key}`,
       priority,
       run: async () => {
-        const dsm = this.manifest.height.dsm;
-        if (!dsm || chunk.canopy || this.chunks.get(chunk.key) !== chunk) return;
+        const dsm = chunk.level === 0 ? chunk.src.level.height.dsm : undefined;
+        const chm = !dsm && chunk.level === 0 && chunk.src.v3 ? this.layerSource(chunk, CHM_KEY) : undefined;
+        if ((!dsm && !chm) || chunk.canopy || this.chunks.get(chunk.key) !== chunk) return;
         try {
-          const { data, width } = await this.pool.decodeHeights(chunkUrl(this.baseUrl, dsm.path, chunk.i, chunk.j));
-          if (width !== heightImageSize(this.grid)) throw new Error(`${width}px`);
+          let data: Float32Array;
+          if (dsm) {
+            const r = await this.pool.decodeHeights(this.srcUrl(chunk, dsm.path));
+            if (r.width !== heightImageSize(this.grid)) throw new Error(`${r.width}px`);
+            data = r.data;
+          } else {
+            // v3 (contract "No dsm in v3"): DSM = DTM + CHM per cell, CHM with its 1-texel apron.
+            if (!chunk.hasLayer(CHM_KEY)) {
+              const r = await this.pool.decodeU8(this.srcUrl(chunk, chm!.path));
+              const n = chunk.grid.chunkSize;
+              if (r.width !== n || r.height !== n) throw new Error(`chm ${r.width}×${r.height}px`);
+              if (this.chunks.get(chunk.key) !== chunk) return;
+              this.installLayer(chunk, CHM_KEY, r.data);
+            }
+            const tex = chunk.texture(CHM_KEY) as DataTexture | undefined;
+            if (!tex) throw new Error('chm not resident');
+            data = dsmFromChm(chunk.heights, tex.image.data as Uint8Array, chm!.min, chm!.max);
+          }
           if (this.chunks.get(chunk.key) !== chunk || chunk.canopy) return;
           this.canopyHeights.add(chunk.i, chunk.j, data);
           const part = chunk.setCanopy(data);
@@ -690,7 +767,13 @@ export class Terrain extends Group {
   private neededLayers(c: TerrainChunk, lens = true): string[] {
     const out: string[] = [];
     for (const key of [this.layerSlotA(), this.layerSlotB(), lens ? this.layerSlotC() : null]) {
-      if (key && this.hasSource(c.level, key) && !c.layerFailed.has(key) && !out.includes(key)) out.push(key);
+      if (!key) continue;
+      if (this.hasSource(c, key)) {
+        if (!c.layerFailed.has(key) && !out.includes(key)) out.push(key);
+      } else if (this.usesLiveVat(c, key)) {
+        // Derived VAT: the chunk needs its svf + opns_pos inputs instead of a baked layer.
+        for (const k of VAT_INPUTS) if (!out.includes(k)) out.push(k);
+      }
     }
     return out;
   }
@@ -703,11 +786,11 @@ export class Terrain extends Group {
   private bindChunk(c: TerrainChunk): void {
     const a = this.layerSlotA();
     const b = this.layerSlotB();
-    const altA = a && !this.hasSource(c.level, a) ? (LAYER_ALT[a] ?? -1) : -1;
-    const altB = b && !this.hasSource(c.level, b) ? (LAYER_ALT[b] ?? -1) : -1;
-    c.bindLayers(a, b, altA, altB);
     const lc = this.layerSlotC();
-    c.bindLens(lc, lc && !this.hasSource(c.level, lc) ? (LAYER_ALT[lc] ?? -1) : -1);
+    c.bindLayers(a, b, this.altFor(c, a), this.altFor(c, b));
+    c.bindLens(lc, this.altFor(c, lc));
+    const vat = this.usesLiveVat(c, a) || this.usesLiveVat(c, b) || this.usesLiveVat(c, lc);
+    c.bindVatInputs(vat ? VAT_INPUTS[0] : null, vat ? VAT_INPUTS[1] : null);
   }
 
   private evict(c: TerrainChunk): void {
@@ -844,12 +927,16 @@ export class Terrain extends Group {
         return !!c && this.isComplete(c);
       },
       wasActive: (n) => this.active.has(nodeKey(n.level, n.i, n.j)),
+      status: (n) => this.nodeStatus(n),
     });
     this.active = sel.active;
     this.drawn = [];
-    for (const n of sel.draw) {
+    for (let k = 0; k < sel.draw.length; k++) {
+      const n = sel.draw[k];
       const c = this.chunks.get(nodeKey(n.level, n.i, n.j));
-      if (c) this.drawn.push(c);
+      if (!c) continue;
+      c.setQuadMask(sel.drawMask[k]); // partial parent next to source-less quadrants (S2)
+      this.drawn.push(c);
     }
     this.heights.setDisplayed(this.drawn);
     for (const key of sel.keep) {
@@ -890,7 +977,7 @@ export class Terrain extends Group {
       imageNeed(c, d, v);
       wantLayers(c, prio);
       for (const k of this.neededLayers(c)) {
-        const img = this.imageSource(c.level, k);
+        const img = this.imageSource(c, k);
         const cur = img && c.imageInfo(k)?.size;
         if (cur && resizeTarget(this.tiers(img), cur, c.imageNeedPx, pressure) !== null) jobs.push(this.imageResizeJob(c, k, prio + 0.25, pressure));
       }
@@ -1059,7 +1146,23 @@ export class Terrain extends Group {
 
   /** Should chunk `c` load the R0.7 building mask (manifest has it, not resident/failed)? */
   private needsBldg(c: TerrainChunk): boolean {
-    return c.level === 0 && !!this.manifest.layers[BLDG_KEY] && !c.hasLayer(BLDG_KEY) && !c.layerFailed.has(BLDG_KEY);
+    return c.level === 0 && !!this.layerSource(c, BLDG_KEY) && !c.hasLayer(BLDG_KEY) && !c.layerFailed.has(BLDG_KEY);
+  }
+
+  /** Is `key` a derived (live) VAT of this manifest (v3 `derived`, no baked level-0 layer)? */
+  isDerivedVat(key: string): boolean {
+    return !!key && !this.manifest.layers[key] && this.manifest.derived?.[key]?.method === 'rvt-vat-combined-v1';
+  }
+
+  /**
+   * Value range / label of display key `key`: the manifest layer, or for a derived VAT a 0–1
+   * pseudo layer (never fetched; used for ranges, defaults and the mode list).
+   */
+  layerMeta(key: string): LayerSource | undefined {
+    const l = this.manifest.layers[key];
+    if (l) return l;
+    if (this.isDerivedVat(key)) return { path: '', encoding: 'u8', min: 0, max: 1, label_de: this.manifest.derived![key].label_de };
+    return undefined;
   }
 
   /** Manifest layers that are u8 encoded (missing layers are simply absent). */
@@ -1069,7 +1172,11 @@ export class Terrain extends Group {
 
   /** The relief switcher entries available for this manifest (in shortcut order). */
   modes(): ModeEntry[] {
-    return availableModes(this.manifest.layers);
+    const derived = Object.keys(this.manifest.derived ?? {}).filter((k) => this.isDerivedVat(k));
+    if (!derived.length) return availableModes(this.manifest.layers);
+    const layers: Record<string, LayerSource> = { ...this.manifest.layers };
+    for (const k of derived) layers[k] = this.layerMeta(k)!;
+    return availableModes(layers);
   }
 
   /** Image modes ("Bilder", F13/F14): one per level-0 `rgb` layer, no number shortcut. */
@@ -1084,16 +1191,16 @@ export class Terrain extends Group {
 
   /** Display label (German) for a key: manifest `label_de`, live label, or the key. */
   labelFor(key: string): string {
-    return LIVE_SOURCES[key]?.label ?? this.manifest.layers[key]?.label_de ?? this.manifest.imageLayers?.[key]?.label_de ?? key;
+    return LIVE_SOURCES[key]?.label ?? this.layerMeta(key)?.label_de ?? this.manifest.imageLayers?.[key]?.label_de ?? key;
   }
 
   /** Default display: `vat` if the manifest has it, else live hillshade. */
   defaultDisplay(): string {
-    return this.manifest.layers.vat ? 'vat' : 'live-hillshade';
+    return this.manifest.layers.vat || this.isDerivedVat('vat') ? 'vat' : 'live-hillshade';
   }
 
   isValidDisplay(key: string): boolean {
-    return isLiveKey(key) || this.manifest.layers[key]?.encoding === 'u8' || this.isImageKey(key);
+    return isLiveKey(key) || this.manifest.layers[key]?.encoding === 'u8' || this.isImageKey(key) || this.isDerivedVat(key);
   }
 
   getDisplay(): string {
@@ -1101,7 +1208,7 @@ export class Terrain extends Group {
   }
 
   private freshChannel(key: string): ChannelSettings {
-    const layer = this.manifest.layers[key];
+    const layer = this.layerMeta(key);
     const colormap = defaultColormap(key, layer);
     return {
       colormap,
@@ -1128,7 +1235,7 @@ export class Terrain extends Group {
 
   /** Default (manifest-derived) stretch for a key. */
   defaultStretchFor(key: string): Stretch {
-    return defaultStretch(key, this.manifest.layers[key]);
+    return defaultStretch(key, this.layerMeta(key));
   }
 
   /** Switch the base display (live key or manifest layer key). Unknown keys fall back to hillshade. */
@@ -1198,7 +1305,7 @@ export class Terrain extends Group {
       u.uLensStretch.value.set(st.lo, st.hi, st.gamma);
       u.uLensShade.value = ch.shade ?? fresh.shade;
       u.uLensTint.value.set(...(ch.tint ?? [1, 1, 1]));
-      const layer = this.manifest.layers[key];
+      const layer = this.layerMeta(key);
       if (layer) u.uLayerCRange.value.set(layer.min, layer.max);
     }
     for (const c of this.chunks.values()) this.bindChunk(c);
@@ -1225,7 +1332,7 @@ export class Terrain extends Group {
     const u = this.uniforms;
     const key = this.display;
     const ch = this.channel(key);
-    const layer = this.manifest.layers[key];
+    const layer = this.layerMeta(key);
     u.uBaseSrc.value = LIVE_SRC[key] ?? (this.isImageKey(key) ? ShaderSource.ImageA : ShaderSource.LayerA);
     u.uBaseCmap.value = ch.colormap;
     u.uBaseStretch.value.set(ch.stretch.lo, ch.stretch.hi, ch.stretch.gamma);
@@ -1240,7 +1347,7 @@ export class Terrain extends Group {
       u.uOvlShade.value = o.shade;
       u.uOvlOpacity.value = o.opacity;
       u.uOvlBlend.value = o.blend;
-      const ol = this.manifest.layers[o.key];
+      const ol = this.layerMeta(o.key);
       if (ol) u.uLayerBRange.value.set(ol.min, ol.max);
     } else {
       u.uOvlSrc.value = ShaderSource.Off;
@@ -1258,7 +1365,7 @@ export class Terrain extends Group {
    * requests settled. Chunks show hillshade (or a stand-in) until their texture arrives.
    */
   async ensureLayer(key: string): Promise<void> {
-    const todo = this.drawn.filter((c) => this.hasSource(c.level, key) && !c.hasLayer(key) && !c.layerFailed.has(key));
+    const todo = this.drawn.filter((c) => this.hasSource(c, key) && !c.hasLayer(key) && !c.layerFailed.has(key));
     if (todo.length === 0) return;
     for (const c of todo) {
       const j = this.layerJob(c, key, 0);
@@ -1270,8 +1377,9 @@ export class Terrain extends Group {
 
   // ---- forest / canopy -----------------------------------------------------------------------
 
+  /** DSM available: v1/v2 `height.dsm`, or v3 (no dsm) DTM + CHM (contract "No dsm in v3"). */
   hasCanopyData(): boolean {
-    return !!this.manifest.height.dsm;
+    return !!this.manifest.height.dsm || (this.manifest.version === 3 && !!this.manifest.layers[CHM_KEY]);
   }
 
   /**
@@ -1320,7 +1428,7 @@ export class Terrain extends Group {
       }
     }
     this.schedule([...this.pending]);
-    const bldgDone = (c: TerrainChunk) => !this.manifest.layers[BLDG_KEY] || c.hasLayer(BLDG_KEY) || c.layerFailed.has(BLDG_KEY);
+    const bldgDone = (c: TerrainChunk) => !this.layerSource(c, BLDG_KEY) || c.hasLayer(BLDG_KEY) || c.layerFailed.has(BLDG_KEY);
     return this.waitFor(() =>
       todo.every((c) => ((c.canopy || this.canopyFailed.has(c.key)) && bldgDone(c)) || this.chunks.get(c.key) !== c),
     );

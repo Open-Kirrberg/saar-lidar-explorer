@@ -4,6 +4,8 @@ export type DecodeKind = 'terrarium' | 'u8';
 
 export type WorkerRequest =
   | { type: 'decode'; id: number; url: string; kind: DecodeKind }
+  /** S2: can this browser decode AVIF? (contract "Slim formats": probe once, no fallback files) */
+  | { type: 'probe-avif'; id: number }
   | {
       type: 'boxblur';
       id: number;
@@ -19,4 +21,5 @@ export type WorkerResponse =
   | { type: 'decoded'; id: number; kind: 'terrarium'; width: number; height: number; data: Float32Array }
   | { type: 'decoded'; id: number; kind: 'u8'; width: number; height: number; data: Uint8Array }
   | { type: 'blurred'; id: number; data: Float32Array }
+  | { type: 'probed'; id: number; avif: boolean }
   | { type: 'error'; id: number; message: string };

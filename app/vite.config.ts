@@ -48,9 +48,13 @@ function withSlash(p: string): string {
   return p.endsWith('/') ? p : `${p}/`;
 }
 
-/** AOI datasets = sub-directories of public/data that contain a manifest.json (hundreds of MB). */
+/**
+ * AOI datasets = sub-directories of public/data that contain a manifest.json (hundreds of MB), or
+ * (S2) a catalog.json / overview (catalog + overview + place folders, contract 3.0).
+ */
 function isAoiDir(path: string): boolean {
-  return statSync(path).isDirectory() && existsSync(join(path, 'manifest.json'));
+  if (!statSync(path).isDirectory()) return false;
+  return ['manifest.json', 'catalog.json', 'overview/overview.json'].some((f) => existsSync(join(path, f)));
 }
 
 const MIME: Record<string, string> = {

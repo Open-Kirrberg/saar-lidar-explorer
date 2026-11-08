@@ -15,6 +15,7 @@ import {
   Colormap,
   COLORMAP_LABELS,
   IMAGE_PRESETS,
+  adaptPreset,
   legendGradient,
   mixTexts,
   mixToOpacity,
@@ -132,7 +133,8 @@ export function createReliefPanel(ctx: ReliefPanelContext): ReliefPanelApi {
   };
   for (const m of modes) modeButton(m, modeBox);
   for (const m of images) modeButton(m, imageBox);
-  const usablePresets = [...PRESETS, ...IMAGE_PRESETS].filter(
+  // v3: presets that used baked slrm/slope use the derived live modes (adaptPreset).
+  const usablePresets = [...PRESETS, ...IMAGE_PRESETS].map((p) => adaptPreset(p, (k) => terrain.isValidDisplay(k), terrain.manifest.derived)).filter(
     (p) => terrain.isValidDisplay(p.base) && (!p.overlay || terrain.isValidDisplay(p.overlay.key)),
   );
   top.querySelector<HTMLElement>('.rl-section-label .rl-dim')!.textContent =

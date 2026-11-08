@@ -46,6 +46,9 @@ export interface SharedTerrainUniforms {
   uLayerBRange: IUniform<Vector2>;
   /** 1 = write raw physical values (auto-contrast pass). */
   uValuePass: IUniform<number>;
+  /** Decode ranges (min, max) of the live-VAT inputs svf / opns_pos (fixed in v3). */
+  uVatSvfRange: IUniform<Vector2>;
+  uVatOpnRange: IUniform<Vector2>;
   uFogColor: IUniform<Vector3>;
   uFogDensity: IUniform<number>;
   uLodTint: IUniform<number>;
@@ -111,6 +114,12 @@ export interface ChunkUniforms {
   uHasLowpass: IUniform<number>;
   uSkirtDepth: IUniform<number>;
   uLodColor: IUniform<Color>;
+  /** Quadrants (bit a + 2b) covered by drawn children → discarded (partial parent, S2). */
+  uQuadMask: IUniform<number>;
+  /** Live VAT inputs (u8 apron textures) + flag (both resident). */
+  uVatSvf: IUniform<Texture>;
+  uVatOpn: IUniform<Texture>;
+  uHasVatIn: IUniform<number>;
 }
 
 /** Per-chunk canopy uniforms. */
@@ -150,6 +159,8 @@ export function createSharedUniforms(hRef: number, chunkSize: number): SharedTer
     uOvlBlend: { value: BlendMode.Normal },
     uLayerBRange: { value: new Vector2(0, 1) },
     uValuePass: { value: 0 },
+    uVatSvfRange: { value: new Vector2(0.6, 1) },
+    uVatOpnRange: { value: new Vector2(60, 95) },
     uFogColor: { value: FOG_COLOR.clone() },
     uFogDensity: { value: 1 / 7000 },
     uLodTint: { value: 0 },

@@ -61,6 +61,7 @@ export const LINK_ONLY_HOSTS: readonly string[] = [
   'www.shop.lvgl.saarland.de',
   'www.geoportal.rlp.de', // V2.9 dataset URIs (RLP ALKIS WFS, DOP20 WMS)
   'geo4.service24.rlp.de',
+  'www.bkg.bund.de', // S1: BKG VG25 credit link in „Quellen und Lizenzen“
 ];
 
 /** Hosts of the deployment itself (site + data repositories on GitHub Pages) and local dev. */

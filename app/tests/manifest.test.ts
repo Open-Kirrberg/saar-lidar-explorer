@@ -163,7 +163,7 @@ describe('manifest levels (contract v2)', () => {
   });
 
   it('rejects unknown versions', () => {
-    expect(() => validateManifest({ ...base, version: 3 })).toThrow(/version/);
+    expect(() => validateManifest({ ...base, version: 4 })).toThrow(/version/);
   });
 
   it('vector heights: baked is kept, anything else dropped', () => {

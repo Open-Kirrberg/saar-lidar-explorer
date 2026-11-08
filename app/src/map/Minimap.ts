@@ -18,6 +18,7 @@ import { borderNdc, footprintFromRays } from './footprint';
 import { DOP_WMS, mergeOverlayPrefs, syncOverlayPrefs, xyzOverlay } from './overlays';
 import { resolveDataPath } from '../data/urls';
 import type { RayHit, V3 } from './footprint';
+import { tileLabelPoint, tileOutlineRings } from '../catalog/outline';
 
 const PREFS_KEY = 'sle.map.v2';
 /** Dispatched synchronously when the full-screen map opens / closes (the shell re-places its corner). */
@@ -259,7 +260,38 @@ export class Minimap {
       maxZoom: 20,
       attribution: cadastreAttr,
     } as L.WMSOptions);
-    overlays[AOI_OVERLAY] = this.aoiOutline();
+    // S2 catalog mode: stacked per-place relief tiles (alpha 0 outside each place's own tiles).
+    if (ctx.catalog) {
+      const group = L.layerGroup();
+      const added = new Set<string>();
+      let name = 'Relief: VAT (Kombination)';
+      const addPlaces = () => {
+        for (const r of ctx.catalog!.places.ready()) {
+          const x = r.manifest.xyz?.vat;
+          if (!x || added.has(r.place.id)) continue;
+          added.add(r.place.id);
+          const b = x.bounds;
+          const layer = L.tileLayer(resolveDataPath(r.baseUrl, x.url), {
+            minZoom: 10,
+            maxZoom: 20,
+            minNativeZoom: x.minZoom,
+            maxNativeZoom: x.maxZoom,
+            bounds: b ? L.latLngBounds(b) : undefined,
+            opacity: this.prefs.reliefOpacity,
+            attribution: esc(r.manifest.attribution.split(';')[0] ?? ''),
+            className: 'mm-relief',
+          });
+          this.reliefLayers.push(layer);
+          group.addLayer(layer);
+        }
+      };
+      const first = ctx.catalog.places.ready().find((r) => r.manifest.xyz?.vat);
+      if (first) name = xyzOverlay('vat', first.manifest.xyz!.vat, first.manifest.layers, first.manifest.imageLayers).name;
+      addPlaces();
+      ctx.catalog.places.onChange(addPlaces);
+      overlays[name] = group;
+    }
+    overlays[AOI_OVERLAY] = ctx.catalog ? this.catalogOutlines() : this.aoiOutline();
     overlays[FOCUS_OVERLAY] = this.focusOutlines();
     overlays[POI_OVERLAY] = this.poiLayer;
     overlays[MARKER_OVERLAY] = this.markerLayer;
@@ -693,6 +725,37 @@ export class Minimap {
       `Geladenes Gebiet: ${esc(name)}<br><small>${km(size.width)} × ${km(size.height)} km</small>`,
       { sticky: true },
     );
+  }
+
+  /**
+   * S2 catalog mode: outline (union of owned 1 km tiles) and name of every catalog place. 3D places
+   * solid, places without 3D yet dashed („Ortspate gesucht“).
+   */
+  private catalogOutlines(): L.LayerGroup {
+    const g = L.layerGroup();
+    for (const p of this.ctx.catalog!.catalog.places) {
+      const rings = tileOutlineRings(p.bbox, p.tiles).map((r) => this.toLatLngs(r));
+      if (!rings.length) continue;
+      const has3d = p.status !== 'stats';
+      L.polyline(rings, {
+        color: has3d ? '#e03c31' : '#7d7d7d',
+        weight: has3d ? 2 : 1.5,
+        dashArray: has3d ? undefined : '5 5',
+        interactive: true,
+        bubblingMouseEvents: true, // clicks still fly the camera
+      })
+        .bindTooltip(`${esc(p.name_de)}${has3d ? (p.status === 'building' ? ' (im Aufbau)' : '') : ' – Ortspate gesucht'}`, { sticky: true })
+        .addTo(g);
+      const lp = tileLabelPoint(p.bbox, p.tiles);
+      if (lp) {
+        const ll = utmToWgs84(lp[0], lp[1]);
+        L.tooltip({ permanent: true, direction: 'center', className: 'gmm-place-name', interactive: false })
+          .setLatLng([ll.lat, ll.lon])
+          .setContent(esc(p.name_de))
+          .addTo(g);
+      }
+    }
+    return g;
   }
 
   /** Dashed outlines of the focus areas (pipeline/aois.toml), German tooltips. */

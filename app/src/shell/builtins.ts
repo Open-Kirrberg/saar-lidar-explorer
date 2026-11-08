@@ -126,7 +126,7 @@ export function registerBuiltins(shell: ShellApi, d: BuiltinDeps): void {
     tier: 'standard',
     panelTier: 'labor',
     label: 'Wege (OSM) in 3D',
-    available: () => !!m.vectors,
+    available: () => !!m.vectors || !!ctx.catalog, // S2 catalog mode: per-place OSM files
     mount(h) {
       initVectorLayers(ctx, h.panel);
     },

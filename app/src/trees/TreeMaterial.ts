@@ -46,7 +46,9 @@ float falloff(float d) { return d <= uLod.x ? 1.0 : (uLod.x / d) * (uLod.x / d);
 float density(float d) { return falloff(d) * (1.0 - smoothstep(0.85 * uLod.y, uLod.y, d)); }
 
 void main() {
-  vec3 anchor = vec3(iA.x, uHRef + (iA.y - uHRef) * uExag, iA.z);
+  // modelMatrix is identity in single-AOI mode; in catalog mode (S2) it carries the place's offset
+  // from the session origin (translation only, session-local metres, never raw UTM).
+  vec3 anchor = vec3(iA.x, uHRef + (iA.y - uHRef) * uExag, iA.z) + modelMatrix[3].xyz;
   float d = distance(cameraPosition, anchor);
   float thr = density(d) * (1.0 + uLod.z);
   float vis = clamp((thr - iB.y) / uLod.z, 0.0, 1.0) * (1.0 - uLensFade);
