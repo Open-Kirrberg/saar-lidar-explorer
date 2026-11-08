@@ -11,6 +11,10 @@ import { isAvifPath } from '../data/manifest';
 import type { Overview } from '../data/overview';
 import { loadOverview } from '../data/overview';
 import { CatalogResolver, sessionRect } from '../terrain/sources';
+import type { CoverageGrid } from '../terrain/coverage';
+import { coverageGrid } from '../terrain/coverage';
+import type { CatalogLeaderboard } from './leaderboard';
+import { loadLeaderboard } from './leaderboard';
 import { PlaceManager } from './PlaceManager';
 import { buildSessionManifest } from './session';
 
@@ -27,6 +31,10 @@ export interface CatalogSession {
   hRef: number;
   /** Start ground point (hash position or the first 3D place's centre). */
   start: { E: number; N: number };
+  /** Owned tiles of all places (any status) over the session rectangle: the terrain is clipped to it. */
+  coverage: CoverageGrid;
+  /** The catalog's `leaderboard` stats-only manifest (🏆 Orte im Vergleich), when it loaded. */
+  leaderboard: CatalogLeaderboard | null;
 }
 
 /** The 3D place under (E, N), else the nearest 3D place by bbox. */
@@ -61,6 +69,8 @@ export async function openCatalogSession(
   opts: { avif: boolean; start?: { E: number; N: number }; onAvifMissing?: () => void },
 ): Promise<CatalogSession> {
   const catalog = await loadCatalog(url);
+  // The leaderboard manifest is tiny; fetched alongside the overview.
+  const leaderboardP = catalog.leaderboardUrl ? loadLeaderboard(catalog.leaderboardUrl) : Promise.resolve(null);
   let overview: Overview | null = null;
   if (catalog.overviewUrl) {
     try {
@@ -88,5 +98,7 @@ export async function openCatalogSession(
   }
   places.update(start.E, start.N);
   const manifest = buildSessionManifest(catalog, overview, rect, topLevel, first);
-  return { catalog, overview, resolver, places, manifest, baseUrl: url.replace(/[^/]*$/, ''), hRef: catalog.height_ref_m, start };
+  const coverage = coverageGrid(catalog.owners.keys(), rect);
+  const leaderboard = await leaderboardP;
+  return { catalog, overview, resolver, places, manifest, baseUrl: url.replace(/[^/]*$/, ''), hRef: catalog.height_ref_m, start, coverage, leaderboard };
 }

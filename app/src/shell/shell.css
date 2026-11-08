@@ -50,6 +50,13 @@
 #hud .hud-stream[hidden] { display: none; }
 @keyframes hud-spin { to { transform: rotate(360deg); } }
 .hud-extra:not(:empty) { margin-top: 6px; }
+/* S2 catalog mode: place without detailed 3D (catalog/placeHint.ts) */
+.sle-place-hint { font-size: 12px; line-height: 1.35; color: var(--ui-dim); white-space: normal; }
+.sle-place-hint[hidden] { display: none; }
+.sle-place-hint b { color: var(--ui-fg); font-weight: 600; }
+.sle-place-hint-link { pointer-events: auto; color: var(--ui-accent); text-decoration: none; white-space: nowrap; }
+.sle-place-hint-link:hover, .sle-place-hint-link:focus-visible { text-decoration: underline; }
+.sle-place-hint-link[hidden] { display: none; }
 #hud table { border-collapse: collapse; font-size: 12.5px; }
 #hud td { padding: 1px 0; }
 #hud td:first-child { color: var(--ui-dim); padding-right: 10px; }

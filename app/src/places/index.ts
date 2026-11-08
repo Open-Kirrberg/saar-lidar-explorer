@@ -10,6 +10,7 @@
  * S1: with a valid `stats_levels` key the card and the full view get a level switch Gemeinden / Ortsteile
  * (levels.ts loads the other level lazily from its AOI, e.g. the stats-only AOI `saarland`).
  */
+import { applyCatalogStatus, levelBaseUrl } from '../catalog/leaderboard';
 import type { AppContext } from '../main';
 import { mountPlaceStats } from './PlacesPanel';
 
@@ -17,6 +18,23 @@ export { parseManifestStats } from './placesData';
 export type { ManifestStats } from './placesData';
 
 export function registerPlaceStats(ctx: AppContext): () => void {
+  // S2 catalog mode: the catalog's `leaderboard` stats-only manifest (Gemeinde level, its
+  // `stats_levels` resolved next to it), catalog status over stats status (join on AGS).
+  const cat = ctx.catalog;
+  const lb = cat?.leaderboard;
+  if (cat && lb) {
+    return ctx.shell.registerFeature({
+      id: 'place-stats',
+      tier: 'standard',
+      label: 'Orte im Vergleich',
+      mount: (h) =>
+        mountPlaceStats(h, lb.meta, lb.levels, {
+          baseUrl: lb.baseUrl,
+          levelBaseUrl: (aoi) => levelBaseUrl(lb, aoi),
+          adjust: (d) => void applyCatalogStatus(d, cat.catalog),
+        }),
+    });
+  }
   return ctx.shell.registerFeature({
     id: 'place-stats',
     tier: 'standard',

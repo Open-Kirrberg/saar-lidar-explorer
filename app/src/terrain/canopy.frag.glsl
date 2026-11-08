@@ -35,6 +35,10 @@ vec3 canopyRamp(float t) {
 }
 
 void main() {
+#ifdef COVERAGE
+  float covHaze = coverageHaze(vWorld); // catalog mode: no canopy outside the owned tiles
+  if (covHaze >= 0.999) discard;
+#endif
   float h;
   vec2 g;
   sampleHeight(uHeight, vPx, h, g);
@@ -61,5 +65,9 @@ void main() {
   col *= mix(1.0, 0.4, smoothstep(1.5, 4.0, length(g)));
 
   float a = uCanopyOpacity * smoothstep(uCanopyMin, uCanopyMin + 1.5, chm);
-  fragColor = vec4(applyFog(col, vWorld, uFogColor, uFogDensity), a);
+  col = applyFog(col, vWorld, uFogColor, uFogDensity);
+#ifdef COVERAGE
+  col = mix(col, uFogColor, covHaze);
+#endif
+  fragColor = vec4(col, a);
 }

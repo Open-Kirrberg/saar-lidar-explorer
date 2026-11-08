@@ -281,6 +281,14 @@ vec3 blendColor(vec3 b, vec3 o, int mode) {
 }
 
 void main() {
+#ifdef COVERAGE
+  // Catalog mode: outside the owned tiles plain haze (no relief, never in the auto-contrast pass).
+  float covHaze = coverageHaze(vWorld);
+  if (covHaze >= 0.999) {
+    fragColor = uValuePass == 1 ? vec4(0.0) : vec4(uFogColor, 1.0);
+    return;
+  }
+#endif
   if (uQuadMask != 0) {
     // Partial parent: quadrant (a, b) split at the chunk's half (owned pixels 0.5 … n + 0.5).
     float split = 0.5 * uChunkSize + 0.5;
@@ -358,6 +366,9 @@ void main() {
 
   col = mix(col, col * uLodColor, uLodTint);
   col = applyFog(col, vWorld, uFogColor, uFogDensity);
+#ifdef COVERAGE
+  col = mix(col, uFogColor, covHaze); // fade into the haze at the edge of the catalog area
+#endif
   if (glow > 0.0) {
     float pulse = 0.78 + 0.22 * sin(uGlowTime * 3.2);
     float a = clamp(glow * pulse, 0.0, 1.0);

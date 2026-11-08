@@ -45,7 +45,8 @@ import { AoiResolver } from './sources';
 import { CHM_KEY, dsmFromChm } from './canopyChm';
 import type { ChunkSource, SourceResolver } from './sources';
 import { BLDG_KEY, TerrainChunk } from './TerrainChunk';
-import { createSharedUniforms } from './TerrainMaterial';
+import { addCoverageUniforms, createSharedUniforms } from './TerrainMaterial';
+import type { CoverageGrid } from './coverage';
 import type { SharedTerrainUniforms } from './TerrainMaterial';
 import {
   availableModes,
@@ -171,6 +172,8 @@ export interface TerrainOptions {
   resolver?: SourceResolver;
   /** hRef of the exaggeration rule (catalog mode: catalog `height_ref_m`; default: heightRange.min). */
   hRef?: number;
+  /** Catalog mode: owned-tile mask over the terrain rectangle; fragments outside are clipped (coverage.ts). */
+  coverage?: CoverageGrid;
 }
 
 interface Job {
@@ -327,6 +330,7 @@ export class Terrain extends Group {
     this.heights = new LevelHeights(this.levelGrids.map((g, k) => new HeightQuery(g, this.levels[k].chunks.nx, this.levels[k].chunks.ny)));
     this.canopyHeights = new HeightQuery(this.grid, manifest.chunks.nx, manifest.chunks.ny);
     this.uniforms = createSharedUniforms(opts.hRef ?? manifest.heightRange.min, manifest.chunkSize);
+    if (opts.coverage) addCoverageUniforms(this.uniforms, opts.coverage, this.aoi);
     const svf = manifest.layers.svf;
     const opn = manifest.layers.opns_pos;
     if (svf) this.uniforms.uVatSvfRange.value.set(svf.min, svf.max);

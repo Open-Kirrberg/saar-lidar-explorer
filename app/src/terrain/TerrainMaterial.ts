@@ -1,10 +1,12 @@
-import { Color, DataTexture, FloatType, GLSL3, NearestFilter, RedFormat, ShaderMaterial, UnsignedByteType, Vector2, Vector3, Vector4 } from 'three';
+import { ClampToEdgeWrapping, Color, DataTexture, FloatType, GLSL3, LinearFilter, NearestFilter, RedFormat, ShaderMaterial, UnsignedByteType, Vector2, Vector3, Vector4 } from 'three';
 import type { IUniform, Texture } from 'three';
 import canopyFragment from './canopy.frag.glsl?raw';
 import heightSample from './heightSample.glsl?raw';
 import fragmentShader from './terrain.frag.glsl?raw';
 import vertexShader from './terrain.vert.glsl?raw';
 import { BlendMode, Colormap, ShaderSource } from './relief';
+import type { CoverageGrid } from './coverage';
+import { COVERAGE_EDGE, COVERAGE_FADE_END, COVERAGE_SINK_LO } from './coverage';
 
 export { Colormap } from './relief';
 
@@ -81,6 +83,9 @@ export interface SharedTerrainUniforms {
   uGlowMix: IUniform<number>;
   /** Metres per pixel at 1 m distance (2·tan(fov/2) / drawing-buffer height): minimum glow size. */
   uGlowPx: IUniform<number>;
+  // Catalog mode only (addCoverageUniforms, coverage.ts): `uCoverage` (owned-tile mask over the session
+  // rectangle, R8 linear) and `uCoverageSize` (rectangle size in metres) via the index signature;
+  // present → the chunk materials compile with `COVERAGE` and clip to it.
 }
 
 /** Max candidate glows per frame (uniform array size; keep in sync with GLOW_MAX in terrain.frag.glsl). */
@@ -186,12 +191,43 @@ export function createSharedUniforms(hRef: number, chunkSize: number): SharedTer
   };
 }
 
+/** Add the catalog-mode coverage mask (`uCoverage`, `uCoverageSize`) to the shared uniforms. */
+export function addCoverageUniforms(shared: SharedTerrainUniforms, g: CoverageGrid, size: { width: number; height: number }): void {
+  const t = new DataTexture(g.data, g.w, g.h, RedFormat, UnsignedByteType);
+  t.minFilter = t.magFilter = LinearFilter;
+  t.wrapS = t.wrapT = ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  t.needsUpdate = true;
+  shared.uCoverage = { value: t };
+  shared.uCoverageSize = { value: new Vector2(size.width, size.height) };
+}
+
+const f3 = (v: number) => v.toFixed(3);
+/**
+ * GLSL of the coverage mask (catalog mode): `coverageHaze(world)` = haze share 0 … 1 (1 outside the
+ * owned tiles; CPU reference: coverage.ts `coverageHaze`).
+ */
+const COVERAGE_DECL = `#define COVERAGE
+#define COVERAGE_EDGE ${f3(COVERAGE_EDGE)}
+#define COVERAGE_SINK_LO ${f3(COVERAGE_SINK_LO)}
+uniform sampler2D uCoverage;
+uniform vec2 uCoverageSize;
+`;
+const COVERAGE_GLSL = `${COVERAGE_DECL}float coverageHaze(vec3 world) {
+  float c = texture(uCoverage, vec2(world.x, -world.z) / uCoverageSize).r;
+  return 1.0 - smoothstep(${f3(COVERAGE_EDGE)}, ${f3(COVERAGE_FADE_END)}, c);
+}
+`;
+const coveragePrefix = (shared: SharedTerrainUniforms) => (shared.uCoverage ? COVERAGE_GLSL : '');
+/** Vertex shader with the coverage sink (catalog mode) or unchanged. */
+const vertexFor = (shared: SharedTerrainUniforms) => (shared.uCoverage ? COVERAGE_DECL + vertexShader : vertexShader);
+
 /** One material per chunk; shared uniform objects are referenced, so one program serves all chunks. */
 export function createChunkMaterial(shared: SharedTerrainUniforms, chunk: ChunkUniforms): ShaderMaterial {
   return new ShaderMaterial({
     glslVersion: GLSL3,
-    vertexShader,
-    fragmentShader: `#define GLOW_MAX ${GLOW_MAX}\n` + heightSample + '\n' + fragmentShader,
+    vertexShader: vertexFor(shared),
+    fragmentShader: `#define GLOW_MAX ${GLOW_MAX}\n` + heightSample + '\n' + coveragePrefix(shared) + fragmentShader,
     uniforms: { ...shared, ...chunk },
   });
 }
@@ -200,8 +236,8 @@ export function createChunkMaterial(shared: SharedTerrainUniforms, chunk: ChunkU
 export function createCanopyMaterial(shared: SharedTerrainUniforms, chunk: CanopyChunkUniforms): ShaderMaterial {
   return new ShaderMaterial({
     glslVersion: GLSL3,
-    vertexShader,
-    fragmentShader: heightSample + '\n' + canopyFragment,
+    vertexShader: vertexFor(shared),
+    fragmentShader: heightSample + '\n' + coveragePrefix(shared) + canopyFragment,
     uniforms: { ...shared, ...chunk },
   });
 }

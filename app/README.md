@@ -481,6 +481,25 @@ live-lrm r = 20). Canopy and `dsmAt` = DTM + CHM (`terrain/canopyChm.ts`) when t
 hint is shown once (no fallback files). **Vectors:** `densified: false` OSM is densified ≤ 2 m;
 `flurstuecke.lines: 'derived'` → boundary lines from the polygons (`vectors/parcelEdges.ts`).
 **Minimap:** outlines + names of all catalog places, per-place `xyz.vat` tiles stacked.
+**Edge of the catalog area** (`terrain/coverage.ts`, tested). The overview has no no-data marker:
+cells outside the source data are pyramid-filled by the pipeline (flat blocks with stair steps) and
+overview chunks are present when they touch one owned tile, so the coarse levels reach far into
+France / RLP. The terrain therefore gets a coverage mask (one R8 texel per 1 km tile of the session
+rectangle, 255 = owned by any catalog place, sampled bilinearly; shader define `COVERAGE`, catalog
+mode only): within ≈ 200 m of the tile edge the relief fades into the haze colour, outside it is
+drawn as plain unlit haze and its vertices sink to hRef (not discarded: a cut heightfield shows the
+skirts behind it from below). The canopy is discarded there.
+**Parity.** 🏆 *Orte im Vergleich* reads the catalog's `leaderboard` stats-only manifest (Gemeinde
+level; its `stats_levels` AOIs resolve next to it, e.g. `../overall/` for the Ortsteile); catalog
+`status` overrides the stats `status` (join on AGS), `place_aoi` / `aoi_share_pct` are ignored
+(`catalog/leaderboard.ts`, `PlacesPanel` `PlaceStatsSource`). `catalog/placeContent.ts` registers
+the *Bäume* switch, the Baum-Steckbrief over all places' trees (`mountTreeCardFor`, each layer
+picked in its own frame, row „Gemeinde“ from the leaderboard) and the *Gebäude* card + `G`
+(`replaces: 'buildings'`); `window.sleTrees` fans the lens fade out to every place. Over a 'stats'
+place the HUD shows „<Name> · noch kein Detail‑3D · 🙋 Ortspate gesucht“ (link Open-Kirrberg),
+over a 'building' place „3D im Aufbau“ (`catalog/placeHint.ts`, feature `place-hint`). POIs
+(`pois.geojson` at the data root) and zones work unchanged; „nur im Gebiet“ means the session
+rectangle.
 
 ## Wege & Flurstücke (F10, F12)
 
@@ -760,10 +779,14 @@ pnpm run perf:gltf -- --url 'http://127.0.0.1:5241/?aoi=overall'    # baeckerei-
 
 ## Known gaps
 
-- **Katalog-Modus (S2):** no Bäume/Gebäude switches (the stored prefs are honoured), no tree card
-  for place trees, no per-place candidates/POIs/zones/point clouds/historic layers yet; parcel
-  lookup only via the owning place's polygons; lossy layers are not marked „≈“ in probes; live VAT
-  phone GPU cost and Safari/Firefox AVIF not measured.
+- **Katalog-Modus (S2):** no per-place candidates (F15 reads `ctx.manifest.candidates`; needs a
+  per-place loader with the place offset + `options.relict_candidates`), no historic layers, point
+  clouds frozen in both modes (ADR 0020); species / historic forest of the tree card only if a place
+  manifest carries them (Homburg does not); Riesen collecting counts Gemeinde-level Riesen anywhere
+  in the session rectangle; the edge mask works per 1 km tile, so real RLP data beyond the owned
+  tiles is hidden too, and the haze plane ends visibly at the overview bbox (far, near the horizon);
+  parcel lookup only via the owning place's polygons; lossy layers are not marked „≈“ in probes;
+  live VAT phone GPU cost and Safari/Firefox AVIF not measured.
 
 - Messen (F17): no editing of finished measurements (delete + redraw); no measurement import; the rubber band is a straight (not draped) preview; the area is horizontal only (no 3D surface area). Exports are not written by the Export button in automated checks (GeoJSON content was checked via `measurementsToGeoJSON`).
 - Verdachtsflächen (F15): the optional `candidates.mask` class raster is not rendered (outlines/circles only); N/P does not switch the relief preset per class; *Bekannte Orte* (`pois/PoiPanel.ts`) still fly with the old, not exaggeration-aware `flyToSite` (one-line switch to `flyToSiteExag`). Precision of the rule-set-2 coarse candidates is unknown (2 inspected by eye). The mask raster is not drawn. Clicking a candidate circle or a point-cloud outline on the minimap no longer also triggers the map's click-to-fly (`bubblingMouseEvents: false`, v1.0.1; verified by code path, not clicked in a browser).

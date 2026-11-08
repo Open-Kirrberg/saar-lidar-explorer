@@ -28,6 +28,12 @@ void main() {
   float y = uHRef + (h - uHRef) * uExag;
   if (position.y < 0.0) y -= uSkirtDepth;
   vec4 wp = modelMatrix * vec4(p.x, y, p.y, 1.0);
+#ifdef COVERAGE
+  // Catalog mode: outside the owned tiles the (pyramid-filled) overview terrain sinks to hRef, so its
+  // plateaus never stand against the sky or occlude real terrain; drawn as plain haze (fragment).
+  float cv = textureLod(uCoverage, vec2(wp.x, -wp.z) / uCoverageSize, 0.0).r;
+  wp.y = mix(uHRef - (position.y < 0.0 ? uSkirtDepth : 0.0), wp.y, smoothstep(COVERAGE_SINK_LO, COVERAGE_EDGE, cv));
+#endif
   vPx = p;
   vWorld = wp.xyz;
   gl_Position = projectionMatrix * viewMatrix * wp;

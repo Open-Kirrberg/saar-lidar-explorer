@@ -40,6 +40,8 @@ import type { ManifestForestHist, PickedTree } from './treeFacts';
 import { ageGroup, speciesAt, speciesPixel, speciesWording, treeAge, treeGroup } from './treeSpecies';
 import type { ManifestSpecies } from './treeSpecies';
 import type { TreeLayer } from './TreeLayer';
+import type { Manifest } from '../data/manifest';
+import type { ManifestStats } from '../places/placesData';
 import './treeCard.css';
 
 const SEL_GROUP = 'tree-card';
@@ -122,34 +124,74 @@ declare global {
   }
 }
 
+/**
+ * One pickable tree layer with its data context: single-AOI = the AOI (offset 0); catalog mode = a
+ * place (its v3 manifest, base URL and the offset of its Group from the session origin).
+ */
+export interface TreeCardSource {
+  layer: TreeLayer;
+  manifest: Manifest;
+  baseUrl: string;
+  /** World position of the layer's parent (place Group), x / z in the session frame. */
+  offset: { x: number; z: number };
+}
+
+/** Where the Gemarkung row comes from (stats-only manifest key + its base URL). */
+export interface TreeCardStats {
+  meta: ManifestStats;
+  baseUrl: string;
+  /** Row label (default „Gemarkung“; catalog mode: „Gemeinde“). */
+  rowLabel?: string;
+}
+
+/** Single-AOI: the AOI's one tree layer and its own `stats`. */
 export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
+  const { manifest, terrain } = h.ctx;
+  const src: TreeCardSource[] = [{ layer, manifest, baseUrl: terrain.baseUrl, offset: { x: 0, z: 0 } }];
+  return mountTreeCardFor(h, () => src, manifest.stats ? { meta: manifest.stats, baseUrl: terrain.baseUrl } : null);
+}
+
+type CardCtx = { places: { data: PlacesData; outlines: Outlines } | null; forest: ForestMask | null; species: SpeciesGrid | null };
+
+/** Baum-Steckbrief over any number of tree layers (catalog mode: one per place). */
+export function mountTreeCardFor(h: FeatureHost, sources: () => readonly TreeCardSource[], stats: TreeCardStats | null): () => void {
   const { ctx, services } = h;
-  const { manifest, terrain, camera, renderer } = ctx;
-  const origin = manifest.origin;
+  const { terrain, camera, renderer } = ctx;
   const canvas = renderer.domElement;
   const app = document.getElementById('app');
+  const rowLabel = stats?.rowLabel ?? 'Gemarkung';
 
   // ---- lazily loaded context data -------------------------------------------------------------------
   let placesP: Promise<{ data: PlacesData; outlines: Outlines } | null> | null = null;
   const places = () =>
     (placesP ??= (async () => {
-      const st = manifest.stats;
+      const st = stats?.meta;
       if (!st) return null;
       try {
-        const data = parsePlacesFile(await fetchJson(terrain.baseUrl + st.url));
+        const data = parsePlacesFile(await fetchJson(stats!.baseUrl + st.url));
         if (!data) return null;
-        const outlines = st.geometry ? parseOutlines(await fetchJson(terrain.baseUrl + st.geometry)) : new Map();
+        const outlines = st.geometry ? parseOutlines(await fetchJson(stats!.baseUrl + st.geometry)) : new Map();
         return { data, outlines };
       } catch (err) {
         console.warn('[trees] places not loaded (card shows no Gemarkung):', err);
         return null;
       }
     })());
-  let forestP: Promise<ForestMask | null> | null = null;
-  const forest = () => (forestP ??= manifest.forest_hist ? loadForestMask(terrain.baseUrl, manifest.forest_hist) : Promise.resolve(null));
-  let speciesP: Promise<SpeciesGrid | null> | null = null;
-  const speciesGrid = () => (speciesP ??= manifest.species ? loadSpeciesGrid(terrain.baseUrl, manifest.species) : Promise.resolve(null));
-  const aoiFrame = { E0: origin.E0, N0: origin.N0, heightM: manifest.size.height * manifest.cellSize };
+  /** Per source (base URL): forest mask + species grid, loaded once. */
+  const perSource = new Map<string, { forest: Promise<ForestMask | null>; species: Promise<SpeciesGrid | null>; loaded: CardCtx | null }>();
+  const sourceData = (s: TreeCardSource) => {
+    let d = perSource.get(s.baseUrl);
+    if (!d) {
+      const m = s.manifest;
+      d = {
+        forest: m.forest_hist ? loadForestMask(s.baseUrl, m.forest_hist) : Promise.resolve(null),
+        species: m.species ? loadSpeciesGrid(s.baseUrl, m.species) : Promise.resolve(null),
+        loaded: null,
+      };
+      perSource.set(s.baseUrl, d);
+    }
+    return d;
+  };
 
   // ---- card -------------------------------------------------------------------------------------------
   const card = el('section', { class: 'sle-tree-card', role: 'dialog', 'aria-label': 'Baum-Steckbrief' });
@@ -194,11 +236,12 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
   window.addEventListener('resize', place);
 
   let current: PickedTree | null = null;
-  let loaded: { places: { data: PlacesData; outlines: Outlines } | null; forest: ForestMask | null; species: SpeciesGrid | null } | null = null;
+  let curSrc: TreeCardSource | null = null;
   let renderSeq = 0;
 
   const close = () => {
     current = null;
+    curSrc = null;
     renderSeq++;
     card.hidden = true;
     card.replaceChildren();
@@ -210,10 +253,10 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
   const row = (label: string, value: Node | string, hint?: string, ...extra: Array<Node | string>) =>
     el('div', { class: 'sle-tree-kv' }, el('dt', { text: label, title: hint }), el('dd', {}, value, ...extra));
 
-  const render = (
-    t: PickedTree,
-    ctxData: { places: { data: PlacesData; outlines: Outlines } | null; forest: ForestMask | null; species: SpeciesGrid | null } | null,
-  ) => {
+  const render = (t: PickedTree, source: TreeCardSource, ctxData: CardCtx | null) => {
+    const { manifest } = source;
+    const origin = manifest.origin;
+    const aoiFrame = { E0: origin.E0, N0: origin.N0, heightM: manifest.size.height * manifest.cellSize };
     // Species first: the tree group (title, wood density) follows a „wahrscheinlich“ class, not the DOP colour
     // type alone, which reads most conifers as broadleaf (tree-group-v1, review 2026-11-08).
     const sg = ctxData?.species ?? null;
@@ -330,17 +373,17 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
       }
     }
     // Gemarkung
-    if (manifest.stats) {
-      if (!ctxData) dl.append(row('Gemarkung', el('span', { class: 'sle-dim', text: 'lädt …' })));
+    if (stats) {
+      if (!ctxData) dl.append(row(rowLabel, el('span', { class: 'sle-dim', text: 'lädt …' })));
       else if (pl) {
         const link = el('button', { type: 'button', class: 'sle-tree-link', text: 'Orte im Vergleich ›', title: `${placeTitle(pl)} in „Orte im Vergleich“ öffnen` });
         link.addEventListener('click', () => {
           window.dispatchEvent(new CustomEvent(PLACE_OPEN_EVENT, { detail: { id: pl.id } }));
           if (window.innerWidth <= 600) close(); // phones: the place card opens in the bottom sheet
         });
-        dl.append(row('Gemarkung', el('span', { text: placeTitle(pl) }), 'Umriss vereinfacht (10 m)', el('br'), link));
+        dl.append(row(rowLabel, el('span', { text: placeTitle(pl) }), 'Umriss vereinfacht (10 m)', el('br'), link));
       } else if (pd) {
-        dl.append(row('Gemarkung', el('span', { class: 'sle-dim', text: 'nicht im Vergleich' }), 'Keine der verglichenen Gemarkungen'));
+        dl.append(row(rowLabel, el('span', { class: 'sle-dim', text: 'nicht im Vergleich' }), 'Keine der verglichenen Gemarkungen'));
       }
     }
     dl.append(row('Baum-Nr.', String(t.id), 'Aus der Lage der Kronenspitze (1-m-Zelle); kann sich bei einer neuen Befliegung ändern'));
@@ -359,22 +402,24 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
     card.replaceChildren(...out);
   };
 
-  const openTree = (t: PickedTree, screenX = NaN) => {
+  const openTree = (t: PickedTree, source: TreeCardSource, screenX = NaN) => {
     current = t;
+    curSrc = source;
     pickX = screenX;
     const seq = ++renderSeq;
-    render(t, loaded); // context data already in from an earlier card: no „lädt …“ flash
+    const sd = sourceData(source);
+    render(t, source, sd.loaded); // context data already in from an earlier card: no „lädt …“ flash
     card.hidden = false;
     card.scrollTop = 0;
     place();
     const pin = el('div', { class: 'sle-tree-sel', 'aria-hidden': 'true' }, el('span', { text: '▼' }));
     services.labels.set(SEL_ID, SEL_GROUP, t.E, t.N, pin, { lift: t.h + 0.5, maxDistance: 3000 });
     window.dispatchEvent(new CustomEvent(TREE_CARD_OPEN_EVENT, { detail: { id: t.id, E: t.E, N: t.N } }));
-    if (loaded) return;
-    void Promise.all([places(), forest(), speciesGrid()]).then(([p, f, sg]) => {
-      loaded = { places: p, forest: f, species: sg };
+    if (sd.loaded) return;
+    void Promise.all([places(), sd.forest, sd.species]).then(([p, f, sg]) => {
+      sd.loaded = { places: p, forest: f, species: sg };
       if (seq !== renderSeq || current !== t) return;
-      render(t, loaded);
+      render(t, source, sd.loaded);
       place();
     });
   };
@@ -382,25 +427,32 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
   // ---- picking ------------------------------------------------------------------------------------------
   const raycaster = new Raycaster();
   const ndc = new Vector2();
-  const pickTree = (clientX: number, clientY: number, slackPx: number): PickedTree | null => {
+  const pickTree = (clientX: number, clientY: number, slackPx: number): { tree: PickedTree; source: TreeCardSource } | null => {
     const r = canvas.getBoundingClientRect();
     if (!r.width || !r.height) return null;
     ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
     const ray = raycaster.ray;
     const mPerPx = (2 * Math.tan(((camera as { fov?: number }).fov ?? 60) * (Math.PI / 360))) / r.height;
-    const hit = layer.pick(
-      { ox: ray.origin.x, oy: ray.origin.y, oz: ray.origin.z, dx: ray.direction.x, dy: ray.direction.y, dz: ray.direction.z },
-      { slackPerM: slackPx * mPerPx, minApparent: 2.5 / slackPx, maxDistance: PICK_MAX_M },
-    );
-    if (!hit) return null;
+    // Nearest hit over all visible layers; each layer is picked in its own (place-local) frame.
+    let best: { hit: NonNullable<ReturnType<TreeLayer['pick']>>; source: TreeCardSource } | null = null;
+    for (const source of sources()) {
+      if (!source.layer.visible) continue;
+      const hit = source.layer.pick(
+        { ox: ray.origin.x - source.offset.x, oy: ray.origin.y, oz: ray.origin.z - source.offset.z, dx: ray.direction.x, dy: ray.direction.y, dz: ray.direction.z },
+        { slackPerM: slackPx * mPerPx, minApparent: 2.5 / slackPx, maxDistance: PICK_MAX_M },
+      );
+      if (hit && (!best || hit.t < best.hit.t)) best = { hit, source };
+    }
+    if (!best) return null;
+    const { hit, source } = best;
     const ground = terrain.intersectRay(ray, hit.t + 50);
     if (ground && ground.distanceTo(ray.origin) < hit.t - 3) return null; // behind a ridge / the ground
-    return treeFromRow(hit.rows, hit.index, origin);
+    return { tree: treeFromRow(hit.rows, hit.index, source.manifest.origin), source };
   };
 
   const blocked = () =>
-    !layer.visible ||
+    !sources().some((x) => x.layer.visible) ||
     !!app?.classList.contains('marker-mode') ||
     !!app?.classList.contains('measure-mode') ||
     !!app?.classList.contains('sle-zone-active');
@@ -434,7 +486,7 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
       tapTimer = setTimeout(() => {
         tapTimer = undefined;
         const t = pickTree(x, y, 14);
-        if (t) openTree(t, x);
+        if (t) openTree(t.tree, t.source, x);
         else if (current) close();
       }, DOUBLE_TAP_MS);
       return;
@@ -450,7 +502,7 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
       opts.lockOnClick = false; // the controller's own pointerup runs next: no pointer lock for this click
       setTimeout(() => (opts.lockOnClick = lock), 0);
     }
-    openTree(t, x);
+    openTree(t.tree, t.source, x);
   };
   window.addEventListener('pointerdown', onDown, true);
   window.addEventListener('pointerup', onUp, true);
@@ -461,13 +513,14 @@ export function mountTreeCard(h: FeatureHost, layer: TreeLayer): () => void {
   };
   window.addEventListener('keydown', onKey);
   const offFrame = ctx.onFrame(() => {
-    if (current && !layer.visible) close(); // „Bäume“ off, Relikt-Blick or relief-lab canopy on
+    // „Bäume“ off, Relikt-Blick or relief-lab canopy on, or (catalog mode) the place was dropped
+    if (current && (!curSrc || !curSrc.layer.visible || !sources().includes(curSrc))) close();
   });
 
   const api: TreeCardApi = {
     pickAt(x, y) {
       const t = pickTree(x, y, 6);
-      if (t) openTree(t, x);
+      if (t) openTree(t.tree, t.source, x);
       return !!t;
     },
     close,

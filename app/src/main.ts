@@ -17,6 +17,7 @@ import type { AppState, Store } from './state';
 import { createSky } from './terrain/Sky';
 import { installTrees } from './trees';
 import { installPlaceContent } from './catalog/placeContent';
+import { registerPlaceHint } from './catalog/placeHint';
 import { Terrain } from './terrain/Terrain';
 import type { StreamStats } from './terrain/Terrain';
 import { resolveStartAoi } from './ui/startAoi';
@@ -137,7 +138,7 @@ async function main(): Promise<void> {
 
   // Catalog mode: one session origin (= manifest.origin of the session rectangle), places placed by
   // their offset through the resolver, one hRef = catalog height_ref_m.
-  const terrain = new Terrain(manifest, baseUrl, pool, catalog ? { resolver: catalog.resolver, hRef: catalog.hRef } : {});
+  const terrain = new Terrain(manifest, baseUrl, pool, catalog ? { resolver: catalog.resolver, hRef: catalog.hRef, coverage: catalog.coverage } : {});
   terrain.imageAnisotropy = renderer.capabilities.getMaxAnisotropy();
   terrain.renderer = renderer; // GPU apron patches for image layers (seam fix), all tiers
   scene.add(terrain);
@@ -301,8 +302,10 @@ async function main(): Promise<void> {
   registerZones(ctx); // V2.6b: zone portals (Standard), loading screen, enter / leave
   registerPlaceStats(ctx); // 🏆 Orte im Vergleich: card in the „Orte“ drawer (Standard, when manifest.stats)
   installTutorial(ctx); // V2.9 first-flight tutorial: 🟢 Standard, once per profile (ADR 0038)
-  installPlaceContent(ctx); // S2 catalog mode: per-place trees + buildings at their offsets (no-op otherwise)
-  installTrees(ctx); // V2.4 CHM trees: 🟢 Standard feature `trees`, updated via ctx.onFrame (app/README „Bäume“)
+  // S2 catalog mode: per-place trees + buildings at their offsets, with the Bäume / Gebäude switches and
+  // the Baum-Steckbrief (catalog/placeContent.ts); single-AOI mode: the AOI's trees.
+  if (!installPlaceContent(ctx)) installTrees(ctx);
+  else registerPlaceHint(ctx); // S2: „Ortspate gesucht“ in the HUD over places without detailed 3D // V2.4 CHM trees: 🟢 Standard feature `trees`, updated via ctx.onFrame (app/README „Bäume“)
   registerLens(ctx); // V2.5: game look + Relikt-Blick lens (src/lens, ADR 0035)
 
   // ---- frame loop -----------------------------------------------------------------------------

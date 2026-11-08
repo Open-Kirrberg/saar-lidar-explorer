@@ -155,7 +155,20 @@ async function fetchJson(url: string, signal: AbortSignal): Promise<unknown | nu
 
 type Selection = { kind: 'place'; place: Place } | { kind: 'municipality'; mun: Municipality } | null;
 
-export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels?: StatsLevels): () => void {
+/**
+ * Where the stats come from when not from the current AOI (S2 catalog mode: the catalog's
+ * `leaderboard` stats-only manifest, catalog/leaderboard.ts).
+ */
+export interface PlaceStatsSource {
+  /** Base URL (ends in '/') of the stats files `meta.url` / `meta.geometry`. */
+  baseUrl: string;
+  /** Base URL of a level AOI of `stats_levels`. */
+  levelBaseUrl(aoi: string): string;
+  /** Adjust every loaded places file (catalog mode: the catalog `status` wins). */
+  adjust?(data: PlacesData): void;
+}
+
+export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels?: StatsLevels, source?: PlaceStatsSource): () => void {
   const { ctx, services } = h;
   const { terrain, manifest } = ctx;
   const abort = new AbortController();
@@ -1342,7 +1355,10 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels
     const pr = probed.get(lv);
     if (!choice || !pr) return null;
     const ld = await loadLevelData(choice, pr.baseUrl, pr.meta, (u) => fetchJson(u, abort.signal));
-    if (ld) loadedLevels.set(lv, { data: ld.data, outlines: ld.outlines });
+    if (ld) {
+      source?.adjust?.(ld.data);
+      loadedLevels.set(lv, { data: ld.data, outlines: ld.outlines });
+    }
     return ld;
   };
 
@@ -1428,7 +1444,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels
     const ok = await Promise.all(
       all.map(async (c) => {
         if (c.own) return true;
-        const baseUrl = aoiBaseUrl(c.aoi);
+        const baseUrl = source ? source.levelBaseUrl(c.aoi) : aoiBaseUrl(c.aoi);
         const m = await probeLevel(c, baseUrl, (u) => fetchJson(u, abort.signal));
         if (m) probed.set(c.level, { baseUrl, meta: m });
         return !!m;
@@ -1463,7 +1479,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels
   };
 
   // ---- load ----------------------------------------------------------------------------------------------
-  const base = terrain.baseUrl;
+  const base = source?.baseUrl ?? terrain.baseUrl;
   void (async () => {
     try {
       const raw = await fetchJson(base + meta.url, abort.signal);
@@ -1473,6 +1489,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels
         sec.root.hidden = true;
         return;
       }
+      source?.adjust?.(parsed);
       if (parsed.level !== ownLevel) console.warn(`[places] places.json level ${parsed.level} ≠ manifest level ${ownLevel}`);
       data = parsed;
       ownData = parsed;

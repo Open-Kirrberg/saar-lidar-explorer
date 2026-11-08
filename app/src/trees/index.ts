@@ -81,8 +81,8 @@ function writeOn(on: boolean): void {
   }
 }
 
-/** „Bäume“ switch in the settings dialog. */
-function mountSettings(h: FeatureHost, api: TreesApi): () => void {
+/** „Bäume“ switch in the settings dialog (single-AOI and catalog mode). */
+export function mountTreesSettings(h: FeatureHost, api: Pick<TreesApi, 'on' | 'setVisible'>): () => void {
   const id = 'sle-trees-on';
   const box = document.createElement('input');
   box.type = 'checkbox';
@@ -185,7 +185,7 @@ export function installTrees(o: InstallTreesOptions): TreesApi {
     id: TREES_FEATURE.id,
     tier: TREES_FEATURE.tier,
     label: TREES_FEATURE.label,
-    mount: (h) => mountSettings(h, api),
+    mount: (h) => mountTreesSettings(h, api),
   });
   const unregisterCard = o.shell?.registerFeature({
     id: TREE_CARD_FEATURE.id,
