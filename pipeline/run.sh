@@ -44,8 +44,10 @@ for n in "${!STEPS[@]}"; do
     gemeinde-trees) step "gemeinde-trees" uv run python gemeinde_trees.py all ;;  # S1b: LiDAR canopy per Gemeinde, streamed per tile (long, resumable)
     gemeinden-stats) step "gemeinden-stats $AOI" uv run python gemeinden_stats.py "$AOI" ;;   # S1: publish saarland/stats (sle-stats-v1, level gemeinde)
     attribution) step "attribution $AOI" uv run python -c 'import sys, common; print(common.refresh_attribution(sys.argv[1]))' "$AOI" ;;  # manifest-only: heal superseded entries
+    catalog) step "catalog"  sh -c 'uv run python catalog.py ownership && uv run python overview.py && uv run python catalog.py build' ;;  # S2: ownership, central overview, sle-catalog-v1 (app/public/data/orte-katalog)
+    fixture) step "fixture $AOI" uv run python fixture_v3.py ;;                # S2 shared fixture: overview + catalog + README (after the member builds)
     test)  step "tests"      uv run pytest -q ;;
-    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|forest|pois|detect|pointcloud|trees|places|stats-trees|stats-inputs|species|gbif|roofs|forest-age|stats|gemeinden|gemeinde-trees|gemeinden-stats|attribution|test)"; exit 1 ;;
+    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|forest|pois|detect|pointcloud|trees|places|stats-trees|stats-inputs|species|gbif|roofs|forest-age|stats|gemeinden|gemeinde-trees|gemeinden-stats|attribution|catalog|fixture|test)"; exit 1 ;;
   esac
 done
 AOI="${AOIS[${#AOIS[@]}-1]:-$AOI}"

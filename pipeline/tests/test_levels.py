@@ -117,7 +117,9 @@ def test_level0_entry_repeats_top_level():
 
 
 # --------------------------------------------------------------------------- generated output
-_KNOWN = [k for k in tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text()) if k != "defaults"]
+# v1/v2 rectangle AOIs only; v3 places (`place = …`) and groups are checked in tests/test_place_v3.py
+_KNOWN = [k for k, v in tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text()).items()
+          if k != "defaults" and not v.get("place") and not v.get("group")]
 
 
 def _with_levels():

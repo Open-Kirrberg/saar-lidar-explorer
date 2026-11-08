@@ -27,6 +27,15 @@ name = "Stats only"
 bbox = [375000, 5453000, 387000, 5471000]
 stats_only = true
 
+[grp]
+name = "Group"
+group = ["tiles", "tiles2"]
+after = ["fixture"]
+
+[tiles2]
+name = "Tiles 2"
+bbox = [379000, 5460000, 380000, 5461000]
+
 [stats2]
 name = "Stats only, own output"
 bbox = [375000, 5453000, 387000, 5471000]
@@ -96,3 +105,13 @@ def test_run_sh_refuses_tile_step_for_stats_aoi() -> None:
                        timeout=120)
     assert r.returncode != 0
     assert "stats_only" in r.stderr and "=== places" not in r.stdout
+
+
+def test_plan_group_runs_members_then_own_steps(toml: Path) -> None:
+    plan = plan_steps("grp", (), toml)
+    members = [s for s in common.DEFAULT_STEPS if s not in ("pois", "test")]
+    assert plan == [(s, "tiles") for s in members] + [(s, "tiles2") for s in members] + \
+        [("fixture", "grp"), ("test", "grp")]
+    assert plan_steps("grp", ["build", "fixture"], toml) == [("build", "tiles"), ("build", "tiles2"),
+                                                             ("fixture", "grp")]
+    assert plan_steps("grp", ["fixture"], toml) == [("fixture", "grp")]

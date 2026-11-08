@@ -1,0 +1,13 @@
+# S2 catalog (catalog.py build → sle-catalog-v1): per-place status and hosting. Places not listed here are
+# status "stats" („Ortspate gesucht“): no place repo yet, only overview terrain. Ownership is never configured
+# here; it comes from the VG25 outlines (catalog.py ownership, rule largest-share-v1).
+#
+# data_url resolves against the catalog URL (local dev: app/public/data/orte-katalog/catalog.json).
+# relict_candidates mirrors ort.toml (ADR 0053, default false).
+
+[places.homburg]
+status = "3d"
+data_url = "../ort-homburg/"
+repo = "Open-Kirrberg/ort-homburg"
+maintainers = ["huhn511"]
+relict_candidates = true

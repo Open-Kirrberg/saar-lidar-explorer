@@ -398,7 +398,8 @@ def test_along_fraction():
 
 
 # ----------------------------------------------------------------------------- generated output
-_KNOWN = [k for k in tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text()) if k != "defaults"]
+_CFG = tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text())
+_KNOWN = [k for k in _CFG if k != "defaults" and "place" not in _CFG[k]]   # v3 places: test_detect_v3.py
 CAND_AOIS = sorted(k for k in _KNOWN if (APP_DATA / k / "manifest.json").exists()
                    and "candidates" in json.loads((APP_DATA / k / "manifest.json").read_text()))
 

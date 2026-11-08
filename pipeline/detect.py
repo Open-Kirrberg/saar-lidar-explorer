@@ -33,6 +33,12 @@ everything is pure numpy/scipy/skimage on arrays so it is unit-testable on synth
                (≥ 15°) band ≤ 10 m wide, ≥ 30 m long, ≥ 1 m step, flatter ground on both sides (terrace edges);
                edges in an OSM road/rail corridor (buffer + 16 m: embankments, cuttings) are dropped.
 Defaults: candidates written from score 0.3 (--min-score), mask raster from 0.4 (--mask-min-score).
+
+v3 places (contract "Many places (v3, S2)", ADR 0053): a place publishes candidates only when `relict_candidates`
+is set in aois.toml (ort.toml opt-in); without it nothing is computed and a stale `candidates` key/dir is removed.
+With it, detection runs on the whole rectangle and only candidates whose centroid (the feature point) lies in a
+present tile are written (rule 6); the class8 mask is drawn from those and written as WebP lossless
+`candidates/mask/{i}_{j}.webp` for present chunks only (rule 2).
 """
 from __future__ import annotations
 
@@ -54,7 +60,7 @@ from scipy import ndimage
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import dijkstra
 
-from common import APP_DATA, WORK_DIR, load_aoi, update_manifest
+from common import AOI, APP_DATA, WORK_DIR, load_aoi, update_manifest
 
 METHOD = "lrm-rules"
 RULESET_VERSION = 2   # 2: coarse pass for large structures (Q-15); fine rules = version 1
@@ -1610,18 +1616,64 @@ def load_pois(path: Path, grid: Grid) -> list[dict]:
     return out
 
 
-def write_mask_chunks(mask: np.ndarray, out_dir: Path, cs: int) -> list[list[int]]:
+def write_mask_chunks(mask: np.ndarray, out_dir: Path, cs: int, keep=None, fmt: str = "png") -> list[list[int]]:
+    """Non-empty chunks of the class8 mask as 8-bit grey PNG (v1/v2) or WebP lossless (`fmt="webp"`, v3, bit-exact
+    round trip asserted). `keep(i, j)` limits the chunks written (v3: the present chunks)."""
     from PIL import Image
     H, W = mask.shape
     chunks = []
     for j in range(H // cs):
         for i in range(W // cs):
+            if keep is not None and not keep(i, j):
+                continue
             m = mask[j * cs:(j + 1) * cs, i * cs:(i + 1) * cs]
             if m.any():
                 out_dir.mkdir(parents=True, exist_ok=True)
-                Image.fromarray(np.ascontiguousarray(m), mode="L").save(out_dir / f"{i}_{j}.png", compress_level=9)
+                if fmt == "webp":
+                    from encode import save_webp_lossless
+                    save_webp_lossless(out_dir / f"{i}_{j}.webp", m)
+                else:
+                    Image.fromarray(np.ascontiguousarray(m), mode="L").save(out_dir / f"{i}_{j}.png",
+                                                                            compress_level=9)
                 chunks.append([i, j])
     return chunks
+
+
+# ----------------------------------------------------------------------------- v3 places (rules 2 + 6, ADR 0053)
+def publishes_candidates(aoi: AOI) -> bool:
+    """ADR 0053: a v3 place publishes candidates only on opt-in; v1/v2 rectangle AOIs always (as before)."""
+    return not aoi.is_place or bool(aoi.relict_candidates)
+
+
+def own_candidates(aoi: AOI, cands: Sequence[Candidate]) -> list[Candidate]:
+    """Rule 6: a v3 place keeps the candidates whose centroid (E, N) lies in a present tile, so two neighbouring
+    places never publish the same hypothesis. v1/v2 rectangle AOIs keep everything."""
+    if not aoi.is_place:
+        return list(cands)
+    from grid import tile_of_point
+    return [c for c in cands if aoi.present(*tile_of_point(c.E, c.N))]
+
+
+def present_cells(aoi: AOI) -> np.ndarray | None:
+    """Bool raster (rectangle grid, row 0 = north) of the cells in present tiles of a v3 place; None for v1/v2."""
+    if not aoi.is_place:
+        return None
+    m = np.zeros((aoi.height, aoi.width), bool)
+    for e_km, n_km in aoi.owned:
+        c0, r0 = e_km * 1000 - aoi.e0, aoi.n1 - (n_km + 1) * 1000
+        m[r0:r0 + 1000, c0:c0 + 1000] = True
+    return m
+
+
+def retract_candidates(out: Path, reason: str) -> None:
+    """Remove a stale `candidates` key and directory of an AOI (never anything else)."""
+    cdir = out / "candidates"
+    had = cdir.exists() or ("candidates" in json.loads((out / "manifest.json").read_text())
+                            if (out / "manifest.json").exists() else False)
+    shutil.rmtree(cdir, ignore_errors=True)
+    if (out / "manifest.json").exists():
+        update_manifest(out, {}, remove=["candidates"])
+    print(f"no candidates written: {reason}" + (" (stale candidates removed)" if had else ""))
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -1635,7 +1687,11 @@ def main(argv: list[str] | None = None) -> None:
     params = {**PARAMS, "min_score": args.min_score, "mask_min_score": args.mask_min_score}
     T0 = time.time()
     work = WORK_DIR / aoi.key
-    out = APP_DATA / aoi.key
+    out = aoi.data_dir
+    if not publishes_candidates(aoi):
+        retract_candidates(out, f"v3 place {aoi.key!r} has not opted in (`relict_candidates = true` in aois.toml / "
+                                "ort.toml, ADR 0053)")
+        return
     grid = Grid(aoi.e0, aoi.n1, (aoi.height, aoi.width))
     dtm = read_tif(work / "dtm.tif", grid)
     if dtm is None:
@@ -1650,6 +1706,11 @@ def main(argv: list[str] | None = None) -> None:
           flush=True)
     cands = detect(dtm, aoi.e0, aoi.n1, ctx, [(p["id"], p["E"], p["N"]) for p in pois], params,
                    log=lambda m: print(m, flush=True))
+    if aoi.is_place:
+        n_all = len(cands)
+        cands = own_candidates(aoi, cands)
+        pois = [p for p in pois if aoi.present(int(p["E"] // 1000), int(p["N"] // 1000))]
+        print(f"v3 place: {len(cands)} of {n_all} candidates have their centroid in the {len(aoi.owned)} present tiles")
 
     from heights import DtmSampler
     sampler = DtmSampler(dtm.astype(np.float64), aoi.e0, aoi.n1)
@@ -1668,14 +1729,23 @@ def main(argv: list[str] | None = None) -> None:
     }
     if not args.no_mask:
         m = class_mask(cands, grid, params["mask_min_score"])
-        chunks = write_mask_chunks(m, cdir / "mask", aoi.chunk_size)
-        entry["mask"] = {"path": "candidates/mask/{i}_{j}.png", "encoding": "class8",
-                         "minScore": params["mask_min_score"], "chunks": chunks}
+        if aoi.is_place:
+            chunks = write_mask_chunks(m, cdir / "mask", aoi.chunk_size, keep=aoi.chunk_present, fmt="webp")
+            mpath = "candidates/mask/{i}_{j}.webp"
+        else:
+            chunks = write_mask_chunks(m, cdir / "mask", aoi.chunk_size)
+            mpath = "candidates/mask/{i}_{j}.png"
+        entry["mask"] = {"path": mpath, "encoding": "class8", "minScore": params["mask_min_score"], "chunks": chunks}
     entry["label_de"] = LABEL_DE
 
     chm = ctx.chm
-    forest_km2 = float((chm >= params["forest_chm_m"]).sum()) / 1e6 if chm is not None else 0.0
-    open_km2 = aoi.width * aoi.height / 1e6 - forest_km2
+    pres = present_cells(aoi)   # v3: evaluate over the present tiles only (the candidates are limited to them)
+    forest = (chm >= params["forest_chm_m"]) if chm is not None else None
+    if forest is not None and pres is not None:
+        forest &= pres
+    forest_km2 = float(forest.sum()) / 1e6 if forest is not None else 0.0
+    area_km2 = float(pres.sum()) / 1e6 if pres is not None else aoi.width * aoi.height / 1e6
+    open_km2 = area_km2 - forest_km2
     ms = params["min_score"]
     ev = {"all": evaluate(cands, pois, grid, forest_km2, open_km2, min_score=ms),
           "score_ge_0.5": evaluate(cands, pois, grid, forest_km2, open_km2, min_score=0.5),

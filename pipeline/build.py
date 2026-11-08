@@ -18,6 +18,7 @@ import shutil
 import sys
 import time
 import warnings
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import matplotlib.cm
@@ -217,14 +218,57 @@ def compute_relief(dtm: np.ndarray) -> dict:
     out["opns_neg"] = r["opns"].astype(np.float32)
     log("  negative openness", t)
     t = time.time()
-    imgs = {"Sky-View Factor": out["svf"], "Openness - Positive": out["opns_pos"],
-            "Slope gradient": out["slope"], "Hillshade": hs315}
+    out["vat"] = vat_combined(out["svf"], out["opns_pos"], out["slope"], hs315)
+    log("  VAT blend", t)
+    return out
+
+
+def vat_combined(svf: np.ndarray, opns_pos: np.ndarray, slope_deg: np.ndarray, hs315: np.ndarray) -> np.ndarray:
+    """RVT „VAT combined“ = 50 % VAT general over VAT flat (rvt.blend_func, incl. its in-place overlay quirk)."""
+    imgs = {"Sky-View Factor": svf, "Openness - Positive": opns_pos, "Slope gradient": slope_deg, "Hillshade": hs315}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         general = rvt_blend(VAT_GENERAL, imgs)
         flat = rvt_blend(VAT_FLAT, imgs)
-    out["vat"] = rbf.render_images(general, flat, 50).astype(np.float32)
-    log("  VAT blend", t)
+    return rbf.render_images(general, flat, 50).astype(np.float32)
+
+
+VAT_PRESETS_V1 = ((50.0, 68.0, 93.0, 0.7), (15.0, 85.0, 91.0, 0.9))   # (s_max, o_min, o_max, v_min): general, flat
+
+
+def vat_formula_v1(svf: np.ndarray, opns_pos_deg: np.ndarray, dtm: np.ndarray) -> np.ndarray:
+    """Contract method `rvt-vat-combined-v1` in numpy (what the app computes live): VAT from svf, positive openness
+    (degrees) and the gradient of the 1 m DTM (row 0 = north). Used by the tests to bound the live-vs-baked error."""
+    dh_drow, dh_dcol = np.gradient(dtm.astype(np.float64))
+    gx, gy = dh_dcol, -dh_drow            # ∂h/∂E, ∂h/∂N
+    a, e = math.radians(315.0), math.radians(35.0)
+    L = (math.cos(e) * math.sin(a), math.cos(e) * math.cos(a), math.sin(e))
+    norm = np.sqrt(gx * gx + gy * gy + 1.0)
+    hs = np.clip((-gx * L[0] - gy * L[1] + L[2]) / norm, 0, 1)
+    s = np.degrees(np.arctan(np.hypot(gx, gy)))
+    out = np.zeros(dtm.shape)
+    for s_max, o_min, o_max, v_min in VAT_PRESETS_V1:
+        r1 = 0.5 * (1 - np.clip(s / s_max, 0, 1)) + 0.5 * hs
+        o = np.clip((opns_pos_deg - o_min) / (o_max - o_min), 0, 1)
+        r2 = np.where(r1 > 0.5, 1 - (1 - 2 * (r1 - 0.5)) * (1 - o), 2 * r1 * o)
+        v = np.clip((svf - v_min) / (1 - v_min), 0, 1)
+        out += 0.5 * (0.75 * r2 + 0.25 * v * r2)
+    return out
+
+
+def compute_relief_v3(dtm: np.ndarray) -> dict:
+    """v3 relief of one tile window: svf, opns_pos, opns_neg (r = 10 m, 16 directions) and the internal 1 m VAT
+    (only its level-1 block mean is published). Every value depends on heights within 11 m (locality rule)."""
+    s = PARAMS["svf"]
+    slope = np.degrees(rvt.vis.slope_aspect(dtm, resolution_x=1, resolution_y=1, output_units="radian")["slope"])
+    hs315 = rvt.vis.hillshade(dtm, 1, 1, sun_azimuth=315, sun_elevation=35).astype(np.float32)
+    r = rvt.vis.sky_view_factor(dtm, resolution=1, compute_svf=True, compute_opns=True,
+                                svf_n_dir=s["n_dir"], svf_r_max=s["r_max_m"], svf_noise=s["noise"])
+    out = {"svf": r["svf"].astype(np.float32), "opns_pos": r["opns"].astype(np.float32)}
+    r = rvt.vis.sky_view_factor(-dtm, resolution=1, compute_svf=False, compute_opns=True,
+                                svf_n_dir=s["n_dir"], svf_r_max=s["r_max_m"], svf_noise=s["noise"])
+    out["opns_neg"] = r["opns"].astype(np.float32)
+    out["vat"] = vat_combined(out["svf"], out["opns_pos"], slope.astype(np.float32), hs315)
     return out
 
 
@@ -280,14 +324,287 @@ def save_previews(aoi, layers: dict, ranges: dict):
     Image.fromarray(rgba[..., :3]).save(PREVIEW_DIR / f"{aoi.key}_chm.jpg", quality=72, optimize=True)
 
 
+# ============================================================================= v3 place build (contract "Many places")
+# Fixed SL − RLP height offset applied to every RLP fill pixel in v3. v1/v2 measure it per AOI (median over the
+# overlap), which makes heights depend on the AOI extent; v3 needs a constant (locality rule). Value: the median
+# measured over homburg-gemeinde (58 M overlap px) and overall (23 M px), both −0.06 m (karlsberg −0.07).
+RLP_OFFSET_V3_M = -0.06
+V3_LAYERS = {  # key → file format (contract "Slim formats"): data layers lossless, visual layers AVIF q90
+    "svf": "avif", "opns_pos": "avif", "opns_neg": "avif", "chm": "webp", "mask": "webp"}
+V3_LAYER_ORDER = ["svf", "opns_pos", "opns_neg", "chm", "mask"]
+V3_DERIVED = {
+    "hillshade": {"method": "live-hillshade", "label_de": "Schummerung"},
+    "slope": {"method": "live-slope", "unit": "deg", "label_de": "Hangneigung"},
+    "slrm": {"method": "live-lrm", "params": {"radius_m": 20}, "unit": "m", "label_de": "Lokales Relief"},
+    "vat": {"method": "rvt-vat-combined-v1", "inputs": ["svf", "opns_pos"], "label_de": "VAT (Kombination)"},
+}
+
+
+def v3_layer_entry(key: str, path: str) -> dict:
+    from grid import FIXED_RANGES
+    label, unit, desc = LAYER_META[key]
+    lo, hi = FIXED_RANGES[key]
+    e = {"path": path, "encoding": "u8", "min": lo, "max": hi}
+    if unit:
+        e["unit"] = unit
+    if path.endswith(".avif"):
+        e["lossy"] = True
+    e["label_de"] = label
+    e["description"] = desc
+    return e
+
+
+# v3: heights below this are source errors, not terrain (SL 2025 tiles 343_5457 and 327_5485 hold ≈ 100–200
+# pixels between −0.26 and 100 m, holes of a few hundred px; the lowest real terrain of the catalog area is ≈ 137 m
+# at the Moselle). Treated as no data (nearest fill, mask 1).
+MIN_VALID_HEIGHT_M = 100.0
+
+
+def fill_heights(sl: np.ndarray, rlp: np.ndarray, off: float) -> tuple[np.ndarray, np.ndarray]:
+    """SL first, RLP + offset where SL has no data, nearest fill for the rest (within the given array only).
+    Returns (dtm float32, mask: 0 = SL, 0.5 = RLP, 1 = interpolated)."""
+    sl = np.where(sl < MIN_VALID_HEIGHT_M, np.nan, sl)
+    rlp = np.where(rlp < MIN_VALID_HEIGHT_M, np.nan, rlp)
+    use_rlp = ~np.isfinite(sl) & np.isfinite(rlp)
+    dtm = np.where(use_rlp, rlp + np.float32(off), sl).astype(np.float32)
+    mask = np.zeros(sl.shape, np.float32)
+    mask[use_rlp] = 0.5
+    gap = ~np.isfinite(dtm)
+    mask[gap] = 1.0
+    if gap.all():
+        raise ValueError("no height data in window")
+    return fill_nearest(dtm), mask
+
+
+def fill_surface(dsl: np.ndarray, drlp: np.ndarray, dtm: np.ndarray, off: float) -> np.ndarray:
+    dsl = np.where(dsl < MIN_VALID_HEIGHT_M, np.nan, dsl)
+    drlp = np.where(drlp < MIN_VALID_HEIGHT_M, np.nan, drlp)
+    use = ~np.isfinite(dsl) & np.isfinite(drlp)
+    dsm = np.where(use, drlp + np.float32(off), dsl)
+    dsm = np.where(np.isfinite(dsm), dsm, dtm)
+    return np.maximum(dsm, dtm - 0.5).astype(np.float32)
+
+
+def tile_window(t: tuple[int, int], b: int) -> tuple[int, int, int, int]:
+    """[E0, N0, E1, N1] of tile t dilated by the relief buffer b."""
+    return t[0] * 1000 - b, t[1] * 1000 - b, (t[0] + 1) * 1000 + b, (t[1] + 1) * 1000 + b
+
+
+def process_tile_v3(win: dict, b: int) -> dict:
+    """All published rasters of one tile from its raw source window (tile ± b m, row 0 = north): `win` holds
+    dgm_sl, dgm_rlp and optionally dom_sl, dom_rlp (float32, NaN = no data). Pure function of the window, so a
+    tile gives the same values whichever tile set it is built with (locality test, tests/test_place_v3.py).
+
+    Returns 1 m window arrays dtm, mask, (chm, dsm), svf, opns_pos, opns_neg, vat."""
+    dtm, mask = fill_heights(win["dgm_sl"], win["dgm_rlp"], RLP_OFFSET_V3_M)
+    out = {"dtm": dtm, "mask": mask, **compute_relief_v3(dtm)}
+    if win.get("dom_sl") is not None:
+        dsm = fill_surface(win["dom_sl"], win["dom_rlp"], dtm, RLP_OFFSET_V3_M)
+        out["dsm"] = dsm
+        out["chm"] = np.clip(dsm - dtm, 0, 40).astype(np.float32)
+    return out
+
+
+def tile_files_v3(w: dict, b: int, t: tuple[int, int], e0: int, n1: int) -> dict[str, tuple[str, np.ndarray]]:
+    """Encoder inputs of every file of tile t: {relative path: (format, uint8 array)}. `w` = process_tile_v3 output.
+    Level 0: 4 chunks (dtm 502² apron 1 from the real neighbouring terrain, u8 layers 500²); level 1: the tile itself
+    (dtm 502² of 2 m block means incl. a 2 m apron, vat 500² block mean of the 1 m VAT)."""
+    from grid import FIXED_RANGES, tile_cell, tile_chunks
+    from levels import block_mean
+    files: dict[str, tuple[str, np.ndarray]] = {}
+    for n, (i, j) in enumerate(tile_chunks(t, e0, n1)):
+        ox, oy = b + (n % 2) * 500, b + (n // 2) * 500
+        files[f"dtm/{i}_{j}.webp"] = ("webp", terrarium_encode(w["dtm"][oy - 1:oy + 501, ox - 1:ox + 501]))
+        for k in V3_LAYER_ORDER:
+            if k not in w:
+                continue
+            lo, hi = FIXED_RANGES[k]
+            files[f"relief/{k}/{i}_{j}.{V3_LAYERS[k]}"] = (V3_LAYERS[k],
+                                                          u8_encode(w[k][oy:oy + 500, ox:ox + 500], lo, hi))
+    I, J = tile_cell(t, e0, n1)
+    d1 = block_mean(w["dtm"][b - 2:b + 1002, b - 2:b + 1002], 2)
+    files[f"levels/1/dtm/{I}_{J}.webp"] = ("webp", terrarium_encode(d1))
+    files[f"levels/1/vat/{I}_{J}.avif"] = ("avif", u8_encode(block_mean(w["vat"][b:b + 1000, b:b + 1000], 2), 0, 1))
+    return files
+
+
+def write_files_v3(out: Path, files: dict[str, tuple[str, np.ndarray]]) -> dict:
+    from encode import save_avif_u8, save_webp_lossless
+    st = {"bytes": 0, "avif_max_err": 0, "avif_requality": 0}
+    for rel, (fmt, arr) in files.items():
+        if fmt == "webp":
+            st["bytes"] += save_webp_lossless(out / rel, arr)
+        else:
+            r = save_avif_u8(out / rel, arr)
+            st["bytes"] += r["bytes"]
+            st["avif_max_err"] = max(st["avif_max_err"], r["max_err"])
+            st["avif_requality"] += r["quality"] != 90
+    return st
+
+
+def read_sources(tiles: list, box: tuple[int, int, int, int], with_dsm: bool) -> dict:
+    """Raw (unfilled) SL / RLP mosaics of DGM1 (+ DOM1) over `box`, reading only `tiles`."""
+    sl_p, rlp_p = tile_paths("dgm1", tiles)
+    if not sl_p and not rlp_p:
+        sys.exit("no DGM1 tiles found – run fetch.py first")
+    src = {"paths": {"dgm1": (sl_p, rlp_p)}}
+    src["dgm_sl"], src["sl_used"] = read_mosaic(sl_p, box)
+    src["dgm_rlp"] = read_mosaic(rlp_p, box)[0] if rlp_p else np.full_like(src["dgm_sl"], np.nan)
+    if with_dsm:
+        dsl_p, drlp_p = tile_paths("dom1", tiles)
+        if dsl_p or drlp_p:
+            src["paths"]["dom1"] = (dsl_p, drlp_p)
+            src["dom_sl"] = read_mosaic(dsl_p, box)[0] if dsl_p else np.full_like(src["dgm_sl"], np.nan)
+            src["dom_rlp"] = read_mosaic(drlp_p, box)[0] if drlp_p else np.full_like(src["dgm_sl"], np.nan)
+    return src
+
+
+def window_of(src: dict, box: tuple[int, int, int, int], wbox: tuple[int, int, int, int]) -> dict:
+    r0, c0 = box[3] - wbox[3], wbox[0] - box[0]
+    h, w = wbox[3] - wbox[1], wbox[2] - wbox[0]
+    return {k: src[k][r0:r0 + h, c0:c0 + w] for k in ("dgm_sl", "dgm_rlp", "dom_sl", "dom_rlp") if k in src}
+
+
+def _tile_job_v3(tile, win, b, e0, n1, out):
+    """Worker: compute + write one tile; returns its 1 m core rasters for the work GeoTIFFs."""
+    w = process_tile_v3(win, b)
+    st = write_files_v3(Path(out), tile_files_v3(w, b, tile, e0, n1))
+    core = {k: w[k][b:b + 1000, b:b + 1000].copy() for k in ("dtm", "mask", "vat", "dsm") if k in w}
+    return tile, core, st
+
+
+def build_v3(aoi, no_dsm: bool = False, no_previews: bool = False, workers: int = 4) -> dict:
+    """v3 place build: only the present (owned) tiles, each computed from its own source window (tile ± buffer_m),
+    WebP lossless / AVIF chunks, fixed u8 ranges, presence bitmap, level 0 + 1, `derived` relief modes, no dsm."""
+    from common import PIPELINE_VERSION
+    from grid import GRID, presence_bitmap
+    from levels import level0_entry
+    T0 = time.time()
+    b = aoi.buffer_m
+    tiles = sorted(aoi.owned, key=lambda t: (-t[1], t[0]))
+    fetch = aoi.tiles(buffered=True)
+    box = aoi.buffered
+    cs = aoi.chunk_size
+    nx, ny = aoi.width // cs, aoi.height // cs
+    log(f"v3 place {aoi.place} ({aoi.key}): {len(tiles)} tiles in {aoi.width // 1000}×{aoi.height // 1000} km "
+        f"rectangle {aoi.e0},{aoi.n0}; fetch set {len(fetch)} tiles")
+    t = time.time()
+    src = read_sources(fetch, box, with_dsm=not no_dsm)
+    log("read sources", t)
+    out = aoi.data_dir
+    for sub in ("dtm", "dsm", "levels"):
+        shutil.rmtree(out / sub, ignore_errors=True)
+    for k in LAYER_META:
+        shutil.rmtree(out / "relief" / k, ignore_errors=True)
+
+    # whole-rectangle work rasters (for osm/buildings/trees/detect/xyz): global fill, present tiles overwritten
+    # with their window values (identical except in gap-filled cells)
+    work = WORK_DIR / aoi.key
+    work.mkdir(parents=True, exist_ok=True)
+    dtm_all, mask_all = fill_heights(src["dgm_sl"], src["dgm_rlp"], RLP_OFFSET_V3_M)
+    has_dsm = "dom_sl" in src
+    dsm_all = fill_surface(src["dom_sl"], src["dom_rlp"], dtm_all, RLP_OFFSET_V3_M) if has_dsm else None
+    vat_all = np.full(dtm_all.shape, np.nan, np.float32)
+
+    t = time.time()
+    lo_h, hi_h = math.inf, -math.inf
+    stats = {"bytes": 0, "avif_max_err": 0, "avif_requality": 0}
+    jobs = ((tile, window_of(src, box, tile_window(tile, b)), b, aoi.e0, aoi.n1, str(out)) for tile in tiles)
+    with ProcessPoolExecutor(max_workers=max(1, workers)) as ex:
+        for n, (tile, core, st) in enumerate(ex.map(_tile_job_v3, *zip(*jobs))):
+            for k, v in st.items():
+                stats[k] = max(stats[k], v) if k == "avif_max_err" else stats[k] + v
+            lo_h, hi_h = min(lo_h, float(core["dtm"].min())), max(hi_h, float(core["dtm"].max()))
+            r0, c0 = box[3] - (tile[1] + 1) * 1000, tile[0] * 1000 - box[0]
+            dst = (slice(r0, r0 + 1000), slice(c0, c0 + 1000))
+            dtm_all[dst], mask_all[dst], vat_all[dst] = core["dtm"], core["mask"], core["vat"]
+            if has_dsm:
+                dsm_all[dst] = core["dsm"]
+            if n % 10 == 9 or n == len(tiles) - 1:
+                log(f"  {n + 1}/{len(tiles)} tiles, {stats['bytes'] / 1e6:.1f} MB", t)
+    crop = (slice(b, b + aoi.height), slice(b, b + aoi.width))
+    work_rasters = {"dtm": dtm_all[crop], "mask": mask_all[crop], "vat": vat_all[crop]}
+    if has_dsm:
+        work_rasters["dsm"] = dsm_all[crop]
+        work_rasters["chm"] = np.clip(dsm_all[crop] - dtm_all[crop], 0, 40).astype(np.float32)
+    for k, v in work_rasters.items():
+        write_geotiff(work / f"{k}.tif", v, aoi.e0, aoi.n1)
+
+    # --- manifest -----------------------------------------------------------------------------------------
+    tr = Transformer.from_crs("EPSG:25832", "EPSG:4326", always_xy=True)
+    corners = [tr.transform(e, n) for e in (aoi.e0, aoi.e1) for n in (aoi.n0, aoi.n1)]
+    lons, lats = [c[0] for c in corners], [c[1] for c in corners]
+    own = set(tiles)
+    sources = []
+    for product, (sl_p, rlp_p) in src["paths"].items():
+        for (e, n) in sorted(sl_p):
+            sources.append({"tile": f"{e}_{n}", "provider": "LVGL-SL", "year": 2025, "product": product.upper(),
+                            "role": "aoi" if (e, n) in own else "buffer"})
+        for (e, n), p in sorted(rlp_p.items()):
+            sources.append({"tile": f"{e}_{n}", "provider": "LVermGeo-RP", "year": int(p.stem.rsplit("_", 1)[-1]),
+                            "product": product.upper(), "role": "aoi" if (e, n) in own else "buffer"})
+    rlp_used = bool((mask_all == 0.5).any())
+    attribution = [ATTRIBUTION_SL] + ([ATTRIBUTION_RLP] if rlp_used else [])
+    layers = {k: v3_layer_entry(k, f"relief/{k}/{{i}}_{{j}}.{V3_LAYERS[k]}") for k in V3_LAYER_ORDER
+              if k != "chm" or has_dsm}
+    manifest = {
+        "version": 3, "aoi": aoi.place, "name": aoi.name, "place": {"id": aoi.place, "ags": aoi.ags},
+        "crs": "EPSG:25832", "grid": GRID,
+        "origin": {"E0": aoi.e0, "N0": aoi.n0}, "size": {"width": aoi.width, "height": aoi.height},
+        "cellSize": 1, "chunkSize": cs, "chunks": {"nx": nx, "ny": ny},
+        "presence": presence_bitmap(aoi.e0, aoi.n0, aoi.width, aoi.height, tiles),
+        "heightRange": {"min": round(lo_h, 2), "max": round(hi_h, 2)},
+        "wgs84Bounds": [[round(min(lats), 6), round(min(lons), 6)], [round(max(lats), 6), round(max(lons), 6)]],
+        "height": {"dtm": {"path": "dtm/{i}_{j}.webp", "encoding": "terrarium", "apron": 1}},
+        "layers": layers,
+        "derived": V3_DERIVED,
+    }
+    vat1 = {**{k: v for k, v in v3_layer_entry("vat", "levels/1/vat/{i}_{j}.avif").items() if k != "description"},
+            "description": "Blockmittel (2 m) der 1-m-VAT (RVT, kombiniert allgemein+flach)"}
+    level1 = {"level": 1, "cellSize": 2, "chunkSize": cs, "size": {"width": aoi.width // 2, "height": aoi.height // 2},
+              "chunks": {"nx": aoi.width // 1000, "ny": aoi.height // 1000},
+              "height": {"dtm": {"path": "levels/1/dtm/{i}_{j}.webp", "encoding": "terrarium", "apron": 1}},
+              "layers": {"vat": vat1}}
+    manifest["levels"] = [level0_entry(manifest), level1]
+    manifest["sources"] = sources
+    manifest["build"] = {
+        "pipeline": PIPELINE_VERSION, "generated": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "proj4": UTM32_PROJ4,
+        "verticalDatum": "DHHN2016 (EPSG:7837)", "bufferM": b, "tiles": len(tiles),
+        "params": {k: PARAMS[k] for k in ("svf", "openness", "vat", "chm")},
+        "rlpOffset": {"applied": RLP_OFFSET_V3_M, "note": "fixed constant in v3 (locality)"},
+        "encoding": {"webp": "lossless exact method 6", "avif_u8_quality": 90,
+                     "avif_max_err": stats["avif_max_err"], "avif_requality_files": stats["avif_requality"]},
+        "timingsS": {"total": round(time.time() - T0, 1)},
+    }
+    # foreign layers (bldg, ortho, hist_*) and keys of later steps survive a rebuild (per-sub-key merge)
+    manifest = update_manifest(out, manifest, attribution=attribution,
+                               drop_attribution=[ATTRIBUTION_SL, ATTRIBUTION_RLP], own_layers=list(LAYER_META))
+    (work / "build.json").write_text(json.dumps(manifest["build"], indent=2, ensure_ascii=False))
+    if not no_previews:
+        PREVIEW_DIR.mkdir(parents=True, exist_ok=True)
+        v = work_rasters["vat"]
+        f = max(1, round(max(v.shape) / 1500))
+        img = downsample_mean(np.where(np.isfinite(v), v, 0.5), f)
+        Image.fromarray(np.rint(np.clip(img, 0, 1) * 255).astype(np.uint8)).save(
+            PREVIEW_DIR / f"{aoi.key}_vat.jpg", quality=72, optimize=True)
+    size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file() and "xyz" not in f.parts)
+    log(f"wrote {out} ({size / 1e6:.1f} MB excl. xyz, {size / 1e6 / len(tiles):.2f} MB/km² so far), "
+        f"{len(tiles)} tiles", T0)
+    return manifest
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("aoi")
     ap.add_argument("--no-dsm", action="store_true")
     ap.add_argument("--no-previews", action="store_true")
     ap.add_argument("--levels", type=int, default=N_LEVELS, help="coarse overview levels (0 = v1 manifest)")
+    ap.add_argument("--workers", type=int, default=4, help="v3 places: parallel tile processes")
     args = ap.parse_args()
     aoi = load_aoi(args.aoi)
+    if aoi.fmt == 3:
+        build_v3(aoi, no_dsm=args.no_dsm, no_previews=args.no_previews, workers=args.workers)
+        return
     T0 = time.time()
     timings = {}
     b = aoi.buffer_m

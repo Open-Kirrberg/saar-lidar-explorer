@@ -18,7 +18,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import APP_DATA, WORK_DIR, load_aoi  # noqa: E402
 from encode import terrarium_decode, terrarium_encode, u8_decode, u8_encode  # noqa: E402
 
-_KNOWN = [k for k in tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text()) if k != "defaults"]
+# v1/v2 rectangle AOIs only; v3 places (`place = …`) and groups are checked in tests/test_place_v3.py
+_KNOWN = [k for k, v in tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text()).items()
+          if k != "defaults" and not v.get("place") and not v.get("group")]
 # only AOIs built by this pipeline (the app may keep its own test fixtures under app/public/data/)
 AOIS = sorted(k for k in _KNOWN if (APP_DATA / k / "manifest.json").exists() and (WORK_DIR / k / "dtm.tif").exists())
 POI_TYPES = {"castle", "palace", "garden", "bunker", "burial_mound", "cave", "boundary_stone", "mine", "other"}

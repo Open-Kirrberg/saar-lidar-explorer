@@ -258,7 +258,8 @@ def test_srs_and_rlp_tile_selection():
 from common import APP_DATA, WORK_DIR, load_aoi  # noqa: E402
 import tomllib  # noqa: E402
 
-_KNOWN = [k for k in tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text()) if k != "defaults"]
+_CFG = tomllib.loads((Path(__file__).resolve().parents[1] / "aois.toml").read_text())
+_KNOWN = [k for k in _CFG if k != "defaults" and "place" not in _CFG[k]]   # v3 places: test_buildings_v3.py
 BUILT = [k for k in _KNOWN if (APP_DATA / k / "manifest.json").exists()
          and "buildings" in json.loads((APP_DATA / k / "manifest.json").read_text()).get("models", {})]
 

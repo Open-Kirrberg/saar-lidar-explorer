@@ -113,3 +113,83 @@ def test_generated_historic(aoi, key):
     assert zs == set(range(x["minZoom"], x["maxZoom"] + 1))
     # relief xyz layers written by xyz.py are still there (per-sub-key merge)
     assert "vat" in m["xyz"]
+
+
+# ------------------------------------------------------------------------------------------- v3 places (S2)
+from common import AOI  # noqa: E402
+from historic import HIST_PPC, drop_xyz_keys, place_blocks, write_place_chunks  # noqa: E402
+from ortho import present_chunk_list, present_tile_cells  # noqa: E402
+
+# homburg-gemeinde (block grid of the cache) and the two interlocking S2 fixtures
+GRID = (374000, 5456000, 385000, 5472000)
+FIX = {"homburg": (376000, 5462000, 378000, 5464000, {(376, 5462), (377, 5462), (377, 5463)}),
+       "kirkel": (375000, 5462000, 377000, 5464000, {(375, 5462), (375, 5463), (376, 5463)})}
+
+
+def _place(name: str) -> AOI:
+    e0, n0, e1, n1, owned = FIX[name]
+    return AOI(f"t-{name}", name, e0, n0, e1, n1, 200, "x", 500, fmt=3, place=name, owned=frozenset(owned))
+
+
+@pytest.mark.parametrize("name", ["homburg", "kirkel"])
+def test_place_blocks_on_cache_grid_paste_exactly(name):
+    """Blocks of the cache AOI's grid cover every present chunk; pasting the block windows reproduces the world
+    image at the place's pixels (chunk index mapping + pixel windows)."""
+    a = _place(name)
+    ge0, gn0, ge1, gn1 = GRID
+    gnx, gny = (ge1 - ge0) // 500, (gn1 - gn0) // 500
+    di, dj = (a.e0 - ge0) // 500, (gn1 - a.n1) // 500
+    nx, ny = a.width // 500, a.height // 500
+    present = set(present_chunk_list(a))
+    blocks = place_blocks(request_blocks(ge0, gn1, gnx, gny), di, dj, present, nx, ny)
+    assert all(b["bbox"][0] >= ge0 and b["bbox"][3] <= gn1 for b in blocks)
+    # synthetic "world" over the grid: unique value per 1 m pixel (row, col)
+    rows, cols = np.mgrid[0:gny * 500, 0:gnx * 500]
+    world = (rows * 7 + cols * 13) % 251
+    mosaic = np.full((a.height, a.width), -1)
+    for b in blocks:
+        arr = world[b["row"]:b["row"] + b["height"], b["col"]:b["col"] + b["width"]]
+        r0, r1, c0, c1 = b["src"]
+        R0, R1, C0, C1 = b["dst"]
+        mosaic[R0:R1, C0:C1] = arr[r0:r1, c0:c1]
+    want = world[dj * 500:(dj + ny) * 500, di * 500:(di + nx) * 500]
+    for i, j in present:
+        sl = np.s_[j * HIST_PPC:(j + 1) * HIST_PPC, i * HIST_PPC:(i + 1) * HIST_PPC]
+        assert np.array_equal(mosaic[sl], want[sl]), (i, j)
+    # homburg lies inside one 2 km block of the grid; kirkel straddles two
+    assert len(blocks) == {"homburg": 1, "kirkel": 2}[name]
+
+
+def test_place_blocks_skip_blocks_without_present_chunks():
+    blocks = request_blocks(374000, 5472000, 22, 32)
+    assert place_blocks(blocks, 4, 16, set(), 4, 4) == []
+    only = place_blocks(blocks, 4, 16, {(3, 3)}, 4, 4)
+    assert len(only) == 1 and only[0]["src"] == (0, 2000, 0, 2000) and only[0]["dst"] == (0, 2000, 0, 2000)
+
+
+def test_drop_xyz_keys():
+    assert drop_xyz_keys({"xyz": {"vat": 1, "hist_1840": 2}}, ["hist_1840"]) == ({"xyz": {"vat": 1}}, [])
+    assert drop_xyz_keys({"xyz": {"hist_1840": 2}}, ["hist_1840"]) == ({}, ["xyz"])
+    assert drop_xyz_keys({"xyz": {"vat": 1}}, ["hist_1840"]) == ({}, [])
+    assert drop_xyz_keys({}, ["hist_1840"]) == ({}, [])
+
+
+def test_v3_hist_writer_synthetic(tmp_path):
+    """Writer of the v3 hist layer on a synthetic map (the WMS was down in S2): AVIF only for present chunks and
+    tiles, entry shapes per contract."""
+    a = _place("homburg")
+    rgb = np.full((2000, 2000, 3), 240, np.uint8)
+    rgb[1000:, :1000] = (90, 60, 30)                  # SW tile brown
+    chunks, cells = present_chunk_list(a), present_tile_cells(a)
+    base = {"label_de": HIST_LAYERS["hist_1840"]["label_de"], "attribution": ATTRIBUTION_HIST, "source": "s"}
+    e0, coarse, nbytes = write_place_chunks(tmp_path, "hist_1840", rgb, chunks, cells, base)
+    assert e0 == {"path": "hist_1840/{i}_{j}.avif", "encoding": "rgb", "format": "avif", "pixelsPerChunk": 500,
+                  "kind": "image", **base}
+    assert coarse == {1: {**e0, "path": "hist_1840/levels/1/{i}_{j}.avif", "pixelsPerChunk": 500}}
+    l0 = {tuple(int(v) for v in p.stem.split("_")) for p in (tmp_path / "hist_1840").glob("*.avif")}
+    assert l0 == set(chunks) and len(l0) == 12 and nbytes > 0
+    l1 = {tuple(int(v) for v in p.stem.split("_")) for p in (tmp_path / "hist_1840/levels/1").glob("*.avif")}
+    assert l1 == set(cells)
+    with Image.open(tmp_path / "hist_1840" / "0_2.avif") as im:
+        assert im.format == "AVIF" and im.mode == "RGB" and im.size == (500, 500)
+        assert abs(int(np.asarray(im)[250, 250, 0]) - 90) < 12

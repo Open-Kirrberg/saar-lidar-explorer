@@ -75,3 +75,49 @@ bbox = [379200, 5464000, 380200, 5465000]   # Hohenburg/Vauban-Festung ≈ 37968
 id = "merburg"
 name_de = "Burgruine Merburg"
 bbox = [381500, 5463000, 382500, 5464000]   # Merburg ≈ 381964/5463453
+
+# ---------------------------------------------------------------------------------------------------------------
+# S2 v3 places (contract "Many places (v3, S2)"): `place` = catalog place id; the rectangle is the bounding box of
+# the tiles the catalog assigns to it (catalog.py ownership → data/work/catalog/tile_owners.json), the fetch set
+# is those tiles + their 8 neighbours. Optional `tiles` publishes a subset (fixtures; status 'building'); optional
+# `out` = output dir below app/public/data (default: the key). `relict_candidates` = ort.toml opt-in (ADR 0053).
+# `cache_from` = a rectangle AOI whose raw download caches (OSM, ortho, WMS/WFS) cover the place: reused, no refetch.
+# Always manifest version 3: WebP lossless / AVIF chunks, fixed u8 ranges, level 0 + 1, derived relief, no dsm.
+# Central catalog (`./run.sh orte-katalog`): ownership, overview levels ≥ 2, sle-catalog-v1 into
+# app/public/data/orte-katalog/ (catalog.json, overview/). No place tiles; bbox informative (catalog area).
+[orte-katalog]
+name = "Orte-Katalog (catalog + central overview)"
+bbox = [308000, 5441000, 388000, 5501000]
+stats_only = true
+stats_steps = ["catalog"]
+
+[ort-homburg]
+name = "Homburg"
+place = "homburg"
+relict_candidates = true
+cache_from = "homburg-gemeinde"
+phase = "S2"
+
+# Shared S2 fixture (app/public/data/fixture-v3/, README.md there): the Homburg/Kirkel border near Limbach,
+# two interlocking L-shaped places of 3 tiles each (each a 2 × 2 km rectangle with one absent tile).
+[fixture-v3]
+name = "S2 fixture (two v3 places + catalog + overview)"
+group = ["fixture-v3-homburg", "fixture-v3-kirkel"]
+after = ["fixture"]   # fixture_v3.py: overview + catalog + README into app/public/data/fixture-v3/
+
+[fixture-v3-homburg]
+name = "Homburg (Fixture v3)"
+place = "homburg"
+tiles = ["376_5462", "377_5462", "377_5463"]
+out = "fixture-v3/homburg"
+relict_candidates = true
+cache_from = "homburg-gemeinde"
+phase = "S2"
+
+[fixture-v3-kirkel]
+name = "Kirkel (Fixture v3)"
+place = "kirkel"
+tiles = ["375_5462", "375_5463", "376_5463"]
+out = "fixture-v3/kirkel"
+cache_from = "homburg-gemeinde"
+phase = "S2"
