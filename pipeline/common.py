@@ -20,19 +20,50 @@ import certifi
 
 PIPELINE_DIR = Path(__file__).resolve().parent
 ROOT = PIPELINE_DIR.parent
-RAW_DIR = ROOT / "data" / "raw"
+
+
+def _dir_env(name: str, default: Path) -> Path:
+    """A directory from the environment (absolute path), else `default`. S3 place builds (`place.py`, GitHub Actions
+    and the local dry run) point raw caches, work files and the output somewhere else without touching the checkout."""
+    v = os.environ.get(name, "").strip()
+    if not v:
+        return default
+    p = Path(v)
+    if not p.is_absolute():
+        sys.exit(f"{name} must be an absolute path, got {v!r}")
+    return p
+
+
+RAW_DIR = _dir_env("SLE_RAW_DIR", ROOT / "data" / "raw")
 SL_RAW = RAW_DIR / "lvgl-sl"
 RLP_RAW = RAW_DIR / "rlp"
-WORK_DIR = ROOT / "data" / "work"
-APP_DATA = ROOT / "app" / "public" / "data"
-PREVIEW_DIR = ROOT / "docs" / "previews"
+WORK_DIR = _dir_env("SLE_WORK_DIR", ROOT / "data" / "work")
+APP_DATA = _dir_env("SLE_APP_DATA", ROOT / "app" / "public" / "data")
+PREVIEW_DIR = _dir_env("SLE_PREVIEW_DIR", ROOT / "docs" / "previews")
+# Extra AOI tables merged over aois.toml (absolute path of a TOML file; `place.py` writes one per ort.toml build).
+AOIS_EXTRA_ENV = "SLE_AOIS_EXTRA"
 
 # Pipeline version written to `build.pipeline` of v3 manifests (the catalog CI compares neighbours). Bump it when
 # a change alters published bytes of a v3 place (encoders, relief parameters, fill rules).
 PIPELINE_VERSION = "0.9.1"
 
 SSL_CTX = ssl.create_default_context(cafile=certifi.where())
-USER_AGENT = "saar-lidar-explorer-pipeline/0.1 (personal research; polite sequential downloads)"
+
+
+def user_agent(context: str | None = None) -> str:
+    """Descriptive User-Agent (R8): pipeline name + version, the public project URL, the download policy, and an
+    optional build context from `SLE_UA_CONTEXT` (e.g. "ci Open-Kirrberg/ort-homburg"). No personal data: the context
+    is restricted to a repository-like token set, anything else is dropped."""
+    import re
+    ctx = os.environ.get("SLE_UA_CONTEXT", "") if context is None else context
+    ctx = ctx.strip()
+    if ctx and not re.fullmatch(r"[A-Za-z0-9 ._:/-]{1,80}", ctx):
+        ctx = ""
+    return (f"saar-lidar-explorer-pipeline/{PIPELINE_VERSION} (+https://github.com/Open-Kirrberg/saar-lidar-explorer; "
+            f"open-data relief maps; polite sequential downloads{'; ' + ctx if ctx else ''})")
+
+
+USER_AGENT = user_agent()
 
 # proj4 string from docs/data-contract.md (identical to EPSG:25832 for our purposes)
 UTM32_PROJ4 = "+proj=utm +zone=32 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
@@ -145,9 +176,22 @@ DEFAULT_STEPS = ("fetch", "build", "xyz", "osm", "cadastre", "buildings", "ortho
                  "pointcloud", "trees", "test")
 
 
+def load_aois(path: Path = PIPELINE_DIR / "aois.toml") -> dict[str, Any]:
+    """aois.toml plus the tables of `$SLE_AOIS_EXTRA` (if set): an extra table replaces a same-named one entirely
+    (S3: `place.py` writes the AOI of an ort.toml build there instead of editing aois.toml)."""
+    cfg = tomllib.loads(path.read_text())
+    extra = os.environ.get(AOIS_EXTRA_ENV, "").strip()
+    if extra:
+        for k, v in tomllib.loads(Path(extra).read_text()).items():
+            if k == "defaults":
+                sys.exit(f"{extra}: an extra AOI file must not redefine [defaults]")
+            cfg[k] = v
+    return cfg
+
+
 def aoi_config(key: str, path: Path = PIPELINE_DIR / "aois.toml") -> dict[str, Any]:
     """Raw aois.toml entry of `key` merged over [defaults]; exits with the known names when `key` is unknown."""
-    cfg = tomllib.loads(path.read_text())
+    cfg = load_aois(path)
     if key not in cfg or key == "defaults":
         names = [k for k in cfg if k != "defaults"]
         sys.exit(f"unknown AOI {key!r}; known: {', '.join(names)}")
@@ -218,9 +262,12 @@ def _load_place(key: str, a: Mapping[str, Any]) -> AOI:
     """v3 place AOI (aois.toml `place = "<catalog id>"`): the rectangle is the bounding box of the owned tiles
     (catalog ownership, data/work/catalog/tile_owners.json); an optional `tiles = ["E_N", …]` publishes only a
     subset (fixtures, status 'building'). Always manifest version 3, chunk size 500."""
-    from catalog import load_owners, owned_tiles
+    from catalog import load_owners, owned_tiles, owners_from_catalog
     from grid import parse_tile_id, tiles_bbox, valid_tile
-    owners, meta = load_owners()
+    if a.get("catalog"):   # S3 ort.toml builds: ownership from a published sle-catalog-v1 file (place.py)
+        owners, meta = owners_from_catalog(json.loads(Path(str(a["catalog"])).read_text()))
+    else:
+        owners, meta = load_owners()
     place = str(a["place"])
     if place not in meta.get("places", {}):
         sys.exit(f"AOI {key}: unknown catalog place {place!r}")

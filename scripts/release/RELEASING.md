@@ -9,6 +9,9 @@ GitHub repositories in the org **Open-Kirrberg**, all served by GitHub Pages und
 | `saar-lidar-data` | branch deploy (`main`, `/`), `.nojekyll` | AOI `overall` without Leaflet tiles, stats-only AOI `saarland` (leaderboard level „Gemeinden“), `pois.geojson`, `shared/` (reconstruction 1789), `castle-viewer/terrain/`, `zones/` (cleared zone packages: castle, bakery) | `export-data.sh` |
 | `saar-lidar-data-2` | branch deploy (`main`, `/`), `.nojekyll` | Leaflet XYZ tiles (≤ z17), 3D-print series (3MF only) | `export-data.sh` |
 
+**S3 (many places):** the per-place repos `ort-<id>`, the template `ort-vorlage` and the catalog `orte-katalog` are
+built by GitHub Actions instead (§6); the two data repos below stay online during the transition (§7).
+
 **Why two data repos.** GitHub Pages publishes at most **≈ 1 GB per repository** (every file < 100 MB).
 `saar-lidar-data` holds ≈ 825 MB (AOI `overall` layers, point clouds, castle terrain, zone packages),
 `saar-lidar-data-2` ≈ 330 MB of Leaflet XYZ minimap tiles (≤ z17) plus ≈ 105 MB of legacy 3D-print series
@@ -235,3 +238,86 @@ large refreshes, prefer a fresh orphan commit (`git checkout --orphan new && git
   `SLE_PUBLIC=1 VITE_DATA_URL=http://127.0.0.1:5271/saar-lidar-data/`,
   serve the site under `/saar-lidar-explorer/` on one port and `../_release` with `Access-Control-Allow-Origin: *` on
   another (the minimap tiles still point to github.io until the data are live).
+
+## 6. Places and catalog (S3, plan „Orte skalieren“, ADR 0052)
+
+From S3 on, the data are built **in GitHub Actions** of three more repositories in the org, never committed and
+never staged by `export-data.sh`:
+
+| Repository | Pages | Content | Built by |
+|---|---|---|---|
+| `ort-vorlage` (public, **template repository**) | none (its build job is skipped in the template itself) | `ort.toml` (`sle-ort-v1`), caller workflows, content checks (`werkzeuge/ort_check.py`, JSON schemas, tests), issue forms, `CONTRIBUTING.md`, devcontainer, skill `ort-pflegen`; code MIT, content CC BY 4.0 / CC0 (`LIZENZEN.md`) | – |
+| `ort-homburg` (public, from the template) | GitHub Actions → `https://open-kirrberg.github.io/ort-homburg/` | `ort.toml` + community content; the site = the v3 place build (`manifest.json` …) + `inhalte/`, `aktionen/` | `.github/workflows/build.yml` → this repo's reusable `build-place.yml` at a pinned SHA |
+| `orte-katalog` (public) | GitHub Actions → `https://open-kirrberg.github.io/orte-katalog/` | `orte.toml` (place status / hosting), `daten.toml` (pinned data bundle); the site = `catalog.json`, `overview/`, `saarland/`, `ortsteile/` | `.github/workflows/build.yml` (pipeline checked out at a pinned SHA) + the data bundle release asset |
+
+Layout of both sites: data contract „Hosting (Revision 3.2, S3)“. Build commands: `pipeline/place.py`,
+`pipeline/katalog.py` (pipeline/README.md „S3“).
+
+**Why the catalog uses a release asset.** The overview needs ≈ 2 800 DGM1 tiles (≈ 11 GB) and the Gemeinde
+leaderboard DGM1 + DOM1 (≈ 22 GB, ≈ 90 min download). A runner has ≈ 14 GB free disk, `actions/cache` holds 10 GB
+per repository and evicts entries unused for 7 days, so a rarely run catalog workflow would re-download the whole
+state from LVGL every time (R8). The maintainer therefore computes the statewide products locally (`./run.sh
+saarland`, `./run.sh orte`, `./run.sh orte-katalog`, all cached) and publishes them as one tar
+(`katalog.py bundle`, ≈ 170 MB, `sle-katalog-bundle-v1`) on an orte-katalog release; `daten.toml` pins its SHA-256.
+The workflow downloads only that asset from GitHub, recomputes the tile ownership from the bundled VG25 outlines
+(fails if it differs from the bundle's), builds `catalog.json` from `orte.toml` and deploys. Leaderboard numbers come
+only from the bundle (R3).
+
+**Place builds.** One build per place at a time (`concurrency`), triggered by a push that changes `ort.toml`,
+content or the pinned workflow ref, or by hand — never on a schedule. Raw downloads (fetch set = owned tiles + 8
+neighbours, LAZ of the opted-in areas, LoD2, DOP20 WMS, Overpass) are kept in `actions/cache` under a key of tile
+list + `place.SOURCE_VERSIONS` (bump an entry for a new official flight). The finished data build is cached under a
+key of pipeline version + ref + owned tiles + options, so a content-only push re-deploys without any download or
+compute. The User-Agent names the pipeline version, the project URL and the calling repository
+(`SLE_UA_CONTEXT`, no personal data). Cadastre (WFS 414) and historic maps (Geoportal WMS) are optional steps: on a
+service outage the site ships without them and the job summary says so. Homburg's `detect` peaks at ≈ 17 GB RSS (runner: 16 GB RAM), so the
+workflow adds swap before the build (input `swap_gb`, default 16); measured numbers in pipeline/README.md „S3“.
+
+### Dry run before pushing
+
+```bash
+scripts/release/dry-run-orte.sh                    # → ../_orte-dryrun (katalog bundle + site, then ort-homburg)
+scripts/release/dry-run-orte.sh --only katalog     # catalog part only (seconds)
+scripts/release/dry-run-orte.sh --fresh-downloads  # Homburg without reusing the homburg-gemeinde WMS/WFS caches
+```
+
+It runs the workflows' commands against the sibling checkouts `../ort-homburg`, `../orte-katalog` with the shared
+raw cache `data/raw/` (never deleted), reports time, peak memory, site / work sizes and warns when the working tree's
+pipeline differs from the SHA the place repo pins or when the bundle's SHA-256 differs from `daten.toml`.
+
+### First release (the user; nothing here is pushed by the scripts)
+
+1. Push this repository (`git push origin main`): the place and catalog repos pin a commit of it
+   (`build-place.yml` + `pipeline/` at that SHA must be on GitHub).
+2. **orte-katalog:** create the repository, push, upload the data bundle (`gh release create …`, tag and asset as in
+   `daten.toml`), Settings → Pages → Source „GitHub Actions“, run the workflow.
+3. **ort-vorlage:** create, push, mark as template repository.
+4. **ort-homburg:** create, push, Pages source „GitHub Actions“, run the workflow (first run downloads the fetch set,
+   later runs use the cache). Check `https://open-kirrberg.github.io/ort-homburg/manifest.json`.
+5. Re-run the orte-katalog workflow: it now finds Homburg's manifest and copies `pipeline` / `manifest_version`.
+6. Smoke test the app in catalog mode against the live catalog (local build with
+   `VITE_CATALOG_URL=https://open-kirrberg.github.io/orte-katalog/catalog.json`), then set the repository variable
+   `SLE_CATALOG_URL` of this repository and re-run `pages.yml` to switch the public app to catalog mode.
+
+**Pipeline bump in a place repo:** one pull request that changes `uses: …/build-place.yml@<sha>`, `pipeline_ref`
+and `pipeline_version` together (the build fails with a clear message when version and ref disagree); same for
+`PIPELINE_REF` / `PIPELINE_VERSION` in orte-katalog. Tag explorer commits that place repos pin (`pipeline-v0.9.1`)
+so the pins are readable.
+
+## 7. Transition: retiring `saar-lidar-data` / `-2` (plan D8)
+
+The two branch-deployed data repos stay online, unchanged, during the transition:
+
+- The public app keeps single-AOI mode (`VITE_DATA_URL` = saar-lidar-data) until step 6 above; links with
+  `?aoi=overall` keep working afterwards because the data stay.
+- Still served **only** from `saar-lidar-data`: the zone packages (`zones/`: Schloss Karlsberg, Bäckerei Heusser —
+  they stay there in S3, `ort-homburg/zones/README.md`), `castle-viewer/terrain/` (read by `pages.yml`),
+  `pois.geojson`, `shared/` (reconstruction 1789). The app reads them from `VITE_DATA_URL` in both modes.
+- `saar-lidar-data-2` holds the minimap XYZ tiles of `overall` and the legacy print series.
+
+Retire them only when all of the following hold: (a) catalog mode has been live for ≥ 4 weeks without data issues;
+(b) zones, castle terrain, `pois.geojson` and `shared/` have a new home (zone packages from the place repo once the
+zone contract allows it; the rest e.g. in the explorer's own site or the catalog site) and `VITE_DATA_URL` points
+there; (c) no app release still reads `overall` by default. Then: replace each repo's README / `index.html` with a
+pointer to the new sites, archive the repositories (read-only, history kept), keep Pages on for another three months,
+then switch Pages off. Never force-push or delete them.

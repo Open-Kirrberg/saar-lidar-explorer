@@ -1,0 +1,251 @@
+# Reusable build of one place repo (plan „Orte skalieren“ §4.4, S3; ADR 0052, 0053).
+#
+# A place repo (created from Open-Kirrberg/ort-vorlage) calls this workflow with a pinned explorer ref:
+#
+#   jobs:
+#     build:
+#       uses: Open-Kirrberg/saar-lidar-explorer/.github/workflows/build-place.yml@<sha>   # same value as pipeline_ref
+#       with: { pipeline_ref: <sha>, pipeline_version: "0.9.1", place_id: homburg }
+#       permissions: { contents: read, pages: write, id-token: write }
+#
+# What it does: checks out the place repo and the explorer pipeline at `pipeline_ref`, sets up uv + Python 3.12,
+# validates ort.toml and the community content, reads the place's owned tiles from the published catalog, restores
+# the raw-download cache (fetch set = owned tiles + 8 neighbours; key = tile list + source versions), runs the v3
+# place build (pipeline/place.py; the same commands as scripts/release/dry-run-orte.sh), adds the content, checks
+# the hosting limits and deploys the site as a Pages artifact. A finished data build is cached under a key that
+# ignores community content, so a content-only push re-deploys without fetching or computing anything.
+#
+# Politeness (R8): downloads are sequential (ortho ≤ 3 parallel) with retries and a descriptive User-Agent that
+# names the calling repository (SLE_UA_CONTEXT); one build per place at a time; callers trigger on change only
+# (ort.toml, content, the pinned ref), never on a schedule. Measured limits (time, disk, memory → the swap step): pipeline/README.md „S3“.
+name: Build place (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      pipeline_ref:
+        description: Explorer commit SHA (or tag) to build with; must equal the @ref of the `uses:` line
+        required: true
+        type: string
+      pipeline_version:
+        description: Expected PIPELINE_VERSION at that ref (pipeline/common.py); a mismatch fails the build
+        required: true
+        type: string
+      place_id:
+        description: Catalog place id (must equal `id` in ort.toml)
+        required: true
+        type: string
+      ort_toml:
+        description: Path of ort.toml in the place repo
+        required: false
+        type: string
+        default: ort.toml
+      catalog_url:
+        description: sle-catalog-v1 the tile ownership is read from
+        required: false
+        type: string
+        default: https://open-kirrberg.github.io/orte-katalog/catalog.json
+      explorer_repo:
+        required: false
+        type: string
+        default: Open-Kirrberg/saar-lidar-explorer
+      swap_gb:
+        description: Extra swap for the build (detect peaks at ≈ 17 GB RSS for Homburg's 9 × 15 km rectangle; the runner has 16 GB RAM); 0 = none
+        required: false
+        type: number
+        default: 16
+      deploy:
+        description: Deploy to GitHub Pages (false = build and check only)
+        required: false
+        type: boolean
+        default: true
+    outputs:
+      page_url:
+        value: ${{ jobs.deploy.outputs.page_url }}
+
+env:
+  UV_VERSION: "0.12.3"
+  PYTHON_VERSION: "3.12.13"
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    concurrency:
+      group: sle-build-place-${{ inputs.place_id }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    outputs:
+      site_bytes: ${{ steps.check.outputs.site_bytes }}
+    steps:
+      - name: Place repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: ort
+          persist-credentials: false
+
+      - name: Explorer pipeline at the pinned ref
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.explorer_repo }}
+          ref: ${{ inputs.pipeline_ref }}
+          path: explorer
+          sparse-checkout: |
+            pipeline
+            docs/research
+          persist-credentials: false
+
+      - name: uv + Python
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: |
+            explorer/pipeline/uv.lock
+            ort/werkzeuge/uv.lock
+
+      - name: Paths and install
+        run: |
+          set -euo pipefail
+          {
+            echo "SLE_APP_DATA=$RUNNER_TEMP/app-data"
+            echo "SLE_WORK_DIR=$RUNNER_TEMP/work"
+            echo "SLE_UA_CONTEXT=ci $GITHUB_REPOSITORY"
+            echo "UV_PYTHON=$PYTHON_VERSION"
+          } >> "$GITHUB_ENV"
+          (cd explorer/pipeline && uv sync --frozen)
+          df -h / "$RUNNER_TEMP" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Check community content (place repo's own checker)
+        run: |
+          set -euo pipefail
+          if [ -f ort/werkzeuge/ort_check.py ]; then
+            uv run --project ort/werkzeuge --frozen python ort/werkzeuge/ort_check.py ort
+          else
+            echo "::warning::no werkzeuge/ort_check.py in the place repo: content is published unchecked"
+          fi
+
+      - name: Plan (ort.toml, catalog ownership, cache keys)
+        id: plan
+        working-directory: explorer/pipeline
+        run: |
+          set -euo pipefail
+          uv run --frozen python place.py plan --ort "$GITHUB_WORKSPACE/ort/${{ inputs.ort_toml }}" \
+            --catalog "${{ inputs.catalog_url }}" --app-data "$SLE_APP_DATA" --work "$SLE_WORK_DIR" \
+            --expect-pipeline "${{ inputs.pipeline_version }}"
+          id=$(grep '^place_id=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)
+          if [ "$id" != "${{ inputs.place_id }}" ]; then
+            echo "::error::ort.toml id '$id' ≠ place_id input '${{ inputs.place_id }}'"; exit 1
+          fi
+
+      - name: Restore finished data build
+        id: site
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/app-data/${{ steps.plan.outputs.key }}
+          key: ${{ steps.plan.outputs.build_key }}
+
+      - name: Restore raw downloads
+        id: raw
+        if: steps.site.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: explorer/data/raw
+          key: ${{ steps.plan.outputs.raw_key }}
+          restore-keys: sle-raw-${{ inputs.place_id }}-
+
+      - name: Swap (only when the data build runs)
+        if: steps.site.outputs.cache-hit != 'true' && inputs.swap_gb > 0
+        env:
+          WANT_GB: ${{ inputs.swap_gb }}
+        run: |
+          set -euo pipefail
+          # largest of /mnt (runner temp disk, if any) and /; on / keep 8 GB for raw + work + site + cache archives
+          dir=/; reserve=8
+          avail_root=$(df --output=avail -BG / | tail -1 | tr -dc 0-9)
+          avail=$avail_root
+          if mountpoint -q /mnt; then
+            avail_mnt=$(df --output=avail -BG /mnt | tail -1 | tr -dc 0-9)
+            if [ "$avail_mnt" -gt "$avail_root" ]; then dir=/mnt; reserve=1; avail=$avail_mnt; fi
+          fi
+          size=$(( WANT_GB < avail - reserve ? WANT_GB : avail - reserve ))
+          if [ "$size" -lt 4 ]; then
+            echo "::warning::only ${avail} GB free on $dir: no extra swap, detect may run out of memory"; exit 0
+          fi
+          f="${dir%/}/sle-swapfile"
+          sudo fallocate -l "${size}G" "$f"; sudo chmod 600 "$f"; sudo mkswap "$f" >/dev/null; sudo swapon "$f"
+          free -g | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Build (v3 place)
+        id: build
+        if: steps.site.outputs.cache-hit != 'true'
+        working-directory: explorer/pipeline
+        run: |
+          set -euo pipefail
+          uv run --frozen python place.py build --ort "$GITHUB_WORKSPACE/ort/${{ inputs.ort_toml }}" \
+            --catalog "${{ inputs.catalog_url }}" --app-data "$SLE_APP_DATA" --work "$SLE_WORK_DIR" --workers 3
+          du -sh "$GITHUB_WORKSPACE/explorer/data/raw" "$SLE_WORK_DIR" "$SLE_APP_DATA" | tee -a "$GITHUB_STEP_SUMMARY"
+          df -h / | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Save raw downloads (also after a failed build, so a retry does not download again)
+        if: always() && steps.site.outputs.cache-hit != 'true' && steps.raw.outputs.cache-hit != 'true' && steps.plan.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: explorer/data/raw
+          key: ${{ steps.plan.outputs.raw_key }}
+
+      - name: Save finished data build
+        if: steps.build.outcome == 'success'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/app-data/${{ steps.plan.outputs.key }}
+          key: ${{ steps.plan.outputs.build_key }}
+
+      - name: Stage community content
+        working-directory: explorer/pipeline
+        run: |
+          uv run --frozen python place.py stage --ort "$GITHUB_WORKSPACE/ort/${{ inputs.ort_toml }}" \
+            --site "${{ steps.plan.outputs.site }}" --repo "$GITHUB_WORKSPACE/ort"
+
+      - name: Check site (limits, contract identity, ADR 0010/0053)
+        id: check
+        working-directory: explorer/pipeline
+        run: |
+          set -euo pipefail
+          uv run --frozen python place.py check --ort "$GITHUB_WORKSPACE/ort/${{ inputs.ort_toml }}" \
+            --catalog "${{ inputs.catalog_url }}" --site "${{ steps.plan.outputs.site }}" --work "$SLE_WORK_DIR"
+          bytes=$(du -sb "${{ steps.plan.outputs.site }}" | cut -f1)
+          echo "site_bytes=$bytes" >> "$GITHUB_OUTPUT"
+          {
+            echo "### ${{ inputs.place_id }}: $(numfmt --to=si "$bytes")B, pipeline ${{ steps.plan.outputs.pipeline_version }} (${{ inputs.pipeline_ref }})"
+            echo "data build from cache: ${{ steps.site.outputs.cache-hit == 'true' }}"
+            [ -f "$SLE_WORK_DIR/place/build-report.json" ] && { echo '```json'; cat "$SLE_WORK_DIR/place/build-report.json"; echo '```'; }
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Configure Pages
+        if: inputs.deploy
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload Pages artifact
+        if: inputs.deploy
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ steps.plan.outputs.site }}
+
+  deploy:
+    if: inputs.deploy
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

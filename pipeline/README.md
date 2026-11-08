@@ -337,6 +337,71 @@ point-cloud areas by bbox centre, OSM clipped to the present tiles (2D, `densifi
 present tiles (`lines: 'derived'`), ortho / historic maps AVIF q65 per present chunk, minimap `xyz.vat` ≤ z16 with
 alpha 0 outside the place. Candidates only with `relict_candidates = true` (ADR 0053).
 
+## 🏗️ Place repos and the catalog site (S3)
+
+Plan „Orte skalieren“ §9 S3, [ADR 0058](../docs/adr/0058-actions-builds-place-cache-catalog-bundle.md), contract
+„Hosting (Revision 3.2, S3)“. Two entry points, run by GitHub Actions and by the local dry run
+(`scripts/release/dry-run-orte.sh`, RELEASING.md §6) with the same arguments:
+
+```bash
+# place repo (ort-<id>): .github/workflows/build-place.yml runs these four
+uv run python place.py plan  --ort ../../ort-homburg/ort.toml --catalog <url|catalog.json> --app-data DIR --work DIR
+uv run python place.py build --ort … --catalog … --app-data DIR --work DIR --workers 3
+uv run python place.py stage --ort … --site DIR/ort-homburg --repo ../../ort-homburg
+uv run python place.py check --ort … --catalog … --site DIR/ort-homburg --work DIR
+uv run python place.py validate --ort ort.toml          # schema only
+
+# catalog (orte-katalog): the maintainer packs the statewide products once, the workflow builds the site
+uv run python katalog.py bundle --out DIR [--name sle-katalog-daten-<date>.tar]   # after ./run.sh saarland, orte, orte-katalog
+uv run python katalog.py site --bundle B.tar --sha256 HEX --config orte.toml --out SITE --work DIR [--no-probe]
+uv run python katalog.py check --site SITE
+```
+
+- **`ort.toml` (`sle-ort-v1`)**: `schema`, `id` (catalog place id), `name_de`, `ags`, `state`, `maintainers`
+  (GitHub handles), `[options] relict_candidates` (default false, ADR 0053) and `pointclouds` (ids of
+  `[[defaults.pointclouds]]`), optional `[[pointcloud_area]]` (bbox multiples of 100 m, ≤ 1 km², ≤ 5 areas in
+  total). Unknown keys are errors. `place.parse_ort` collects every problem.
+- **`plan`** reads the place's owned tiles from the catalog (`catalog.owners_from_catalog`: format, grid, bitmaps,
+  partition checked; AGS must match `ort.toml`), writes the AOI table `<work>/place/aois.ort.toml` (key `ort-<id>`)
+  and prints `raw_key` (fetch set + `SOURCE_VERSIONS` + LAZ areas) and `build_key` (pipeline version + git ref +
+  owned tiles + options; never content) for `actions/cache`.
+- **Environment hooks in `common.py`** (all optional, absolute paths): `SLE_RAW_DIR`, `SLE_WORK_DIR`,
+  `SLE_APP_DATA`, `SLE_PREVIEW_DIR` relocate raw caches, work files, output and previews; `SLE_AOIS_EXTRA` merges
+  an extra AOI file over `aois.toml` (same-named tables are replaced, `[defaults]` may not be redefined; an AOI
+  table with `catalog = "<path>"` takes its ownership from that catalog instead of `data/work/catalog/`);
+  `SLE_UA_CONTEXT` appends a build context to the User-Agent (`saar-lidar-explorer-pipeline/<version>
+  (+https://github.com/Open-Kirrberg/saar-lidar-explorer; open-data relief maps; polite sequential downloads; ci
+  Open-Kirrberg/ort-homburg)`; only `[A-Za-z0-9 ._:/-]`, no personal data); `SLE_CACHE_FROM` (dry run only) sets
+  `cache_from` on the generated AOI. Without these variables every existing AOI builds exactly as before.
+- **`build`** runs fetch → build → xyz → osm → cadastre* → buildings → ortho → historic* → pois (only with
+  candidates) → detect (retracts candidates without the opt-in) → pointcloud (only with areas) → trees; `*` =
+  optional (Geoportal outages: warning, site without that layer). Report: `<work>/place/build-report.json`.
+- **`stage`** copies `inhalte/` + `aktionen/` (allowed extensions only, no symlinks) and writes `ATTRIBUTION.txt`,
+  `index.html`, `.nojekyll`. **`check`** fails on: manifest not v3 / wrong grid / place id or AGS ≠ ort.toml /
+  presence outside the owned tiles / candidates without opt-in / point-cloud areas not opted in, any file ≥ 100 MB,
+  site > 1 GB (warning > 0.9 GB), symlinks, UXO terms (ADR 0010) or local paths in text files.
+- **`katalog.py`**: `bundle` packs overview, `saarland/` (stats_levels rewritten to `saarland` + `ortsteile`),
+  `ortsteile/` (stats-only manifest from `overall`'s `stats` key), the VG25 answers and `tile_owners.json` into an
+  uncompressed tar with `bundle.json` (SHA-256 per file; privacy guards of `stats.py`, UXO scan). `site` verifies the
+  pinned tar hash and every member (regular files, relative paths only), recomputes `largest-share-v1` from the
+  bundled outlines (must equal the bundle's ownership and the overview's tile count), builds `catalog.json` from
+  `orte.toml` (`katalog.place_config`: https `data_url` ending in `/` for 3d/building, none for stats) and, unless
+  `--no-probe`, GETs each 3D place's `manifest.json` once to copy `pipeline` / `manifest_version` (warnings only).
+- Tests: `tests/test_place_s3.py`.
+
+**Measured (dry run 2026-11-08, Apple M-series, 18 cores, `--workers 3`, raw cache warm):** Homburg (91 owned
+tiles, fetch set 150, rectangle 9 × 15 km) builds in 488 s: fetch 13 s, build 202 s, xyz 11 s, buildings 53 s,
+ortho 34 s, detect 87 s, pointcloud 7 s, trees 18 s; cadastre and historic skipped (Geoportal 503, 31 s each).
+Site 547.9 MB / 5 378 files (largest file 11.9 MB `candidates.geojson`; relief 147 MB, pointclouds 115 MB, ortho
+69 MB, dtm 62 MB), work 1.2 GB, raw fetch set 1.06 GB SL + 0.33 GB RLP DGM1/DOM1 plus the LoD2, DOP20 and LAZ
+subsets (well under the 10 GB per-repo cache). **Peak RSS per step:** detect 17.0 GB (whole-rectangle rasters),
+build 8.9 GB, trees 6.2 GB, buildings 4.6 GB, ortho 4.0 GB. A public `ubuntu-24.04` runner has 4 cores, 16 GB RAM
+and ≈ 14 GB free disk, so `build-place.yml` adds up to 16 GB swap before the build (on `/mnt` when that is the
+larger disk). Not measured on a runner yet: expect a few times the local time for a first build; a content-only
+push re-deploys from the cached data build. Places much larger than Homburg need a tiled `detect` (open item) or a
+larger runner. Catalog: bundle 171.9 MB / 1 077 files, site 168.2 MB (54 places, 2 857 owned tiles), `katalog.py
+site` + `check` ≈ 2 s.
+
 ## Larger AOIs
 
 `overall` (6 × 8 km, 80 tiles incl. buffer) runs the relief step on about 54 M cells and needs roughly 4–5 GB RAM. Tile it by AOI if that becomes a problem. XYZ size grows with area: about 13 MB per km² at z12–18.

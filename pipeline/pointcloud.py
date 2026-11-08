@@ -107,8 +107,8 @@ def area_belongs(aoi: AOI, area: FocusArea) -> bool:
 
 
 def areas_for_aoi(aoi: AOI, path: Path = Path(__file__).resolve().parent / "aois.toml") -> list[FocusArea]:
-    import tomllib
-    cfg = tomllib.loads(path.read_text())
+    from common import load_aois
+    cfg = load_aois(path)   # includes $SLE_AOIS_EXTRA (S3 ort.toml builds: the opted-in areas only)
     raw = cfg.get(aoi.key, {}).get("pointclouds", cfg.get("defaults", {}).get("pointclouds", []))
     return [a for a in parse_areas(raw) if area_belongs(aoi, a)]
 

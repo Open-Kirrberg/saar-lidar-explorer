@@ -90,6 +90,43 @@ def owned_tiles(owners: Mapping[Tile, Mapping[str, Any]], place_id: str) -> set[
     return {t for t, v in owners.items() if v["owner"] == place_id}
 
 
+def catalog_place_tiles(entry: Mapping[str, Any]) -> set[Tile]:
+    """Owned tiles of one `CatalogPlace` from its `bbox` + `tiles` bitmap (inverse of `place_entry`). Pure."""
+    from grid import decode_bitmap
+    e0, n0, e1, n1 = (int(v) for v in entry["bbox"])
+    if any(v % TILE_M for v in (e0, n0, e1, n1)) or e1 <= e0 or n1 <= n0:
+        raise ValueError(f"{entry.get('id')}: bbox {entry['bbox']} not aligned at 1 km")
+    bm = entry["tiles"]
+    if bm.get("w") != (e1 - e0) // TILE_M or bm.get("h") != (n1 - n0) // TILE_M:
+        raise ValueError(f"{entry.get('id')}: tiles bitmap size does not match the bbox")
+    return {(e0 // TILE_M + c, n1 // TILE_M - 1 - r) for c, r in decode_bitmap(bm)}
+
+
+def owners_from_catalog(doc: Mapping[str, Any]) -> tuple[dict[Tile, dict[str, Any]], dict[str, Any]]:
+    """(owners, meta) in the shape of `load_owners`, read from a published `sle-catalog-v1` document (S3: place
+    repos build from the catalog's ownership, never compute it). Raises ValueError on an invalid catalog or a tile
+    claimed twice. Pure."""
+    if doc.get("format") != "sle-catalog-v1":
+        raise ValueError(f"not an sle-catalog-v1 document (format {doc.get('format')!r})")
+    if doc.get("grid") != GRID:
+        raise ValueError("catalog grid is not sle-grid-25832-v1")
+    owners: dict[Tile, dict[str, Any]] = {}
+    places: dict[str, dict[str, Any]] = {}
+    for e in doc.get("places", []):
+        pid = e["id"]
+        if pid in places:
+            raise ValueError(f"place {pid!r} listed twice")
+        places[pid] = {"ags": e["ags"], "name_de": e["name_de"], "state": e.get("state", "SL"),
+                       "status": e.get("status", "stats")}
+        for t in catalog_place_tiles(e):
+            if t in owners:
+                raise ValueError(f"tile {tile_id(t)} claimed by {owners[t]['owner']!r} and {pid!r}")
+            owners[t] = {"owner": pid}
+    meta = {"rule": (doc.get("ownership") or {}).get("rule", RULE),
+            "outlines": (doc.get("ownership") or {}).get("outlines", ""), "places": places}
+    return owners, meta
+
+
 def place_entry(p: Mapping[str, Any], tiles: Iterable[Tile], cfg: Mapping[str, Any]) -> dict[str, Any]:
     """One `CatalogPlace` (contract). `cfg` = its catalog.toml table (status, data_url, repo, maintainers, options)."""
     import re
@@ -160,18 +197,20 @@ def build_catalog(places: Sequence[Mapping[str, Any]], owners: Mapping[Tile, Map
 
 
 # =================================================================================================== I/O
-def load_places() -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Catalog candidates from the cached VG25 answers (unsimplified, dissolved per AGS) + edition info."""
+def load_places(vg25_dir: Path | None = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Catalog candidates from the cached VG25 answers (unsimplified, dissolved per AGS) + edition info.
+    `vg25_dir` (default data/raw/vg25): S3 catalog builds read the copy shipped in the catalog data bundle."""
     from gemeinden import RLP_NEIGHBOURS, parse_vg25
+    vg25 = VG25_RAW if vg25_dir is None else Path(vg25_dir)
     feats = []
     for key in ("sl", "rlp"):
-        f = VG25_RAW / f"vg25_gem_{key}.json"
+        f = vg25 / f"vg25_gem_{key}.json"
         if not f.exists():
             sys.exit(f"{f} missing – run `uv run python gemeinden.py outlines` first")
         feats += json.loads(f.read_text())["features"]
     places = parse_vg25(feats, keep_ags=set(RLP_NEIGHBOURS))
     beginn = sorted({str((x.get("properties") or {}).get("beginn") or "")[:10] for x in feats} - {""})
-    fetched = dt.date.fromtimestamp((VG25_RAW / "vg25_gem_sl.json").stat().st_mtime).isoformat()
+    fetched = dt.date.fromtimestamp((vg25 / "vg25_gem_sl.json").stat().st_mtime).isoformat()
     meta = {"outlines": f"BKG VG25 vg25_gem (WFS, abgerufen {fetched}, Objektbeginn bis "
                         f"{beginn[-1] if beginn else '?'}), unvereinfacht"}
     return places, meta
@@ -250,6 +289,8 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--height-ref", type=int)
     ap.add_argument("--overview", default="overview/overview.json")
     ap.add_argument("--leaderboard", default=None, help="URL of the stats-only manifest, relative to the catalog")
+    ap.add_argument("--config", type=Path, default=CATALOG_TOML,
+                    help="place status / hosting table (default pipeline/catalog.toml; S3: orte-katalog's orte.toml)")
     a = ap.parse_args(argv)
     if a.cmd == "ownership":
         run_ownership()
@@ -257,7 +298,8 @@ def main(argv: list[str] | None = None) -> None:
     lb = a.leaderboard
     if lb is None and (APP_DATA / "saarland" / "manifest.json").exists() and a.out.parent == APP_DATA:
         lb = "../saarland/manifest.json"   # local dev: the S1 stats-only manifest next to the catalog folder
-    doc = write_catalog(a.out, overview=a.overview, leaderboard=lb, height_ref_m=a.height_ref)
+    doc = write_catalog(a.out, overview=a.overview, leaderboard=lb, height_ref_m=a.height_ref,
+                        cfg=load_config(a.config).get("places", {}))
     n = {s: sum(1 for p in doc["places"] if p["status"] == s) for s in STATUSES}
     size = (a.out / "catalog.json").stat().st_size
     print(f"catalog: {len(doc['places'])} places {n}, height_ref_m {doc['height_ref_m']}, {size / 1e3:.1f} KB "

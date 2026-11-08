@@ -24,6 +24,8 @@ env:
   SLE_BASE: "/saar-lidar-explorer/"
   VITE_DATA_URL: ${{ vars.SLE_DATA_URL || 'https://open-kirrberg.github.io/saar-lidar-data/' }}
   VITE_AOIS: ${{ vars.SLE_AOIS || 'overall' }}
+  # S3: catalog mode (orte-katalog) only when the repository variable is set; unset = single-AOI mode as before.
+  VITE_CATALOG_URL: ${{ vars.SLE_CATALOG_URL || '' }}
   VITE_IMPRESSUM_URL: ${{ vars.SLE_IMPRESSUM_URL || '' }}
 
 jobs:
