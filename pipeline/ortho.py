@@ -12,6 +12,11 @@ Usage:  uv run python ortho.py <aoi> [--workers 3]
   mean of the level-0 imagery via a 1 m mosaic, edge clamp past the AOI like the height levels). The coarse images
   live under `ortho/` and not under `levels/` because build.py wipes `levels/` on every run.
 - Manifest: `layers.ortho`, `levels[k].layers.ortho` (k = 0 mirrors the top level), attribution — read–modify–write.
+- v3 places (contract "Many places (v3, S2)", rules 2 + 3, "Slim formats"): AVIF q65 (`format: 'avif'`), requests
+  and files only for the present level-0 chunks (`ortho/{i}_{j}.avif`, 1000²) and level 1 only, one 500² image per
+  present tile (`ortho/levels/1/{i}_{j}.avif`); no levels ≥ 2 (those come from the central overview). The raw
+  cache of the covering rectangle AOI (`cache_from`, e.g. homburg-gemeinde) is read and extended in place: cache
+  names are bbox-based and every 1 km aligned place chunk is a chunk of that rectangle (`map_chunk_index`).
 - Raw responses are cached in data/raw/ortho/<aoi>/{sl,rlp}/ (named by bbox; identical files from another AOI's
   cache are hard-linked instead of downloaded again). Work: data/work/<aoi>/ortho_1m.tif, ortho.json.
 
@@ -41,8 +46,9 @@ from typing import Any, Callable
 import numpy as np
 from PIL import Image
 
-from common import (APP_DATA, PREVIEW_DIR, RAW_DIR, SSL_CTX, USER_AGENT, WORK_DIR, fmt_bytes, load_aoi, swap_dir,
+from common import (PREVIEW_DIR, RAW_DIR, SSL_CTX, USER_AGENT, WORK_DIR, fmt_bytes, load_aoi, swap_dir,
                     update_manifest)
+from encode import AVIF_RGB_QUALITY, save_avif_rgb
 from levels import block_mean, level_grid
 
 SL_DOP_WMS = "https://geoportal.saarland.de/freewms/truedop"
@@ -88,6 +94,39 @@ def wms_getmap_url(base: str, layer: str, bbox: tuple[float, float, float, float
 
 def _num(v: float) -> str:
     return str(int(v)) if float(v).is_integer() else repr(float(v))
+
+
+def map_chunk_index(i: int, j: int, e0: int, n_top: int, to_e0: int, to_n_top: int,
+                    chunk_m: int = CHUNK_M) -> tuple[int, int]:
+    """Chunk (i, j) of the rectangle with west edge e0 / north edge n_top → index of the same chunk in another
+    rectangle (to_e0, to_n_top), e.g. a v3 place chunk → the covering cache AOI's chunk. Both on the chunk grid."""
+    if (e0 - to_e0) % chunk_m or (to_n_top - n_top) % chunk_m:
+        raise ValueError("rectangles are not aligned on the same chunk grid")
+    return i + (e0 - to_e0) // chunk_m, j + (to_n_top - n_top) // chunk_m
+
+
+def present_chunk_list(aoi) -> list[tuple[int, int]]:
+    """Level-0 chunks (i, j) to build, row-major: every chunk of a rectangle AOI, only the present ones of a v3
+    place (presence rule 2: chunk (i, j) exists iff its tile is present)."""
+    cs = aoi.chunk_size
+    nx, ny = aoi.width // cs, aoi.height // cs
+    return [(i, j) for j in range(ny) for i in range(nx) if not aoi.is_place or aoi.chunk_present(i, j)]
+
+
+def present_tile_cells(aoi) -> list[tuple[int, int]]:
+    """Level-1 chunks (= present 1 km tiles) of a v3 place as (i, j) in its rectangle, row-major."""
+    from grid import tile_cell
+    return sorted((tile_cell(t, aoi.e0, aoi.n1) for t in aoi.owned), key=lambda c: (c[1], c[0]))
+
+
+def presence_raster(aoi, px_per_m: float = 1.0) -> np.ndarray:
+    """Bool H×W raster of the place rectangle (row 0 = north) at `px_per_m`, True inside present tiles."""
+    tp = int(round(1000 * px_per_m))
+    w, h = aoi.width // 1000, aoi.height // 1000
+    grid = np.zeros((h, w), bool)
+    for c, r in present_tile_cells(aoi):
+        grid[r, c] = True
+    return np.repeat(np.repeat(grid, tp, axis=0), tp, axis=1)
 
 
 def cache_name(layer: str, bbox: tuple[float, float, float, float], px: int, ext: str = "png") -> str:
@@ -255,6 +294,8 @@ def fetch_meta(raw_dir: Path, info: dict[str, Any]) -> dict[str, Any]:
 # ------------------------------------------------------------------------------------------- outputs
 def save_image(path: Path, rgb: np.ndarray, fmt: str, quality: int = WEBP_QUALITY) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if fmt == "avif":
+        return save_avif_rgb(path, rgb, quality)
     img = Image.fromarray(rgb, "RGB")
     if fmt == "webp":
         img.save(path, "WEBP", quality=quality, method=4)
@@ -285,6 +326,23 @@ def write_coarse_levels(out_dir: Path, rel_dir: str, mosaic_1m: np.ndarray, mani
         entries[k] = {**base_entry, "path": f"{rel_dir}/levels/{k}/{{i}}_{{j}}.{fmt}", "pixelsPerChunk": COARSE_PPC}
         print(f"  level {k}: {g['chunks']['nx']}×{g['chunks']['ny']} chunks, {fmt_bytes(nbytes)}", flush=True)
     return entries
+
+
+def write_level1_cells(out_dir: Path, rel_dir: str, mosaic_1m: np.ndarray, cells: list[tuple[int, int]],
+                       base_entry: dict[str, Any], fmt: str, quality: int, cs: int = CHUNK_M) -> dict[int, dict[str, Any]]:
+    """v3 place: level 1 only (rule 3), one `COARSE_PPC`² image per present tile (= level-1 chunk), 2 × 2 area mean
+    of the 1 m mosaic, path `<rel_dir>/levels/1/{i}_{j}.<fmt>`. Returns {1: entry} ({} without cells)."""
+    if not cells:
+        return {}
+    arr = block_mean_rgb(mosaic_1m, 2)
+    nbytes = sum(save_image(out_dir / rel_dir / "levels" / "1" / f"{i}_{j}.{fmt}", chunk_clamped(arr, i, j, cs), fmt,
+                            quality) for i, j in cells)
+    print(f"  level 1: {len(cells)} present chunks, {fmt_bytes(nbytes)}", flush=True)
+    return {1: {**base_entry, "path": f"{rel_dir}/levels/1/{{i}}_{{j}}.{fmt}", "pixelsPerChunk": COARSE_PPC}}
+
+
+def has_level(manifest: dict[str, Any], k: int) -> bool:
+    return any(isinstance(lv, dict) and lv.get("level") == k for lv in manifest.get("levels") or [])
 
 
 def image_layer_patch(manifest: dict[str, Any], key: str, entry0: dict[str, Any],
@@ -361,19 +419,28 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=3, help="parallel requests (max 3)")
     args = ap.parse_args()
     aoi = load_aoi(args.aoi)
-    out = APP_DATA / aoi.key
+    out = aoi.data_dir
     if not (out / "manifest.json").exists():
         sys.exit(f"{out}/manifest.json missing – run build first")
     t0 = time.time()
     cs = aoi.chunk_size
-    nx, ny = aoi.width // cs, aoi.height // cs
     n_top = aoi.n1
-    raw = RAW_DIR / "ortho" / aoi.key
+    v3 = aoi.is_place
+    fmt, quality = ("avif", AVIF_RGB_QUALITY) if v3 else ("webp", WEBP_QUALITY)
+    cache = aoi.cache_aoi() if v3 else None
+    raw = RAW_DIR / "ortho" / (cache.key if cache else aoi.key)   # v3: reuse (and extend) the covering cache
     meta = fetch_meta(raw, {"sl": {"url": SL_DOP_WMS, "layer": SL_DOP_LAYER, "format": "image/png"},
                             "rlp": {"url": RLP_DOP_WMS, "layer": RLP_DOP_LAYER, "format": "image/png; mode=24bit"},
                             "pxPerChunk": ORTHO_PPC, "crs": "EPSG:25832"})
     sl = WmsClient(raw / "sl", share_glob="ortho/*/sl")
     rlp = WmsClient(raw / "rlp", share_glob="ortho/*/rlp")
+    items = present_chunk_list(aoi)
+    if cache is not None:
+        hit = sum((raw / "sl" / cache_name(SL_DOP_LAYER, chunk_bbox(aoi.e0, n_top, i, j, cs), ORTHO_PPC)).exists()
+                  for i, j in items)
+        ci, cj = map_chunk_index(*items[0], aoi.e0, n_top, cache.e0, cache.n1, cs)
+        print(f"cache {cache.key}: {hit}/{len(items)} present chunks cached (chunk {items[0]} = {cache.key} "
+              f"chunk ({ci}, {cj}))", flush=True)
     rel = "ortho"
     # Write into a staging tree and swap it in only after every fetch + level succeeded: a WMS error
     # mid-run must not leave the manifest pointing at a deleted ortho/ (audit pipeline-2).
@@ -395,12 +462,11 @@ def main() -> None:
             layers.append(a_rlp)
         rgb, cov = composite_over(layers)
         rlp_px = int(((a_sl[..., 3] < 255) & (layers[-1][..., 3] > 0)).sum()) if len(layers) > 1 else 0
-        nbytes = save_image(stage_root / rel / f"{i}_{j}.webp", rgb, "webp")
+        nbytes = save_image(stage_root / rel / f"{i}_{j}.{fmt}", rgb, fmt, quality)
         mosaic[j * cs:(j + 1) * cs, i * cs:(i + 1) * cs] = downsample2(rgb)
         return {"i": i, "j": j, "slCoverage": round(sl_cov, 6), "rlpPx": rlp_px,
                 "nodataPx": int((cov < 0.5).sum()), "bytes": nbytes}
 
-    items = [(i, j) for j in range(ny) for i in range(nx)]
     stats = run_pool(do_chunk, items, args.workers)
     t_fetch = time.time() - t0
     n_rlp = sum(s["rlpPx"] for s in stats)
@@ -416,17 +482,23 @@ def main() -> None:
     if n_rlp:
         src += f"; Lücken: WMS RP DOP20 (Layer {RLP_DOP_LAYER}, LVermGeo RLP), abgerufen {date}"
         attribution.append(ATTRIBUTION_DOP_RLP)
-    entry0 = {"path": f"{rel}/{{i}}_{{j}}.webp", "encoding": "rgb", "format": "webp", "pixelsPerChunk": ORTHO_PPC,
+    entry0 = {"path": f"{rel}/{{i}}_{{j}}.{fmt}", "encoding": "rgb", "format": fmt, "pixelsPerChunk": ORTHO_PPC,
               "kind": "image", "label_de": "Luftbild (DOP20)", "attribution": "; ".join(attribution), "source": src}
     t = time.time()
     manifest = json.loads((out / "manifest.json").read_text())
-    coarse = write_coarse_levels(stage_root, rel, mosaic, manifest, "ortho", entry0, "webp", WEBP_QUALITY, cs)
+    if v3:
+        cells = present_tile_cells(aoi) if has_level(manifest, 1) else []
+        coarse = write_level1_cells(stage_root, rel, mosaic, cells, entry0, fmt, quality, cs)
+    else:
+        coarse = write_coarse_levels(stage_root, rel, mosaic, manifest, "ortho", entry0, fmt, quality, cs)
     t_levels = time.time() - t
     swap_dir(stage_root / rel, out / rel)
     shutil.rmtree(stage_root, ignore_errors=True)
     write_image_layer_manifest(out, "ortho", entry0, coarse, attribution=attribution,
                                drop_attribution=[] if n_rlp else [ATTRIBUTION_DOP_RLP])
-    write_geotiff_rgb(WORK_DIR / aoi.key / "ortho_1m.tif", mosaic, aoi.e0, n_top, 1.0)
+    # v3: alpha band = presence, so a covering-raster reader never takes black absent tiles for imagery
+    work = np.dstack([mosaic, presence_raster(aoi).astype(np.uint8) * 255]) if v3 else mosaic
+    write_geotiff_rgb(WORK_DIR / aoi.key / "ortho_1m.tif", work, aoi.e0, n_top, 1.0)
     save_preview(PREVIEW_DIR / f"{aoi.key}_ortho.jpg", mosaic)
     total = sum(p.stat().st_size for p in (out / rel).rglob("*") if p.is_file())
     report = {"aoi": aoi.key, "chunks": len(stats), "level0Bytes": l0_bytes, "totalBytes": total,
@@ -436,6 +508,9 @@ def main() -> None:
                                                  "total": round(time.time() - t0, 1)},
               "chunksWithRlp": [[s["i"], s["j"]] for s in stats if s["rlpPx"]],
               "chunksWithNodata": [[s["i"], s["j"], s["nodataPx"]] for s in stats if s["nodataPx"]]}
+    if v3:
+        report.update({"format": fmt, "presentTiles": len(aoi.owned), "cacheFrom": cache.key if cache else None,
+                       "mbPerKm2": round(total / 1e6 / len(aoi.owned), 3)})
     (WORK_DIR / aoi.key).mkdir(parents=True, exist_ok=True)
     (WORK_DIR / aoi.key / "ortho.json").write_text(json.dumps(report, indent=2) + "\n")
     print(f"ortho {aoi.key}: {fmt_bytes(total)} total, done in {time.time() - t0:.0f}s")
