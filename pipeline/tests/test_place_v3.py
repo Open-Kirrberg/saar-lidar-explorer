@@ -223,3 +223,11 @@ def test_generated_v3_manifest_rules(d, m):
             continue
         stems = {p.name.rsplit(".", 1)[0] for p in (d / Path(lay["path"]).parent).glob("*")}
         assert stems <= {f"{i}_{j}" for i, j in present}, key
+
+
+def test_implausible_heights_are_no_data():
+    sl = np.full((5, 5), 300.0, np.float32)
+    sl[2, 2] = 0.0
+    sl[0, 0] = -0.26
+    dtm, mask = B.fill_heights(sl, np.full_like(sl, np.nan), B.RLP_OFFSET_V3_M)
+    assert dtm.min() == 300.0 and mask[2, 2] == 1.0 and mask[0, 0] == 1.0

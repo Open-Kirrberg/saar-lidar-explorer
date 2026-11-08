@@ -354,9 +354,16 @@ def v3_layer_entry(key: str, path: str) -> dict:
     return e
 
 
+# v3: heights below this are source errors, not terrain (two SL 2025 tiles, 343_5457 and 327_5485, hold ≈ 100
+# pixels of 0 / −0.26 m; the lowest real terrain of the catalog area is ≈ 137 m at the Moselle). Treated as no data.
+MIN_VALID_HEIGHT_M = 50.0
+
+
 def fill_heights(sl: np.ndarray, rlp: np.ndarray, off: float) -> tuple[np.ndarray, np.ndarray]:
     """SL first, RLP + offset where SL has no data, nearest fill for the rest (within the given array only).
     Returns (dtm float32, mask: 0 = SL, 0.5 = RLP, 1 = interpolated)."""
+    sl = np.where(sl < MIN_VALID_HEIGHT_M, np.nan, sl)
+    rlp = np.where(rlp < MIN_VALID_HEIGHT_M, np.nan, rlp)
     use_rlp = ~np.isfinite(sl) & np.isfinite(rlp)
     dtm = np.where(use_rlp, rlp + np.float32(off), sl).astype(np.float32)
     mask = np.zeros(sl.shape, np.float32)
@@ -369,6 +376,8 @@ def fill_heights(sl: np.ndarray, rlp: np.ndarray, off: float) -> tuple[np.ndarra
 
 
 def fill_surface(dsl: np.ndarray, drlp: np.ndarray, dtm: np.ndarray, off: float) -> np.ndarray:
+    dsl = np.where(dsl < MIN_VALID_HEIGHT_M, np.nan, dsl)
+    drlp = np.where(drlp < MIN_VALID_HEIGHT_M, np.nan, drlp)
     use = ~np.isfinite(dsl) & np.isfinite(drlp)
     dsm = np.where(use, drlp + np.float32(off), dsl)
     dsm = np.where(np.isfinite(dsm), dsm, dtm)
