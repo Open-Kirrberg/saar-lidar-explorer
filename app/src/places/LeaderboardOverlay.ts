@@ -8,6 +8,8 @@
  *    decimals per column + a thin bar), sticky head and place column, sortable, Alle / Städte / Dörfer;
  *  - Medaillenspiegel: olympic medal count, no weighted total (ADR 0050);
  *  - Vergleichen: 2–3 places side by side with bars, the difference in words and „So kommt … nach oben“.
+ * S1 (ADR 0051): with several levels a switch Gemeinden / Ortsteile on every tab; one level at a time
+ * (the panel loads the other level and hands it in with `setData`), never mixed in one ranking.
  * Pure logic: compare.ts. Wired from PlacesPanel.ts (board buttons, 🏆 map button, key U, place card).
  */
 import { el, ICONS } from '../shell/dom';
@@ -15,9 +17,10 @@ import { copyText } from '../ui/clipboard';
 import { isTyping } from '../ui/keys';
 import { isolateModalKeys } from '../ui/modalKeys';
 import {
-  CATEGORY_LABELS,
   barFraction,
   buildMatrix,
+  categoryOptions,
+  dativePlural,
   climbFor,
   columnDecimals,
   columnHead,
@@ -30,8 +33,8 @@ import {
   withCompareParam,
 } from './compare';
 import type { CategoryFilter, Cell, ClimbSummary, Matrix } from './compare';
-import { fmtValue, otherFlight, otherFlightNote } from './placesData';
-import type { Discipline, Goal, Place, PlacesData } from './placesData';
+import { ORTSPATE_URL, fmtValue, otherFlight, otherFlightNote, pendingText, placeTitle } from './placesData';
+import type { Discipline, Goal, Place, PlacesData, StatsLevel } from './placesData';
 
 export type OverlayTab = 'tabelle' | 'medaillen' | 'vergleich';
 
@@ -46,6 +49,10 @@ export interface OverlayDeps {
   /** The place currently selected in the panel (row highlight). */
   selectedId: () => string | null;
   onClose?: () => void;
+  /** S1: the levels of the switch (≥ 2), display order; absent → no switch. */
+  levels?: Array<{ level: StatsLevel; label_de: string }>;
+  /** The user picked another level: the panel loads it and calls `setData` (or keeps the old one). */
+  onLevel?: (level: StatsLevel) => void;
 }
 
 export interface LeaderboardHandle {
@@ -56,6 +63,8 @@ export interface LeaderboardHandle {
   show(o: OverlayOptions): void;
   /** The panel's selection changed: move the row highlight. */
   setSelected(id: string | null): void;
+  /** Another level's data (level switch): filter, sort and comparison start fresh. */
+  setData(data: PlacesData, o?: OverlayOptions): void;
 }
 
 export interface OverlayOptions {
@@ -120,19 +129,26 @@ function renderClimb(s: ClimbSummary, onGoal?: (g: Goal) => void): HTMLElement {
   root.append(
     el('p', {
       class: 'sle-cmpx-fine sle-small',
-      text: 'Abstand zum nächstbesseren Platz, grob umgerechnet auf die ganze Gemarkung (bei ☀️ die Gemeinde) – keine einzelnen Grundstücke oder Gebäude. Gemessen wird erst mit der nächsten Befliegung.',
+      text:
+        s.place.kind === 'gemeinde'
+          ? 'Abstand zum nächstbesseren Platz, grob umgerechnet auf die ganze Gemeinde – keine einzelnen Grundstücke oder Gebäude. Gemessen wird erst mit der nächsten Befliegung oder Karte.'
+          : 'Abstand zum nächstbesseren Platz, grob umgerechnet auf die ganze Gemarkung (bei ☀️ die Gemeinde) – keine einzelnen Grundstücke oder Gebäude. Gemessen wird erst mit der nächsten Befliegung.',
     }),
   );
   return root;
 }
 
 export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): LeaderboardHandle {
-  const { data } = deps;
+  let data = deps.data;
   let tab: OverlayTab = opts.tab ?? 'tabelle';
   let filter: CategoryFilter = 'alle';
   let sortBy: string | null = opts.sortBy ?? null;
   let selected = deps.selectedId();
-  const byName = [...data.places].sort((a, b) => a.name_de.localeCompare(b.name_de, 'de'));
+  const sortedByName = () => [...data.places].sort((a, b) => a.name_de.localeCompare(b.name_de, 'de'));
+  let byName = sortedByName();
+  const gemeindeLevel = () => data.level === 'gemeinde';
+  /** „Ort“ / „Gemeinde“ in pickers and headings. */
+  const unitWord = () => (gemeindeLevel() ? 'Gemeinde' : 'Ort');
   const pickIds = (want: readonly string[] | undefined) => {
     let out = (want ?? []).filter((id) => data.places.some((p) => p.id === id)).slice(0, 3);
     if (out.length < 2) out = [...new Set([...out, ...byName.map((p) => p.id)])].slice(0, 2);
@@ -181,19 +197,52 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
     return g;
   };
 
-  const filterRow = () =>
-    el(
+  /** S1: level switch (Gemeinden / Ortsteile) on every tab; the panel loads the level. */
+  const levelRow = () => {
+    const lv = deps.levels;
+    if (!lv || lv.length < 2) return null;
+    return el(
+      'div',
+      { class: 'sle-cmpx-tools sle-cmpx-levels' },
+      seg<StatsLevel>('Ebene', lv.map((l) => [l.level, l.label_de]), data.level, (v) => {
+        if (v !== data.level) deps.onLevel?.(v);
+      }),
+      el('span', { class: 'sle-dim sle-small', text: gemeindeLevel() ? 'Gemeinden mit Gemeinden verglichen' : 'Ortsteile mit Ortsteilen verglichen' }),
+    );
+  };
+
+  const filterRow = () => {
+    const opts = categoryOptions(data);
+    const label = opts.find(([k]) => k === filter)?.[1] ?? filter;
+    return el(
       'div',
       { class: 'sle-cmpx-tools' },
-      seg<CategoryFilter>('Größenklasse', (['alle', 'stadt', 'dorf'] as const).map((k) => [k, CATEGORY_LABELS[k]]), filter, (v) => {
+      seg<CategoryFilter>('Größenklasse', opts, filter, (v) => {
         filter = v;
         render();
       }),
-      filter !== 'alle' ? el('span', { class: 'sle-dim sle-small', text: `Ränge nur unter den ${CATEGORY_LABELS[filter]}n` }) : null,
+      filter !== 'alle' ? el('span', { class: 'sle-dim sle-small', text: `Ränge nur unter den ${dativePlural(label)}` }) : null,
     );
+  };
+
+  /** Disciplines still being computed on this level: one line, no column and no ranking. */
+  const pendingRow = (m: Matrix) =>
+    m.pending.length
+      ? el('p', { class: 'sle-cmpx-pending sle-small', role: 'note' }, `⏳ ${m.pending.map(dName).join(', ')}: ${pendingText(data)} – noch ohne Rangliste.`)
+      : null;
+
+  /** Status marker of a Gemeinde (S1): 🙋 Ortspate gesucht (link to the org) / 🏗 3D im Aufbau. */
+  const statusTag = (p: Place) => {
+    if (p.status === 'stats') {
+      const t = `Ortspate gesucht: ${p.name_de} hat noch kein 3D-Modell – mitmachen bei Open-Kirrberg auf GitHub`;
+      return el('a', { class: 'sle-cmpx-tag pate', href: ORTSPATE_URL, target: '_blank', rel: 'noopener noreferrer', title: t, 'aria-label': t, text: '🙋' });
+    }
+    if (p.status === 'building') return el('span', { class: 'sle-cmpx-tag build', title: '3D im Aufbau', 'aria-label': '3D im Aufbau', text: '🏗' });
+    return null;
+  };
 
   const placeBtn = (p: Place) => {
-    const b = el('button', { type: 'button', class: 'sle-cmpx-place', title: `Gemarkung ${p.name_de}: Karte öffnen und hinfliegen` }, p.name_de);
+    const b = el('button', { type: 'button', class: 'sle-cmpx-place', title: `${placeTitle(p)}: Karte öffnen und hinfliegen` }, p.name_de);
     b.addEventListener('click', () => pick(p));
     return b;
   };
@@ -209,7 +258,7 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
   const cellEl = (d: Discipline, c: Cell | undefined, digits: number, ext: Matrix['extent'][string] | undefined) => {
     const td = el('td', {});
     if (!c) return td;
-    if (d.scope === 'municipality') td.classList.add('mun');
+    if (d.scope === 'municipality' && !gemeindeLevel()) td.classList.add('mun');
     const val = el('span', { class: 'sle-cmpx-v', text: fmtFixed(c.value, digits) });
     if (c.rank !== null) {
       const rk = el('span', { class: `sle-cmpx-rk${c.rank <= 3 ? ` m m${c.rank}` : ''}`, text: c.rank <= 3 ? MEDALS[c.rank - 1] : String(c.rank), 'aria-label': `Platz ${c.rank} von ${c.of}:` });
@@ -221,7 +270,7 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
         bar.style.width = `${Math.max(3, f * 100)}%`;
         td.append(bar);
       }
-      td.title = `${d.name_de}: ${fmtValue(c.value, d.unit)}, Platz ${c.rank} von ${c.of}${d.scope === 'municipality' && c.municipality ? ` (Gemeinde ${c.municipality.name_de}, gilt für alle ihre Gemarkungen)` : ''}`;
+      td.title = `${d.name_de}: ${fmtValue(c.value, d.unit)}, Platz ${c.rank} von ${c.of}${d.scope === 'municipality' && c.municipality && !gemeindeLevel() ? ` (Gemeinde ${c.municipality.name_de}, gilt für alle ihre Gemarkungen)` : ''}`;
     } else {
       td.classList.add('unranked');
       td.title = `${d.name_de}: ohne Rang – ${c.reason ?? 'keine Daten'}`;
@@ -233,7 +282,7 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
   const renderTable = (m: Matrix) => {
     const head = el('tr', {});
     const nameTh = el('th', { scope: 'col', class: `sticky${sortBy ? '' : ' on'}`, 'aria-sort': sortBy ? 'none' : 'ascending' });
-    const nameBtn = el('button', { type: 'button', class: 'sle-cmpx-sort', title: 'Nach Namen sortieren', 'data-k': 'sort:' }, el('span', { class: 'sle-cmpx-h1', text: `Ort${sortBy ? '' : ' ▾'}` }), el('span', { class: 'sle-cmpx-h2', text: 'A–Z' }));
+    const nameBtn = el('button', { type: 'button', class: 'sle-cmpx-sort', title: 'Nach Namen sortieren', 'data-k': 'sort:' }, el('span', { class: 'sle-cmpx-h1', text: `${unitWord()}${sortBy ? '' : ' ▾'}` }), el('span', { class: 'sle-cmpx-h2', text: 'A–Z' }));
     nameBtn.addEventListener('click', () => {
       sortBy = null;
       render();
@@ -244,8 +293,8 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
     for (const d of m.disciplines) {
       digits[d.id] = columnDecimals(m.rows.map((r) => r.cells[d.id]?.value ?? null));
       const on = sortBy === d.id;
-      const h = columnHead(d);
-      const th = el('th', { scope: 'col', 'aria-sort': on ? 'ascending' : 'none', class: `${on ? 'on' : ''}${d.scope === 'municipality' ? ' mun' : ''}`.trim() || undefined });
+      const h = columnHead(d, data.level);
+      const th = el('th', { scope: 'col', 'aria-sort': on ? 'ascending' : 'none', class: `${on ? 'on' : ''}${d.scope === 'municipality' && !gemeindeLevel() ? ' mun' : ''}`.trim() || undefined });
       const b = el(
         'button',
         { type: 'button', class: 'sle-cmpx-sort', title: `${d.name_de} (${d.unit}): ${d.description_de}${d.note_de ? ` – ${d.note_de}` : ''} · antippen: nach Rang sortieren`, 'data-k': `sort:${d.id}` },
@@ -266,7 +315,13 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
       const p = r.place;
       const tags = [p.category === 'stadt' ? 'Stadt' : p.category === 'dorf' ? 'Dorf' : null, p.complete ? null : 'unvollständig'].filter(Boolean).join(' · ');
       const ft = flightTag(p);
-      const th = el('th', { scope: 'row', class: 'sticky' }, placeBtn(p), tags || ft ? el('span', { class: 'sle-cmpx-ptags' }, tags, ft ? ' ' : null, ft) : null);
+      const st = statusTag(p);
+      const th = el(
+        'th',
+        { scope: 'row', class: 'sticky' },
+        placeBtn(p),
+        tags || ft || st ? el('span', { class: 'sle-cmpx-ptags' }, tags, ft ? ' ' : null, ft, st ? ' ' : null, st) : null,
+      );
       const tr = el('tr', { 'data-id': p.id, class: p.id === selected ? 'sel' : undefined }, th);
       for (const d of m.disciplines) tr.append(cellEl(d, r.cells[d.id], digits[d.id], m.extent[d.id]));
       tbody.append(tr);
@@ -274,7 +329,7 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
     const table = el(
       'table',
       { class: 'sle-cmpx-table' },
-      el('caption', { class: 'sle-sr', text: `Alle Ranglisten (${CATEGORY_LABELS[filter]}): Platz und Wert je Disziplin; Einheiten im Spaltenkopf` }),
+      el('caption', { class: 'sle-sr', text: `Alle Ranglisten (${gemeindeLevel() ? 'Gemeinden' : 'Ortsteile'}, ${categoryOptions(data).find(([k]) => k === filter)?.[1] ?? filter}): Platz und Wert je Disziplin; Einheiten im Spaltenkopf` }),
       el('thead', {}, head),
       tbody,
     );
@@ -298,12 +353,17 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
         { class: 'sle-cmpx-notes' },
         el('li', { text: '🥇🥈🥉 / Zahl = Platz, daneben der Wert (Einheit im Spaltenkopf). Der dünne Balken zeigt, wo der Wert zwischen schlechtestem und bestem Ort liegt – länger ist besser. Gleiche Werte teilen sich den Platz.' }),
         el('li', { text: 'Spaltenkopf antippen: nach dieser Disziplin sortieren. Ortsname antippen: Karte des Orts öffnen und hinfliegen.' }),
-        ...[...reasons].map(([k, names]) => el('li', { text: `„–“ ${k} – ${names.join(', ')}` })),
-        m.disciplines.some((d) => d.scope === 'municipality') ? el('li', { text: '☀️ Sonne ist ein Gemeindewert (Marktstammdatenregister nur pro Gemeinde): Gemarkungen einer Gemeinde teilen sich Wert und Platz; die Spalte ist leicht getönt.' }) : null,
+        ...[...reasons].map(([k, names]) => el('li', { text: `„–“ ${k} – ${names.length > 12 ? `${names.slice(0, 12).join(', ')} und ${names.length - 12} weitere` : names.join(', ')}` })),
+        m.disciplines.some((d) => d.scope === 'municipality') && !gemeindeLevel()
+          ? el('li', { text: '☀️ Sonne ist ein Gemeindewert (Marktstammdatenregister nur pro Gemeinde): Gemarkungen einer Gemeinde teilen sich Wert und Platz; die Spalte ist leicht getönt.' })
+          : null,
+        data.places.some((p) => p.status === 'stats')
+          ? el('li', {}, '🙋 = Ortspate gesucht: noch kein 3D-Modell. Wer seine Gemeinde in 3D bringen möchte, startet bei ', el('a', { href: ORTSPATE_URL, target: '_blank', rel: 'noopener noreferrer', text: 'Open-Kirrberg auf GitHub' }), '. 🏗 = 3D im Aufbau.')
+          : null,
         data.places.some((p) => p.flags.includes('other-flight')) ? el('li', { text: `✈ = andere Befliegung (RLP 2022)${data.rlpTreeRatio && data.rlpTreeRatio > 1 ? `: dort ≈ ${Math.round((data.rlpTreeRatio - 1) * 100)} % mehr Bäume gezählt` : ''}.` }) : null,
       ),
     );
-    return [filterRow(), scroll, legend];
+    return [levelRow(), filterRow(), pendingRow(m), scroll, legend];
   };
 
   // ---- Medaillenspiegel ----------------------------------------------------------------------------
@@ -332,14 +392,22 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
     }
     const arten = ds.find((d) => d.note_de);
     return [
+      levelRow(),
       filterRow(),
+      pendingRow(m),
       el('p', { class: 'sle-cmpx-why', text: 'Keine Gesamtpunktzahl: Jede Gewichtung der Disziplinen wäre willkürlich (zählt Beton doppelt so viel wie Bäume?). Deshalb zählen wir Medaillen wie bei Olympia – erst Gold, dann Silber, dann Bronze.' }),
       ol,
       el(
         'ul',
         { class: 'sle-cmpx-notes sle-small' },
         el('li', { text: `Gezählt: ${ds.map(dName).join(', ')}. Gleiche Werte teilen sich die Medaille; unvollständige Orte und Orte ohne Daten bekommen dort keine.` }),
-        m.disciplines.some((d) => d.scope === 'municipality') ? el('li', { text: '☀️ Sonnenstärkster Ort zählt nicht mit: ein Gemeindewert, den sich mehrere Gemarkungen teilen.' }) : null,
+        m.disciplines.some((d) => d.scope === 'municipality')
+          ? el('li', {
+              text: gemeindeLevel()
+                ? `${m.disciplines.filter((d) => d.scope === 'municipality').map(dName).join(', ')} zählt nicht mit: Werte aus dem Marktstammdatenregister bleiben wie bei den Ortsteilen außerhalb des Medaillenspiegels.`
+                : '☀️ Sonnenstärkster Ort zählt nicht mit: ein Gemeindewert, den sich mehrere Gemarkungen teilen.',
+            })
+          : null,
         arten ? el('li', { text: `${dName(arten)} zählt mit, ist aber nur ein grober Hinweis – der Wert hängt davon ab, wer wo beobachtet und meldet. Orte mit zu wenigen Meldungen bekommen dort keine Medaille.` }) : null,
       ),
     ];
@@ -352,8 +420,8 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
     const m = buildMatrix(data); // all places: the panel's ranks
     const pickers = el('div', { class: 'sle-cmpx-pickers' });
     for (let slot = 0; slot < 3; slot++) {
-      const sel = el('select', { 'aria-label': `Ort ${slot + 1}`, 'data-k': `sel:${slot}` });
-      if (slot === 2) sel.append(el('option', { value: '', text: '– kein dritter Ort –' }));
+      const sel = el('select', { 'aria-label': `${unitWord()} ${slot + 1}`, 'data-k': `sel:${slot}` });
+      if (slot === 2) sel.append(el('option', { value: '', text: gemeindeLevel() ? '– keine dritte Gemeinde –' : '– kein dritter Ort –' }));
       for (const p of byName) sel.append(el('option', { value: p.id, text: p.name_de }));
       sel.value = ids[slot] ?? '';
       sel.addEventListener('change', () => {
@@ -366,7 +434,7 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
         if (ids.length < 2) ids = [...new Set([...ids, ...byName.map((p) => p.id)])].slice(0, 2);
         render();
       });
-      pickers.append(el('label', { class: 'sle-cmpx-picker' }, el('span', { class: 'sle-small sle-dim', text: `Ort ${slot + 1}` }), sel));
+      pickers.append(el('label', { class: 'sle-cmpx-picker' }, el('span', { class: 'sle-small sle-dim', text: `${unitWord()} ${slot + 1}` }), sel));
     }
     const duels = headToHead(m, ids, data.rlpTreeRatio);
     const list = el('div', { class: 'sle-cmpx-duels' });
@@ -375,7 +443,7 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
       const sec = el(
         'section',
         { class: 'sle-cmpx-duel' },
-        el('h3', {}, dName(d), d.scope === 'municipality' ? el('span', { class: 'sle-cmpx-sub', text: ' Gemeindewert' }) : null, d.note_de ? el('span', { class: 'sle-cmpx-sub', text: ' grober Hinweis' }) : null),
+        el('h3', {}, dName(d), d.scope === 'municipality' && !gemeindeLevel() ? el('span', { class: 'sle-cmpx-sub', text: ' Gemeindewert' }) : null, d.note_de ? el('span', { class: 'sle-cmpx-sub', text: ' grober Hinweis' }) : null),
       );
       for (const e of duel.entries) {
         const bar = el('span', { class: 'sle-cmpx-bar', 'aria-hidden': 'true' });
@@ -416,14 +484,17 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
     }
     const copy = el('button', { type: 'button', class: 'sle-btn', text: '🔗 Link zu diesem Vergleich kopieren' });
     copy.addEventListener('click', () => {
-      const url = `${location.origin}${location.pathname}${withCompareParam(location.search, ids)}${location.hash}`;
+      // With levels the link names its level (`ebene=`), so it opens the same board later.
+      const url = `${location.origin}${location.pathname}${withCompareParam(location.search, ids, deps.levels && deps.levels.length > 1 ? data.level : null)}${location.hash}`;
       void copyText(url).then((ok) => {
         linkStatus.textContent = ok ? 'Link kopiert.' : `Kopieren nicht möglich: ${url}`;
       });
     });
     return [
+      levelRow(),
       pickers,
-      el('p', { class: 'sle-dim sle-small', text: 'Balken: von schlechtestem bis bestem Ort der ganzen Rangliste – länger ist besser (auch bei „Wenigsten Beton“). ★ = vorn in diesem Vergleich.' }),
+      el('p', { class: 'sle-dim sle-small', text: `Balken: von schlechtestem bis bestem ${gemeindeLevel() ? 'Wert aller Gemeinden' : 'Ort der ganzen Rangliste'} – länger ist besser${gemeindeLevel() ? '' : ' (auch bei „Wenigsten Beton“)'}. ★ = vorn in diesem Vergleich.` }),
+      pendingRow(m),
       list,
       climbs,
       el('div', { class: 'sle-cmpx-actions' }, copy, linkStatus),
@@ -449,7 +520,8 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
       tabs.append(b);
     }
     const m = tab === 'vergleich' ? null : buildMatrix(data, filter);
-    view.replaceChildren(...(tab === 'tabelle' ? renderTable(m!) : tab === 'medaillen' ? renderMedals(m!) : renderCompare()));
+    const parts: Array<Node | null> = tab === 'tabelle' ? renderTable(m!) : tab === 'medaillen' ? renderMedals(m!) : renderCompare();
+    view.replaceChildren(...parts.filter((n): n is Node => !!n));
     view.dataset.tab = tab;
     // Re-rendering replaces the buttons: keep keyboard focus on the same control.
     if (keep) body.querySelector<HTMLElement>(`[data-k="${keep}"]`)?.focus({ preventScroll: true });
@@ -519,6 +591,16 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): L
     isOpen: () => open,
     close,
     setSelected,
+    setData(next: PlacesData, o: OverlayOptions = {}) {
+      data = next;
+      byName = sortedByName();
+      filter = 'alle';
+      sortBy = o.sortBy !== undefined ? o.sortBy : sortBy && data.disciplines.some((d) => d.id === sortBy) ? sortBy : null;
+      ids = pickIds(o.compare);
+      if (o.tab) tab = o.tab;
+      selected = deps.selectedId();
+      render();
+    },
     show(o: OverlayOptions) {
       if (o.tab) tab = o.tab;
       if (o.compare) ids = pickIds(o.compare);

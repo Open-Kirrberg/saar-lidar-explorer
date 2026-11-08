@@ -21,6 +21,15 @@ export const PLACE_OPEN_EVENT = 'sle:place-open';
  */
 export const TREE_CARD_OPEN_EVENT = 'sle:tree-card-open';
 
+/** Leaderboard levels (contract „Gemeinde level“, ADR 0051): never mixed in one ranking. */
+export type StatsLevel = 'gemeinde' | 'ortsteil';
+export const STATS_LEVELS_FORMAT = 'sle-stats-levels-v1';
+const LEVELS: readonly StatsLevel[] = ['gemeinde', 'ortsteil'];
+export const isStatsLevel = (v: unknown): v is StatsLevel => typeof v === 'string' && (LEVELS as readonly string[]).includes(v);
+
+/** GitHub org where a new Ortspate starts (plan „Orte skalieren“ R1; no per-place repo URLs yet). */
+export const ORTSPATE_URL = 'https://github.com/Open-Kirrberg';
+
 /** Manifest key `stats` (contract „Manifest key“). */
 export interface ManifestStats {
   format: typeof STATS_FORMAT;
@@ -29,6 +38,44 @@ export interface ManifestStats {
   generated?: string;
   places?: number;
   label_de: string;
+  /** Contract „Gemeinde level“: absent = 'ortsteil' (all files before S1). */
+  level?: StatsLevel;
+}
+
+/** Manifest key `stats_levels` (`sle-stats-levels-v1`): the levels of the board, display order. */
+export interface StatsLevelEntry {
+  level: StatsLevel;
+  /** AOI dir under the same data root whose manifest `stats` holds this level. */
+  aoi: string;
+  label_de: string;
+}
+
+export interface StatsLevels {
+  format: typeof STATS_LEVELS_FORMAT;
+  levels: StatsLevelEntry[];
+}
+
+/** Level of a manifest `stats` key (absent → 'ortsteil'). */
+export const statsLevelOf = (m: Pick<ManifestStats, 'level'>): StatsLevel => m.level ?? 'ortsteil';
+
+/**
+ * Contract „stats_levels“: other format / no array → absent; unknown levels, non-`[\w-]+` AOI names and
+ * repeated levels are dropped; `label_de` defaults to „Gemeinden“ / „Ortsteile“. No valid entry → absent.
+ */
+export function parseStatsLevels(v: unknown): StatsLevels | undefined {
+  if (!isObj(v)) return undefined;
+  if (v.format !== STATS_LEVELS_FORMAT || !Array.isArray(v.levels)) {
+    console.warn('[places] manifest.stats_levels: unknown format, ignored', v.format);
+    return undefined;
+  }
+  const levels: StatsLevelEntry[] = [];
+  for (const e of v.levels) {
+    if (!isObj(e) || !isStatsLevel(e.level) || levels.some((l) => l.level === e.level)) continue;
+    const aoi = str(e.aoi);
+    if (!aoi || !/^[\w-]+$/.test(aoi)) continue;
+    levels.push({ level: e.level, aoi, label_de: str(e.label_de) || (e.level === 'gemeinde' ? 'Gemeinden' : 'Ortsteile') });
+  }
+  return levels.length ? { format: STATS_LEVELS_FORMAT, levels } : undefined;
 }
 
 export type Range = [lo: number, mid: number, hi: number];
@@ -139,13 +186,29 @@ export interface Goal {
   note_de: string | null;
 }
 
+/** Gemeinde level: '3d' = whole Gemeinde in 3D, 'building' = 3D in preparation / partial, 'stats' = numbers only. */
+export type PlaceStatus = '3d' | 'building' | 'stats';
+/** Per place and discipline (Gemeinde level): 'pending' = input not processed yet, 'none' = no source here. */
+export type DisciplineState = 'ready' | 'pending' | 'none';
+
 export interface Place {
   id: string;
   name_de: string;
   kind: string;
   state: string;
   municipality: string | null;
-  category: 'stadt' | 'dorf' | null;
+  /** Size class: 'stadt' / 'dorf' (Ortsteile, by inhabitants) or 'stadt' / 'gemeinde' (Gemeinden, legal status). */
+  category: 'stadt' | 'dorf' | 'gemeinde' | null;
+  // ---- Gemeinde level (S1; null / empty on the Ortsteile level) ----
+  ags: string | null;
+  status: PlaceStatus | null;
+  place_aoi: string | null;
+  /** Its places on the Ortsteile level (ids in that AOI's stats). */
+  ortsteile: { aoi: string; places: string[] } | null;
+  discipline_state: Record<string, DisciplineState>;
+  forest_pct: number | null;
+  ortslage_canopy_pct: number | null;
+  ortslage_area_ha: number | null;
   complete: boolean;
   flags: string[];
   suppressed: string[];
@@ -217,6 +280,14 @@ export interface PlaceLabels {
 }
 
 export interface PlacesData {
+  /** Contract „Gemeinde level“: top-level `level`, absent = 'ortsteil'. */
+  level: StatsLevel;
+  /** Gemeinde level: every discipline ready for every place (absent → true). */
+  complete: boolean;
+  /** Gemeinde level: state of the slow LiDAR run (informative), or null. */
+  progress: { lidar: { tiles_done: number | null; tiles_total: number | null; pct: number | null; places_done: number | null } } | null;
+  /** Labels of the size-class filter (`categories_de`; default Städte / Dörfer). */
+  categories: Record<string, string>;
   generated: string;
   label_de: string;
   disclaimer_de: string;
@@ -273,6 +344,8 @@ export function parseManifestStats(v: unknown): ManifestStats | undefined {
   if (geometry) out.geometry = geometry;
   if (str(v.generated)) out.generated = v.generated as string;
   if (num(v.places) !== null) out.places = v.places as number;
+  if (isStatsLevel(v.level)) out.level = v.level;
+  else if (v.level !== undefined) console.warn('[places] manifest.stats.level: unknown level, treated as Ortsteile', v.level);
   return out;
 }
 
@@ -425,14 +498,32 @@ export function parsePlace(v: unknown): Place | null {
   const name = str(v.name_de);
   if (!id || !name) return null; // contract: a place without string id / name_de is skipped
   const flags = strArr(v.flags);
-  const cat = v.category === 'stadt' || v.category === 'dorf' ? v.category : null;
+  const cat = v.category === 'stadt' || v.category === 'dorf' || v.category === 'gemeinde' ? v.category : null;
+  const kind = str(v.kind) ?? 'gemarkung';
+  // Contract: unknown `status` → 'stats'; only Gemeinde-level places carry one.
+  const status: PlaceStatus | null =
+    v.status === '3d' || v.status === 'building' || v.status === 'stats' ? v.status : v.status !== undefined || kind === 'gemeinde' ? 'stats' : null;
+  const ot = isObj(v.ortsteile) && str(v.ortsteile.aoi) ? { aoi: v.ortsteile.aoi as string, places: strArr(v.ortsteile.places) } : null;
+  // Contract: unknown `discipline_state` values → 'pending'.
+  const ds: Record<string, DisciplineState> = {};
+  if (isObj(v.discipline_state)) {
+    for (const [k, s] of Object.entries(v.discipline_state)) ds[k] = s === 'ready' || s === 'none' ? s : 'pending';
+  }
   return {
     id,
     name_de: name,
-    kind: str(v.kind) ?? 'gemarkung',
+    kind,
     state: str(v.state) ?? '',
     municipality: str(v.municipality),
     category: cat,
+    ags: str(v.ags),
+    status,
+    place_aoi: str(v.place_aoi),
+    ortsteile: ot && ot.places.length ? ot : null,
+    discipline_state: ds,
+    forest_pct: num(v.forest_pct),
+    ortslage_canopy_pct: num(v.ortslage_canopy_pct),
+    ortslage_area_ha: num(v.ortslage_area_ha),
     complete: v.complete !== false && !flags.includes('cut-by-aoi'),
     flags,
     suppressed: strArr(v.suppressed),
@@ -520,7 +611,20 @@ export function parsePlacesFile(v: unknown): PlacesData | null {
     isObj(x) ? Object.fromEntries(Object.entries(x).filter((e): e is [string, string] => typeof e[1] === 'string')) : {};
   const inputs = isObj(v.inputs) ? v.inputs : {};
   const inputNotes = [...new Set(Object.values(inputs).map((i) => (isObj(i) ? str(i.note_de) : null)).filter((n): n is string => !!n))];
+  if (v.level !== undefined && !isStatsLevel(v.level)) {
+    console.warn('[places] places.json: unknown level, ignored', v.level);
+    return null;
+  }
+  const level: StatsLevel = isStatsLevel(v.level) ? v.level : 'ortsteil';
+  const cats = strMap(v.categories_de);
+  const lidar = isObj(v.progress) && isObj(v.progress.lidar) ? v.progress.lidar : null;
   return {
+    level,
+    complete: v.complete !== false,
+    progress: lidar
+      ? { lidar: { tiles_done: num(lidar.tiles_done), tiles_total: num(lidar.tiles_total), pct: num(lidar.pct), places_done: num(lidar.places_done) } }
+      : null,
+    categories: Object.keys(cats).length ? cats : level === 'gemeinde' ? { stadt: 'Städte', gemeinde: 'Gemeinden' } : { stadt: 'Städte', dorf: 'Dörfer' },
     generated: str(v.generated) ?? '',
     label_de: str(v.label_de) ?? 'Orte im Vergleich',
     disclaimer_de: str(v.disclaimer_de) ?? '',
@@ -699,7 +803,10 @@ export function otherFlightNote(p: Pick<Place, 'lidar_epochs' | 'lidar_epoch'>, 
 /** Badges of a place (list rows and the card): other flight, Stadt/Dorf, incomplete, estimate. */
 export function placeBadges(p: Place, rlpTreeRatio: number | null): Badge[] {
   const out: Badge[] = [];
-  if (p.category) {
+  if (p.status === 'stats') out.push({ key: 'status-stats', text: 'Ortspate gesucht', title: 'Noch kein 3D-Modell: Hier fehlt noch ein Ortspate' });
+  else if (p.status === 'building') out.push({ key: 'status-building', text: '3D im Aufbau', title: 'Ein Teil ist schon in 3D zu sehen, der Rest folgt' });
+  // Gemeinde level: the title already says „Stadt …“ / „Gemeinde …“ (legal status).
+  if (p.category && p.kind !== 'gemeinde') {
     out.push({
       key: 'category',
       text: p.category === 'stadt' ? 'Stadt' : 'Dorf',
@@ -711,14 +818,55 @@ export function placeBadges(p: Place, rlpTreeRatio: number | null): Badge[] {
     const text = pct !== null && year ? `andere Befliegung: ${fmtNum(Math.round(pct))} % ${year}` : `andere Befliegung${year ? ` ${year}` : ''}`;
     out.push({ key: 'other-flight', text, title: otherFlightNote(p, rlpTreeRatio) });
   }
-  if (!p.complete) out.push({ key: 'incomplete', text: 'unvollständig', title: 'Gemarkung nicht ganz erfasst: Summen sind Teilwerte' });
+  if (!p.complete) out.push({ key: 'incomplete', text: 'unvollständig', title: `${levelNoun(p)} nicht ganz erfasst: Summen sind Teilwerte` });
   if (p.flags.includes('estimate')) out.push({ key: 'estimate', text: 'hochgerechnet', title: 'Einzelne Werte hochgerechnet (≈)' });
   return out;
 }
 
-/** „Gemarkung Einöd“ (contract: places are labelled as Gemarkung, not Stadtteil). */
-export function placeTitle(p: Pick<Place, 'name_de' | 'kind'>): string {
+/** „Gemeinde“ for Gemeinde-level places, else „Gemarkung“ (wording of notes and reasons). */
+export const levelNoun = (p: Pick<Place, 'kind'>): string => (p.kind === 'gemeinde' ? 'Gemeinde' : 'Gemarkung');
+
+/** The level a place belongs to (by `kind`): a guard so one ranking never mixes levels. */
+export const placeLevel = (p: Pick<Place, 'kind'>): StatsLevel => (p.kind === 'gemeinde' ? 'gemeinde' : 'ortsteil');
+
+/**
+ * „Gemarkung Einöd“ (contract: places are labelled as Gemarkung, not Stadtteil); Gemeinde level by
+ * legal status: „Stadt Homburg“ / „Gemeinde Kirkel“.
+ */
+export function placeTitle(p: Pick<Place, 'name_de' | 'kind'> & { category?: Place['category'] }): string {
+  if (p.kind === 'gemeinde') return `${p.category === 'stadt' ? 'Stadt' : 'Gemeinde'} ${p.name_de}`;
   return p.kind === 'gemarkung-group' ? `Gemarkungen ${p.name_de}` : `Gemarkung ${p.name_de}`;
+}
+
+// ---- discipline availability per level (contract „Gemeinde level“: discipline_state) ------------------
+
+/**
+ * 'ready': ranked board; 'pending': some place's input is still being computed (no ranking, „wird
+ * berechnet“); 'none': no place has a source → hidden on this level; 'soon': not ready, no state
+ * (Ortsteile files) → „bald“ as before.
+ */
+export type DisciplineAvailability = 'ready' | 'pending' | 'none' | 'soon';
+
+export function disciplineAvailability(data: Pick<PlacesData, 'places'>, d: Pick<Discipline, 'id' | 'ready'>): DisciplineAvailability {
+  if (d.ready) return 'ready';
+  // Only places that report states (Gemeinde level); a place without the key counts as 'none'.
+  const withStates = data.places.filter((p) => Object.keys(p.discipline_state).length);
+  const states = withStates.map((p) => p.discipline_state[d.id] ?? 'none');
+  if (states.includes('pending')) return 'pending';
+  if (states.length && states.every((s) => s === 'none')) return 'none';
+  return 'soon';
+}
+
+/** Disciplines shown on this level (file order): all but those without any source ('none'). */
+export const shownDisciplines = (data: PlacesData): Discipline[] => data.disciplines.filter((d) => disciplineAvailability(data, d) !== 'none');
+
+/** Disciplines still being computed on this level. */
+export const pendingDisciplines = (data: PlacesData): Discipline[] => data.disciplines.filter((d) => disciplineAvailability(data, d) === 'pending');
+
+/** „wird noch berechnet (LiDAR-Auswertung 12 %)“ — the progress part only when the file reports it. */
+export function pendingText(data: Pick<PlacesData, 'progress'>): string {
+  const pct = data.progress?.lidar.pct;
+  return `wird noch berechnet${pct !== null && pct !== undefined ? ` (LiDAR-Auswertung ${fmtNum(Math.round(pct))} %)` : ''}`;
 }
 
 /** Fly-to framing for a bbox (EPSG:25832): target point and an oblique view distance / height. */

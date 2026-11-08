@@ -4,10 +4,11 @@
  * `layers.bldg` mask (R0.7), `models.buildings` (F11), `xyz.hist_*` (F14), `candidates` (F15),
  * `pointclouds` (F16), `trees` (V2.4, parsed in trees/treeData.ts), `stats` (Orte im Vergleich,
  * parsed in places/placesData.ts), `forest_hist` (Baum-Steckbrief, parsed in trees/treeFacts.ts),
- * `species` (Baum-Steckbrief Baumart, parsed in trees/treeSpecies.ts).
+ * `species` (Baum-Steckbrief Baumart, parsed in trees/treeSpecies.ts), `stats_levels` (S1 leaderboard
+ * levels, parsed in places/placesData.ts; `kind: 'stats-only'` manifests are rejected as terrain AOIs).
  */
-import { parseManifestStats } from '../places/placesData';
-import type { ManifestStats } from '../places/placesData';
+import { parseManifestStats, parseStatsLevels } from '../places/placesData';
+import type { ManifestStats, StatsLevels } from '../places/placesData';
 import { parseTrees } from '../trees/treeData';
 import type { ManifestTrees } from '../trees/treeData';
 import { parseForestHist } from '../trees/treeFacts';
@@ -144,6 +145,8 @@ export interface Manifest {
   trees?: ManifestTrees;
   /** Optional place statistics (Orte im Vergleich, 'sle-stats-v1'); see "Place statistics" in docs/data-contract.md. */
   stats?: ManifestStats;
+  /** Optional leaderboard levels (S1, 'sle-stats-levels-v1'); see "Gemeinde level" in docs/data-contract.md. */
+  stats_levels?: StatsLevels;
   /** Optional historic forest mask ('sle-forest-hist-v1', Baum-Steckbrief); see "Historic forest mask" in docs/data-contract.md. */
   forest_hist?: ManifestForestHist;
   /** Optional tree species grid ('sle-species-v1', DLR, Baum-Steckbrief); see "Tree species" in docs/data-contract.md. */
@@ -929,6 +932,8 @@ export function validateManifest(m: unknown): Manifest {
     throw new Error(`manifest.json: ${what}`);
   };
   if (!x || typeof x !== 'object') fail('not an object');
+  // Contract „Gemeinde level“: a stats-only manifest (e.g. AOI `saarland`) is never a terrain AOI.
+  if ((x as { kind?: unknown }).kind === 'stats-only') fail('stats-only manifest (no terrain), not an AOI to fly');
   if (x.version !== 1 && x.version !== 2) fail(`unsupported version ${String(x.version)}`);
   if (!x.origin || !Number.isFinite(x.origin.E0) || !Number.isFinite(x.origin.N0)) fail('origin');
   if (!x.size || !x.chunks || !x.chunkSize) fail('size/chunks/chunkSize');
@@ -964,6 +969,9 @@ export function validateManifest(m: unknown): Manifest {
   const stats = parseManifestStats((x as { stats?: unknown }).stats);
   if (stats) out.stats = stats;
   else delete out.stats;
+  const statsLevels = stats ? parseStatsLevels((x as { stats_levels?: unknown }).stats_levels) : undefined;
+  if (statsLevels) out.stats_levels = statsLevels;
+  else delete out.stats_levels;
   const forestHist = parseForestHist((x as { forest_hist?: unknown }).forest_hist);
   if (forestHist) out.forest_hist = forestHist;
   else delete out.forest_hist;

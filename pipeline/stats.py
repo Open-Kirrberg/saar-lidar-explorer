@@ -1437,15 +1437,17 @@ def disjoint_outlines(geoms: list, snap_m: float = SNAP_M, min_part_m2: float = 
     return out
 
 
-def outline_features(ids: list[str], names: list[str], geoms: list) -> list[dict]:
-    """places.geojson features: holes < 1 ha dropped, coverage-simplified 10 m, 1 m grid, {id, name_de}."""
+def outline_features(ids: list[str], names: list[str], geoms: list, simplify_m: float | None = None) -> list[dict]:
+    """places.geojson features: holes < 1 ha dropped, coverage-simplified (SIMPLIFY_M = 10 m unless `simplify_m`;
+    the Gemeinde level uses 25 m), 1 m grid, {id, name_de}."""
+    tol = SIMPLIFY_M if simplify_m is None else simplify_m
     import shapely
     from shapely.geometry import mapping
     g = disjoint_outlines([fill_small_holes(shapely.make_valid(x)) for x in geoms])
     try:
-        simp = list(shapely.coverage_simplify(np.array(g, dtype=object), SIMPLIFY_M))
+        simp = list(shapely.coverage_simplify(np.array(g, dtype=object), tol))
     except Exception:  # not a clean coverage → per-feature topology-preserving simplification
-        simp = [x.simplify(SIMPLIFY_M, preserve_topology=True) for x in g]
+        simp = [x.simplify(tol, preserve_topology=True) for x in g]
     feats = []
     for i, n, x in zip(ids, names, simp):
         x = shapely.make_valid(shapely.set_precision(x, 1.0))

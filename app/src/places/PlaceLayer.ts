@@ -8,7 +8,9 @@
  *    tree itself is not exaggerated, see trees/TreeMaterial) and on the minimap. Phones get the short
  *    pin text („🌲 60,9 m“) so the label stays clear of the minimap dial,
  *  - the *Riesen* of the open place card (Phase 1): numbered dots on the minimap (✓ when discovered),
- *    the one tapped in the list as a pin in 3D (crown top) and a highlighted dot.
+ *    the one tapped in the list as a pin in 3D (crown top) and a highlighted dot,
+ *  - S1: while the Gemeinde level is active, all Gemeinde outlines as thin lines on the minimap only
+ *    (they cover the whole Saarland, far beyond the 3D area; not interactive: a map click flies).
  * Coordinates: EPSG:25832 → local frame via utmToWorld (x = E − E0, z = −(N − N0)); never raw UTM in float32.
  */
 import L from 'leaflet';
@@ -26,6 +28,8 @@ import type { AoiRect, Outlines, Place, Riese } from './placesData';
 
 const OUTLINE_RGB: [number, number, number] = [0.27, 0.95, 0.78]; // teal: distinct from parcel / OSM styles
 const OUTLINE_HEX = '#45f2c7';
+/** All Gemeinde outlines (level on): darker teal, dashed — readable on the light OSM tiles, distinct from the selection. */
+const LEVEL_HEX = '#13806a';
 const PIN_GROUP = 'place-giants';
 const RIESE_GROUP = 'place-riesen';
 /** Same breakpoint as the shell's phone layout (shell.css). */
@@ -49,6 +53,8 @@ export class PlaceLayer {
   private mapOf: L.Map | null = null;
   private pinsFor: Place[] = [];
   private mapRiesen: L.LayerGroup | null = null;
+  private mapLevel: L.LayerGroup | null = null;
+  private levelFor: Outlines | null = null;
   private readonly narrow = typeof window.matchMedia === 'function' ? window.matchMedia(NARROW) : null;
   private readonly onNarrow = () => {
     if (this.pinsFor.length) this.setGiants([...this.pinsFor]);
@@ -228,6 +234,28 @@ export class PlaceLayer {
     this.mapRiesen = null;
   }
 
+  /** All outlines of a level on the minimap (thin, non-interactive); null → none. Same map → no rebuild. */
+  setLevelOutlines(outlines: Outlines | null): void {
+    if (outlines === this.levelFor && (this.mapLevel || !outlines)) return;
+    this.mapLevel?.remove();
+    this.mapLevel = null;
+    this.levelFor = outlines;
+    if (!outlines || !outlines.size) return;
+    const group = L.layerGroup();
+    for (const rings of outlines.values()) {
+      for (const r of rings) {
+        const ll = r.map(([E, N]) => {
+          const w = utmToWgs84(E, N);
+          return [w.lat, w.lon] as L.LatLngTuple;
+        });
+        L.polygon(ll, { color: LEVEL_HEX, weight: 1.6, opacity: 0.85, dashArray: '5 4', fill: false, interactive: false, smoothFactor: 1.5 }).addTo(group);
+      }
+    }
+    this.mapLevel = group;
+    const mm = this.map();
+    if (mm) group.addTo(mm);
+  }
+
   /** Per frame: ribbon bucket build / re-sampling while terrain streams. */
   update(camera: Camera, renderer: WebGLRenderer): void {
     this.outline?.update(camera, renderer);
@@ -239,6 +267,7 @@ export class PlaceLayer {
     if (mm === this.mapOf) return;
     this.mapOf = mm;
     if (mm) {
+      this.mapLevel?.addTo(mm);
       this.mapOutline?.addTo(mm);
       this.mapPins?.addTo(mm);
       this.mapRiesen?.addTo(mm);
@@ -256,5 +285,6 @@ export class PlaceLayer {
     this.clearOutline();
     this.clearGiants();
     this.clearRiesen();
+    this.setLevelOutlines(null);
   }
 }

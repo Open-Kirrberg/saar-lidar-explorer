@@ -4,7 +4,7 @@ The pipeline (`pipeline/`) writes static files to **`app/public/data/<aoi>/`** (
 
 **Zones** (detailed places behind portals: castle, bakery, …) have their own binding contract: [zone-contract.md](zone-contract.md) (`sle-zone-v1`, [ADR 0029](adr/0029-zones-same-bundle-folder-layout.md)). Frames, proj4 and attribution rules below apply to zones unchanged.
 
-**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`, Orte im Vergleich `stats` and `forest_hist`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees", "Place statistics", "Historic forest mask"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid. **Revision 2.2 (Orte im Vergleich Phase 0, 2026-11-08):** adds the optional `stats` key (`sle-stats-v1`: `stats/places.json` + `stats/places.geojson`, [ADR 0049](adr/0049-orte-im-vergleich-places-only.md)) and the optional `forest_hist` key (`sle-forest-hist-v1`: `forest_hist/forest_hist.png`) — additive like `trees`: `version` stays 1/2, manifests without them stay valid, and the app hides the panel / the card row when a key is missing or invalid. **Revision 2.3 (Orte im Vergleich Phase 1, 2026-11-08):** adds the optional `species` key (`sle-species-v1`: `species/species.png`, see "Tree species") — additive like `forest_hist`: `version` stays 1/2, manifests without it stay valid, and the tree card hides the species row when it is missing or invalid.
+**Versions.** `version: 1` = single 1 m level (the MVP format). `version: 2` (F9) = v1 **plus** `levels` (overview pyramid, see "Levels") — a v2 manifest is a strict superset, all v1 keys keep their meaning and paths. Optional baked vector heights (`vectors.<key>.heights`, see "Vectors") are allowed in both, as are the additive F11/F13/F14 keys (`rgb` image layers, the `bldg` mask layer, `models.buildings`, `xyz.hist_*`, F15 `candidates`, F16 `pointclouds`, V2.4 `trees`, Orte im Vergleich `stats` and `forest_hist`; see "Image layers", "Building mask", "Models", "Candidates", "Point clouds", "Trees", "Place statistics", "Historic forest mask"). The app loads v1 and v2: a v1 manifest is treated as one level (level 0); unknown versions are rejected. The pipeline writes `version: 2` exactly when it writes `levels`. **Revision 2.1 (V2.4, 2026-11-04):** adds the optional `trees` key — additive, the manifest `version` stays 1/2 and older manifests stay valid. **Revision 2.2 (Orte im Vergleich Phase 0, 2026-11-08):** adds the optional `stats` key (`sle-stats-v1`: `stats/places.json` + `stats/places.geojson`, [ADR 0049](adr/0049-orte-im-vergleich-places-only.md)) and the optional `forest_hist` key (`sle-forest-hist-v1`: `forest_hist/forest_hist.png`) — additive like `trees`: `version` stays 1/2, manifests without them stay valid, and the app hides the panel / the card row when a key is missing or invalid. **Revision 2.3 (Orte im Vergleich Phase 1, 2026-11-08):** adds the optional `species` key (`sle-species-v1`: `species/species.png`, see "Tree species") — additive like `forest_hist`: `version` stays 1/2, manifests without it stay valid, and the tree card hides the species row when it is missing or invalid. **Revision 2.4 (S1 Saarland leaderboard, 2026-11-08):** adds the optional top-level key `stats_levels` (`sle-stats-levels-v1`) and **stats-only manifests** (`kind: 'stats-only'`, e.g. AOI `saarland`: `stats` + `stats_levels` + `attribution`, no terrain), see "Gemeinde level" under "Place statistics" — additive: tile manifests keep `version` 1/2 and stay valid without the key.
 
 ## Coordinate frames
 
@@ -1059,6 +1059,133 @@ Rounding happens last; derived values (shares, per-inhabitant) are computed from
 **App tolerance.** Missing `stats`, a non-object, `format` ≠ `sle-stats-v1` or a non-string `url` → absent (logged, not fatal). A 404 or a places.json whose `format` ≠ `sle-stats-v1` → panel hidden. Missing `geometry` or a 404 on it → no outlines; fly-to uses `label` and `bbox`. A place without a string `id` or `name_de` is skipped. A discipline whose `measure` does not resolve to a number for any entry shows „keine Daten“. Unknown fields, flags, topics, input ids and disciplines with unknown `scope` are ignored. Phase 1 fields are all optional: a missing, `null` or malformed block hides its row; a `riesen` entry without finite `h`, `E`, `N` is skipped; an unknown species key, age class or land-use group without a `labels_de` entry is shown by its key or skipped; a `goals` entry without `title_de` is skipped.
 
 **UI rules for the Phase 1 values (G7).** Species, age, biodiversity, roof potential and the 1935 forest share are **estimates**: show „Schätzung“/„geschätzt“ and the range or probability (`kwp` as „lo–hi kWp“, Riesen species as „wahrscheinlich Douglasie (80 %)“ per the "Tree species" wording (only „wahrscheinlich“ classes are published for Riesen), age classes with „aus der Baumhöhe geschätzt“; the `beyond` share as „höher als die Ertragstafel (ohne Alter)“ in a neutral colour, never as old). The species mix covers only the forest part (`coverage_pct`); `weak` entries are marked as unsure (e.g. hatched, „?“, with the reason). The roof area next to `kwp` is `usable_m2` (the area the kWp rest on); `suitable_m2` is only shown as the larger area before the factors, labelled so. `forest_continuity` with `snapshot: true` reads „laut Karte 1935–40 Wald“, never „seit“. `biodiversity` reads as „gemeldete Beobachtungen“, never as the quality of nature. Credits come from `inputs` / `attribution` (DLR CC BY 4.0, GBIF).
+
+### 🗺️ Gemeinde level (`level: 'gemeinde'`, S1 Saarland leaderboard)
+
+Plan: [docs/plans/orte-skalieren.md](plans/orte-skalieren.md) §6, §9 S1; decision: [ADR 0051](adr/0051-leaderboard-levels-gemeinden-ortsteile.md). The leaderboard has **two levels in separate files, never mixed in one ranking** (plan D3): **Gemeinden** (all 52 Saarland municipalities plus the RLP neighbours Zweibrücken and Bechhofen) and **Ortsteile innerhalb einer Gemeinde** (today's Gemarkungen in `overall`). Both files are `sle-stats-v1` (`format` and `version: 1` unchanged): everything below is **additive**, so the current panel, which only reads the AOI's own `stats` key, keeps working unchanged (R9).
+
+**Where it is published.** A **stats-only AOI** `saarland` (aois.toml `stats_only = true`, built by `pipeline/gemeinden.py` → `gemeinde_trees.py` → `gemeinden_stats.py`), on the same data root as the tile AOIs:
+
+```
+<dataRoot>/saarland/manifest.json            stats-only manifest (below)
+<dataRoot>/saarland/stats/places.json        sle-stats-v1, level 'gemeinde'
+<dataRoot>/saarland/stats/places.geojson     outlines {id, name_de}, simplify_m 50
+```
+
+Why a sibling AOI and not more entries in `overall`'s file: `overall`'s file stays below its 80 KB target and byte-for-byte what old readers know; one file = one level, so a reader cannot rank Gemeinden against Gemarkungen by accident; the later catalog (`sle-catalog-v1`, plan §4.1 `leaderboard`) points at this file unchanged; the release export stages one more directory of three small files.
+
+**Stats-only manifest** (`saarland/manifest.json`; no `origin`, `size`, `levels`, `layers` or chunks):
+
+```ts
+{
+  version: 1,
+  kind: 'stats-only',                     // NEW. The app never opens such a manifest as a terrain AOI (no ?aoi=saarland flight)
+  aoi: 'saarland',
+  name: 'Saarland – Gemeinden im Vergleich',
+  crs: 'EPSG:25832',
+  stats: { format: 'sle-stats-v1', url: 'stats/places.json', geometry: 'stats/places.geojson',
+           generated: string, places: number, label_de: 'Gemeinden im Vergleich', level: 'gemeinde' },
+  stats_levels: StatsLevels,              // same value as in the tile AOIs, see below
+  attribution: string                     // '; '-joined, all inputs of places.json
+}
+```
+
+**`stats_levels`** (new optional top-level key, owned by `gemeinden_stats.py`, written into the stats-only manifest **and** into every tile AOI manifest whose stats are an Ortsteile level, today `overall`; `stats.py` does not touch it):
+
+```ts
+StatsLevels = {
+  format: 'sle-stats-levels-v1',          // anything else → ignored
+  levels: Array<{
+    level: 'gemeinde' | 'ortsteil',       // unknown levels are ignored
+    aoi: string,                          // AOI dir under the SAME data root whose manifest `stats` key holds this level
+                                          // (may be the AOI itself); load <dataRoot>/<aoi>/manifest.json, then its stats.url
+    label_de: string                      // 'Gemeinden' | 'Ortsteile'
+  }>                                      // order = display order of the level switch (Gemeinden first)
+}
+```
+
+A manifest `stats` key without `level` and a places.json without `level` mean `'ortsteil'` (all files before S1). A reader that knows no levels simply shows the AOI's own `stats` (today's behaviour).
+
+**`places.json` of the Gemeinde level** = the `Places` shape above plus:
+
+```ts
+Places += {
+  level: 'gemeinde',                      // NEW top-level (absent = 'ortsteil')
+  complete: boolean,                      // NEW: every discipline of this file is ready for every place (a reasoned `discipline_state: 'none'`, e.g. too few GBIF records, counts as done)
+  progress?: {                            // NEW: state of the slow inputs (S1b LiDAR run), informative
+    lidar: { tiles_done: number, tiles_total: number, pct: number, places_done: number }
+  },
+  categories_de: { stadt: 'Städte', gemeinde: 'Gemeinden' }   // NEW: labels of the size-class filter on this level
+}
+Place += {                                // kind: 'gemeinde'; gemarkungen: [] (VG25 outline, no ALKIS parcels)
+  ags: string,                            // 8-digit Amtlicher Gemeindeschlüssel, e.g. Homburg '10045114'
+  status: '3d' | 'building' | 'stats',    // '3d': a 3D place (repo/AOI) of the whole Gemeinde is published;
+                                          // 'building': 3D in preparation or partial (e.g. Homburg: `overall` covers part, S0 builds the rest);
+                                          // 'stats': numbers only → the app shows „Ortspate gesucht“
+  place_aoi?: string,                     // AOI that shows (part of) it in 3D, e.g. 'overall'; aoi_share_pct = its share
+  ortsteile?: { aoi: string, places: string[] },   // its places on the Ortsteile level (place ids in that AOI's stats), e.g.
+                                          // Homburg → { aoi: 'overall', places: ['beeden-schwarzenbach', …] }; absent when none
+  discipline_state: Record<DisciplineId, 'ready' | 'pending' | 'none'>,
+                                          // per discipline of this file: 'ready' = value from complete inputs (may still be
+                                          // null by the min-size / few-records rules); 'pending' = input not processed yet
+                                          // (value null, card „wird noch berechnet“); 'none' = no source for this place
+  forest_pct: number | null,              // dlr-forest-share-v1: share of the outline's 10 m cells with a DLR class or canopy loss
+  ortslage_canopy_pct?: number | null,    // S1b, ortslage-bldg-edt-50m-v1: CHM ≥ 3 m share of the Ortslage cells
+  ortslage_area_ha?: number | null        // S1b, area of that Ortslage
+}
+```
+
+Field meanings that differ from the Ortsteile level:
+
+| Field | Gemeinde level |
+|---|---|
+| `kind` | `'gemeinde'` (UI: „Gemeinde Kirkel“ / „Stadt Homburg“ by `category`) |
+| `municipality` | its own id; `municipalities[]` has exactly one entry per place with the same id (so `scope: 'municipality'` boards rank the same set) |
+| `category` | `'stadt' \| 'gemeinde'` by **legal status** (VG25 `bez`, method `category-legal-status-v1`; 18 Städte, 36 Gemeinden). Not by inhabitants: every Saarland municipality has > 5,000. The filter reads *Alle / Städte / Gemeinden* (`categories_de`); a reader that knows only `stadt`/`dorf` shows no class for `'gemeinde'` |
+| `area_ha` | area of the VG25 outline (no parcel sum); `parcels: null` |
+| `inhabitants` | official Zensus 2022 municipality total (`zensus-gemeinde-v1`, Regionaltabelle), not the grid; = `municipalities[].inhabitants` |
+| `complete` | `true` unless the outline is not fully covered by an input that *is* ready (then flag `cut-by-aoi` as before). Pending slow inputs do **not** set `complete: false` (that would unrank every board); they show in `discipline_state` |
+| `trees`, `crown_ha`, `crown_pct`, `agb_t`, `co2_t`, `trees_per_inhabitant` | S1b streaming run (`gemeinde_trees.py`), `null` while `discipline_state` is `'pending'` |
+| `ortslage` | always `null` on this level (no NDVI statewide, see disciplines); `ortslage_canopy_pct` instead |
+| `tallest`, `riesen` | absent in S1 (the plausibility checks of `tallest-checked-v4` need OSM masts/turbines and the Ortslage statewide; positions are published only after them) |
+| `species` | `species-dlr-cell-mix-v1`: the mix of the 10 m DLR cells inside the outline (cell area, no tree weighting); `trees` = 0, `coverage_pct` = cells with a class ÷ forest cells |
+| `biodiversity`, `roof_potential` | as on the Ortsteile level, per Gemeinde outline |
+| `nutzung`, `forest_age`, `forest_continuity*`, `goals` | absent in S1 |
+| `lidar_epoch`, flags | RLP places: `2022` + flag `other-flight` (the RLP 2022 flight); SL: `2025` |
+
+**Disciplines of the Gemeinde level** (the app renders them generically as before; `ready` is `true` only when the discipline is `'ready'` for **every** place, so no board is ever shown with half the Gemeinden missing):
+
+| `id` | `measure` | `unit` | higher better | `method` | stage |
+|---|---|---|---|---|---|
+| `waldanteil` | `forest_pct` | `%` | ✓ | `dlr-forest-share-v1` | S1a |
+| `sonnenstaerkste-gemeinde` | `pv.kwp_per_inhabitant` (scope `municipality`) | `kWp/Einw.` | ✓ | `mastr-municipality-v1` | S1a |
+| `solarpotenzial-genutzt` | `pv.used_pct_mid` (scope `municipality`) | `%` | ✓ | `roof-pv-potential-v2` | S1a (after the statewide LoD2) |
+| `artenvielfalt` | `biodiversity.rarefied_500` | `Arten` | ✓ | `gbif-rarefied-v1` | S1a |
+| `waldreichste-gemeinde` | `crown_pct` | `%` | ✓ | `crown-disc-v1` | S1b |
+| `baeume-pro-einwohner` | `trees_per_inhabitant` | `Bäume/Einw.` | ✓ | `zensus-gemeinde-v1` | S1b; measured crowns only, `note_de` says so |
+| `kronenreichste-ortslage` | `ortslage_canopy_pct` | `%` | ✓ | `ortslage-bldg-edt-50m-v1` | S1b |
+
+`Municipality.pv.used_pct_mid` (new, number) = `used_pct[1]`, so a board can rank it. *Grünste Ortslage*, *Wenigsten Beton* (NDVI from the CIR WMS: ≈ 2,600 GetMap requests at 1 m for the state, against R8) and *Riesenbaum* are **not offered on this level** in S1 (ADR 0051); they stay on the Ortsteile level. The medal table of the Gemeinde level counts only its place-scope disciplines (as ADR 0050).
+
+New method ids (in `method`):
+
+| Topic | `id` | Meaning |
+|---|---|---|
+| `outline` | `vg25-gemeinde-v1` | BKG VG25 `vg25_gem` (Stand 31.12., ATKIS accuracy), parts with the same AGS dissolved; Moselle condominium (ibz 69) dropped; published simplified 50 m. Checks: 52 SL features, Σ ≈ 2,570 km² (± 1 %), unique AGS, no overlaps, Homburg 82.6 km² |
+| `inhabitants` | `zensus-gemeinde-v1` | Zensus 2022 Regionaltabelle total of the AGS |
+| `category` | `category-legal-status-v1` | `stadt` when the VG25 `bez` contains „Stadt“, else `gemeinde` |
+| `forest` | `dlr-forest-share-v1` | DLR Tree Species 2022 on the EPSG:25832 10 m grid (`dlr-nearest-25832-v1`), cell centre inside the outline: class 0–9 or canopy loss = forest |
+| `species` | `species-dlr-cell-mix-v1` | share of each DLR class among the outline's cells with a class; `weak` as in `species-dlr-crown-mix-v1` |
+| `trees` | `chm-lmf-watershed-dlrtype-v2` | trees.py detection (`sle-trees-v1` Params, tops ≤ 60 m) per 1 km tile with a 64 m apron, streamed; tree type from the **DLR class** under the crown instead of the DOP colour (conifer ⇒ conifer fill as ADR 0030); building mask from LoD2; a tree belongs to the Gemeinde whose outline contains its top cell centre. **`trees` counts measured tops only** (fill trees are excluded from the count but kept in crown area and biomass, since they partition measured canopy segments); v1 counted the fill, which doubled counts in conifer tiles. The method carries a `note_de` |
+| `ortslage` | `ortslage-bldg-edt-50m-v1` | cells within 50 m (Euclidean distance on the 1 m grid) of a LoD2 building cell, inside the outline; no hole filling (v1 Ortsteile rule closes holes < 1 ha) |
+
+**Outlines** (`saarland/stats/places.geojson`): as "places.geojson" above (`{id, name_de}` only, EPSG:25832, 1 m integers, coverage-simplified, holes < 1 ha dropped) with `simplify_m` **50** (54 outlines over 2,650 km², ≈ 170 KB, target **< 200 KB**; 25 m gave 260 KB). **Size** of places.json target **< 160 KB** (≈ 25 KB gzip on Pages).
+
+**Inputs** (new ids): `vg25` (`© BKG (2026) CC BY 4.0, Datenquellen: https://sg.geodatenzentrum.de/web_public/gdz/datenquellen/datenquellen_vg25.pdf (VG25)`, licence `CC-BY-4.0`), plus the known `zensus_gemeinden`, `mastr`, `species_dlr`, `gbif`, `lod2_sl`, `lod2_rlp`, `lidar_sl`, `lidar_rlp` (the LiDAR ones only once at least one Gemeinde has S1b values).
+
+**Privacy** (ADR 0049) unchanged: aggregates per Gemeinde only; the S1b run keeps per-tile sums and at most the 10 highest tops per Gemeinde and tile in `data/work/gemeinden/` (never published); `check_privacy` runs on the file.
+
+**App tolerance (additions).** A missing / invalid `stats_levels`, an unreachable level AOI or a places.json without `level` → only the AOI's own stats (no level switch). `kind: 'stats-only'` manifests are never used as a terrain AOI. Unknown `status` → treated as `'stats'`; unknown `discipline_state` values → `'pending'`. A Gemeinde-level place has no `riesen` / `tallest` / `goals`: hide those rows. Fly-to: `label` / `bbox` as before, decided by geometry against the **current** AOI (not by `status`, and not by `aoi_share_pct`, which refers to `place_aoi`): a Gemeinde partly inside the current 3D area is flown to that part with a „Nur x % …“ note; one fully outside gets no 3D flight, its card says so and the minimap fits its outline.
 
 ## Other files
 

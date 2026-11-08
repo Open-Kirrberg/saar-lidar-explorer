@@ -125,7 +125,7 @@ def plan_steps(key: str, steps: Iterable[str] = (), path: Path = PIPELINE_DIR / 
     steps = list(steps)
     stats_only = bool(a.get("stats_only", False))
     if not steps:
-        steps = list(STATS_ONLY_DEFAULT_STEPS if stats_only else DEFAULT_STEPS)
+        steps = list(a.get("stats_steps", STATS_ONLY_DEFAULT_STEPS) if stats_only else DEFAULT_STEPS)
     if stats_only:
         bad = [s for s in steps if s in TILE_STEPS]
         if bad:

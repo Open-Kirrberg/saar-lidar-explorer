@@ -264,6 +264,23 @@ NDVI thresholds were set from the classes measured inside the Ortslage (`stats_r
 
 **Known limits.** The tallest-tree checks are geometric only: the 60.9 m top (Bruchhof-Sanddorf, in a group of 50–58 m conifers) is plausible but not confirmed on the ground. NDVI cannot tell bare soil from asphalt (fields inside the 50 m fringe count as sealed). RLP places are partly RLP 2022 LiDAR (+20 % trees per ha of canopy at the border, `border_effect.json`, not harmonised). Copernicus imperviousness is not used.
 
+## 🗺️ Gemeinde level (`gemeinden.py`, `gemeinde_trees.py`, `gemeinden_stats.py`, S1)
+
+The Saarland leaderboard (plan `docs/plans/orte-skalieren.md` S1, [ADR 0051](../docs/adr/0051-leaderboard-levels-gemeinden-ortsteile.md), contract "Place statistics" → "Gemeinde level"). `./run.sh saarland` (stats-only AOI, `stats_steps`) = `gemeinden.py all` → `gemeinde_trees.py all` → `gemeinden_stats.py saarland`; every step is cached and can be rerun alone. Work files: `data/work/gemeinden/`; output: `app/public/data/saarland/{manifest.json,stats/}` plus `stats_levels` in `overall`'s manifest.
+
+| Step | What | Cost |
+|---|---|---|
+| `gemeinden.py outlines` | BKG VG25 `vg25_gem` WFS (2 requests, CC BY 4.0): 52 SL + Zweibrücken + Bechhofen, checks (count, Σ area 2,570 km², AGS, overlaps, Homburg 82.6 km²), 1 km tiles per Gemeinde, tile owners (largest share) | seconds |
+| `zensus` / `mastr` | Regionaltabelle totals per AGS; MaStR solar units per AGS (paged, cached, 1 s pause) | ≈ 11 min first run |
+| `dlr` | DLR COG window of the state (≈ 5 MB) → 10 m EPSG:25832 grid → forest share + cell species mix | ≈ 15 s |
+| `gbif` | `gbif.run` on the Gemeinde outlines (facets only; simplification steps up to 200 m for the WKT limit) | ≈ 30 s per Gemeinde |
+| `lod2` / `roofs` | LVGL LoD2 county ZIPs (≈ 1.3 GB) + RLP 2 km tiles; one pass → roof potential per Gemeinde + WKB footprints per tile (`footprints/`) | ≈ 20 + 8 min |
+| `gemeinde_trees.py fetch` | all DGM1 + DOM1 members of the six county ZIPs (≈ 2,700 tiles, ≈ 20 GB in `data/raw/lvgl-sl/`), sequential, both products per tile, waits on outages | ≈ 90 min |
+| `gemeinde_trees.py run` | per 1 km tile + 64 m apron: `stats_trees.lidar_window` → trees.py detection (DLR type, conifer fill) → sums per Gemeinde → `tiles/<E>_<N>.json` (resumable; ≈ 1 s per tile and worker) | ≈ 15 min with 3 workers |
+| `gemeinden_stats.py` | publishes; a discipline is `ready` only when every Gemeinde has it; slow inputs stay `pending` per place | seconds |
+
+Measured on two Kirrberg/Homburg tiles against the Ortsteile run: crown area equal to < 0.02 %, measured tops identical; tree counts differ only by the conifer fill (DLR class instead of DOP colour: 2× trees in a conifer tile, 380/5464), which is why the Gemeinde level has its own method id.
+
 ## 🌲 Historic forest mask (`historic_forest.py`)
 
 `./run.sh <aoi> forest` (after `historic`; = `uv run python historic_forest.py <aoi> [--no-manifest]`) reads `data/work/<aoi>/hist_1935.tif` / `hist_1840.tif` (1 m RGBA mosaics of historic.py) and writes `forest_hist/forest_hist.png` (one u8 PNG, 5 m cells, ≈ 35 KB for `overall`) plus the manifest key `forest_hist` (contract "Historic forest mask", `sle-forest-hist-v1`). Bits: 0 forest 1836–41, 1 forest 1935–40, 2/3 that map has no image, 255 outside.

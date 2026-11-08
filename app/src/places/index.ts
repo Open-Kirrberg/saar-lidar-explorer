@@ -7,6 +7,8 @@
  * valid `stats` key. It lives in the Standard „Orte“ drawer (phones: bottom sheet, ADR 0014), as a
  * card between „Nachbauten zum Betreten“ (zones) and „Bekannte Orte“ (POIs): it is about places too,
  * needs no tools and is the playful entry point to the data, so it is not hidden in Labor.
+ * S1: with a valid `stats_levels` key the card and the full view get a level switch Gemeinden / Ortsteile
+ * (levels.ts loads the other level lazily from its AOI, e.g. the stats-only AOI `saarland`).
  */
 import type { AppContext } from '../main';
 import { mountPlaceStats } from './PlacesPanel';
@@ -20,6 +22,6 @@ export function registerPlaceStats(ctx: AppContext): () => void {
     tier: 'standard',
     label: 'Orte im Vergleich',
     available: () => !!ctx.manifest.stats,
-    mount: (h) => mountPlaceStats(h, ctx.manifest.stats!),
+    mount: (h) => mountPlaceStats(h, ctx.manifest.stats!, ctx.manifest.stats_levels),
   });
 }

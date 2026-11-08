@@ -11,6 +11,14 @@
  * „gemeldete Beobachtungen“), roof PV potential plus the municipality's used share, land use when
  * known, and the example goals with baseline/target bars (no progress bar while `progress` is null).
  * Local collecting („Riesen entdeckt x/y“, „Orte besucht x/9“): collect.ts, only in this browser.
+ *
+ * S1 Saarland leaderboard (ADR 0051, contract „Gemeinde level“): with a valid `stats_levels` key a
+ * switch Gemeinden / Ortsteile (levels.ts probes the other level's manifest at start and loads its
+ * stats on the first switch). One level at a time — board, card, full view and deep link
+ * (`?vergleich=a,b&ebene=gemeinde`). Gemeinde cards: status (🙋 Ortspate gesucht → Open-Kirrberg on
+ * GitHub, 🏗 3D im Aufbau), their Ortsteile (→ Ortsteil card), „wird noch berechnet“ for pending
+ * inputs; Gemeinden outside the 3D area are shown on the map only (no 3D flight). While the Gemeinde
+ * level is on, all Gemeinde outlines are drawn on the minimap. Collecting stays on the own level.
  */
 import { gridBearing } from '../pois/PoiPanel';
 import { obliqueView } from '../pois/pois';
@@ -37,19 +45,24 @@ import {
   saveCollect,
 } from './collect';
 import type { KV } from './collect';
-import { buildMatrix, parseCompareParam, rivalFor, withCompareParam } from './compare';
+import { buildMatrix, parseCompareParam, parseLevelParam, rivalFor, withCompareParam } from './compare';
+import { aoiBaseUrl } from '../data/manifest';
+import { levelChoices, loadLevelData, probeLevel } from './levels';
+import type { LevelChoice, LoadedLevel } from './levels';
 import { climbList, climbSummaryText, openLeaderboard } from './LeaderboardOverlay';
 import type { LeaderboardHandle, OverlayOptions } from './LeaderboardOverlay';
 import { PlaceLayer } from './PlaceLayer';
 import {
   AGE_COLORS,
   NUTZUNG_COLORS,
+  ORTSPATE_URL,
   PLACE_OPEN_EVENT,
   SPECIES_COLORS,
   TREE_CARD_OPEN_EVENT,
   aoiRect,
   approx,
   boardFor,
+  disciplineAvailability,
   fmtGoalValue,
   fmtNum,
   fmtRange,
@@ -61,17 +74,21 @@ import {
   inAoiRect,
   insideFocus,
   labelOf,
+  levelNoun,
   otherFlightNote,
   outsideNote,
   parseOutlines,
   parsePlacesFile,
+  pendingText,
   placeBadges,
   placeTitle,
   riesenInAoi,
   rieseSpeciesText,
+  shownDisciplines,
+  statsLevelOf,
   unionBox,
 } from './placesData';
-import type { Board, Discipline, Goal, ManifestStats, Municipality, Outlines, Place, PlacesData, Riese } from './placesData';
+import type { Board, Discipline, Goal, ManifestStats, Municipality, Outlines, Place, PlacesData, Riese, StatsLevel, StatsLevels } from './placesData';
 import './places.css';
 
 const PREFS_KEY = 'sle.placesCmp.v1';
@@ -80,22 +97,44 @@ const MEDALS = ['🥇', '🥈', '🥉'];
 /** Collecting check interval (ms): cheap, but no need to run it every frame. */
 const COLLECT_EVERY_MS = 500;
 
-function loadPref(): string | null {
+/** `sle.placesCmp.v1`: `discipline` (Ortsteile level, as before), `byLevel` (other levels), `level` (last switch). */
+interface Prefs {
+  discipline?: string;
+  byLevel?: Record<string, string>;
+  level?: string;
+}
+
+function loadPrefs(): Prefs {
   try {
-    const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as { discipline?: unknown };
-    return typeof v.discipline === 'string' ? v.discipline : null;
+    const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') as Record<string, unknown>;
+    const out: Prefs = {};
+    if (typeof v.discipline === 'string') out.discipline = v.discipline;
+    if (v.byLevel && typeof v.byLevel === 'object' && !Array.isArray(v.byLevel)) {
+      out.byLevel = Object.fromEntries(Object.entries(v.byLevel).filter((e): e is [string, string] => typeof e[1] === 'string'));
+    }
+    if (typeof v.level === 'string') out.level = v.level;
+    return out;
   } catch {
-    return null;
+    return {};
   }
 }
 
-function savePref(discipline: string): void {
+function savePrefs(patch: Prefs): void {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ discipline }));
+    const cur = loadPrefs();
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...cur, ...patch, byLevel: { ...cur.byLevel, ...patch.byLevel } }));
   } catch {
     /* ignore */
   }
 }
+
+const loadPref = (level: StatsLevel): string | null => {
+  const p = loadPrefs();
+  return (level === 'ortsteil' ? p.discipline : p.byLevel?.[level]) ?? null;
+};
+
+const savePref = (level: StatsLevel, discipline: string): void =>
+  savePrefs(level === 'ortsteil' ? { discipline } : { byLevel: { [level]: discipline } });
 
 /** localStorage, or null where the accessor throws (private mode, blocked site data). */
 function storage(): KV | null {
@@ -116,7 +155,7 @@ async function fetchJson(url: string, signal: AbortSignal): Promise<unknown | nu
 
 type Selection = { kind: 'place'; place: Place } | { kind: 'municipality'; mun: Municipality } | null;
 
-export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void {
+export function mountPlaceStats(h: FeatureHost, meta: ManifestStats, statsLevels?: StatsLevels): () => void {
   const { ctx, services } = h;
   const { terrain, manifest } = ctx;
   const abort = new AbortController();
@@ -134,8 +173,21 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   const status = el('p', { class: 'sle-dim sle-small', text: 'Lade Vergleich …' });
   sec.body.append(status);
 
+  /** The active level's file and outlines (board, cards, full view). */
   let data: PlacesData | null = null;
   let outlines: Outlines = new Map();
+  // ---- levels (S1) --------------------------------------------------------------------------------
+  const ownLevel = statsLevelOf(meta);
+  let level: StatsLevel = ownLevel;
+  /** The AOI's own level (collecting, Riesen, the tree card's place link). */
+  let ownData: PlacesData | null = null;
+  let ownOutlines: Outlines = new Map();
+  /** Levels offered by the switch (after probing their manifests); null → no switch. */
+  let choices: LevelChoice[] | null = null;
+  const probed = new Map<StatsLevel, { baseUrl: string; meta: ManifestStats }>();
+  const loadedLevels = new Map<StatsLevel, Pick<LoadedLevel, 'data' | 'outlines'>>();
+  const levelLabel = (lv: StatsLevel) => choices?.find((c) => c.level === lv)?.label_de ?? (lv === 'gemeinde' ? 'Gemeinden' : 'Ortsteile');
+  const hasLevel = (lv: StatsLevel) => !!choices?.some((c) => c.level === lv);
   let discipline: Discipline | null = null;
   let selection: Selection = null;
   let activeRiese: Riese | null = null;
@@ -172,6 +224,10 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
 
   // ---- DOM skeleton ------------------------------------------------------------------------------
   const progress = el('div', { class: 'sle-cmp-progress', role: 'status', 'aria-live': 'polite' });
+  const levelSeg = el('div', { class: 'sle-seg sle-cmp-levels', role: 'group', 'aria-label': 'Ebene: Gemeinden oder Ortsteile' });
+  levelSeg.hidden = true;
+  const levelNote = el('p', { class: 'sle-cmp-levelnote sle-small', role: 'status', 'aria-live': 'polite' });
+  levelNote.hidden = true;
   const chips = el('div', { class: 'sle-cmp-chips', role: 'radiogroup', 'aria-label': 'Disziplin wählen' });
   const desc = el('p', { class: 'sle-cmp-desc sle-small' });
   const note = el('p', { class: 'sle-cmp-note sle-small' });
@@ -186,7 +242,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     openLb({ tab: 'vergleich', compare: p ? compareWith(p) : undefined });
   });
   const fullRow = el('div', { class: 'sle-cmp-actions sle-cmp-full' }, fullBtn, cmpBtn);
-  const boardView = el('div', { class: 'sle-cmp-board' }, chips, fullRow, desc, note, list, extra);
+  const boardView = el('div', { class: 'sle-cmp-board' }, levelSeg, levelNote, chips, fullRow, desc, note, list, extra);
   const cardView = el('div', { class: 'sle-cmp-card' });
   cardView.hidden = true;
   const disclaimer = el('p', { class: 'sle-cmp-disclaimer sle-small' });
@@ -278,7 +334,31 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     if (fr) flyFramed(fr.E, fr.N, fr.dist, fr.agl);
   };
 
-  const flyToPlace = (p: Place) => flyToArea(placeTitle(p), outlines.get(p.id) ?? [], p.bbox, p.label, p.aoi_share_pct);
+  /**
+   * Share (%) of a Gemeinde-level place inside this 3D area, from its outline (its `aoi_share_pct`
+   * refers to `place_aoi`, which need not be this AOI); without an outline from label / bbox centre.
+   */
+  const areaShare = (p: Place): number => {
+    const rings = outlines.get(p.id) ?? [];
+    if (rings.length) return (insideFocus(rings, aoi)?.share ?? 0) * 100;
+    const c = p.label ?? (p.bbox ? [(p.bbox[0] + p.bbox[2]) / 2, (p.bbox[1] + p.bbox[3]) / 2] : null);
+    return c && inAoi(c[0], c[1]) ? 100 : 0;
+  };
+  const outsideText = (p: Place) => `${placeTitle(p)} liegt außerhalb des 3D-Gebiets: kein Flug in 3D, die Karte zeigt den Umriss.`;
+  const flyToPlace = (p: Place) => {
+    if (p.kind === 'gemeinde') {
+      const share = areaShare(p);
+      if (share <= 0) {
+        // Gemeinden cover the whole Saarland: outside the 3D area only the minimap shows it (select() fitted it).
+        say(outsideText(p));
+        if (layer.bounds) services.minimap?.setFocus(layer.bounds);
+        return;
+      }
+      flyToArea(placeTitle(p), outlines.get(p.id) ?? [], p.bbox, p.label, share);
+      return;
+    }
+    flyToArea(placeTitle(p), outlines.get(p.id) ?? [], p.bbox, p.label, p.aoi_share_pct);
+  };
   /** Fly to a tree top (Riesenbaum or one of the Riesen): frame the crown top (pin tip). */
   const flyToTree = (E: number, N: number, hTree: number, what: string, p: Place): boolean => {
     if (!inAoi(E, N)) {
@@ -308,12 +388,19 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     return b;
   };
 
-  const badgeEls = (p: Place) =>
-    placeBadges(p, data?.rlpTreeRatio ?? null).map((b) => el('span', { class: `sle-cmp-badge b-${b.key}`, text: b.text, title: b.title }));
+  /** `compact` (board rows): „Ortspate gesucht“ as a small 🙋 (53 of 54 Gemeinden carry it); the card says it in full. */
+  const badgeEls = (p: Place, compact = false) =>
+    placeBadges(p, data?.rlpTreeRatio ?? null).map((b) =>
+      compact && b.key === 'status-stats'
+        ? el('span', { class: `sle-cmp-badge b-${b.key} compact`, text: '🙋', title: `${b.text}: ${b.title}`, 'aria-label': b.text })
+        : el('span', { class: `sle-cmp-badge b-${b.key}`, text: b.text, title: b.title }),
+    );
 
   const syncGiants = () => {
     const on = !!data && discipline?.id === GIANT_ID && !sec.root.hidden;
     layer.setGiants(on ? data!.places : []);
+    // S1: all Gemeinde outlines on the minimap while that level is on.
+    layer.setLevelOutlines(level === 'gemeinde' && !sec.root.hidden && outlines.size ? outlines : null);
   };
 
   const syncRiesen = () => {
@@ -354,11 +441,11 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   const riesenIds = () => riesenAll.map((x) => x.riese.id!);
 
   const renderProgress = () => {
-    if (!data) return;
+    if (!ownData) return;
     const pr = collectProgress(
       collected,
       riesenIds(),
-      data.places.map((p) => p.id),
+      ownData.places.map((p) => p.id),
     );
     const parts: Node[] = [
       el(
@@ -399,12 +486,14 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     saveCollect(storage(), collected);
     refreshCollected();
     const f = fresh[0];
-    const p = data?.places.find((x) => x.id === f.place);
+    const p = ownData?.places.find((x) => x.id === f.place);
     const pr = collectProgress(collected, riesenIds(), []);
     celebrate(`🌲 Riese entdeckt: Nr. ${f.riese.rank} von ${p?.name_de ?? '?'} (${fmtNum(f.riese.h, 1)} m) · ${pr.riesen[0]}/${pr.riesen[1]}`, quiet);
   };
 
   const collectTick = () => {
+    const data = ownData; // collecting counts the AOI's own places (Gemarkungen), whatever level is shown
+    const outlines = ownOutlines;
     if (!data) return;
     const s = ctx.store.get();
     // Automatic fly-tos pass over other places / Riesen and end in a framed pose that may hover over the
@@ -441,22 +530,24 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   // ---- discipline chooser ---------------------------------------------------------------------------
   const renderChips = () => {
     chips.replaceChildren();
-    for (const d of data!.disciplines) {
+    // 'none' (no source on this level) is hidden; 'pending' can be opened and says „wird noch berechnet“.
+    for (const d of shownDisciplines(data!)) {
       const on = d.id === discipline?.id;
+      const av = disciplineAvailability(data!, d);
       const b = el(
         'button',
         {
           type: 'button',
-          class: `sle-cmp-chip${on ? ' on' : ''}${d.ready ? '' : ' soon'}`,
+          class: `sle-cmp-chip${on ? ' on' : ''}${av === 'soon' ? ' soon' : av === 'pending' ? ' pending' : ''}`,
           role: 'radio',
           'aria-checked': String(on),
           'data-id': d.id,
-          title: d.ready ? d.description_de : `${d.name_de}: bald (${d.description_de})`,
-          disabled: !d.ready,
+          title: av === 'ready' ? d.description_de : av === 'pending' ? `${d.name_de}: ${pendingText(data!)} (${d.description_de})` : `${d.name_de}: bald (${d.description_de})`,
+          disabled: av === 'soon',
         },
         el('span', { class: 'sle-cmp-emoji', 'aria-hidden': 'true', text: d.emoji ?? '🏅' }),
         el('span', { text: d.name_de }),
-        d.ready ? null : el('span', { class: 'sle-cmp-soon', text: 'bald' }),
+        av === 'soon' ? el('span', { class: 'sle-cmp-soon', text: 'bald' }) : av === 'pending' ? el('span', { class: 'sle-cmp-soon', text: '⏳', 'aria-label': 'wird berechnet' }) : null,
       );
       b.addEventListener('click', () => setDiscipline(d));
       chips.append(b);
@@ -471,7 +562,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
 
   const setDiscipline = (d: Discipline) => {
     discipline = d;
-    savePref(d.id);
+    savePref(level, d.id);
     renderChips();
     renderBoard();
     syncGiants();
@@ -481,7 +572,8 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   const rankLabel = (rank: number) => el('span', { class: 'sle-cmp-rank', text: MEDALS[rank - 1] ?? `${rank}.`, 'aria-label': `Platz ${rank}` });
 
   const placeRow = (p: Place, value: number | null, rank: number | null, d: Discipline) => {
-    const visited = !!collected.places[p.id];
+    // Collecting counts Gemarkungen only (a Gemeinde may share an id with its core Gemarkung).
+    const visited = p.kind !== 'gemeinde' && !!collected.places[p.id];
     const b = el(
       'button',
       { type: 'button', class: 'sle-cmp-row', title: `${placeTitle(p)}: Karte öffnen und hinfliegen` },
@@ -489,8 +581,14 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       el(
         'span',
         { class: 'sle-cmp-name' },
-        el('span', {}, placeTitle(p), visited ? el('span', { class: 'sle-cmp-visited', text: ' ✓', title: 'besucht (auf diesem Gerät)', 'aria-label': 'besucht' }) : null),
-        el('span', { class: 'sle-cmp-badges' }, ...badgeEls(p)),
+        el(
+          'span',
+          {},
+          placeTitle(p),
+          visited ? el('span', { class: 'sle-cmp-visited', text: ' ✓', title: 'besucht (auf diesem Gerät)', 'aria-label': 'besucht' }) : null,
+          ...badgeEls(p, true).filter((b) => b.classList.contains('compact')).map((b) => el('span', {}, ' ', b)),
+        ),
+        el('span', { class: 'sle-cmp-badges' }, ...badgeEls(p).filter((b) => !b.classList.contains('b-status-stats'))),
       ),
       el('span', { class: 'sle-cmp-val', text: fmtValue(value, d.unit) }),
     );
@@ -532,7 +630,16 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     if (!d || !data) return;
     desc.textContent = d.description_de;
     const notes: string[] = [];
-    if (d.scope === 'municipality') {
+    const gemeindeLevel = data.level === 'gemeinde';
+    if (disciplineAvailability(data, d) === 'pending') {
+      note.hidden = !d.note_de;
+      note.textContent = d.note_de ?? '';
+      list.append(
+        el('li', { class: 'sle-cmp-pending sle-small' }, `⏳ Diese Rangliste ${pendingText(data)}. Sie erscheint, sobald alle ${levelLabel(level)} ausgewertet sind – vorher gäbe es nur eine halbe Tabelle.`),
+      );
+      return;
+    }
+    if (d.scope === 'municipality' && !gemeindeLevel) {
       notes.push(
         'Gemeinde-Ansicht, keine Rangliste der Gemarkungen: Das Marktstammdatenregister (MaStR) nennt kleine Anlagen unter 30 kW nur pro Gemeinde, ohne Adresse – Kirrberg, Homburg und Bruchhof teilen sich eine Postleitzahl.',
       );
@@ -545,8 +652,12 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       list.append(el('li', { class: 'sle-dim', text: 'Kommt bald.' }));
       return;
     }
-    const row = (e: { item: Place | Municipality; value: number | null }, rank: number | null) =>
-      d.scope === 'municipality' ? munRow(e.item as Municipality, e.value, rank, d) : placeRow(e.item as Place, e.value, rank, d);
+    const row = (e: { item: Place | Municipality; value: number | null }, rank: number | null) => {
+      if (d.scope !== 'municipality') return placeRow(e.item as Place, e.value, rank, d);
+      // Gemeinde level: one municipality per place with the same id → the richer place row / card.
+      const asPlace = gemeindeLevel ? data!.places.find((x) => x.id === e.item.id) : undefined;
+      return asPlace ? placeRow(asPlace, e.value, rank, d) : munRow(e.item as Municipality, e.value, rank, d);
+    };
     if (!board.ranked.length) list.append(el('li', { class: 'sle-dim', text: 'keine Daten' }));
     for (const e of (board as Board<Place | Municipality>).ranked) list.append(row(e, e.rank));
     const rest = (title: string, entries: Array<{ item: Place | Municipality; value: number | null }>) => {
@@ -698,16 +809,20 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     const dom = s.mix[0];
     const weak = s.mix.filter((m) => m.weak);
     const weakPct = weak.reduce((acc, m) => acc + m.share_pct, 0);
+    // Gemeinde level (species-dlr-cell-mix-v1): shares of the map's 10 m cells, not of measured crowns.
+    const cells = p.kind === 'gemeinde';
     return section(
       'species',
       '🌳 Baumarten im Wald',
       `meist ${labelOf(L, s.dominant ?? dom.key)} (${fmtNum(dom.share_pct)} %)`,
       true,
-      ...stackBar('Baumarten nach Kronenfläche', parts),
+      ...stackBar(cells ? 'Baumarten nach Waldfläche' : 'Baumarten nach Kronenfläche', parts),
       el(
         'p',
         { class: 'sle-cmp-fine sle-small' },
-        `Anteile an der Kronenfläche mit bekannter Art. Gilt nur für den Waldteil: ${s.coverage_pct !== null ? `${fmtNum(s.coverage_pct)} %` : 'ein Teil'} der Kronenfläche liegen in der Waldkarte, Gärten und Ortsbäume fehlen.${s.conifer_pct !== null ? ` Nadelbäume: ${fmtNum(s.conifer_pct)} %.` : ''} Satellitenkarte (DLR 2022, 10-m-Raster) `,
+        cells
+          ? `Anteile der Waldfläche laut Satellitenkarte (10-m-Zellen mit bekannter Art, Fläche statt Bäume; ${s.coverage_pct !== null ? `${fmtNum(s.coverage_pct)} %` : 'ein Teil'} der Waldzellen haben eine Art).${s.conifer_pct !== null ? ` Nadelbäume: ${fmtNum(s.conifer_pct)} %.` : ''} Gärten und Ortsbäume fehlen. DLR 2022 `
+          : `Anteile an der Kronenfläche mit bekannter Art. Gilt nur für den Waldteil: ${s.coverage_pct !== null ? `${fmtNum(s.coverage_pct)} %` : 'ein Teil'} der Kronenfläche liegen in der Waldkarte, Gärten und Ortsbäume fehlen.${s.conifer_pct !== null ? ` Nadelbäume: ${fmtNum(s.conifer_pct)} %.` : ''} Satellitenkarte (DLR 2022, 10-m-Raster) `,
         estChip(),
       ),
       weak.length
@@ -789,7 +904,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       b.rarefied_500 !== null ? `${fmtNum(b.rarefied_500)} Arten je 500 Meldungen` : `${fmtNum(b.species)} Arten gemeldet`,
       false,
       dl,
-      small('Gemeldete Beobachtungen (GBIF, u. a. iNaturalist), keine Bewertung der Natur: Der Wert hängt davon ab, wer wo was beobachtet. Nur Zahlen pro Gemarkung, keine Fundorte.'),
+      small(`Gemeldete Beobachtungen (GBIF, u. a. iNaturalist), keine Bewertung der Natur: Der Wert hängt davon ab, wer wo was beobachtet. Nur Zahlen pro ${levelNoun(p)}, keine Fundorte.`),
     );
   };
 
@@ -828,7 +943,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       r?.kwp ? `${fmtRange(r.kwp, 'kWp')} möglich` : null,
       false,
       dl,
-      small('Grobe Schätzung aus den 3D-Gebäuden (LoD2), ohne Verschattung und Statik. Nur Summen pro Gemarkung, keine einzelnen Dächer; installierte Anlagen gibt es nur pro Gemeinde.'),
+      small(`Grobe Schätzung aus den 3D-Gebäuden (LoD2), ohne Verschattung und Statik. Nur Summen pro ${levelNoun(p)}, keine einzelnen Dächer; installierte Anlagen gibt es nur pro Gemeinde.`),
     );
   };
 
@@ -894,8 +1009,10 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
         host: h.overlay,
         drawers: () => [...shellRoot.querySelectorAll<HTMLElement>('.sle-drawer')],
         selectedId: () => (selection?.kind === 'place' ? selection.place.id : null),
+        levels: choices && choices.length > 1 ? choices.map((c) => ({ level: c.level, label_de: c.label_de })) : undefined,
+        onLevel: (lv) => void setLevel(lv),
         onPick: (p, modal) => {
-          openPlace(p.id);
+          openCurrent(p.id);
           flyToPlace(p);
           // Phones: the view closed, the card is in the sheet; wide screens: focus stays in the table.
           if (modal) cardView.querySelector<HTMLElement>('.sle-cmp-back')?.focus({ preventScroll: true });
@@ -998,7 +1115,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
           const gd = data!.disciplines.find((x) => x.id === GIANT_ID && x.ready);
           if (gd) {
             discipline = gd;
-            savePref(gd.id);
+            savePref(level, gd.id);
             renderChips();
             syncGiants();
           }
@@ -1011,9 +1128,129 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     cmp.addEventListener('click', () => openLb({ tab: 'vergleich', compare: compareWith(p) }));
     actions.append(cmp);
     out.push(actions);
+    // S1: up to its Gemeinde on the Gemeinde level (own card there; no flight: it may lie mostly outside).
+    if (hasLevel('gemeinde') && p.municipality) {
+      const name = mun?.name_de ?? p.municipality;
+      const up = el('button', { type: 'button', class: 'sle-btn sle-cmp-up', text: `🗺️ Gemeinde ${name} im Gemeinde-Vergleich ›`, title: `Zur Ebene Gemeinden wechseln und ${name} öffnen` });
+      up.addEventListener('click', () => {
+        void setLevel('gemeinde', () => {
+          const g = data?.places.find((x) => x.ortsteile?.places.includes(p.id) && x.ortsteile.aoi === levelAoi('ortsteil')) ?? data?.places.find((x) => x.id === p.municipality);
+          if (g) openCurrent(g.id);
+        });
+      });
+      out.push(el('div', { class: 'sle-cmp-actions' }, up));
+    }
     riesenList = null;
     riesenFor = null;
     for (const s of [climbSection(p), riesenSection(p), speciesSection(p), ageSection(p), bioSection(p), roofSection(p, mun), nutzungSection(p), goalsSection(p)]) if (s) out.push(s);
+    return out;
+  };
+
+  // -- Gemeinde level (S1) --------------------------------------------------------------------------------
+  /** State of the discipline that ranks `measure` (pending inputs show „wird noch berechnet“). */
+  const stateOf = (p: Place, measure: string) => {
+    const d = data!.disciplines.find((x) => x.measure === measure);
+    return d ? p.discipline_state[d.id] : undefined;
+  };
+  const pendingEl = () => el('span', { class: 'sle-cmp-pend', text: '⏳ wird berechnet', title: pendingText(data!) });
+  const orPending = (p: Place, measure: string, v: number | null, text: (v: number) => string | Node): string | Node =>
+    v !== null ? text(v) : stateOf(p, measure) === 'pending' ? pendingEl() : stateOf(p, measure) === 'none' ? 'keine Quelle' : 'keine Daten';
+
+  /** Call to action of a Gemeinde without 3D: links the org page (no per-place repos yet, plan R1). */
+  const statusBox = (p: Place, share: number) => {
+    if (p.status === 'stats') {
+      return el(
+        'div',
+        { class: 'sle-cmp-pate' },
+        el('p', { class: 'sle-cmp-pate-title', text: '🙋 Ortspate gesucht' }),
+        el('p', { class: 'sle-small', text: `${p.name_de} hat noch kein 3D-Modell. Wer mag, bringt die eigene Gemeinde mit in 3D – mit Ortskenntnis, Fotos, Geschichten oder Technik. Die Zahlen hier gibt es schon für alle Gemeinden.` }),
+        el('a', { class: 'sle-btn sle-cmp-pate-link', href: ORTSPATE_URL, target: '_blank', rel: 'noopener noreferrer', text: 'Mitmachen bei Open-Kirrberg auf GitHub ↗' }),
+      );
+    }
+    if (p.status === 'building') {
+      return el(
+        'div',
+        { class: 'sle-cmp-pate build' },
+        el('p', { class: 'sle-cmp-pate-title', text: '🏗 3D im Aufbau' }),
+        el('p', { class: 'sle-small', text: `Ein Teil von ${p.name_de} ist schon in 3D zu sehen${share > 0 ? ` (${fmtShare(share)} der Fläche)` : ''}, der Rest folgt.` }),
+      );
+    }
+    return null;
+  };
+
+  const gemeindeCard = (p: Place) => {
+    const title = placeTitle(p);
+    const out: Node[] = cardHead(title, badgeEls(p));
+    const share = areaShare(p);
+    cardNotice!.textContent =
+      share <= 0 ? `ⓘ ${outsideText(p)}` : share < 50 ? `ⓘ Nur ${fmtShare(share)} der ${title} liegen im 3D-Gebiet; der ganze Umriss steht auf der Karte.` : '';
+    cardNotice!.hidden = !cardNotice!.textContent;
+    const box = statusBox(p, share);
+    if (box) out.push(box);
+    if (p.flags.includes('other-flight')) {
+      out.push(el('p', { class: 'sle-cmp-flight sle-small', text: `ⓘ Andere Befliegung als im Saarland (2025): ${otherFlightNote(p, null)}.` }));
+    }
+    const d = discipline;
+    if (d && d.ready) {
+      const cell = buildMatrix(data!).rows.find((r) => r.place.id === p.id)?.cells[d.id];
+      if (cell?.rank) out.push(el('p', { class: 'sle-cmp-placing', text: `Platz ${cell.rank} von ${cell.of} · ${d.emoji ?? ''} ${d.name_de}: ${fmtValue(cell.value, d.unit)}` }));
+    }
+    const mun = data!.municipalities.find((m) => m.id === p.municipality);
+    const pct = (v: number) => `${fmtNum(v)} %`;
+    const dl = el(
+      'dl',
+      { class: 'sle-cmp-kvs' },
+      kv('Fläche', p.area_ha === null ? 'keine Daten' : `${fmtNum(Math.round(p.area_ha))} ha`, 'Amtlicher Gemeindeumriss (BKG VG25)'),
+      kv('Einwohner', p.inhabitants === null ? 'keine Daten' : fmtNum(p.inhabitants), 'Zensus 2022, amtliche Gemeindezahl'),
+      kv('Wald laut Karte', orPending(p, 'forest_pct', p.forest_pct, pct), 'Satellitenkarte (DLR 2022, 10 m): Anteil der Gemeindefläche mit Wald'),
+      kv('Bäume (LiDAR)', orPending(p, 'crown_pct', p.trees, (v) => fmtNum(v)), 'Gemessene Kronenspitzen, ohne Unterholz'),
+      kv('Kronenanteil', orPending(p, 'crown_pct', p.crown_pct, pct)),
+      kv('Kronen in der Ortslage', orPending(p, 'ortslage_canopy_pct', p.ortslage_canopy_pct, pct), 'Gebäude plus 50 m, auch Gewerbe'),
+      kv('Bäume pro Einwohner', orPending(p, 'trees_per_inhabitant', p.trees_per_inhabitant, (v) => fmtNum(v))),
+      kv('Photovoltaik', mun?.pv ? `${fmtNum(mun.pv.kwp_per_inhabitant)} kWp/Einw. (${fmtNum(mun.pv.systems)} Anlagen, MaStR)` : 'keine Daten'),
+      kv('LiDAR', String(p.lidar_epoch ?? '–')),
+      kv('Im 3D-Gebiet', share > 0 ? `${fmtShare(share)} der Fläche` : 'nein, nur auf der Karte'),
+    );
+    out.push(dl);
+    if (Object.values(p.discipline_state).includes('pending')) {
+      out.push(small(`⏳ Einige Werte ${pendingText(data!)}; sie erscheinen, sobald die Auswertung durch ist. Ranglisten gibt es erst, wenn alle Gemeinden fertig sind.`));
+    }
+    const actions = el('div', { class: 'sle-cmp-actions wrap' });
+    if (share > 0) {
+      const fly = el('button', { type: 'button', class: 'sle-btn primary', text: 'Hinfliegen' });
+      fly.addEventListener('click', () => flyToPlace(p));
+      actions.append(fly);
+    }
+    if (services.minimap) {
+      const b = mapButton();
+      if (share <= 0) b.classList.add('primary');
+      actions.append(b);
+    }
+    const cmp = el('button', { type: 'button', class: 'sle-btn', text: '⚖️ Vergleichen', title: `${p.name_de} mit der nächstbesseren Gemeinde vergleichen` });
+    cmp.addEventListener('click', () => openLb({ tab: 'vergleich', compare: compareWith(p) }));
+    actions.append(cmp);
+    out.push(actions);
+    // Its Ortsteile on the other level (→ that card, flown to: they lie in 3D).
+    const ot = p.ortsteile;
+    if (ot && hasLevel('ortsteil') && ot.aoi === levelAoi('ortsteil')) {
+      const names = loadedLevels.get('ortsteil')?.data.places ?? [];
+      const row = el('div', { class: 'sle-cmp-actions wrap sle-cmp-ortsteile' });
+      for (const id of ot.places) {
+        const op = names.find((x) => x.id === id);
+        const b = el('button', { type: 'button', class: 'sle-btn', text: op?.name_de ?? id, title: `${op ? placeTitle(op) : id}: Karte im Ortsteil-Vergleich öffnen` });
+        b.addEventListener('click', () =>
+          void setLevel('ortsteil', () => {
+            const q = data?.places.find((x) => x.id === id);
+            if (!q) return;
+            openCurrent(q.id);
+            flyToPlace(q);
+          }),
+        );
+        row.append(b);
+      }
+      out.push(el('p', { class: 'sle-small sle-dim', text: `Ortsteile von ${p.name_de} im Ortsteil-Vergleich (Gemarkungen, in 3D):` }), row);
+    }
+    for (const sct of [climbSection(p), speciesSection(p), bioSection(p), roofSection(p, mun)]) if (sct) out.push(sct);
     return out;
   };
 
@@ -1067,7 +1304,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       return;
     }
     layer.setOutline(s.kind === 'place' ? [s.place.id] : s.mun.places, outlines);
-    cardView.replaceChildren(...(s.kind === 'place' ? placeCard(s.place) : munCard(s.mun)));
+    cardView.replaceChildren(...(s.kind === 'place' ? (s.place.kind === 'gemeinde' ? gemeindeCard(s.place) : placeCard(s.place)) : munCard(s.mun)));
     cardView.hidden = false;
     boardView.hidden = true;
     cardView.scrollIntoView?.({ block: 'nearest' });
@@ -1076,15 +1313,129 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
 
   // ---- open a place from outside (Baum-Steckbrief link „Orte im Vergleich“) ------------------------------
   let pendingOpen: string | null = null;
-  const openPlace = (id: string) => {
+  /** Open a place of the active level in the card (drawer and section opened). */
+  const openCurrent = (id: string) => {
     const p = data?.places.find((x) => x.id === id);
-    if (!p) {
-      if (!data) pendingOpen = id; // still loading: open once the data is in
-      return;
-    }
+    if (!p) return;
     if (h.places.closest<HTMLElement>('.sle-drawer')?.hidden) h.shell.anchor('places')?.click();
     openPanelSection(sec);
     select({ kind: 'place', place: p });
+  };
+  /** Outside callers (tree card) name a place of the AOI's own level: switch back to it first. */
+  const openPlace = (id: string) => {
+    if (!data) {
+      pendingOpen = id; // still loading: open once the data is in
+      return;
+    }
+    if (level !== ownLevel) void setLevel(ownLevel, () => openCurrent(id));
+    else openCurrent(id);
+  };
+
+  // ---- levels (S1): switch Gemeinden / Ortsteile ------------------------------------------------------------
+  const levelAoi = (lv: StatsLevel) => choices?.find((c) => c.level === lv)?.aoi ?? null;
+
+  /** The level's data: own (loaded with the panel) or fetched once from its AOI. */
+  const ensureLevel = async (lv: StatsLevel) => {
+    const have = loadedLevels.get(lv);
+    if (have) return have;
+    const choice = choices?.find((c) => c.level === lv);
+    const pr = probed.get(lv);
+    if (!choice || !pr) return null;
+    const ld = await loadLevelData(choice, pr.baseUrl, pr.meta, (u) => fetchJson(u, abort.signal));
+    if (ld) loadedLevels.set(lv, { data: ld.data, outlines: ld.outlines });
+    return ld;
+  };
+
+  const renderLevels = () => {
+    levelSeg.replaceChildren();
+    levelSeg.hidden = !choices || choices.length < 2;
+    if (levelSeg.hidden) return;
+    for (const c of choices!) {
+      const on = c.level === level;
+      const b = el('button', { type: 'button', class: on ? 'on' : '', 'aria-pressed': String(on), text: c.label_de, 'data-level': c.level, title: c.level === 'gemeinde' ? 'Alle Gemeinden im Saarland und Nachbarn' : 'Ortsteile (Gemarkungen) im 3D-Gebiet' });
+      b.addEventListener('click', () => void setLevel(c.level));
+      levelSeg.append(b);
+    }
+  };
+
+  const pickDiscipline = () => {
+    const shown = shownDisciplines(data!);
+    const pref = loadPref(level);
+    const ready = shown.filter((d) => d.ready);
+    discipline = shown.find((d) => d.id === pref && disciplineAvailability(data!, d) !== 'soon') ?? ready[0] ?? shown.find((d) => disciplineAvailability(data!, d) === 'pending') ?? null;
+  };
+
+  const renderMeta = () => {
+    disclaimer.textContent = data!.disclaimer_de;
+    sources.replaceChildren(
+      el('summary', { text: 'Quellen und Methode' }),
+      el('p', { text: data!.attribution }),
+      ...data!.inputNotes.map((n) => el('p', { text: `Hinweis: ${n}` })),
+      el('p', { class: 'sle-dim', text: `Stand der Auswertung: ${data!.generated.slice(0, 10)}` }),
+    );
+  };
+
+  let levelBusy: StatsLevel | null = null;
+  /** Switch the active level (loads it on first use); `after` runs once it is active. */
+  const setLevel = async (next: StatsLevel, after?: () => void): Promise<void> => {
+    if (next === level) {
+      after?.();
+      return;
+    }
+    if (levelBusy) return;
+    levelBusy = next;
+    levelNote.hidden = false;
+    levelNote.textContent = `Lade ${levelLabel(next)} …`;
+    let ld: Pick<LoadedLevel, 'data' | 'outlines'> | null = null;
+    try {
+      ld = await ensureLevel(next);
+    } catch (err) {
+      if (!abort.signal.aborted) console.warn('[places] level not loaded', err);
+    }
+    levelBusy = null;
+    if (abort.signal.aborted) return;
+    levelNote.hidden = true;
+    if (!ld) {
+      // Unreachable level: drop it (contract: no switch then), keep the current level.
+      choices = choices?.filter((c) => c.level !== next) ?? null;
+      if (choices && choices.length < 2) choices = null;
+      renderLevels();
+      services.toast(`${levelLabel(next)} konnten nicht geladen werden.`, false, 3500);
+      return;
+    }
+    select(null);
+    cardView.hidden = true;
+    boardView.hidden = false;
+    level = next;
+    data = ld.data;
+    outlines = ld.outlines;
+    savePrefs({ level });
+    pickDiscipline();
+    sec.setCount(data.places.length);
+    renderMeta();
+    renderLevels();
+    renderChips();
+    renderBoard();
+    syncGiants();
+    lb?.setData(data, { sortBy: discipline?.ready ? discipline.id : null });
+    after?.();
+  };
+
+  /** Probe the other levels' manifests (tiny) before offering the switch (unreachable → not offered). */
+  const probeLevels = async () => {
+    const all = levelChoices(meta, statsLevels);
+    if (!all) return;
+    const ok = await Promise.all(
+      all.map(async (c) => {
+        if (c.own) return true;
+        const baseUrl = aoiBaseUrl(c.aoi);
+        const m = await probeLevel(c, baseUrl, (u) => fetchJson(u, abort.signal));
+        if (m) probed.set(c.level, { baseUrl, meta: m });
+        return !!m;
+      }),
+    );
+    const kept = all.filter((_, i) => ok[i]);
+    choices = kept.length >= 2 ? kept : null;
   };
   const onOpenEvent = (e: Event) => {
     const id = (e as CustomEvent<{ id?: unknown }>).detail?.id;
@@ -1097,6 +1448,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   const openDeepLink = () => {
     const ids = data ? parseCompareParam(location.search, data.places.map((p) => p.id)) : null;
     if (!ids) return;
+    // `ebene=` of the link (setLevel ran before) or the own level (old links).
     history.replaceState(history.state, '', `${location.pathname}${withCompareParam(location.search, [])}${location.hash}`);
     let tries = 0;
     const tryOpen = () => {
@@ -1121,7 +1473,9 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
         sec.root.hidden = true;
         return;
       }
+      if (parsed.level !== ownLevel) console.warn(`[places] places.json level ${parsed.level} ≠ manifest level ${ownLevel}`);
       data = parsed;
+      ownData = parsed;
       riesenAll = riesenInAoi(data.places, aoi);
       if (meta.geometry) {
         try {
@@ -1130,17 +1484,12 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
           if (!abort.signal.aborted) console.warn('[places] outlines not loaded (fly-to uses label/bbox)', err);
         }
       }
-      const ready = data.disciplines.filter((d) => d.ready);
-      const pref = loadPref();
-      discipline = ready.find((d) => d.id === pref) ?? ready[0] ?? null;
+      ownOutlines = outlines;
+      // The own file must really be the manifest's level, else the switch could mix levels: no switch.
+      if (parsed.level === ownLevel) loadedLevels.set(ownLevel, { data: parsed, outlines });
+      pickDiscipline();
       sec.setCount(data.places.length);
-      disclaimer.textContent = data.disclaimer_de;
-      sources.replaceChildren(
-        el('summary', { text: 'Quellen und Methode' }),
-        el('p', { text: data.attribution }),
-        ...data.inputNotes.map((n) => el('p', { text: `Hinweis: ${n}` })),
-        el('p', { class: 'sle-dim', text: `Stand der Auswertung: ${data.generated.slice(0, 10)}` }),
-      );
+      renderMeta();
       status.remove();
       sec.body.append(progress, boardView, cardView, disclaimer, sources);
       renderProgress();
@@ -1152,6 +1501,18 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       const sys = h.shell.anchor('keys')?.parentElement;
       if (sys) sys.insertBefore(trophyBtn, sys.firstChild);
       window.addEventListener('keydown', onKey);
+      if (parsed.level === ownLevel) {
+        await probeLevels();
+        if (abort.signal.aborted) return;
+        renderLevels();
+        // Level: a `vergleich=` link decides (its `ebene=`, or the own level for old links without it);
+        // otherwise the viewer's last choice.
+        const q = new URLSearchParams(location.search);
+        const avail = (choices as LevelChoice[] | null)?.map((c) => c.level) ?? []; // set by probeLevels (TS cannot see it)
+        const prefLevel = loadPrefs().level;
+        const want = q.get('vergleich') ? (parseLevelParam(location.search, avail) ?? ownLevel) : (avail.find((l) => l === prefLevel) ?? null);
+        if (want && want !== level) await setLevel(want);
+      }
       openDeepLink();
     } catch (err) {
       if (abort.signal.aborted) return;

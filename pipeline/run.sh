@@ -40,9 +40,12 @@ for n in "${!STEPS[@]}"; do
     forest-age) step "forest-age" uv run python forest_age.py ;;                # Orte im Vergleich: age classes + 1935 forest share per place (after species)
     stats) step "stats $AOI" uv run python stats.py "$AOI" ;;                 # Orte im Vergleich: place stats (needs data/work/orte from places.py, stats_trees.py, stats_inputs.py; Phase 1 files optional)
     pois)  step "pois"       uv run python pois.py ;;
+    gemeinden) step "gemeinden" uv run python gemeinden.py all ;;                 # S1 Gemeinde level: VG25 outlines, Zensus, MaStR, DLR, GBIF, LoD2 + roofs
+    gemeinde-trees) step "gemeinde-trees" uv run python gemeinde_trees.py all ;;  # S1b: LiDAR canopy per Gemeinde, streamed per tile (long, resumable)
+    gemeinden-stats) step "gemeinden-stats $AOI" uv run python gemeinden_stats.py "$AOI" ;;   # S1: publish saarland/stats (sle-stats-v1, level gemeinde)
     attribution) step "attribution $AOI" uv run python -c 'import sys, common; print(common.refresh_attribution(sys.argv[1]))' "$AOI" ;;  # manifest-only: heal superseded entries
     test)  step "tests"      uv run pytest -q ;;
-    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|forest|pois|detect|pointcloud|trees|places|stats-trees|stats-inputs|species|gbif|roofs|forest-age|stats|attribution|test)"; exit 1 ;;
+    *) echo "unknown step $s (fetch|build|xyz|osm|cadastre|buildings|ortho|historic|forest|pois|detect|pointcloud|trees|places|stats-trees|stats-inputs|species|gbif|roofs|forest-age|stats|gemeinden|gemeinde-trees|gemeinden-stats|attribution|test)"; exit 1 ;;
   esac
 done
 AOI="${AOIS[${#AOIS[@]}-1]:-$AOI}"

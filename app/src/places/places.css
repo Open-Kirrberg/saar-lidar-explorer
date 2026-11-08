@@ -359,3 +359,34 @@ th.sticky .sle-cmpx-sort { align-items: flex-start; text-align: left; }
   .sle-cmpx-cbar { right: 7px; max-width: calc(100% - 14px); }
 }
 .sle-sys-btn.sle-cmp-trophy { font-size: 20px; line-height: 1; }
+
+/* ---- S1 Saarland leaderboard: level switch, status, pending (ADR 0051) -------------------------------- */
+.sle-cmp-levels { display: flex; gap: 4px; margin: 0 0 6px; }
+.sle-cmp-levels[hidden] { display: none; }
+.sle-cmp-levels button {
+  flex: 1 1 0; min-height: 36px; padding: 4px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #2a2a2a; color: var(--ui-fg); font: 12.5px var(--ui-font); cursor: pointer;
+}
+.sle-cmp-levels button:hover { background: #383838; }
+.sle-cmp-levels button.on { background: var(--ui-accent); border-color: var(--ui-accent); color: #1c1c1c; font-weight: 600; }
+.sle-cmp-levelnote { margin: 0 0 6px; color: var(--ui-dim); }
+.sle-cmp-levelnote[hidden] { display: none; }
+.sle-cmp-chip.pending { border-style: dashed; }
+.sle-cmp-pending { padding: 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--ui-fg); line-height: 1.4; }
+.sle-cmp-pend { color: var(--ui-dim); }
+.sle-cmp-badge.b-status-stats { background: rgba(255, 170, 220, 0.12); color: #ffc4e6; border-color: rgba(255, 170, 220, 0.45); }
+.sle-cmp-badge.b-status-stats.compact { padding: 0 3px; font-size: 11px; }
+.sle-cmp-badge.b-status-building { background: rgba(255, 207, 90, 0.15); color: #ffcf5a; border-color: rgba(255, 207, 90, 0.5); }
+.sle-cmp-pate {
+  margin: 6px 0; padding: 8px 10px; border-radius: 8px; border-left: 3px solid #ff9fd4; background: rgba(255, 170, 220, 0.08);
+}
+.sle-cmp-pate.build { border-left-color: #ffcf5a; background: rgba(255, 207, 90, 0.08); }
+.sle-cmp-pate p { margin: 0 0 6px; line-height: 1.4; }
+.sle-cmp-pate-title { font-weight: 600; }
+.sle-cmp-pate-link { display: inline-flex; align-items: center; min-height: 34px; text-decoration: none; }
+.sle-cmp-ortsteile .sle-btn { min-height: 32px; font-size: 12px; }
+.sle-cmpx-pending { margin: 0 0 8px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); color: var(--ui-dim); line-height: 1.4; }
+.sle-cmpx-tag.pate { background: rgba(255, 170, 220, 0.14); color: #ffc4e6; text-decoration: none; }
+.sle-cmpx-tag.pate:hover, .sle-cmpx-tag.pate:focus-visible { background: rgba(255, 170, 220, 0.3); }
+.sle-cmpx-tag.build { background: rgba(255, 207, 90, 0.15); color: #ffcf5a; }
+.sle-cmpx-levels { margin-bottom: 6px; }

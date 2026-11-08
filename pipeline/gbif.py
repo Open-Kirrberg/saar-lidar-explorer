@@ -69,7 +69,7 @@ RAREFY_N_SMALL = 150       # secondary depth so the small places (< 500 records)
 PRECISE_UNCERTAINTY = "0,1000"   # robustness variant: only records with coordinateUncertaintyInMeters ≤ 1 km
 SIMPLIFY_M = 20.0          # first outline simplification before WKT (the place is km wide)
 MAX_WKT_CHARS = 2000       # the API front end answers 400 to URLs of ≈ 4 KB: simplify further until the WKT fits
-SIMPLIFY_STEPS_M = (20.0, 30.0, 40.0, 60.0, 80.0)
+SIMPLIFY_STEPS_M = (20.0, 30.0, 40.0, 60.0, 80.0, 120.0, 160.0, 200.0)   # > 80 m only for whole Gemeinden (S1)
 MIN_RING_HA = 1.0          # holes and parts below this are dropped from the query polygon
 WKT_DECIMALS = 5           # ≈ 1 m in WGS84 at 49° N
 FACET_PAGE = 1000
@@ -358,10 +358,13 @@ def load_places(path: Path = ORTE_WORK / "gemarkungen.geojson") -> list[tuple[st
     return [(f["properties"]["id"], f["properties"]["name_de"], shape(f["geometry"])) for f in d["features"]]
 
 
-def run(refresh: bool = False) -> dict[str, Any]:
+def run(refresh: bool = False, places_path: Path | None = None, out: Path | None = None) -> dict[str, Any]:
+    """`places_path` / `out` default to the Ortsteile set (gemarkungen.geojson → gbif_by_place.json); the S1
+    Gemeinde level passes its outlines (gemeinden.py)."""
     api = Gbif(refresh=refresh)
     places = []
-    for pid, name, geom in load_places():
+    OUT_ = out or OUT
+    for pid, name, geom in load_places(places_path or ORTE_WORK / "gemarkungen.geojson"):
         wkt, qp, tol = place_wkt(geom)
         t0 = time.time()
         rec = place_query(pid, name, wkt, api)
@@ -376,7 +379,7 @@ def run(refresh: bool = False) -> dict[str, Any]:
               f"{rec['rarefied']}, iNat {rec['inaturalist']['share_pct']} %, {rec['years']['first']}–"
               f"{rec['years']['last']} [{time.time() - t0:.1f}s]", flush=True)
     date = max(api.dates) if api.dates else dt.date.today().isoformat()
-    out = {
+    doc = {
         "format": FORMAT, "generated": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
         .replace("+00:00", "Z"), "method": METHOD, "query_date": date,
         "source": {"api": f"{API}/occurrence/search", "filters": BASE_FILTER,
@@ -416,12 +419,12 @@ def run(refresh: bool = False) -> dict[str, Any]:
         "attribution": [attribution(date)], "attribution_note_de": INAT_NOTE,
         "places": places,
     }
-    ORTE_WORK.mkdir(parents=True, exist_ok=True)
-    tmp = OUT.with_suffix(".tmp")
-    tmp.write_text(json.dumps(out, ensure_ascii=False, indent=1) + "\n")
-    tmp.replace(OUT)
-    print(f"wrote {OUT} ({OUT.stat().st_size / 1024:.1f} KB); requests live {api.live}, cached {api.cached}")
-    return out
+    OUT_.parent.mkdir(parents=True, exist_ok=True)
+    tmp = OUT_.with_suffix(".tmp")
+    tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
+    tmp.replace(OUT_)
+    print(f"wrote {OUT_} ({OUT_.stat().st_size / 1024:.1f} KB); requests live {api.live}, cached {api.cached}")
+    return doc
 
 
 def main(argv: list[str] | None = None) -> None:

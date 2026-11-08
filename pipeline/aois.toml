@@ -48,6 +48,16 @@ name = "Homburg (Gemeinde)"
 bbox = [374000, 5456000, 385000, 5472000]
 phase = "S0"
 
+# S1 Saarland leaderboard (docs/plans/orte-skalieren.md §6, ADR 0051): Gemeinde level, statistics only (no 3D tiles).
+# Publishes app/public/data/saarland/{manifest.json,stats/} (stats-only manifest). bbox = the 52 SL municipalities +
+# Zweibrücken + Bechhofen (VG25 outlines, gemeinden.py), snapped outward to 1 km. `./run.sh saarland` runs stats_steps.
+[saarland]
+name = "Saarland – Gemeinden im Vergleich (stats only)"
+bbox = [308000, 5441000, 388000, 5501000]
+phase = "stats"
+stats_only = true
+stats_steps = ["gemeinden", "gemeinde-trees", "gemeinden-stats"]
+
 # F16 point-cloud focus areas (pointcloud.py, contract "Point clouds"). Defined once under [defaults] so every
 # AOI inherits them; an AOI writes the areas whose bbox lies fully inside it. bbox in EPSG:25832, multiples of
 # 100 m (tileSize), ≈ 1 km² each, placed to touch as few 1 km LAZ tiles as possible.

@@ -9,12 +9,22 @@
  * only an olympic medal count over the place-scope disciplines; conversions are whole-Gemarkung sums
  * (ADR 0049: never parcels, buildings or owners).
  */
-import { fmtNum, otherFlightNote, rankBoard } from './placesData';
-import type { Board, Discipline, Goal, Municipality, Place, PlacesData } from './placesData';
+import { disciplineAvailability, fmtNum, isStatsLevel, levelNoun, otherFlightNote, placeLevel, rankBoard } from './placesData';
+import type { Board, Discipline, Goal, Municipality, Place, PlacesData, StatsLevel } from './placesData';
 
-export type CategoryFilter = 'alle' | 'stadt' | 'dorf';
+/** 'alle' or a size class of the level (`categories_de` keys: stadt/dorf, or stadt/gemeinde on the Gemeinde level). */
+export type CategoryFilter = string;
 
-export const CATEGORY_LABELS: Record<CategoryFilter, string> = { alle: 'Alle', stadt: 'Städte', dorf: 'Dörfer' };
+/** Ortsteile-level labels (kept for old callers; per level use `categoryOptions`). */
+export const CATEGORY_LABELS: Record<string, string> = { alle: 'Alle', stadt: 'Städte', dorf: 'Dörfer' };
+
+/** Filter choices of a level: „Alle“ plus its size classes (Städte / Dörfer, or Städte / Gemeinden). */
+export function categoryOptions(data: Pick<PlacesData, 'categories'>): Array<[CategoryFilter, string]> {
+  return [['alle', 'Alle'], ...Object.entries(data.categories)];
+}
+
+/** Dative plural for „Ränge nur unter den …“ (Städten, Dörfern, Gemeinden). */
+export const dativePlural = (label: string): string => (/[ns]$/.test(label) ? label : `${label}n`);
 
 /** One place in one discipline. */
 export interface Cell {
@@ -35,8 +45,12 @@ export interface MatrixRow {
 
 export interface Matrix {
   filter: CategoryFilter;
+  /** The level of the file (one matrix = one level, ADR 0051). */
+  level: StatsLevel;
   /** Ready disciplines with a measure, file order. */
   disciplines: Discipline[];
+  /** Disciplines still being computed on this level (no column, no ranking: „wird berechnet“). */
+  pending: Discipline[];
   /** Places of the filter, by name. */
   rows: MatrixRow[];
   /** The boards behind the cells (places of the filter / all municipalities). */
@@ -55,7 +69,10 @@ export function isSuppressed(p: Pick<Place, 'suppressed'>, path: string): boolea
 
 /** German reason why a place has no rank in a place-scope discipline. */
 export function unrankedReason(p: Place, d: Discipline, value: number | null): string {
-  if (value !== null && !p.complete) return 'unvollständig: Gemarkung nicht ganz erfasst';
+  const st = p.discipline_state[d.id];
+  if (value === null && st === 'pending') return 'wird noch berechnet';
+  if (value === null && st === 'none') return 'keine Quelle für diesen Ort';
+  if (value !== null && !p.complete) return `unvollständig: ${levelNoun(p)} nicht ganz erfasst`;
   if (isSuppressed(p, d.measure)) return 'nicht veröffentlicht (zu wenige)';
   if (d.measure.startsWith('biodiversity.') && p.biodiversity?.few_records) return 'zu wenige Meldungen (unter 500)';
   return 'keine Daten';
@@ -67,8 +84,10 @@ export function unrankedReason(p: Place, d: Discipline, value: number | null): s
  * all municipalities, shown on each of their places.
  */
 export function buildMatrix(data: PlacesData, filter: CategoryFilter = 'alle'): Matrix {
-  const places = data.places.filter((p) => filter === 'alle' || p.category === filter).sort(byName);
+  // Level guard: a place of another level (wrong `kind` in the file) never enters this ranking.
+  const places = data.places.filter((p) => placeLevel(p) === data.level && (filter === 'alle' || p.category === filter)).sort(byName);
   const disciplines = data.disciplines.filter((d) => d.ready && !!d.measure);
+  const pending = data.disciplines.filter((d) => disciplineAvailability(data, d) === 'pending');
   const boards: Matrix['boards'] = {};
   const extent: Matrix['extent'] = {};
   const rows: MatrixRow[] = places.map((place) => ({ place, cells: {} }));
@@ -80,9 +99,11 @@ export function buildMatrix(data: PlacesData, filter: CategoryFilter = 'alle'): 
         const m = data.municipalities.find((x) => x.id === row.place.municipality) ?? null;
         const r = m ? board.ranked.find((e) => e.item.id === m.id) : undefined;
         const v = m ? (board.incomplete.concat(board.noData).find((e) => e.item.id === m.id)?.value ?? null) : null;
+        const st = row.place.discipline_state[d.id];
+        const why = st === 'pending' ? 'wird noch berechnet' : m ? 'keine Gemeindedaten' : 'keine Gemeinde zugeordnet';
         row.cells[d.id] = r
           ? { value: r.value, rank: r.rank, of: board.ranked.length, reason: null, municipality: m }
-          : { value: v, rank: null, of: board.ranked.length, reason: m ? 'keine Gemeindedaten' : 'keine Gemeinde zugeordnet', municipality: m };
+          : { value: v, rank: null, of: board.ranked.length, reason: why, municipality: m };
       }
       setExtent(extent, d.id, board.ranked);
       continue;
@@ -100,7 +121,7 @@ export function buildMatrix(data: PlacesData, filter: CategoryFilter = 'alle'): 
     }
     setExtent(extent, d.id, board.ranked);
   }
-  return { filter, disciplines, rows, boards, extent };
+  return { filter, level: data.level, disciplines, pending, rows, boards, extent };
 }
 
 function setExtent(extent: Matrix['extent'], id: string, ranked: ReadonlyArray<{ value: number }>): void {
@@ -202,7 +223,8 @@ export function fmtArea(m2: number): string {
 const nameList = (names: string[]) => (names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} und ${names[names.length - 1]}`);
 
 /** Disciplines whose values depend on the LiDAR flight (the RLP 2022 / SL 2025 offset applies). */
-export const flightDependent = (d: Pick<Discipline, 'scope' | 'measure'>): boolean => d.scope === 'place' && !d.measure.startsWith('biodiversity.');
+export const flightDependent = (d: Pick<Discipline, 'scope' | 'measure'>): boolean =>
+  d.scope === 'place' && !d.measure.startsWith('biodiversity.') && d.measure !== 'forest_pct'; // forest_pct: DLR satellite map
 
 /** Measures that count trees: the measured RLP/SL tree-count offset (≈ 20 %) applies to them. */
 const TREE_COUNT_MEASURES = ['trees_per_inhabitant', 'trees'];
@@ -247,7 +269,7 @@ export function duelText(d: Discipline, entries: ReadonlyArray<{ place: Place; c
   // Municipality values: compare the Gemeinden, once each.
   const groups = new Map<string, { label: string; value: number }>();
   for (const e of ranked) {
-    const m = d.scope === 'municipality' ? e.cell.municipality : null;
+    const m = d.scope === 'municipality' && e.place.kind !== 'gemeinde' ? e.cell.municipality : null; // Gemeinde level: place = Gemeinde
     const key = m ? `m:${m.id}` : `p:${e.place.id}`;
     if (!groups.has(key)) groups.set(key, { label: m ? `Gemeinde ${m.name_de}` : e.place.name_de, value: e.cell.value! });
   }
@@ -340,7 +362,7 @@ export function climbAction(d: Discipline, gap: number, p: Place, mun: Municipal
       };
     case 'crown_pct':
       return {
-        action: p.area_ha !== null && p.area_ha > 0 ? `≈ ${fmtArea((g / 100) * p.area_ha * 10_000)} mehr Kronenfläche in der Gemarkung` : null,
+        action: p.area_ha !== null && p.area_ha > 0 ? `≈ ${fmtArea((g / 100) * p.area_ha * 10_000)} mehr Kronenfläche in der ${levelNoun(p)}` : null,
         hint: 'Feldgehölze, Hecken und Baumreihen pflanzen, Wald wachsen lassen – Kronen brauchen Jahre.',
       };
     case 'trees_per_inhabitant':
@@ -353,8 +375,25 @@ export function climbAction(d: Discipline, gap: number, p: Place, mun: Municipal
     case 'pv.kwp_per_inhabitant':
       return {
         action: mun && mun.inhabitants !== null && mun.inhabitants > 0 ? `≈ ${fmtNum(roundNice(Math.max(1, g * mun.inhabitants)))} kWp mehr Photovoltaik in der Gemeinde ${mun.name_de}` : null,
-        hint: 'Gemeindewert: zählt für alle Gemarkungen der Gemeinde (Marktstammdatenregister nur pro Gemeinde).',
+        hint:
+          p.kind === 'gemeinde'
+            ? 'Mehr Photovoltaik auf Dächern, Balkonen und Freiflächen der Gemeinde (Marktstammdatenregister).'
+            : 'Gemeindewert: zählt für alle Gemarkungen der Gemeinde (Marktstammdatenregister nur pro Gemeinde).',
       };
+    case 'forest_pct':
+      return {
+        action: p.area_ha !== null && p.area_ha > 0 ? `≈ ${fmtArea((g / 100) * p.area_ha * 10_000)} mehr Wald in der ${levelNoun(p)}` : null,
+        hint: 'Aufforsten und Wald wachsen lassen; der Wert kommt aus der Satellitenkarte 2022 und ändert sich erst mit einer neuen Karte.',
+      };
+    case 'ortslage_canopy_pct': {
+      const ha = p.ortslage_area_ha;
+      return {
+        action: ha !== null && ha > 0 ? `≈ ${fmtArea((g / 100) * ha * 10_000)} mehr Baumkrone in der Ortslage` : null,
+        hint: 'Straßenbäume, Hof- und Gartenbäume pflanzen und erhalten – Kronen brauchen Jahre.',
+      };
+    }
+    case 'pv.used_pct_mid':
+      return { action: null, hint: 'Mehr Photovoltaik auf geeigneten Dächern: zählt im Anteil des ganzen Dachpotenzials der Gemeinde.' };
     case 'biodiversity.rarefied_500':
       return { action: null, hint: 'Mehr verschiedene Arten beobachten und melden (z. B. iNaturalist): der Wert misst Meldungen, nicht die Natur selbst.' };
     default:
@@ -388,7 +427,8 @@ export function climbFor(data: PlacesData, m: Matrix, placeId: string): ClimbSum
     const targetRank = Math.max(...better.map((e) => e.rank));
     const at = better.filter((e) => e.rank === targetRank);
     const isMun = d.scope === 'municipality';
-    const names = at.map((e) => (isMun ? `Gemeinde ${e.item.name_de}` : e.item.name_de));
+    // Gemeinde level: every row is a Gemeinde, the name alone reads better („hinter Kirkel“).
+    const names = at.map((e) => (isMun && m.level !== 'gemeinde' ? `Gemeinde ${e.item.name_de}` : e.item.name_de));
     const gap = Math.abs(at[0].value - cell.value);
     const { action, hint } = climbAction(d, gap, p, cell.municipality);
     const targets = isMun ? [] : (at.map((e) => e.item) as Place[]);
@@ -425,6 +465,14 @@ export function rivalFor(m: Matrix, placeId: string, disciplineId: string | null
 // ---- deep link (?vergleich=a,b[,c]) ------------------------------------------------------------------------------
 
 export const COMPARE_PARAM = 'vergleich';
+/** Level of the comparison (`?vergleich=a,b&ebene=gemeinde`); absent = the AOI's own level (old links). */
+export const LEVEL_PARAM = 'ebene';
+
+/** The level in `?ebene=`, if it is one of `valid`, else null. */
+export function parseLevelParam(search: string, valid: readonly StatsLevel[]): StatsLevel | null {
+  const v = new URLSearchParams(search).get(LEVEL_PARAM);
+  return isStatsLevel(v) && valid.includes(v) ? v : null;
+}
 
 /** 2–3 distinct known place ids from `?vergleich=`, else null (unknown ids dropped). */
 export function parseCompareParam(search: string, validIds: readonly string[]): string[] | null {
@@ -434,11 +482,16 @@ export function parseCompareParam(search: string, validIds: readonly string[]): 
   return ids.length >= 2 ? ids : null;
 }
 
-/** `search` with `?vergleich=` set to `ids` (empty → removed); other params kept. */
-export function withCompareParam(search: string, ids: readonly string[]): string {
+/**
+ * `search` with `?vergleich=` set to `ids` (empty → removed, with `ebene`); `level` given → `ebene=`
+ * set, else removed (an old-style link: the AOI's own level). Other params kept.
+ */
+export function withCompareParam(search: string, ids: readonly string[], level: StatsLevel | null = null): string {
   const q = new URLSearchParams(search);
   if (ids.length) q.set(COMPARE_PARAM, ids.join(','));
   else q.delete(COMPARE_PARAM);
+  if (ids.length && level) q.set(LEVEL_PARAM, level);
+  else q.delete(LEVEL_PARAM);
   const s = q.toString().replace(/%2C/gi, ',');
   return s ? `?${s}` : '';
 }
@@ -481,13 +534,20 @@ const COLUMN_HEADS: Record<string, { short: string; sub: string }> = {
   'tallest.h': { short: 'Riesenbaum', sub: 'Höhe in m' },
   'pv.kwp_per_inhabitant': { short: 'Sonne', sub: 'kWp/Einw.' },
   'biodiversity.rarefied_500': { short: 'Arten', sub: 'je 500 Meldungen' },
+  forest_pct: { short: 'Wald', sub: '% laut Karte' },
+  ortslage_canopy_pct: { short: 'Ortskronen', sub: '% der Ortslage' },
+  'pv.used_pct_mid': { short: 'Dach-PV', sub: '% genutzt' },
 };
 
-export function columnHead(d: Pick<Discipline, 'measure' | 'name_de' | 'unit' | 'higher_is_better' | 'scope' | 'note_de'>): { short: string; sub: string; notes: string[] } {
+export function columnHead(
+  d: Pick<Discipline, 'measure' | 'name_de' | 'unit' | 'higher_is_better' | 'scope' | 'note_de'>,
+  level: StatsLevel = 'ortsteil',
+): { short: string; sub: string; notes: string[] } {
   const h = COLUMN_HEADS[d.measure] ?? { short: d.name_de, sub: d.unit };
   const notes: string[] = [];
   if (!d.higher_is_better) notes.push('weniger ist besser');
-  if (d.scope === 'municipality') notes.push('Gemeindewert');
+  // On the Gemeinde level every row is a Gemeinde: „Gemeindewert“ would say nothing.
+  if (d.scope === 'municipality' && level !== 'gemeinde') notes.push('Gemeindewert');
   if (d.note_de) notes.push('grober Hinweis');
   return { short: h.short, sub: h.sub, notes };
 }

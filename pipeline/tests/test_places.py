@@ -121,9 +121,12 @@ def test_aois_toml_orte_section_loads():
     assert cfg["orte"]["stats_only"] is True and cfg["orte"]["phase"] == "stats"
     a = load_aoi("orte")  # still a valid AOI for the shared loader (km grid, multiple of chunk_size)
     assert a.width % 1000 == 0 and a.height % 1000 == 0 and a.e0 % 1000 == 0 and a.n0 % 1000 == 0
-    for k, v in cfg.items():  # every other AOI is unchanged in shape
-        if k not in ("defaults", "orte"):
+    for k, v in cfg.items():  # every other AOI is unchanged in shape (stats-only: orte, S1 saarland)
+        if k not in ("defaults", "orte", "saarland"):
             assert "stats_only" not in v
+    assert cfg["saarland"]["stats_only"] is True and cfg["saarland"]["stats_steps"]
+    s = load_aoi("saarland")
+    assert s.width % 1000 == 0 and s.height % 1000 == 0
 
 
 # --- attributes ------------------------------------------------------------------------------------
