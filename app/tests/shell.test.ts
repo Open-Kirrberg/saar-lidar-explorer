@@ -465,3 +465,35 @@ describe('zone prompt keeps clear of the splash corner (ADR 0026, V2.8b phone re
     expect(clearOf({ left: 600, top: 840, right: 936, bottom: 900 }, collapsed, 960)).toBeNull();
   });
 });
+
+describe('placeCorner („© Quellen“ above a phone sheet)', () => {
+  it('keeps clear of the system buttons and the HUD', async () => {
+    const { placeCorner } = await import('../src/shell/layout');
+    const host = { left: 0, top: 0, right: 360, bottom: 740 };
+    const base = {
+      host,
+      size: { w: 110, h: 44 },
+      gap: 8,
+      lift: 6,
+      right: [
+        { left: 210, top: 8, right: 352, bottom: 168 }, // minimap
+        { left: 200, top: 164, right: 352, bottom: 208 }, // 🏆 / Steuerung / Einstellungen
+      ],
+      left: [{ left: 8, top: 8, right: 190, bottom: 70 }], // HUD
+    };
+    // low sheet: right side is free
+    expect(placeCorner({ ...base, sheetTop: 400 })).toEqual({ side: 'right', sheetTop: 400, bottom: 346 });
+    // high sheet (round-2 bug: covered „Steuerung“ / „Einstellungen“): left side
+    const hi = placeCorner({ ...base, sheetTop: 228 });
+    expect(hi).toEqual({ side: 'left', sheetTop: 228, bottom: 518 });
+    // left blocked too (tall HUD): the sheet is capped below the buttons
+    const capped = placeCorner({ ...base, sheetTop: 228, left: [{ left: 8, top: 8, right: 190, bottom: 200 }] });
+    expect(capped.side).toBe('right');
+    expect(capped.sheetTop).toBe(208 + 6 + 44 + 6);
+    expect(capped.bottom).toBe(740 - 264 + 6);
+    // a wide corner (splash still showing) never sits on the HUD or the buttons
+    const wide = placeCorner({ ...base, size: { w: 344, h: 160 }, sheetTop: 300 });
+    expect(wide.side).toBe('right');
+    expect(wide.sheetTop).toBeGreaterThanOrEqual(208 + 6 + 160 + 6);
+  });
+});

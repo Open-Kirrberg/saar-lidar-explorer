@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { validateManifest } from '../src/data/manifest';
 import {
   ARRIVAL_MOVE_M,
+  RIESE_ARRIVAL_MOVE_M,
   COLLECT_KEY,
   clearCollect,
   armCollectGate,
@@ -16,6 +17,7 @@ import {
   markRiese,
   newCollectGate,
   riesenNear,
+  rieseDiscoverHint,
   saveCollect,
 } from '../src/places/collect';
 import type { KV } from '../src/places/collect';
@@ -654,10 +656,10 @@ describe('local collecting (collect.ts, localStorage only)', () => {
   it('automatic fly-tos do not collect; places only after moving away from the arrival point', () => {
     // review 2026-11-08: tapping Zweibrücken flew over / ended above Kirrberg and counted it as visited
     const g = newCollectGate();
-    expect(collectGate(g, false, { E: 0, N: 0 })).toEqual({ riesen: true, places: false }); // start pose = arrival
+    expect(collectGate(g, false, { E: 0, N: 0 })).toEqual({ riesen: false, places: false }); // start pose = arrival
     expect(collectGate(g, false, { E: 0, N: ARRIVAL_MOVE_M })).toEqual({ riesen: true, places: true }); // flew away
     expect(collectGate(g, true, { E: 500, N: 0 })).toEqual({ riesen: false, places: false }); // fly-to running
-    expect(collectGate(g, false, { E: 1000, N: 0 })).toEqual({ riesen: true, places: false }); // arrived
+    expect(collectGate(g, false, { E: 1000, N: 0 })).toEqual({ riesen: false, places: false }); // arrived: nothing yet
     expect(g.arrival).toEqual({ E: 1000, N: 0 });
     expect(collectGate(g, false, { E: 1000 + ARRIVAL_MOVE_M / 2, N: 0 }).places).toBe(false);
     expect(collectGate(g, false, { E: 1000, N: ARRIVAL_MOVE_M })).toEqual({ riesen: true, places: true }); // moved
@@ -666,6 +668,26 @@ describe('local collecting (collect.ts, localStorage only)', () => {
     g.flew = true;
     expect(collectGate(g, false, { E: 5000, N: 0 }).places).toBe(false);
     expect(collectGate(g, false, { E: Number.NaN, N: 0 }).places).toBe(false);
+  });
+
+  it('a fly-to from the Riesen list does not collect the neighbours around the arrival pose (user report 2026-11-08)', () => {
+    // A group of Riesen; the list's framed pose ends ≈ 170 m from the target, i.e. within 150 m of two neighbours.
+    const target = { id: 1, E: 0, N: 0, h: 45 };
+    const group = [target, { id: 2, E: -60, N: -40, h: 44 }, { id: 3, E: -110, N: -20, h: 43 }, { id: 4, E: 300, N: 300, h: 42 }];
+    const arrival = { E: -150, N: -80, agl: 110 };
+    const ids = (cam: { E: number; N: number; agl: number }) => riesenNear(group, cam).map((r) => r.id);
+    expect(ids(arrival)).toEqual([2, 3]); // the bug: these counted right at the arrival
+    expect(ids(arrival)).not.toContain(1); // the target itself is out of reach anyway
+    const g = newCollectGate();
+    collectGate(g, false, { E: 5000, N: 5000 }); // start
+    collectGate(g, false, { E: 5000, N: 5000 + ARRIVAL_MOVE_M }); // user flew: gate open
+    expect(collectGate(g, true, { E: 2000, N: 2000 }).riesen).toBe(false); // the fly-to
+    expect(collectGate(g, false, arrival).riesen).toBe(false); // arrived: neighbours not collected
+    expect(collectGate(g, false, { E: arrival.E + RIESE_ARRIVAL_MOVE_M / 2, N: arrival.N }).riesen).toBe(false); // drift
+    // the user flies on, towards the target: from here on what is close counts
+    const closer = { E: arrival.E + 90, N: arrival.N + 50, agl: 80 };
+    expect(collectGate(g, false, closer).riesen).toBe(true);
+    expect(ids(closer)).toContain(1);
   });
 
   it('the start pose and a reset are not a visit (review 2026-11-08: every reload collected Homburg)', () => {
@@ -679,5 +701,17 @@ describe('local collecting (collect.ts, localStorage only)', () => {
     armCollectGate(g); // reset in the panel
     expect(collectGate(g, false, { E: 381100, N: 5464000 }).places).toBe(false);
     expect(collectGate(g, false, { E: 381100, N: 5464000 + ARRIVAL_MOVE_M }).places).toBe(true);
+  });
+});
+
+describe('rieseDiscoverHint', () => {
+  it('offers tapping only for Riesen in the 3D tree layer (user report 2026-11-08)', () => {
+    expect(rieseDiscoverHint({ rank: 3, in_trees: true })).toContain('antippen');
+    expect(rieseDiscoverHint({ rank: 3, in_trees: true })).toContain('Riese Nr. 3');
+    const off = rieseDiscoverHint({ rank: 7, in_trees: false });
+    expect(off).toContain('Riese Nr. 7');
+    expect(off).toContain('heranfliegen');
+    expect(off).not.toContain('oder den Baum antippen');
+    expect(off).toContain('nicht im 3D-Wald');
   });
 });

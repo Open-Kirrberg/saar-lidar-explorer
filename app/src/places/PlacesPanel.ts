@@ -33,6 +33,7 @@ import {
   markRiese,
   newCollectGate,
   riesenNear,
+  rieseDiscoverHint,
   saveCollect,
 } from './collect';
 import type { KV } from './collect';
@@ -362,7 +363,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     const parts: Node[] = [
       el(
         'span',
-        { class: 'sle-cmp-prog', title: 'Ein Riese zählt, wenn du bis auf etwa 150 m herangeflogen bist oder seinen Baum-Steckbrief geöffnet hast. Nur Riesen im 3D-Gebiet.' },
+        { class: 'sle-cmp-prog', title: 'Ein Riese zählt, wenn du selbst bis auf etwa 150 m herangeflogen bist oder seinen Baum-Steckbrief geöffnet hast (nur Riesen im 3D-Wald lassen sich antippen). Nur Riesen im 3D-Gebiet.' },
         '🌲 Riesen entdeckt ',
         el('b', { text: `${pr.riesen[0]}/${pr.riesen[1]}` }),
       ),
@@ -638,7 +639,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
     syncRiesen();
     const flown = flyToTree(r.E, r.N, r.h, `Riese Nr. ${r.rank} von ${p.name_de}`, p);
     // The framed pose stays ≥ 160 m away and fly-tos do not collect (collect.ts): say how it counts.
-    if (flown && !isDiscovered(collected, r.id)) say(`Riese Nr. ${r.rank}: zum Entdecken näher als etwa 150 m heranfliegen oder den Baum antippen.`, 5000);
+    if (flown && !isDiscovered(collected, r.id)) say(rieseDiscoverHint(r), 5000);
   };
 
   const riesenItems = (p: Place) =>
@@ -683,7 +684,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       true,
       riesenList,
       small(
-        'Die höchsten geprüften Bäume außerhalb der Ortslage, mindestens 20 m voneinander entfernt. Höhe aus LiDAR, nicht vor Ort gemessen. Baumart aus der Satellitenkarte (Schätzung); Erle und „andere Laubbäume“ werden nicht genannt, weil diese Klassen hier sehr unsicher sind. Entdeckt ist ein Riese, wenn du näher als etwa 150 m heranfliegst oder ihn antippst – das Hinfliegen aus der Liste allein zählt nicht.',
+        'Die höchsten geprüften Bäume außerhalb der Ortslage, mindestens 20 m voneinander entfernt. Höhe aus LiDAR, nicht vor Ort gemessen. Baumart aus der Satellitenkarte (Schätzung); Erle und „andere Laubbäume“ werden nicht genannt, weil diese Klassen hier sehr unsicher sind. Entdeckt ist ein Riese, wenn du selbst näher als etwa 150 m heranfliegst oder seinen Baum im 3D-Wald antippst – das Hinfliegen aus der Liste allein zählt nicht. Riesen mit eigenem Pin (nicht im 3D-Wald) entdeckst du nur durch Heranfliegen.',
       ),
     );
   };

@@ -21,7 +21,7 @@ import type { Shortcut } from '../ui/shortcuts';
 import { registerBuiltins } from './builtins';
 import { openDialog } from './dialog';
 import { openKeysDialog, openSettingsDialog, openShareDialog } from './dialogs';
-import { clearOf } from './layout';
+import { clearOf, placeCorner } from './layout';
 import { ICONS, createToast, deviceEnv, el } from './dom';
 import { MOVE_LABELS, WALK_EYE, WALK_PITCH, WALK_SPEED, fmtSpeedMult, stepSpeed, walkY } from './flight';
 import type { MoveMode } from './flight';
@@ -260,8 +260,12 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
   // ---- drawers ---------------------------------------------------------------------------------------
   let openDrawer: DrawerId | null = null;
   const drawerBtns: Record<DrawerId, HTMLButtonElement> = { places: placesBtn, tools: toolsBtn };
+  /** Set once „© Quellen“ exists: collapses the start splash (a sheet opened on purpose is an interaction). */
+  let dismissSplash: (() => void) | null = null;
   const setDrawer = (id: DrawerId | null, focus = true) => {
     openDrawer = id;
+    // Phones: the wide splash above a sheet would push it down to a sliver (syncCorner caps the sheet).
+    if (id && window.innerWidth <= 600) dismissSplash?.();
     for (const k of Object.keys(drawers) as DrawerId[]) {
       const on = k === id;
       drawers[k].hidden = !on;
@@ -277,20 +281,49 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
     syncCorner();
   };
   // Phones: a drawer is a bottom sheet, and „© Quellen“ (ADR 0026: always visible) would float over its
-  // content („Schätzung“ chips, values). While a sheet is open the corner sits right above the sheet.
+  // content („Schätzung“ chips, values). While a sheet is open the corner sits right above the sheet —
+  // right-aligned when that is clear of the minimap / system buttons, else left-aligned (clear of the HUD),
+  // else the sheet is capped so the corner fits below the buttons (layout.ts placeCorner).
   const syncCorner = () => {
     const d = openDrawer ? drawers[openDrawer] : null;
     let bottom = '';
+    let left = false;
+    for (const x of Object.values(drawers)) if (x !== d && x.style.maxHeight) x.style.maxHeight = '';
     if (d && !d.hidden && !minimapSlot.classList.contains('gmm-full')) {
+      d.style.maxHeight = ''; // measure the sheet's natural height (a cap from here is set again below)
       const r = d.getBoundingClientRect();
       const host = ui.getBoundingClientRect();
-      if (r.height > 0 && r.width >= host.width * 0.9 && r.top > host.top) bottom = `${Math.round(host.bottom - r.top + 6)}px`;
+      if (r.height > 0 && r.width >= host.width * 0.9 && r.top > host.top) {
+        const gap = parseFloat(getComputedStyle(ui).getPropertyValue('--gap')) || 8;
+        const box = (e: Element) => e.getBoundingClientRect();
+        const shown = (e: HTMLElement) => e.offsetParent !== null && e.getBoundingClientRect().height > 0;
+        // Size of what stays: a splash that is fading out (`.out`) would cap the sheet for the fade.
+        const kids = [...corner.children].filter((k): k is HTMLElement => k instanceof HTMLElement && !k.classList.contains('out') && shown(k)).map(box);
+        const c = kids.length
+          ? { width: Math.max(...kids.map((k) => k.right)) - Math.min(...kids.map((k) => k.left)), height: Math.max(...kids.map((k) => k.bottom)) - Math.min(...kids.map((k) => k.top)) }
+          : corner.getBoundingClientRect();
+        const spot = placeCorner({
+          host,
+          sheetTop: r.top,
+          size: { w: c.width, h: c.height },
+          gap,
+          lift: 6,
+          right: [minimapSlot, sys].filter(shown).map(box),
+          left: [hudEl].filter(shown).map(box),
+        });
+        bottom = `${spot.bottom}px`;
+        left = spot.side === 'left';
+        if (spot.sheetTop > r.top) d.style.maxHeight = `${Math.max(120, Math.floor(r.bottom - spot.sheetTop))}px`;
+      }
     }
     if (corner.style.bottom !== bottom) corner.style.bottom = bottom;
+    corner.classList.toggle('left', left);
   };
   if (typeof ResizeObserver !== 'undefined') {
     const ro = new ResizeObserver(() => syncCorner());
     for (const d of Object.values(drawers)) ro.observe(d);
+    ro.observe(corner); // the start splash collapses → more room
+    ro.observe(sys); // a feature adds a system button (🏆)
   }
   window.addEventListener('resize', syncCorner);
   window.addEventListener('sle:map-full', syncCorner); // Minimap MAP_FULL_EVENT (sync, before the map measures the corner)
@@ -360,6 +393,7 @@ export function createShell(ctx: AppContext, deps: ShellDeps): ShellApi {
     areaNote: deps.areaNote,
     interactionTarget: renderer.domElement,
   });
+  dismissSplash = () => sources.timer.dismiss();
 
   // ---- dialogs ------------------------------------------------------------------------------------------
   let tutorialStart: (() => void) | null = null; // V2.9: „Einführung starten“ in *Steuerung*

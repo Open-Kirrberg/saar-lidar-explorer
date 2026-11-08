@@ -16,9 +16,11 @@
  *    fly-to animation runs (it passes over other places and Riesen); after it, and likewise after the
  *    app start (the default or shared start pose is not a visit) and after a reset, no place counts until
  *    the camera has moved `ARRIVAL_MOVE_M` away from that pose (the framed arrival pose often hovers over
- *    the neighbouring Gemarkung). Riesen are not held back after the flight: one within the radius of the
- *    arrival pose counts. The list's fly-to frames a Riese from ≥ 160 m (the camera ends ≈ 200–310 m from
- *    the top), so flying there alone does not discover it: fly closer or open its Baum-Steckbrief.
+ *    the neighbouring Gemarkung). Riesen wait too, until the camera moved `RIESE_ARRIVAL_MOVE_M` (30 m)
+ *    from the arrival pose: the list's fly-to frames a Riese from ≥ 160 m (on phones ≈ 170 m, closer to
+ *    the ground), and the arrival pose often lies within 150 m of *neighbouring* Riesen (they stand in
+ *    groups) — those counted without any own flying (user report, 2026-11-08). So flying there alone
+ *    discovers nothing: fly closer or open the Baum-Steckbrief (Riesen in the tree layer).
  * Only ids are stored, with the date of the first discovery (no positions, no track).
  */
 
@@ -26,6 +28,20 @@ export const COLLECT_KEY = 'sle.orteCollect.v1';
 export const DISCOVER_RADIUS_M = 150;
 export const VISIT_MAX_AGL_M = 1500;
 export const ARRIVAL_MOVE_M = 100;
+/** After an automatic flight (or the start), Riesen count once the camera moved this far from the arrival pose. */
+export const RIESE_ARRIVAL_MOVE_M = 30;
+
+/**
+ * German hint shown after the Riesen list flew to a Riese that is not discovered yet. Only Riesen in
+ * the 3D tree layer (`in_trees`) can be tapped (their Baum-Steckbrief counts); the others have only a
+ * pin, which flies there, so they are discovered by flying closer alone.
+ */
+export function rieseDiscoverHint(r: { rank: number; in_trees: boolean }): string {
+  const near = `näher als etwa ${DISCOVER_RADIUS_M} m heranfliegen`;
+  return r.in_trees
+    ? `Riese Nr. ${r.rank}: zum Entdecken ${near} oder den Baum antippen.`
+    : `Riese Nr. ${r.rank}: zum Entdecken ${near} – dieser Baum steht nicht im 3D-Wald und lässt sich nicht antippen.`;
+}
 
 /** State of `collectGate` (one per panel). */
 export interface CollectGate {
@@ -57,6 +73,7 @@ export function collectGate(
   flying: boolean,
   cam: { E: number; N: number },
   moveM = ARRIVAL_MOVE_M,
+  rieseMoveM = RIESE_ARRIVAL_MOVE_M,
 ): { riesen: boolean; places: boolean } {
   if (flying) {
     g.flew = true;
@@ -67,8 +84,10 @@ export function collectGate(
     g.flew = false;
     g.arrival = { E: cam.E, N: cam.N };
   }
-  if (g.arrival && Number.isFinite(cam.E) && Number.isFinite(cam.N) && Math.hypot(cam.E - g.arrival.E, cam.N - g.arrival.N) >= moveM) g.arrival = null;
-  return { riesen: true, places: g.arrival === null };
+  const known = Number.isFinite(cam.E) && Number.isFinite(cam.N);
+  const moved = g.arrival && known ? Math.hypot(cam.E - g.arrival.E, cam.N - g.arrival.N) : 0;
+  if (g.arrival && moved >= moveM) g.arrival = null;
+  return { riesen: g.arrival === null ? known : moved >= rieseMoveM, places: g.arrival === null };
 }
 
 /** Minimal Storage subset (localStorage-compatible), injectable for tests. */
