@@ -1,36 +1,61 @@
 /**
- * 🏆 „Alle Ranglisten“: full view of the leaderboards (shell dialog: Esc / ✕ closes, focus trapped and
- * restored, full screen on phones). Tabs:
- *  - Tabelle: places × disciplines (value + rank, „–“ with the reason), sortable columns, Alle / Städte /
- *    Dörfer (ranks within the filter), sticky place column, the table scrolls sideways inside its box;
+ * 🏆 „Alle Ranglisten“: full view of the leaderboards. Wide screens: a non-modal panel *beside* the
+ * open „Orte“ / „Werkzeuge“ drawer (it fills the rest of the view, so a picked place's card stays
+ * visible next to the table and its row is highlighted); keys typed inside it never reach the flight
+ * keys, Esc / U / ✕ close it and focus returns to the opener. Phones (≤ 600 px): full screen and modal
+ * (focus trapped); picking a place closes it and opens the card in the „Orte“ sheet. Tabs:
+ *  - Tabelle: places × disciplines, one line per cell (rank pill or medal + value with one number of
+ *    decimals per column + a thin bar), sticky head and place column, sortable, Alle / Städte / Dörfer;
  *  - Medaillenspiegel: olympic medal count, no weighted total (ADR 0050);
  *  - Vergleichen: 2–3 places side by side with bars, the difference in words and „So kommt … nach oben“.
- * Pure logic: compare.ts. Wired from PlacesPanel.ts (buttons in the board, the place card section).
+ * Pure logic: compare.ts. Wired from PlacesPanel.ts (board buttons, 🏆 map button, key U, place card).
  */
-import { el } from '../shell/dom';
-import type { DialogHandle, DialogOptions } from '../shell/dialog';
+import { el, ICONS } from '../shell/dom';
 import { copyText } from '../ui/clipboard';
+import { isTyping } from '../ui/keys';
+import { isolateModalKeys } from '../ui/modalKeys';
 import {
   CATEGORY_LABELS,
+  barFraction,
   buildMatrix,
   climbFor,
+  columnDecimals,
+  columnHead,
+  fmtFixed,
   headToHead,
   medalDisciplines,
   medalTable,
+  panelLeft,
   sortRows,
   withCompareParam,
 } from './compare';
 import type { CategoryFilter, Cell, ClimbSummary, Matrix } from './compare';
-import { fmtNum, fmtValue, otherFlight, otherFlightNote } from './placesData';
+import { fmtValue, otherFlight, otherFlightNote } from './placesData';
 import type { Discipline, Goal, Place, PlacesData } from './placesData';
 
 export type OverlayTab = 'tabelle' | 'medaillen' | 'vergleich';
 
 export interface OverlayDeps {
   data: PlacesData;
-  openDialog: (o: DialogOptions) => DialogHandle;
-  /** Open the place's card in the panel (and fly there); the overlay is closed first. */
-  onPick: (p: Place) => void;
+  /** Layer the view is mounted in (the feature's overlay layer inside the shell). */
+  host: HTMLElement;
+  /** The drawers the wide view sits beside (hidden ones are ignored). */
+  drawers: () => HTMLElement[];
+  /** Open the place's card in the panel (and fly there). `modal`: the view was closed first (phones). */
+  onPick: (p: Place, modal: boolean) => void;
+  /** The place currently selected in the panel (row highlight). */
+  selectedId: () => string | null;
+  onClose?: () => void;
+}
+
+export interface LeaderboardHandle {
+  readonly root: HTMLElement;
+  isOpen(): boolean;
+  close(): void;
+  /** Switch tab / comparison of the open view. */
+  show(o: OverlayOptions): void;
+  /** The panel's selection changed: move the row highlight. */
+  setSelected(id: string | null): void;
 }
 
 export interface OverlayOptions {
@@ -44,9 +69,6 @@ export interface OverlayOptions {
 const MEDALS = ['🥇', '🥈', '🥉'];
 const rankText = (rank: number) => MEDALS[rank - 1] ?? `${rank}.`;
 const dName = (d: Discipline) => `${d.emoji ?? '🏅'} ${d.name_de}`;
-/** Short units stay in the table cells („45,1 %“, „47,9 m“); longer ones go to the column head. */
-const unitInCell = (unit: string) => unit.length <= 2;
-const cellValue = (v: number | null, unit: string) => (v === null ? '–' : unitInCell(unit) ? fmtValue(v, unit) : fmtNum(v));
 const ARTEN_NOTE = 'Artenvielfalt ist nur ein grober Hinweis: der Wert hängt davon ab, wer wo beobachtet und meldet.';
 
 /** „So kommt <Ort> nach oben“ list (overlay compare tab and the place card). null: nothing to show. */
@@ -104,24 +126,49 @@ function renderClimb(s: ClimbSummary, onGoal?: (g: Goal) => void): HTMLElement {
   return root;
 }
 
-export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): DialogHandle {
+export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): LeaderboardHandle {
   const { data } = deps;
   let tab: OverlayTab = opts.tab ?? 'tabelle';
   let filter: CategoryFilter = 'alle';
   let sortBy: string | null = opts.sortBy ?? null;
+  let selected = deps.selectedId();
   const byName = [...data.places].sort((a, b) => a.name_de.localeCompare(b.name_de, 'de'));
-  let ids: string[] = (opts.compare ?? []).filter((id) => data.places.some((p) => p.id === id)).slice(0, 3);
-  if (ids.length < 2) ids = [...new Set([...ids, ...byName.map((p) => p.id)])].slice(0, 2);
+  const pickIds = (want: readonly string[] | undefined) => {
+    let out = (want ?? []).filter((id) => data.places.some((p) => p.id === id)).slice(0, 3);
+    if (out.length < 2) out = [...new Set([...out, ...byName.map((p) => p.id)])].slice(0, 2);
+    return out;
+  };
+  let ids = pickIds(opts.compare);
 
-  const body = el('div', { class: 'sle-cmpx' });
+  const modal = window.matchMedia?.('(max-width: 600px)').matches ?? false;
+  const opener = document.activeElement as HTMLElement | null;
+  const titleId = 'sle-cmpx-title';
+  const closeBtn = el('button', { type: 'button', class: 'sle-dlg-close', 'aria-label': 'Alle Ranglisten schließen', title: 'Schließen (Esc)', html: ICONS.close });
   const tabs = el('div', { class: 'sle-seg sle-cmpx-tabs', role: 'group', 'aria-label': 'Ansicht' });
   const view = el('div', { class: 'sle-cmpx-view' });
-  body.append(tabs, view);
-  let dlg: DialogHandle | null = null;
+  const body = el(
+    'section',
+    {
+      id: 'sle-cmp-full',
+      class: `sle-cmpx-panel${modal ? ' modal' : ''}`,
+      role: 'dialog',
+      'aria-modal': String(modal),
+      'aria-labelledby': titleId,
+      tabindex: '-1',
+    },
+    el('header', { class: 'sle-cmpx-head' }, el('h2', { id: titleId, text: '🏆 Alle Ranglisten' }), tabs, closeBtn),
+    view,
+  );
+  let open = true;
 
   const pick = (p: Place) => {
-    dlg?.close();
-    deps.onPick(p);
+    if (modal) {
+      close();
+      deps.onPick(p, true);
+      return;
+    }
+    deps.onPick(p, false);
+    setSelected(p.id);
   };
 
   const seg = <T extends string>(label: string, items: Array<[T, string]>, current: T, set: (v: T) => void) => {
@@ -159,49 +206,53 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): D
   };
 
   // ---- Tabelle -----------------------------------------------------------------------------------
-  const cellEl = (d: Discipline, c: Cell | undefined) => {
+  const cellEl = (d: Discipline, c: Cell | undefined, digits: number, ext: Matrix['extent'][string] | undefined) => {
     const td = el('td', {});
     if (!c) return td;
-    const mun = d.scope === 'municipality' && c.municipality ? `Gemeinde ${c.municipality.name_de} (gilt für alle ihre Gemarkungen)` : '';
+    if (d.scope === 'municipality') td.classList.add('mun');
+    const val = el('span', { class: 'sle-cmpx-v', text: fmtFixed(c.value, digits) });
     if (c.rank !== null) {
-      td.append(el('span', { class: 'sle-cmpx-v', text: cellValue(c.value, d.unit) }), el('span', { class: 'sle-cmpx-r', text: rankText(c.rank), 'aria-label': `Platz ${c.rank} von ${c.of}` }));
-      if (c.rank === 1) td.classList.add('first');
-      if (mun) td.title = mun;
+      const rk = el('span', { class: `sle-cmpx-rk${c.rank <= 3 ? ` m m${c.rank}` : ''}`, text: c.rank <= 3 ? MEDALS[c.rank - 1] : String(c.rank), 'aria-label': `Platz ${c.rank} von ${c.of}:` });
+      if (c.rank <= 3) td.classList.add(`r${c.rank}`);
+      td.append(el('span', { class: 'sle-cmpx-cell' }, rk, val));
+      const f = barFraction(d, c.value, ext);
+      if (f !== null) {
+        const bar = el('span', { class: 'sle-cmpx-cbar', 'aria-hidden': 'true' });
+        bar.style.width = `${Math.max(3, f * 100)}%`;
+        td.append(bar);
+      }
+      td.title = `${d.name_de}: ${fmtValue(c.value, d.unit)}, Platz ${c.rank} von ${c.of}${d.scope === 'municipality' && c.municipality ? ` (Gemeinde ${c.municipality.name_de}, gilt für alle ihre Gemarkungen)` : ''}`;
     } else {
       td.classList.add('unranked');
-      td.title = `ohne Rang: ${c.reason ?? 'keine Daten'}`;
-      td.append(
-        el('span', { class: 'sle-cmpx-v', text: cellValue(c.value, d.unit) }),
-        el('span', { class: 'sle-cmpx-r', text: '–', 'aria-hidden': 'true' }),
-        el('span', { class: 'sle-sr', text: `ohne Rang: ${c.reason ?? 'keine Daten'}` }),
-      );
+      td.title = `${d.name_de}: ohne Rang – ${c.reason ?? 'keine Daten'}`;
+      td.append(el('span', { class: 'sle-cmpx-cell' }, el('span', { class: 'sle-cmpx-rk none', text: '–', 'aria-label': `ohne Rang (${c.reason ?? 'keine Daten'}):` }), val));
     }
-    if (d.scope === 'municipality') td.classList.add('mun');
     return td;
   };
 
   const renderTable = (m: Matrix) => {
     const head = el('tr', {});
-    const nameTh = el('th', { scope: 'col', class: 'sticky', 'aria-sort': sortBy ? 'none' : 'ascending' });
-    const nameBtn = el('button', { type: 'button', class: 'sle-cmpx-sort', text: 'Ort', title: 'Nach Namen sortieren', 'data-k': 'sort:' });
+    const nameTh = el('th', { scope: 'col', class: `sticky${sortBy ? '' : ' on'}`, 'aria-sort': sortBy ? 'none' : 'ascending' });
+    const nameBtn = el('button', { type: 'button', class: 'sle-cmpx-sort', title: 'Nach Namen sortieren', 'data-k': 'sort:' }, el('span', { class: 'sle-cmpx-h1', text: `Ort${sortBy ? '' : ' ▾'}` }), el('span', { class: 'sle-cmpx-h2', text: 'A–Z' }));
     nameBtn.addEventListener('click', () => {
       sortBy = null;
       render();
     });
     nameTh.append(nameBtn);
     head.append(nameTh);
+    const digits: Record<string, number> = {};
     for (const d of m.disciplines) {
+      digits[d.id] = columnDecimals(m.rows.map((r) => r.cells[d.id]?.value ?? null));
       const on = sortBy === d.id;
-      const th = el('th', { scope: 'col', 'aria-sort': on ? 'ascending' : 'none', class: on ? 'on' : undefined });
+      const h = columnHead(d);
+      const th = el('th', { scope: 'col', 'aria-sort': on ? 'ascending' : 'none', class: `${on ? 'on' : ''}${d.scope === 'municipality' ? ' mun' : ''}`.trim() || undefined });
       const b = el(
         'button',
-        { type: 'button', class: 'sle-cmpx-sort', title: `${d.description_de} – nach Rang sortieren`, 'data-k': `sort:${d.id}` },
-        el('span', { class: 'sle-cmpx-emoji', 'aria-hidden': 'true', text: d.emoji ?? '🏅' }),
-        el('span', { text: d.name_de }),
-        d.unit && !unitInCell(d.unit) ? el('span', { class: 'sle-cmpx-sub', text: `in ${d.unit}` }) : null,
-        d.scope === 'municipality' ? el('span', { class: 'sle-cmpx-sub', text: 'Gemeindewert' }) : null,
-        d.note_de ? el('span', { class: 'sle-cmpx-sub', text: 'grober Hinweis' }) : null,
-        on ? el('span', { class: 'sle-cmpx-sub', text: '▼ nach Rang' }) : null,
+        { type: 'button', class: 'sle-cmpx-sort', title: `${d.name_de} (${d.unit}): ${d.description_de}${d.note_de ? ` – ${d.note_de}` : ''} · antippen: nach Rang sortieren`, 'data-k': `sort:${d.id}` },
+        el('span', { class: 'sle-cmpx-h1' }, el('span', { 'aria-hidden': 'true', text: `${d.emoji ?? '🏅'} ` }), h.short, on ? el('span', { class: 'sle-cmpx-arrow', 'aria-hidden': 'true', text: ' ▾' }) : null),
+        el('span', { class: 'sle-cmpx-h2', text: h.sub }),
+        ...h.notes.map((n) => el('span', { class: 'sle-cmpx-h2 note', text: n })),
+        el('span', { class: 'sle-sr', text: d.name_de }),
       );
       b.addEventListener('click', () => {
         sortBy = d.id;
@@ -212,24 +263,22 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): D
     }
     const tbody = el('tbody', {});
     for (const r of sortRows(m, sortBy)) {
-      const th = el(
-        'th',
-        { scope: 'row', class: 'sticky' },
-        placeBtn(r.place),
-        el('span', { class: 'sle-cmpx-row-sub' }, r.place.category ? el('span', { class: 'sle-cmpx-tag', text: r.place.category === 'stadt' ? 'Stadt' : 'Dorf' }) : null, flightTag(r.place), r.place.complete ? null : el('span', { class: 'sle-cmpx-tag inc', text: 'unvollständig' })),
-      );
-      const tr = el('tr', {}, th);
-      for (const d of m.disciplines) tr.append(cellEl(d, r.cells[d.id]));
+      const p = r.place;
+      const tags = [p.category === 'stadt' ? 'Stadt' : p.category === 'dorf' ? 'Dorf' : null, p.complete ? null : 'unvollständig'].filter(Boolean).join(' · ');
+      const ft = flightTag(p);
+      const th = el('th', { scope: 'row', class: 'sticky' }, placeBtn(p), tags || ft ? el('span', { class: 'sle-cmpx-ptags' }, tags, ft ? ' ' : null, ft) : null);
+      const tr = el('tr', { 'data-id': p.id, class: p.id === selected ? 'sel' : undefined }, th);
+      for (const d of m.disciplines) tr.append(cellEl(d, r.cells[d.id], digits[d.id], m.extent[d.id]));
       tbody.append(tr);
     }
     const table = el(
       'table',
       { class: 'sle-cmpx-table' },
-      el('caption', { class: 'sle-sr', text: `Alle Ranglisten: ${CATEGORY_LABELS[filter]}, Wert und Platz je Disziplin` }),
+      el('caption', { class: 'sle-sr', text: `Alle Ranglisten (${CATEGORY_LABELS[filter]}): Platz und Wert je Disziplin; Einheiten im Spaltenkopf` }),
       el('thead', {}, head),
       tbody,
     );
-    const scroll = el('div', { class: 'sle-cmpx-scroll', role: 'region', 'aria-label': 'Tabelle (seitlich scrollbar)', tabindex: '0' }, table);
+    const scroll = el('div', { class: 'sle-cmpx-scroll', role: 'region', 'aria-label': 'Tabelle, in beide Richtungen scrollbar', tabindex: '0' }, table);
     // Reasons for „–“ as text (tooltips do not work on touch screens).
     const reasons = new Map<string, string[]>();
     for (const r of m.rows) {
@@ -240,15 +289,21 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): D
         reasons.set(k, [...(reasons.get(k) ?? []), r.place.name_de]);
       }
     }
-    const notes = el(
-      'ul',
-      { class: 'sle-cmpx-notes sle-small' },
-      el('li', { text: '🥇🥈🥉 = Platz 1–3, sonst „4.“ usw.; gleiche Werte teilen sich den Platz. Spaltenkopf antippen: nach dieser Disziplin sortieren, Ortsname antippen: Karte des Orts öffnen.' }),
-      ...[...reasons].map(([k, names]) => el('li', { text: `„–“ ${k} – ${names.join(', ')}` })),
-      el('li', { text: '☀️ Sonnenstärkster Ort ist ein Gemeindewert: Gemarkungen einer Gemeinde teilen sich Wert und Platz.' }),
-      data.places.some((p) => p.flags.includes('other-flight')) ? el('li', { text: `✈ = andere Befliegung (RLP 2022)${data.rlpTreeRatio && data.rlpTreeRatio > 1 ? `: dort ≈ ${Math.round((data.rlpTreeRatio - 1) * 100)} % mehr Bäume gezählt` : ''}.` }) : null,
+    const legend = el(
+      'details',
+      { class: 'sle-cmpx-legend sle-small' },
+      el('summary', { text: `Erklärung${reasons.size ? ' und Orte ohne Rang' : ''}` }),
+      el(
+        'ul',
+        { class: 'sle-cmpx-notes' },
+        el('li', { text: '🥇🥈🥉 / Zahl = Platz, daneben der Wert (Einheit im Spaltenkopf). Der dünne Balken zeigt, wo der Wert zwischen schlechtestem und bestem Ort liegt – länger ist besser. Gleiche Werte teilen sich den Platz.' }),
+        el('li', { text: 'Spaltenkopf antippen: nach dieser Disziplin sortieren. Ortsname antippen: Karte des Orts öffnen und hinfliegen.' }),
+        ...[...reasons].map(([k, names]) => el('li', { text: `„–“ ${k} – ${names.join(', ')}` })),
+        m.disciplines.some((d) => d.scope === 'municipality') ? el('li', { text: '☀️ Sonne ist ein Gemeindewert (Marktstammdatenregister nur pro Gemeinde): Gemarkungen einer Gemeinde teilen sich Wert und Platz; die Spalte ist leicht getönt.' }) : null,
+        data.places.some((p) => p.flags.includes('other-flight')) ? el('li', { text: `✈ = andere Befliegung (RLP 2022)${data.rlpTreeRatio && data.rlpTreeRatio > 1 ? `: dort ≈ ${Math.round((data.rlpTreeRatio - 1) * 100)} % mehr Bäume gezählt` : ''}.` }) : null,
+      ),
     );
-    return [filterRow(), scroll, notes];
+    return [filterRow(), scroll, legend];
   };
 
   // ---- Medaillenspiegel ----------------------------------------------------------------------------
@@ -262,7 +317,7 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): D
       ol.append(
         el(
           'li',
-          { class: r.gold ? 'gold' : undefined },
+          { class: `${r.gold ? 'gold' : ''}${r.place.id === selected ? ' sel' : ''}`.trim() || undefined, 'data-id': r.place.id },
           el('span', { class: 'sle-cmpx-pos', text: `${r.position}.` }),
           el('span', { class: 'sle-cmpx-medal-name' }, placeBtn(r.place), flightTag(r.place), r.won.length ? won : el('span', { class: 'sle-dim sle-small', text: 'noch keine Medaille' })),
           el(
@@ -386,7 +441,7 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): D
     const keep = document.activeElement instanceof HTMLElement && body.contains(document.activeElement) ? focusKey(document.activeElement) : null;
     tabs.replaceChildren();
     for (const [id, text] of TABS) {
-      const b = el('button', { type: 'button', class: id === tab ? 'on' : '', 'aria-pressed': String(id === tab), text, 'data-k': `tab:${id}` });
+      const b = el('button', { type: 'button', class: id === tab ? 'on' : '', 'aria-pressed': String(id === tab), text, 'data-k': `tab:${id}`, title: id === 'medaillen' ? 'Medaillenspiegel' : undefined });
       b.addEventListener('click', () => {
         tab = id;
         render();
@@ -399,10 +454,79 @@ export function openLeaderboard(deps: OverlayDeps, opts: OverlayOptions = {}): D
     // Re-rendering replaces the buttons: keep keyboard focus on the same control.
     if (keep) body.querySelector<HTMLElement>(`[data-k="${keep}"]`)?.focus({ preventScroll: true });
   };
+
+  function setSelected(id: string | null): void {
+    selected = id;
+    for (const r of body.querySelectorAll<HTMLElement>('[data-id]')) r.classList.toggle('sel', r.dataset.id === id);
+  }
+
+  // ---- layout: beside the open drawer (wide screens) -------------------------------------------------------
+  const layout = () => {
+    if (!open || modal) return;
+    const gap = parseFloat(getComputedStyle(body).getPropertyValue('--gap')) || 12;
+    const rects = deps
+      .drawers()
+      .filter((d) => !d.hidden && d.offsetParent !== null)
+      .map((d) => d.getBoundingClientRect());
+    body.style.left = `${panelLeft(rects, window.innerWidth, gap)}px`;
+  };
+  const mo = new MutationObserver(layout);
+  for (const d of deps.drawers()) mo.observe(d, { attributes: true, attributeFilter: ['hidden', 'class', 'style'] });
+  const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(layout) : null;
+  for (const d of deps.drawers()) ro?.observe(d);
+  window.addEventListener('resize', layout);
+
+  // ---- keys + close ------------------------------------------------------------------------------------------
+  const closeKey = (e: KeyboardEvent) =>
+    e.key === 'Escape' || (e.code === 'KeyU' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !isTyping(e.target));
+  let uninstallKeys: (() => void) | null = null;
+  const onPanelKey = (e: KeyboardEvent) => {
+    if (closeKey(e)) {
+      e.preventDefault();
+      close();
+    }
+    e.stopPropagation(); // typing inside the view never flies the drone or switches layers
+  };
+  if (modal) {
+    uninstallKeys = isolateModalKeys(body, (e) => {
+      if (!closeKey(e)) return false;
+      close();
+      return true;
+    });
+  } else body.addEventListener('keydown', onPanelKey);
+
+  function close(): void {
+    if (!open) return;
+    open = false;
+    uninstallKeys?.();
+    body.removeEventListener('keydown', onPanelKey);
+    mo.disconnect();
+    ro?.disconnect();
+    window.removeEventListener('resize', layout);
+    body.remove();
+    deps.onClose?.();
+    if (opener?.isConnected && opener.offsetParent !== null) opener.focus({ preventScroll: true });
+  }
+  closeBtn.addEventListener('click', close);
+
   render();
-  dlg = deps.openDialog({ id: 'sle-cmp-full', title: '🏆 Alle Ranglisten', body, wide: true });
-  dlg.root.classList.add('sle-cmpx-dlg');
-  return dlg;
+  deps.host.append(body);
+  layout();
+  body.focus({ preventScroll: true });
+
+  return {
+    root: body,
+    isOpen: () => open,
+    close,
+    setSelected,
+    show(o: OverlayOptions) {
+      if (o.tab) tab = o.tab;
+      if (o.compare) ids = pickIds(o.compare);
+      if (o.sortBy !== undefined && o.tab === 'tabelle') sortBy = o.sortBy;
+      render();
+      body.focus({ preventScroll: true });
+    },
+  };
 }
 
 /** The stable key (`data-k`) of a control across re-renders (tabs, filter, sort buttons, selects), or null. */

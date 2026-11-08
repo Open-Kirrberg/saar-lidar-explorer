@@ -442,3 +442,64 @@ export function withCompareParam(search: string, ids: readonly string[]): string
   const s = q.toString().replace(/%2C/gi, ',');
   return s ? `?${s}` : '';
 }
+
+// ---- table formatting (round 2) ----------------------------------------------------------------------------
+
+/**
+ * One number of decimals per table column: the most any value needs (at 0.01 precision), at most 2
+ * when some value is below 10, else at most 1 („1,10 · 1,00 · 0,89“, „36,0 · 36,8“, „227 · 316“).
+ */
+export function columnDecimals(values: ReadonlyArray<number | null>): number {
+  const vs = values.filter((v): v is number => v !== null && Number.isFinite(v));
+  if (!vs.length) return 0;
+  const cap = vs.some((v) => Math.abs(v) < 10) ? 2 : 1;
+  let need = 0;
+  for (const v of vs) {
+    const r = Math.round(v * 100) / 100;
+    const frac = Math.abs(r) % 1;
+    const d = frac < 1e-9 ? 0 : Math.abs(Math.round(r * 10) / 10 - r) < 1e-9 ? 1 : 2;
+    need = Math.max(need, d);
+  }
+  return Math.min(need, cap);
+}
+
+const fixedFormats = new Map<number, Intl.NumberFormat>();
+/** German number with exactly `digits` decimals („1,10“, „36,0“, „1.234“). */
+export function fmtFixed(v: number | null, digits: number): string {
+  if (v === null || !Number.isFinite(v)) return '–';
+  let f = fixedFormats.get(digits);
+  if (!f) fixedFormats.set(digits, (f = new Intl.NumberFormat('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits })));
+  return f.format(v);
+}
+
+/** Compact column head: short name + a second line with the unit (and caveats); full text in the title. */
+const COLUMN_HEADS: Record<string, { short: string; sub: string }> = {
+  'ortslage.green_pct': { short: 'Grün', sub: '% der Ortslage' },
+  'ortslage.sealed_pct': { short: 'Beton', sub: '% versiegelt' },
+  trees_per_inhabitant: { short: 'Bäume', sub: 'je Einwohner' },
+  crown_pct: { short: 'Wald', sub: '% Krone' },
+  'tallest.h': { short: 'Riesenbaum', sub: 'Höhe in m' },
+  'pv.kwp_per_inhabitant': { short: 'Sonne', sub: 'kWp/Einw.' },
+  'biodiversity.rarefied_500': { short: 'Arten', sub: 'je 500 Meldungen' },
+};
+
+export function columnHead(d: Pick<Discipline, 'measure' | 'name_de' | 'unit' | 'higher_is_better' | 'scope' | 'note_de'>): { short: string; sub: string; notes: string[] } {
+  const h = COLUMN_HEADS[d.measure] ?? { short: d.name_de, sub: d.unit };
+  const notes: string[] = [];
+  if (!d.higher_is_better) notes.push('weniger ist besser');
+  if (d.scope === 'municipality') notes.push('Gemeindewert');
+  if (d.note_de) notes.push('grober Hinweis');
+  return { short: h.short, sub: h.sub, notes };
+}
+
+/**
+ * Left edge (px) of the full view on wide screens: right of the open drawers (`rects` of the visible
+ * ones) plus a gap, or `gap` when none is open. Keeps at least `minWidth` px of table: a drawer
+ * that leaves less than that is covered instead (the view starts at `gap`).
+ */
+export function panelLeft(rects: ReadonlyArray<{ left: number; right: number }>, viewportW: number, gap: number, minWidth = 480): number {
+  const right = rects.reduce((m, r) => Math.max(m, r.right), 0);
+  if (!(right > 0)) return gap;
+  const left = right + gap;
+  return viewportW - left - gap >= minWidth ? left : gap;
+}

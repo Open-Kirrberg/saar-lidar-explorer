@@ -18,6 +18,7 @@ import { utmToWorld } from '../geo';
 import { el } from '../shell/dom';
 import type { FeatureHost } from '../shell/types';
 import { epochSpan, placeIdAt } from '../trees/treeFacts';
+import { isTyping } from '../ui/keys';
 import { modalOpen } from '../ui/modalKeys';
 import { createPanelSection, openPanelSection } from '../ui/panelSection';
 import {
@@ -37,7 +38,7 @@ import {
 import type { KV } from './collect';
 import { buildMatrix, parseCompareParam, rivalFor, withCompareParam } from './compare';
 import { climbList, climbSummaryText, openLeaderboard } from './LeaderboardOverlay';
-import type { OverlayOptions } from './LeaderboardOverlay';
+import type { LeaderboardHandle, OverlayOptions } from './LeaderboardOverlay';
 import { PlaceLayer } from './PlaceLayer';
 import {
   AGE_COLORS,
@@ -878,20 +879,45 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   };
 
   // -- „So kommt <Ort> nach oben“ + full view (compare.ts / LeaderboardOverlay.ts) ----------------------------
+  let lb: LeaderboardHandle | null = null;
   const openLb = (o: OverlayOptions) => {
     if (!data) return;
-    openLeaderboard(
+    if (lb?.isOpen()) {
+      lb.show(o);
+      return;
+    }
+    const shellRoot = h.places.closest<HTMLElement>('#sle-shell') ?? document;
+    lb = openLeaderboard(
       {
         data,
-        openDialog: (dl) => h.shell.openDialog(dl),
-        onPick: (p) => {
+        host: h.overlay,
+        drawers: () => [...shellRoot.querySelectorAll<HTMLElement>('.sle-drawer')],
+        selectedId: () => (selection?.kind === 'place' ? selection.place.id : null),
+        onPick: (p, modal) => {
           openPlace(p.id);
           flyToPlace(p);
-          cardView.querySelector<HTMLElement>('.sle-cmp-back')?.focus({ preventScroll: true });
+          // Phones: the view closed, the card is in the sheet; wide screens: focus stays in the table.
+          if (modal) cardView.querySelector<HTMLElement>('.sle-cmp-back')?.focus({ preventScroll: true });
+        },
+        onClose: () => {
+          lb = null;
         },
       },
       o,
     );
+  };
+  const toggleLb = () => {
+    if (lb?.isOpen()) lb.close();
+    else openLb({ tab: 'tabelle', sortBy: discipline?.id ?? null });
+  };
+  // 🏆 next to „Steuerung“ / „Einstellungen“ under the minimap, and key U: the table without the drawer.
+  const trophyBtn = el('button', { type: 'button', class: 'sle-sys-btn sle-cmp-trophy', title: 'Alle Ranglisten: Orte im Vergleich (U)', 'aria-label': 'Alle Ranglisten', text: '🏆' });
+  trophyBtn.setAttribute('aria-haspopup', 'dialog');
+  trophyBtn.addEventListener('click', toggleLb);
+  const onKey = (e: KeyboardEvent) => {
+    if (e.code !== 'KeyU' || e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || modalOpen(e.target) || !data) return;
+    e.preventDefault();
+    toggleLb();
   };
   /** This place and its natural rival in the current discipline (right above, or right below when 1st). */
   const compareWith = (p: Place): string[] => {
@@ -1031,6 +1057,7 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   const select = (s: Selection) => {
     if (s?.kind !== 'place' || selection?.kind !== 'place' || selection.place.id !== s.place.id) activeRiese = null;
     selection = s;
+    lb?.setSelected(s?.kind === 'place' ? s.place.id : null);
     if (!data) return;
     if (!s) {
       cardNotice = null;
@@ -1121,6 +1148,9 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
       syncGiants();
       if (pendingOpen) openPlace(pendingOpen);
       pendingOpen = null;
+      const sys = h.shell.anchor('keys')?.parentElement;
+      if (sys) sys.insertBefore(trophyBtn, sys.firstChild);
+      window.addEventListener('keydown', onKey);
       openDeepLink();
     } catch (err) {
       if (abort.signal.aborted) return;
@@ -1132,7 +1162,9 @@ export function mountPlaceStats(h: FeatureHost, meta: ManifestStats): () => void
   return () => {
     abort.abort();
     if (deepTimer !== undefined) clearTimeout(deepTimer);
-    document.getElementById('sle-cmp-full')?.dispatchEvent(new Event('sle:close'));
+    lb?.close();
+    trophyBtn.remove();
+    window.removeEventListener('keydown', onKey);
     window.removeEventListener(PLACE_OPEN_EVENT, onOpenEvent);
     window.removeEventListener(TREE_CARD_OPEN_EVENT, onTreeCard);
     disarm();

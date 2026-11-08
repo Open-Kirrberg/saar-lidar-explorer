@@ -378,3 +378,36 @@ describe('deep link', () => {
     expect(withCompareParam('?vergleich=a,b', [])).toBe('');
   });
 });
+
+describe('table formatting (round 2)', () => {
+  it('uses one number of decimals per column', async () => {
+    const { columnDecimals, fmtFixed } = await import('../src/places/compare');
+    expect(columnDecimals([1.1, 1, 0.89])).toBe(2);
+    expect(columnDecimals([36, 36.8, 49.8])).toBe(1);
+    expect(columnDecimals([20, 30, 4.2, 38])).toBe(1);
+    expect(columnDecimals([227, 316, null])).toBe(0);
+    expect(columnDecimals([12.345, 50])).toBe(1); // ≥ 10 everywhere: at most one decimal
+    expect(columnDecimals([])).toBe(0);
+    expect(fmtFixed(1.1, 2)).toBe('1,10');
+    expect(fmtFixed(36, 1)).toBe('36,0');
+    expect(fmtFixed(1234, 0)).toBe('1.234');
+    expect(fmtFixed(null, 1)).toBe('–');
+  });
+
+  it('gives compact column heads with caveats', async () => {
+    const { columnHead } = await import('../src/places/compare');
+    const d = data();
+    const beton = columnHead(d.disciplines.find((x) => x.id === 'beton')!);
+    expect(beton).toEqual({ short: 'Beton', sub: '% versiegelt', notes: ['weniger ist besser'] });
+    expect(columnHead(d.disciplines.find((x) => x.id === 'pv')!).notes).toEqual(['Gemeindewert']);
+    expect(columnHead({ measure: 'x.y', name_de: 'Neu', unit: 'kg', higher_is_better: true, scope: 'place', note_de: 'grob' })).toEqual({ short: 'Neu', sub: 'kg', notes: ['grober Hinweis'] });
+  });
+
+  it('places the full view right of an open drawer', async () => {
+    const { panelLeft } = await import('../src/places/compare');
+    expect(panelLeft([], 1280, 12)).toBe(12);
+    expect(panelLeft([{ left: 12, right: 332 }], 1280, 12)).toBe(344);
+    expect(panelLeft([{ left: 12, right: 332 }, { left: 0, right: 0 }], 1280, 12)).toBe(344);
+    expect(panelLeft([{ left: 12, right: 332 }], 760, 12)).toBe(12); // too narrow: cover the drawer
+  });
+});

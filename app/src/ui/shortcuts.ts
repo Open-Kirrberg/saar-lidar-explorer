@@ -56,6 +56,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { group: 'Ansicht', keys: ['B'], label: 'Überlagerung ein/aus', short: 'Überlagerung', codes: ['KeyB'], hud: true, feature: 'relief-lab' },
   { group: 'Ansicht', keys: ['V'], label: 'Wald: aus / transparent / voll', short: 'Wald', codes: ['KeyV'], hud: true, feature: 'relief-lab' },
   { group: 'Ansicht', keys: ['K'], label: 'Kontrast automatisch', short: 'Kontrast auto', codes: ['KeyK'], hud: true, feature: 'relief-lab' },
+  { group: 'Ansicht', keys: ['U'], label: 'Alle Ranglisten: Orte im Vergleich (Tabelle, Medaillen, Vergleichen)', short: 'Ranglisten', codes: ['KeyU'], feature: 'place-stats' },
   // ---- Ebenen (feature modules) ----
   { group: 'Ebenen', keys: ['O'], label: 'Wege (OSM)', codes: ['KeyO'], requires: 'osm', hud: true, feature: 'osm-paths' },
   { group: 'Ebenen', keys: ['G'], label: 'Gebäude (LoD2)', codes: ['KeyG'], requires: 'buildings', hud: true, feature: 'buildings' },
