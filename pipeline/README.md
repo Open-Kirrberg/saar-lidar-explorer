@@ -402,6 +402,35 @@ push re-deploys from the cached data build. Places much larger than Homburg need
 larger runner. Catalog: bundle 171.9 MB / 1 077 files, site 168.2 MB (54 places, 2 857 owned tiles), `katalog.py
 site` + `check` ≈ 2 s.
 
+### First RLP-only place: Zweibrücken (S4, pipeline 0.9.2)
+
+`ort-zweibruecken` (AGS 07320000, state RP, 91 owned tiles, rectangle 376–388 × 5450–5464 km, fetch set 149 tiles:
+145 RLP DGM1/DOM1, 44 SL tiles at the Homburg/Blieskastel border; SL first, RLP − 0.06 m as everywhere, so the border
+with Homburg is byte-identical: 28 chunk pairs, apron vs neighbour edge Δh = 0). What differs from an SL place:
+- **Parcels:** the place's own state's WFS is required, the neighbour's is best effort (`cadastre.fetch_state`).
+  The SL WFS 414 still answers 503, the RLP WFS 519 works: 29 535 parcels (4 pages of 10 000, ≈ 7 s each), 21.9 MB.
+  `source` names only the states published, plus "… beim Build nicht erreichbar" for a failed neighbour.
+- **Historic maps:** `place.STATE_ONLY_STEPS` (`historic` = SL; the WMS "SL Historische Karten" is Saarland's):
+  reported "not applicable", no request.
+- **Ortho:** 248 of 364 chunks RLP DOP20 (≈ 2.2 MB per 1000² PNG, ≈ 1–2 s each), 116 SL TrueDOP20 (it reaches well
+  into RLP: 48 chunks of tiles without an SL DGM tile are fully SL, so SL requests cannot be skipped by tile).
+  SL coverage was all-or-nothing per chunk. Attribution / source by the pixels used (`ortho.ortho_source`).
+- **Tree types:** the RLP DOP20 is far darker (canopy median 59 vs 89 on the same pixels, 9 chunks fetched once for
+  the check): uncalibrated, Zweibrücken came out 71 % conifer and 466 k fill trees (DLR 2022: 15 % conifer
+  canopy). `ortho.py` writes `ortho_src.tif` (v3 work raster, 1 SL / 2 RLP per cell); `trees.py` maps RLP cells
+  with `RLP_DOP_CALIB` (k 1.13902, c 22.0928, pinned from `stats_trees.py calibrate`) → 407 730 trees, 4 % conifer,
+  11 k fill (Homburg 5 %; the colour classifier under-calls conifers everywhere, conifer recall ≈ 0.22).
+- No candidates (ADR 0053: `detect` returns in 0.2 s), no point clouds (LAZ are SL 2025 only).
+
+Homburg (0 RLP-filled ortho chunks): ortho + trees re-run with 0.9.2 code byte-identical (manifest differs only in
+`trees.generated`). **Measured** (dry run 2026-11-09, `--workers 3`, same machine): first run (DGM/DOM cached from
+S1; OSM, WFS, LoD2 partly, DOP20 fetched) ≈ 790 s — fetch 12, build 212, xyz 13, osm 42, cadastre 65, buildings 179,
+ortho 201, trees 64; warm rerun 380 s. Peak RSS per step: build 11.5 GB, trees 7.8 GB, ortho 6.1 GB, buildings
+5.4 GB, xyz 4.2 GB, cadastre 0.6 GB, others < 0.2 GB (no detect peak without candidates). **Site 384.1 MB / 4 691
+files = 4.22 MB/km²** (relief 115.9, dtm 61.2, ortho 59.8, models 45.8, xyz 44.5, levels 29.0, vectors 23.6 incl.
+parcels 21.9, trees 4.1); largest file 15.5 MB `flurstuecke_polygons.geojson`. Work 1.1 GB; raw fetch set SL
+0.35 GB + RLP 0.62 GB DGM1/DOM1, DOP20 cache 0.84 GB, WFS 86 MB.
+
 ## Larger AOIs
 
 `overall` (6 × 8 km, 80 tiles incl. buffer) runs the relief step on about 54 M cells and needs roughly 4–5 GB RAM. Tile it by AOI if that becomes a problem. XYZ size grows with area: about 13 MB per km² at z12–18.
