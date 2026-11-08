@@ -310,6 +310,14 @@ only the 1 km tiles it owns; v1/v2 rectangle AOIs (karlsberg, overall, …) are 
 | `overview.py` | `sle-overview-v1` levels 2…K (default 6) for the catalog area: bbox aligned at S_K, level-2 cells = 4 × 4 block means of the per-tile filled DTM (same fill as the places), coarser levels by 2 × 2 means, heights quantised to `quant_m` 0.05, WebP lossless, presence = chunks touching an owned tile. |
 | `fixture_v3.py` | `app/public/data/fixture-v3/`: two interlocking 3-tile places (Homburg / Kirkel border), a `stats` place, overview 2–3, catalog, README. |
 
+**Homburg as a place (`ort-homburg`, 2026-11-08):** 91 owned tiles (rectangle 375–384 × 5457–5472 km), fetch set
+150 tiles (all cached). Sizes (MB = 10⁶ B, per owned km²): dtm 64.3 (0.71), relief 148.0 (1.63: svf/opns AVIF
+103, chm 41, mask/bldg 3), level 1 30.2 (0.33), ortho 71.6 (0.79), models 48.3 (0.53), trees 6.7, osm 2.1 →
+**371 MB = 4.1 MB/km²**; with the S0 estimates for parcels (≈ 0.35) and two historic maps (≈ 0.7) ≈ 5.2 MB/km²
+(S0 projection 5.3). On top: minimap xyz.vat 44.8 MB (0.49), candidates 12.1 MB, 3 point-cloud areas 119.7 MB.
+Build ≈ 2.8 min (4 workers), all steps ≈ 6 min with warm caches. Statewide catalog: 2 857 owned tiles, 54
+places, 16 KB; overview levels 2–6 (bbox 300–396 × 5432–5528 km, 1 067 chunks) 161 MB in ≈ 7 min.
+
 Other steps for a place filter per tile (contract rule 6): trees by top cell, buildings / candidates by centroid,
 point-cloud areas by bbox centre, OSM clipped to the present tiles (2D, `densified: false`), parcel labels inside
 present tiles (`lines: 'derived'`), ortho / historic maps AVIF q65 per present chunk, minimap `xyz.vat` ≤ z16 with

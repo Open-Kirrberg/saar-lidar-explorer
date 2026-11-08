@@ -40,8 +40,13 @@ fixture-v3/
   <place>/relief/{{svf,opns_pos,opns_neg}}/{{i}}_{{j}}.avif   u8 AVIF q90 (lossy: true), fixed ranges
   <place>/relief/{{chm,mask}}/{{i}}_{{j}}.webp  u8 WebP lossless
   <place>/levels/1/dtm/{{i}}_{{j}}.webp, levels/1/vat/{{i}}_{{j}}.avif   level 1 = one 1 km tile per chunk
-  <place>/…                    further keys as written by the later steps (see each manifest)
+  <place>/…                    later steps (see each manifest): ortho/ (AVIF q65, + levels/1), relief/bldg (WebP),
+                               models/buildings/*.glb, trees/*.bin, vectors/osm.geojson (2D, densified: false),
+                               xyz/vat (≤ z16, transparent outside the place), candidates/ (homburg only: opt-in)
 ```
+
+Not in the fixture yet (services down on 2026-11-08, the writers are unit-tested): `vectors.flurstuecke`
+(`lines: 'derived'`, ALKIS WFS 503) and `hist_*` (historic WMS 503). Re-run `./run.sh fixture-v3` when they are back.
 
 Tiles (1 km, id = SW corner in km; rows north → south):
 
