@@ -115,7 +115,15 @@ describe('minimap outlines of catalog places', () => {
 
 describe('VITE_CATALOG_URL', () => {
   it('unset / ?aoi= / non-http → single-AOI mode (null)', () => {
-    expect(catalogUrl(undefined, 'http://localhost:5240/', '')).toBeNull();
+    // Hermetic: the public Pages build sets VITE_CATALOG_URL for the whole job, tests included.
+    vi.stubEnv('VITE_CATALOG_URL', '');
+    try {
+      expect(catalogUrl(undefined, 'http://localhost:5240/', '')).toBeNull();
+      vi.stubEnv('VITE_CATALOG_URL', 'https://example.org/orte/catalog.json');
+      expect(catalogUrl(undefined, 'http://localhost:5240/', '')).toBe('https://example.org/orte/catalog.json');
+    } finally {
+      vi.unstubAllEnvs();
+    }
     expect(catalogUrl('', 'http://localhost:5240/', '')).toBeNull();
     expect(catalogUrl('data/fixture-v3/catalog.json', 'http://localhost:5240/', '?aoi=overall')).toBeNull();
     expect(catalogUrl('javascript:alert(1)', 'http://localhost:5240/', '')).toBeNull();
