@@ -11,7 +11,7 @@ The reusable workflow `.github/workflows/build-place.yml` and the local dry run
 - `plan` validates `ort.toml` (schema `sle-ort-v1`, below), reads the place's owned tiles from the published catalog
   (`sle-catalog-v1`, ownership is never computed by a place), writes the AOI table `<work>/place/aois.ort.toml`
   (key `ort-<id>`, read by every step through `$SLE_AOIS_EXTRA`) and prints the cache keys
-  (`raw_key` = fetch set + source versions, `build_key` = pipeline version + ref + owned tiles + build options).
+  (`raw_key` = fetch set + source versions, `build_key` = pipeline version + pipeline/ tree hash + owned tiles + build options).
 - `build` runs the v3 place steps with `SLE_APP_DATA`, `SLE_WORK_DIR`, `SLE_AOIS_EXTRA` set. Required steps fail
   the build; the Geoportal steps (`cadastre`, `historic`) are optional: on a service outage the site ships without
   parcels / historic maps and the report says so. Steps whose only source covers one state (`STATE_ONLY_STEPS`:
@@ -333,12 +333,18 @@ def fetch_catalog(src: str, dest: Path) -> dict[str, Any]:
     return doc
 
 
-def git_ref() -> str:
+def git_ref(rev: str = "HEAD") -> str:
     try:
-        r = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
+        r = subprocess.run(["git", "-C", str(ROOT), "rev-parse", rev], capture_output=True, text=True, check=True)
         return r.stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "nogit"
+
+
+def pipeline_tree() -> str:
+    """Git tree hash of pipeline/: the data build depends on nothing else, so workflow-only or app commits keep the
+    finished-build cache (a pin bump for a deploy fix must not cost a 2.5 h rebuild)."""
+    return git_ref("HEAD:pipeline")
 
 
 @dataclass
@@ -358,13 +364,13 @@ class Plan:
     def site(self) -> Path:
         return self.app_data / self.ort.key
 
-    def outputs(self, pipeline_ref: str) -> dict[str, str]:
+    def outputs(self, pipeline_ref: str, pipeline_tree: str | None = None) -> dict[str, str]:
         from grid import tile_id
         owned = [tile_id(t) for t in sorted(self.owned)]
         return {"key": self.ort.key, "place_id": self.ort.id, "site": str(self.site),
                 "owned_tiles": str(len(self.owned)), "fetch_tiles": str(len(self.fetch)),
                 "raw_key": raw_key(self.ort, [tile_id(t) for t in self.fetch], self.areas),
-                "build_key": build_key(self.ort, owned, self.areas, pipeline_ref),
+                "build_key": build_key(self.ort, owned, self.areas, pipeline_tree or pipeline_ref),
                 "pipeline_version": PIPELINE_VERSION, "pipeline_ref": pipeline_ref,
                 "catalog_status": self.status}
 
@@ -578,7 +584,7 @@ def main(argv: list[str] | None = None) -> None:
             for w in plan.warnings:
                 print(f"::warning::{w}")
             if a.cmd == "plan":
-                write_outputs(plan.outputs(git_ref()))
+                write_outputs(plan.outputs(git_ref(), pipeline_tree()))
                 return
             rep = run_build(plan, a.workers, a.steps.split(",") if a.steps else None)
             for s in rep["steps"]:

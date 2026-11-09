@@ -150,6 +150,19 @@ def test_cache_keys_stable_and_sensitive():
     assert b1 != place.build_key(o2, ["376_5462"], [], "abc")
 
 
+
+def test_build_key_follows_pipeline_tree_not_commit():
+    """Workflow-only commits (new pin, same pipeline/) must keep the finished-build cache."""
+    o = place.parse_ort(ORT)
+    plan = place.Plan.__new__(place.Plan)
+    plan.ort, plan.areas, plan.owned, plan.fetch = o, [], {(376, 5462)}, {(376, 5462)}
+    plan.app_data, plan.status = Path("/x"), "3d"
+    a = plan.outputs("commit1", "tree1")
+    assert a["build_key"] == plan.outputs("commit2", "tree1")["build_key"]
+    assert a["build_key"] != plan.outputs("commit1", "tree2")["build_key"]
+    assert a["pipeline_ref"] == "commit1"
+    assert len(place.pipeline_tree()) in (40, 5)  # sha or "nogit"
+
 def test_user_agent_has_no_personal_data_and_filters_context():
     ua = common.user_agent("ci Open-Kirrberg/ort-homburg")
     assert "Open-Kirrberg/ort-homburg" in ua and common.PIPELINE_VERSION in ua and "@" not in ua
