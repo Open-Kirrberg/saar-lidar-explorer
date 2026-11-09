@@ -4,6 +4,7 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-09 | release | 🌍 Public app switched to **catalog mode** (user's go): repo variable `SLE_CATALOG_URL` → `orte-katalog/catalog.json`; Homburg and Zweibrücken stream in detail 3D from their own Pages sites, the rest of the Saarland as overview with „Ortspate gesucht“. Undo: delete the variable and re-run `pages.yml` |
 | 2026-11-09 | orte | 🔧 Place builds (`build-place.yml`): Pages deploy waits up to 30 min (it sat in `syncing_files` > 10 min with ~1,000 files), finished-build cache keyed on the `pipeline/` tree hash instead of the commit, so workflow-only pin bumps reuse the 2.5 h build (ADR 0058 amended) |
 | 2026-11-09 | orte | 🏘️ *Orte skalieren* S3 + S4: public repos `ort-vorlage` (template for municipality repos: `ort.toml`, reusable build in Actions, content checks, German issue forms, CONTRIBUTING), `ort-homburg`, `ort-zweibruecken` (first RLP-only place, ADR 0059) and `orte-katalog` (catalog, Saarland overview, leaderboard; ADR 0058). Statewide rollout on hold (Q-S1) |
 | 2026-11-08 | orte | 🧹 *Orte skalieren* S2 follow-ups (contract revision 3.1, ADR 0057): overview `coverage` bitmap (1 km tiles with real data) and smooth filler outside it, implausible source heights by the local rule `h-plausible-v1` (catalog `height_ref_m` 100 → real terrain), v3 tree types from the place's own orthophoto only (reproducible builds); pipeline 0.9.1. Not published |
