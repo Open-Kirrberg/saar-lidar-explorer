@@ -11,6 +11,10 @@
  * Picking a hit flies there (oblique view sized to the parcel) and outlines the parcel in 3D
  * (DrapedLines, exaggeration in the shader) and on the minimap. Outline geometry: the place's
  * `flurstuecke.polygons` (point-in-polygon at the label point) or the WFS geometry.
+ *
+ * Merkliste: „☆ Merken“ in the selection box or on a hit row saves the parcel in this browser only
+ * (`savedParcels.ts`, localStorage); the saved list is shown in the card and can be outlined all at
+ * once on the minimap.
  */
 import L from 'leaflet';
 import type { Vector3 } from 'three';
@@ -42,6 +46,8 @@ import {
   wfsSearchUrl,
 } from './query';
 import type { Gemarkung, IndexedRecord, ParcelHit, ParcelRecord } from './query';
+import { SAVED_PARCELS_KEY, SAVED_PARCELS_MAX, SavedParcels, browserStorage, parcelKey, savedToRecord } from './savedParcels';
+import type { SavedParcel, WriteResult } from './savedParcels';
 import './parcelsearch.css';
 
 type Ring = Array<[number, number]>;
@@ -116,6 +122,8 @@ export interface ParcelSearchApi {
   /** Fly to and outline a record. */
   show(rec: ParcelRecord): Promise<void>;
   clear(): void;
+  /** The Merkliste (newest first). */
+  saved(): readonly SavedParcel[];
   dispose(): void;
 }
 
@@ -132,7 +140,15 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
       <button type="button" class="sle-btn sle-ps-online-btn">Im ganzen Saarland suchen (Geoportal)</button>
       <p class="sle-dim sle-small">Schickt nur den Suchtext an den ALKIS-Dienst des Saarlands.</p>
     </div>
-    <div class="sle-ps-sel" hidden></div>`;
+    <div class="sle-ps-sel" hidden></div>
+    <div class="sle-ps-saved" hidden>
+      <div class="sle-ps-saved-head">
+        <span class="sle-ps-saved-title"></span>
+        <button type="button" class="sle-link sle-small sle-ps-saved-map" aria-pressed="false">Alle auf der Karte zeigen</button>
+      </div>
+      <div class="sle-list sle-ps-saved-list" role="list"></div>
+    </div>
+    <p class="sle-dim sle-small sle-ps-saved-msg" aria-live="polite" hidden></p>`;
   const form = sec.body.querySelector<HTMLFormElement>('form')!;
   const input = sec.body.querySelector<HTMLInputElement>('input')!;
   const status = sec.body.querySelector<HTMLElement>('.sle-ps-status')!;
@@ -140,21 +156,33 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
   const online = sec.body.querySelector<HTMLElement>('.sle-ps-online')!;
   const onlineBtn = sec.body.querySelector<HTMLButtonElement>('.sle-ps-online-btn')!;
   const selBox = sec.body.querySelector<HTMLElement>('.sle-ps-sel')!;
+  const savedBox = sec.body.querySelector<HTMLElement>('.sle-ps-saved')!;
+  const savedTitle = sec.body.querySelector<HTMLElement>('.sle-ps-saved-title')!;
+  const savedList = sec.body.querySelector<HTMLElement>('.sle-ps-saved-list')!;
+  const savedMapBtn = sec.body.querySelector<HTMLButtonElement>('.sle-ps-saved-map')!;
+  const savedMsg = sec.body.querySelector<HTMLElement>('.sle-ps-saved-msg')!;
 
   // ---- index -----------------------------------------------------------------------------------
   let sources: Source[] = [];
   let index: IndexedRecord[] = [];
   let loading: Promise<void> | null = null;
+  let sourcesLoading: Promise<void> | null = null;
   let loadNote = '';
+  /** The places' manifests only (a saved parcel needs its place's polygons URL, not the whole index). */
+  const ensureSources = (): Promise<void> => {
+    sourcesLoading ??= findSources(ctx).then(
+      (s) => void (sources = s),
+      (err) => {
+        console.warn('[parcel-search] sources', err);
+        sources = [];
+      },
+    );
+    return sourcesLoading;
+  };
   const ensureIndex = (): Promise<void> => {
     loading ??= (async () => {
       status.textContent = 'Lade Flurstücke …';
-      try {
-        sources = await findSources(ctx);
-      } catch (err) {
-        console.warn('[parcel-search] sources', err);
-        sources = [];
-      }
+      await ensureSources();
       const lists = await mapLimited(sources, MAX_PARALLEL, async (s) => {
         const res = await fetch(s.labelsUrl, { mode: 'cors', credentials: 'omit' });
         if (!res.ok) throw new Error(`${s.name}: HTTP ${res.status}`);
@@ -173,27 +201,47 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
   // ---- results -----------------------------------------------------------------------------------
   let lastHits: ParcelHit[] = [];
   let generation = 0;
-  const nameOf = (id: string) => sources.find((s) => s.id === id)?.name ?? '';
+  const nameOf = (id: string) =>
+    sources.find((s) => s.id === id)?.name ?? ctx.catalog?.catalog.places.find((p) => p.id === id)?.name_de ?? '';
+  const whereOf = (rec: ParcelRecord) => (rec.source === 'wfs' ? 'online' : ctx.catalog ? nameOf(rec.source) : '');
+  const titleOf = (p: ParcelLabelProps) => formatParcel({ ...p, lage: undefined } as ParcelLabelProps);
 
   const renderHits = (hits: ParcelHit[], total: number, note: string) => {
     lastHits = hits;
     list.replaceChildren();
     sec.setCount(total);
     for (const [i, h] of hits.entries()) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'sle-item sle-ps-item';
-      b.dataset.i = String(i);
       const p = h.rec.props;
-      const where = h.rec.source === 'wfs' ? 'online' : ctx.catalog ? nameOf(h.rec.source) : '';
-      b.innerHTML = `<span class="sle-item-name"></span><span class="sle-dim sle-small sle-ps-meta"></span>`;
-      b.querySelector('.sle-item-name')!.textContent = formatParcel({ ...p, lage: undefined } as ParcelLabelProps);
-      b.querySelector('.sle-ps-meta')!.textContent = [p.lage, where].filter(Boolean).join(' · ');
+      const row = parcelRow(titleOf(p), [p.lage, whereOf(h.rec)]);
+      const b = row.querySelector<HTMLButtonElement>('.sle-ps-item')!;
+      b.dataset.i = String(i);
       b.addEventListener('click', () => void show(h.rec));
-      list.appendChild(b);
+      const star = document.createElement('button');
+      star.type = 'button';
+      star.className = 'sle-icon sle-ps-star';
+      star.dataset.key = parcelKey(p);
+      star.addEventListener('click', () => toggleSaved(h.rec));
+      row.appendChild(star);
+      list.appendChild(row);
     }
+    syncStars();
     status.textContent = note;
   };
+
+  /** A list row: the main button (title + meta line) — side buttons are appended by the caller. */
+  function parcelRow(title: string, meta: Array<string | undefined>): HTMLElement {
+    const row = document.createElement('div');
+    row.className = 'sle-ps-row';
+    row.setAttribute('role', 'listitem');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'sle-item sle-ps-item';
+    b.innerHTML = `<span class="sle-item-name"></span><span class="sle-dim sle-small sle-ps-meta"></span>`;
+    b.querySelector('.sle-item-name')!.textContent = title;
+    b.querySelector('.sle-ps-meta')!.textContent = meta.filter(Boolean).join(' · ');
+    row.appendChild(b);
+    return row;
+  }
 
   const runLocal = async (text: string): Promise<ParcelHit[]> => {
     const my = ++generation;
@@ -289,16 +337,22 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
       void runLocal('');
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      list.querySelector<HTMLButtonElement>('button')?.focus();
+      (list.querySelector<HTMLButtonElement>('.sle-ps-item') ?? savedList.querySelector<HTMLButtonElement>('.sle-ps-item'))?.focus();
     }
   });
-  list.addEventListener('keydown', (e) => {
-    const t = e.target as HTMLElement;
-    if (e.key === 'ArrowDown') (t.nextElementSibling as HTMLElement | null)?.focus();
-    else if (e.key === 'ArrowUp') ((t.previousElementSibling as HTMLElement | null) ?? input).focus();
-    else return;
+  // Arrow keys move between the rows' main buttons (hits, then the Merkliste); Up from the first → input.
+  const rowNav = (e: KeyboardEvent) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const row = (e.target as HTMLElement).closest('.sle-ps-row');
+    if (!row) return;
+    const items = [...sec.body.querySelectorAll<HTMLButtonElement>('.sle-ps-row .sle-ps-item')].filter((b) => b.offsetParent !== null);
+    const i = items.indexOf(row.querySelector<HTMLButtonElement>('.sle-ps-item')!);
     e.preventDefault();
-  });
+    if (e.key === 'ArrowDown') items[i + 1]?.focus();
+    else (items[i - 1] ?? input).focus();
+  };
+  list.addEventListener('keydown', rowNav);
+  savedList.addEventListener('keydown', rowNav);
   onlineBtn.addEventListener('click', () => void runOnline());
 
   // ---- outline + fly -----------------------------------------------------------------------------
@@ -379,8 +433,11 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
       <div class="sle-dim sle-small sle-ps-sel-meta"></div>
       <div class="sle-row">
         <button type="button" class="sle-btn" data-a="fly">Hinfliegen</button>
+        <button type="button" class="sle-btn sle-ps-save" data-a="save" aria-pressed="false"></button>
         <button type="button" class="sle-btn" data-a="clear">Markierung aus</button>
-      </div>`;
+      </div>
+      <input type="text" class="sle-input sle-ps-note" maxlength="200" autocomplete="off"
+        placeholder="Notiz (bleibt in diesem Browser)" aria-label="Notiz zum gemerkten Flurstück" hidden>`;
     selBox.querySelector('.sle-ps-sel-title')!.textContent = formatParcel(rec.props);
     const meta = [
       area !== undefined ? `Fläche ${fmtArea(area)} (amtlich)` : '',
@@ -390,6 +447,13 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
     selBox.querySelector('.sle-ps-sel-meta')!.innerHTML = meta.map(esc).join('<br>');
     selBox.querySelector('[data-a=fly]')!.addEventListener('click', () => void show(rec));
     selBox.querySelector('[data-a=clear]')!.addEventListener('click', () => clear());
+    selBox.querySelector('[data-a=save]')!.addEventListener('click', () => toggleSaved(rec));
+    const note = selBox.querySelector<HTMLInputElement>('.sle-ps-note')!;
+    note.addEventListener('change', () => report(store.setNote(parcelKey(rec.props), note.value)));
+    note.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') note.blur();
+    });
+    syncSelection();
   };
 
   /** Stand-off for a parcel: the whole parcel in frame, at least 120 m (60 m span when unknown). */
@@ -404,6 +468,7 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
     for (const b of list.querySelectorAll('.active')) b.classList.remove('active');
     const i = lastHits.findIndex((h) => h.rec === rec);
     if (i >= 0) list.querySelector(`[data-i="${i}"]`)?.classList.add('active');
+    markSavedActive();
     let rings: Ring[] = rec.rings ?? [];
     let area = rec.flaeche_m2;
     const needPolygons = !rings.length && rec.source !== 'wfs';
@@ -414,6 +479,8 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
     let dist = standOff(rings);
     let flight = flyToSite(ctx, rec.E, rec.N, dist, dist * 0.6);
     if (needPolygons) {
+      await ensureSources();
+      if (selected !== rec) return;
       const idx = await polygonsOf(rec.source);
       if (selected !== rec) return;
       const f = idx ? idx.find(rec.E, rec.N) : -1;
@@ -439,7 +506,176 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
     selBox.hidden = true;
     selBox.replaceChildren();
     for (const b of list.querySelectorAll('.active')) b.classList.remove('active');
+    markSavedActive();
   }
+
+  // ---- Merkliste ---------------------------------------------------------------------------------
+  const store = new SavedParcels(browserStorage());
+  let mapAll: L.FeatureGroup | null = null;
+
+  /** German note for a failed write; '' clears the message. */
+  function report(r: WriteResult, extra = ''): void {
+    const msg =
+      r === 'quota'
+        ? 'Der Browser-Speicher ist voll – die Änderung an der Merkliste wurde nicht gespeichert.'
+        : r === 'unavailable'
+          ? 'Dieser Browser erlaubt keinen Speicher (z. B. privates Fenster) – die Merkliste gilt nur bis zum Neuladen.'
+          : extra;
+    savedMsg.textContent = msg;
+    savedMsg.hidden = !msg;
+    renderSaved();
+  }
+
+  function toggleSaved(rec: ParcelRecord): void {
+    const key = parcelKey(rec.props);
+    if (store.get(key)) {
+      report(store.remove(key));
+      return;
+    }
+    const { result, dropped } = store.add(rec);
+    report(result, dropped ? `Die Merkliste fasst ${SAVED_PARCELS_MAX} Flurstücke – der älteste Eintrag wurde entfernt.` : '');
+  }
+
+  function markSavedActive(): void {
+    const key = selected ? parcelKey(selected.props) : null;
+    for (const b of savedList.querySelectorAll<HTMLElement>('.sle-ps-item')) b.classList.toggle('active', b.dataset.key === key);
+  }
+
+  function syncStars(): void {
+    for (const b of list.querySelectorAll<HTMLButtonElement>('.sle-ps-star')) {
+      const on = !!store.get(b.dataset.key ?? '');
+      b.textContent = on ? '★' : '☆';
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+      const title = b.closest('.sle-ps-row')?.querySelector('.sle-item-name')?.textContent ?? '';
+      b.setAttribute('aria-label', `„${title}“ merken`);
+      b.title = on ? 'Gemerkt – nochmal tippen zum Entfernen' : 'Merken';
+    }
+  }
+
+  function syncSelection(): void {
+    const btn = selBox.querySelector<HTMLButtonElement>('[data-a=save]');
+    const note = selBox.querySelector<HTMLInputElement>('.sle-ps-note');
+    if (!btn || !note || !selected) return;
+    const s = store.get(parcelKey(selected.props));
+    btn.textContent = s ? '★ Gemerkt' : '☆ Merken';
+    btn.classList.toggle('on', !!s);
+    btn.setAttribute('aria-pressed', String(!!s));
+    btn.title = s ? 'Von der Merkliste entfernen' : 'Auf die Merkliste (nur in diesem Browser)';
+    note.hidden = !s;
+    if (s && document.activeElement !== note) note.value = s.note ?? '';
+  }
+
+  function renderSaved(): void {
+    const items = store.list();
+    savedBox.hidden = !items.length;
+    savedTitle.textContent = `Gemerkte Flurstücke (${items.length})`;
+    savedList.replaceChildren();
+    for (const s of items) {
+      const row = parcelRow(titleOf(s.props), [s.note, s.props.lage, whereOf(s)]);
+      const b = row.querySelector<HTMLButtonElement>('.sle-ps-item')!;
+      b.dataset.key = s.key;
+      b.title = `Hinfliegen – gemerkt am ${new Date(s.savedAt).toLocaleDateString('de-DE')}`;
+      b.addEventListener('click', () => void show(savedToRecord(s)));
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'sle-icon sle-ps-del';
+      del.textContent = '✕';
+      del.title = 'Von der Merkliste entfernen';
+      del.setAttribute('aria-label', `„${titleOf(s.props)}“ von der Merkliste entfernen`);
+      del.addEventListener('click', () => {
+        // Keyboard users keep focus in the list: the next row's remove button, else the previous one.
+        const keyboard = del.matches(':focus-visible');
+        const next = (row.nextElementSibling ?? row.previousElementSibling)?.querySelector<HTMLElement>('.sle-ps-item')?.dataset.key;
+        report(store.remove(s.key));
+        if (!keyboard) return;
+        const nextRow = next ? savedList.querySelector(`.sle-ps-item[data-key="${CSS.escape(next)}"]`)?.closest('.sle-ps-row') : null;
+        (nextRow?.querySelector<HTMLButtonElement>('.sle-ps-del') ?? input).focus();
+      });
+      row.appendChild(del);
+      savedList.appendChild(row);
+    }
+    markSavedActive();
+    syncStars();
+    syncSelection();
+    if (mapAll) void drawSavedOnMap(false);
+  }
+
+  /** All saved parcels on the minimap (dot + outline where known); opens the big map once. */
+  let mapGen = 0;
+  async function drawSavedOnMap(fit: boolean): Promise<void> {
+    const mm = minimap();
+    if (!mm) return;
+    const my = ++mapGen;
+    const items = store.list();
+    if (!items.length) {
+      hideSavedOnMap();
+      return;
+    }
+    const local = items.filter((s) => !s.rings && s.source !== 'wfs');
+    if (local.length) await ensureSources();
+    const idx = new Map<string, ParcelPolygonIndex | null>();
+    for (const src of new Set(local.map((s) => s.source))) idx.set(src, await polygonsOf(src));
+    if (my !== mapGen || !mapAll) return;
+    mapAll.clearLayers();
+    const pts: L.LatLngTuple[] = [];
+    const ll = (E: number, N: number): L.LatLngTuple => {
+      const w = utmToWgs84(E, N);
+      return [w.lat, w.lon];
+    };
+    for (const s of items) {
+      let rings: Ring[] = s.rings ?? [];
+      const pi = idx.get(s.source);
+      const f = pi ? pi.find(s.E, s.N) : -1;
+      if (!rings.length && pi && f >= 0) rings = featureRings(pi.data, f);
+      // A dot for every parcel (small parcels vanish when zoomed out), plus the outline where known.
+      const layers: L.Path[] = [L.circleMarker(ll(s.E, s.N), { radius: 5, color: OUTLINE_HEX, weight: 2, fillOpacity: 0.6 })];
+      if (rings.length) layers.push(L.polygon(rings.map((r) => r.map(([E, N]) => ll(E, N))), { color: OUTLINE_HEX, weight: 2, fillOpacity: 0.2 }));
+      for (const layer of layers) {
+        layer.bindTooltip(titleOf(s.props) + (s.note ? ` – ${s.note}` : ''));
+        layer.on('click', () => void show(savedToRecord(s)));
+        layer.addTo(mapAll);
+      }
+      pts.push(ll(s.E, s.N), ...rings.flatMap((r) => r.map(([E, N]) => ll(E, N))));
+    }
+    if (fit) mm.showBounds(pts);
+  }
+
+  function hideSavedOnMap(): void {
+    mapGen++;
+    if (!mapAll) return;
+    mapAll.remove();
+    mapAll = null;
+    savedMapBtn.textContent = 'Alle auf der Karte zeigen';
+    savedMapBtn.setAttribute('aria-pressed', 'false');
+    minimap()?.endTemporaryView();
+  }
+
+  savedMapBtn.addEventListener('click', () => {
+    if (mapAll) {
+      hideSavedOnMap();
+      return;
+    }
+    const mm = minimap()?.map;
+    if (!mm) {
+      report('ok', 'Die Übersichtskarte ist ausgeschaltet.');
+      return;
+    }
+    mapAll = L.featureGroup().addTo(mm);
+    savedMapBtn.textContent = 'Von der Karte nehmen';
+    savedMapBtn.setAttribute('aria-pressed', 'true');
+    void drawSavedOnMap(true);
+  });
+
+  // Another tab changed the Merkliste.
+  const onStorage = (e: StorageEvent) => {
+    if (e.key !== SAVED_PARCELS_KEY && e.key !== null) return;
+    store.reload();
+    renderSaved();
+  };
+  window.addEventListener('storage', onStorage);
+  renderSaved();
+  if (!store.persistent) report('unavailable');
 
   const api: ParcelSearchApi = {
     async search(text) {
@@ -448,8 +684,11 @@ export function initParcelSearch(ctx: AppContext, parent: HTMLElement, minimap: 
     },
     show,
     clear,
+    saved: () => store.list(),
     dispose() {
       clear();
+      hideSavedOnMap();
+      window.removeEventListener('storage', onStorage);
       offFrame();
       clearTimeout(debounce);
     },

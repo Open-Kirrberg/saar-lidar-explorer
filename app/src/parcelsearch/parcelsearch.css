@@ -3,11 +3,25 @@
 .sle-ps-form .sle-input { width: 100%; box-sizing: border-box; }
 .sle-ps-status { margin: 4px 0; min-height: 1.2em; }
 .sle-ps-list { max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.sle-ps-item { display: flex; flex-direction: column; align-items: flex-start; text-align: left; width: 100%; }
-.sle-ps-item.active { outline: 2px solid #ffd02e; outline-offset: -2px; }
-.sle-ps-meta:empty { display: none; }
+.sle-ps-row { display: flex; align-items: center; gap: 2px; }
+/* .sle-ps-row prefix: beats the generic .sle-item / .sle-small rules whatever the stylesheet order. */
+.sle-ps-row .sle-ps-item { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; width: 100%; flex: 1; min-width: 0; }
+.sle-ps-row .sle-ps-item .sle-item-name { flex: none; max-width: 100%; }
+.sle-ps-row .sle-ps-item.active { outline: 2px solid #ffd02e; outline-offset: -2px; }
+.sle-ps-row .sle-ps-meta { margin: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sle-ps-row .sle-ps-meta:empty { display: none; }
+.sle-ps-row .sle-icon { flex: none; min-width: 28px; min-height: 28px; font-size: 15px; line-height: 1; }
+.sle-ps-star.on { color: #ffd02e; }
 .sle-ps-online { margin-top: 6px; }
 .sle-ps-online p { margin: 2px 0 0; }
 .sle-ps-sel { margin-top: 8px; padding: 6px 8px; border-left: 3px solid #ffd02e; background: rgba(255, 208, 46, 0.08); border-radius: 4px; }
 .sle-ps-sel-title { font-weight: 600; }
 .sle-ps-sel-meta { margin: 2px 0 6px; word-break: break-all; }
+.sle-ps-sel .sle-btn.sle-ps-save.on { background: #ffd02e; color: #222; }
+.sle-ps-note { box-sizing: border-box; margin-bottom: 2px; }
+.sle-ps-saved { margin-top: 10px; }
+.sle-ps-saved-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.sle-ps-saved-title { font-weight: 600; }
+.sle-ps-saved-head .sle-ps-saved-map { margin: 0; font-size: 11px; }
+.sle-ps-saved-list { display: flex; flex-direction: column; gap: 2px; }
+.sle-ps-saved-msg { margin: 4px 0 0; color: #ffb37a; }
