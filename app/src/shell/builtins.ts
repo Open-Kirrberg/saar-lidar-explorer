@@ -6,6 +6,7 @@
  * |----------------|-----------|------------|---------------------------------------------------|
  * | markers        | standard  | labor      | marker store + 3D pins (core); list/GeoJSON card  |
  * | minimap        | standard  |            | game minimap in `slots.minimap` (V2.3, ADR 0036)   |
+ * | parcel-search  | standard  |            | Flurstücksuche card in the „Orte“ drawer           |
  * | places         | standard  |            | „Orte“ drawer (F7) + 3D labels                     |
  * | osm-paths      | standard  | labor      | OSM ways in 3D (F10); card + F12 lookup in Labor  |
  * | buildings      | standard  | labor      | LoD2 houses (F11); card in Labor                  |
@@ -28,6 +29,7 @@ import type { AppContext } from '../main';
 import { Minimap } from '../map/Minimap';
 import { MarkerManager } from '../markers/MarkerManager';
 import { initMeasure } from '../measure';
+import { initParcelSearch } from '../parcelsearch/ParcelSearch';
 import { createPoiPanel } from '../pois/PoiPanel';
 import { onZonePortals } from '../zones/runtime/feature';
 import { initReconstruction } from '../reconstruction/Reconstruction';
@@ -107,6 +109,20 @@ export function registerBuiltins(shell: ShellApi, d: BuiltinDeps): void {
         mm.destroy();
         services.minimap = null;
       };
+    },
+  });
+  reg({
+    id: 'parcel-search',
+    tier: 'standard',
+    label: 'Flurstücksuche',
+    // Local data: a place / the AOI with parcel labels; catalog mode also has the online search.
+    available: () => !!m.vectors?.flurstuecke?.labels || !!ctx.catalog,
+    mount(h) {
+      // Top of the „Orte“ drawer, above the zones (seq 0) and the leaderboard (moves itself to seq 0).
+      h.places.dataset.seq = '-1';
+      h.places.parentElement?.prepend(h.places);
+      const api = initParcelSearch(ctx, h.places, () => services.minimap);
+      return () => api.dispose();
     },
   });
   reg({

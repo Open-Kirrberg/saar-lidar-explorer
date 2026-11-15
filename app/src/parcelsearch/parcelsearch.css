@@ -1,0 +1,13 @@
+/* Flurstücksuche (parcelsearch/ParcelSearch.ts) — card in the „Orte“ drawer. */
+.sle-ps-form { margin: 0 0 4px; }
+.sle-ps-form .sle-input { width: 100%; box-sizing: border-box; }
+.sle-ps-status { margin: 4px 0; min-height: 1.2em; }
+.sle-ps-list { max-height: 40vh; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.sle-ps-item { display: flex; flex-direction: column; align-items: flex-start; text-align: left; width: 100%; }
+.sle-ps-item.active { outline: 2px solid #ffd02e; outline-offset: -2px; }
+.sle-ps-meta:empty { display: none; }
+.sle-ps-online { margin-top: 6px; }
+.sle-ps-online p { margin: 2px 0 0; }
+.sle-ps-sel { margin-top: 8px; padding: 6px 8px; border-left: 3px solid #ffd02e; background: rgba(255, 208, 46, 0.08); border-radius: 4px; }
+.sle-ps-sel-title { font-weight: 600; }
+.sle-ps-sel-meta { margin: 2px 0 6px; word-break: break-all; }

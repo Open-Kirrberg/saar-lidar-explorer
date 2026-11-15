@@ -172,6 +172,20 @@ export function featureContains(d: ParcelPolygonData, f: number, E: number, N: n
   return false;
 }
 
+/** All rings of feature `f` as [E, N] arrays (outer rings and holes; for drawing an outline). */
+export function featureRings(d: ParcelPolygonData, f: number): Array<Array<[number, number]>> {
+  const out: Array<Array<[number, number]>> = [];
+  if (f < 0 || f + 1 >= d.featStart.length) return out;
+  const r0 = d.partStart[d.featStart[f]];
+  const r1 = d.partStart[d.featStart[f + 1]];
+  for (let r = r0; r < r1; r++) {
+    const ring: Array<[number, number]> = [];
+    for (let v = d.ringStart[r]; v < d.ringStart[r + 1]; v++) ring.push([d.coords[2 * v], d.coords[2 * v + 1]]);
+    out.push(ring);
+  }
+  return out;
+}
+
 /** Uniform grid over the parcel bounding boxes; `find` returns the first containing feature. */
 export class ParcelPolygonIndex {
   private readonly cells = new Map<number, number[]>();

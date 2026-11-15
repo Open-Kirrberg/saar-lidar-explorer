@@ -543,6 +543,17 @@ rectangle.
 - The toggle persists in localStorage `sle.vectors.v1` (`osm`, off by default). Debug handle: `window.sleVectors`.
 - **Parcel lookup** (`VectorLayers.lookupLocal`, used by the marker form, *Messen → Punkt*, *bestätigen* and the report): with `flurstuecke.polygons` a point-in-polygon on the parcel polygons (`parcelPolygons.ts`: packed in the vector worker on first use, 100 m grid index, holes/MultiPolygons, any winding, first feature wins on overlap); if the file is missing or fails, the nearest label point ≤ 60 m whose connecting line crosses no parcel boundary; else the live WFS (marker form) or the opt-in online lookup (report). Checked: 3/3 points equal the live SL WFS, incl. a 60 ha forest parcel 836 m from its label point (118 ms incl. the lazy load).
 
+## Flurstücksuche 🔎
+
+`src/parcelsearch/` (`query.ts` pure + tested in `tests/parcelSearch.test.ts`, `ParcelSearch.ts` UI), feature `parcel-search` (🟢 Standard) — the first card in the *Orte* drawer.
+
+- **Input:** „Kirrberg 100/2“, „Hassel Flur 6 1405/1“, „Gemarkung Rohrbach, Flst. 12“, „Kirrberg 3 100“ (a plain number before the parcel number is the Flur), a number alone (all Gemarkungen), a Flurstückskennzeichen (≥ 10 digits/`_`), or words alone (Gemarkung, else Lage/street). Umlauts, „Sankt“/„St.“ and case are folded (`norm`).
+- **Local search** (as you type, 180 ms debounce): the label points (`vectors.flurstuecke.labels`) of every catalog place with status `3d` — fetched once on first focus, ≤ 3 in flight, about 0.85 MB gzip per place — or the AOI's file in single-AOI mode. Ranking: exact number before sub-parcels („100“ before „100/2“), Flur match, Gemarkung exact > prefix > substring > Lage. 50 hits shown, total counted.
+- **Online search** (button „Im ganzen Saarland suchen“, never per keystroke; covers places without 3D data): ALKIS Saarland WFS 414. The service answers exact comparisons only (`PropertyIsLike` → HTTP 403), so typed words are first mapped to Gemarkungsschlüssel via the statewide `Katasterbezirk` list (names only, ≈ 80 KB, loaded once; its GeoJSON without geometry is invalid — `"MultiPolygon",}` — and is repaired before parsing), then `GEMASCHL` (OR over ≤ 5 matches) + `FLSTNRZAE` (+ `FLSTNRNEN`, `FLUR`); Kennzeichen are padded to 20 characters. Typical answer 10–30 s; timeout 45 s. Only the search text goes to the service (listed in *Über & Datenschutz*).
+- **Pick:** flies at once (oblique view, stand-off from the parcel size, re-aimed for large parcels), outline in amber in 3D (`DrapedLines`, exaggeration in the shader) and on the minimap; card with Fläche (amtlich) and Kennzeichen. Outline: point-in-polygon at the label point in the place's `flurstuecke.polygons` (≈ 3.7 MB gzip, loaded on first pick per place) or the WFS geometry. *Markierung aus* removes it. Debug handle: `window.sleParcelSearch` (`search`, `show`, `clear`).
+- **Check:** `node scripts/parcel-search-check.mjs --url http://localhost:5248/` (catalog-mode dev server; screenshots → `docs/shots/parcel-search/`). 2026-11-15: St. Ingbert, Zweibrücken (RLP, no Flur) and online Kirrberg all fly + outline, no console errors.
+- **Gaps:** Homburg's place build has no parcels yet (the SL WFS was down during its build), so Homburg parcels are found online only until a rebuild; Rheinland-Pfalz has no online search; outlines under tree crowns are partly hidden in 3D (the minimap shows them).
+
 ## Gebäude (F11)
 
 `src/buildings/`, registered in `shell/builtins.ts`; the card is hidden when the manifest has no `models.buildings`.

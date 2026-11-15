@@ -4,6 +4,7 @@ One line per shipped item, newest first. Details go in commits and module README
 
 | Date | Version | What |
 |---|---|---|
+| 2026-11-15 | app | 🔎 **Flurstücksuche** (first card in *Orte*): „Kirrberg 100/2“, „Hassel Flur 6 1405/1“, a Kennzeichen or a street → hits from the parcel labels of all 3D places as you type; „Im ganzen Saarland suchen“ asks the ALKIS Saarland WFS (Gemarkung mapped to its key first: the service rejects wildcard filters); a hit flies there and outlines the parcel in 3D and on the minimap with its official area. Not published |
 | 2026-11-12 | orte | 🏙️ **St. Ingbert** is the third place in detail 3D (`Open-Kirrberg/ort-st-ingbert`: whole town incl. Rohrbach, Hassel, Oberwürzbach, Rentrisch; 50 tiles, candidates off, no point clouds), listed in the Orte-Katalog |
 | 2026-11-09 | release | 🌍 Public app switched to **catalog mode** (user's go): repo variable `SLE_CATALOG_URL` → `orte-katalog/catalog.json`; Homburg and Zweibrücken stream in detail 3D from their own Pages sites, the rest of the Saarland as overview with „Ortspate gesucht“. Undo: delete the variable and re-run `pages.yml` |
 | 2026-11-09 | orte | 🔧 Place builds (`build-place.yml`): Pages deploy waits up to 30 min (it sat in `syncing_files` > 10 min with ~1,000 files), finished-build cache keyed on the `pipeline/` tree hash instead of the commit, so workflow-only pin bumps reuse the 2.5 h build (ADR 0058 amended) |

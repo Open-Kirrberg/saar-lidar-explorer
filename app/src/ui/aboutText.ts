@@ -39,7 +39,8 @@ export const EXTERNAL_SERVICES: readonly ExternalService[] = [
     name: 'Geoportal Saarland (Landesamt für Vermessung, Geoinformation und Landentwicklung)',
     when:
       'nur wenn Sie in der Übersichtskarte „Luftbild (DOP20)“, „Flurstücke“ oder „Gemarkung/Flur“ einschalten, ' +
-      'und für die Flurstücksabfrage (siehe oben).',
+      'für die Flurstücksabfrage (siehe oben) und wenn Sie in der Flurstücksuche „Im ganzen Saarland suchen“ antippen ' +
+      '(dann geht nur der Suchtext dorthin).',
     byDefault: false,
   },
 ];
@@ -52,6 +53,7 @@ export const LINK_ONLY_HOSTS: readonly string[] = [
   'opentopomap.org',
   'opendatacommons.org',
   'www.w3.org',
+  'www.opengis.net', // XML namespace in WFS filters (Flurstücksuche)
   'github.com',
   'docs.github.com',
   // „Quellen und Lizenzen“ dialog (ADR 0026): licence and dataset links
