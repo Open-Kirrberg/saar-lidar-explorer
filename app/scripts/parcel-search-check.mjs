@@ -82,6 +82,10 @@ async function typeQuery(page, text) {
 async function pickFirst(page, shot) {
   await page.click('#sle-parcel-search .sle-ps-list .sle-ps-item');
   await settle(page);
+  // The outline follows the place's polygons file (a few MB) — may land after the flight on a slow network.
+  await page
+    .waitForFunction(() => window.sle.scene.children.some((o) => o.name === 'DrapedLines' && o.material?.uniforms?.uColors?.value?.[0]?.x === 1), { timeout: 60000, polling: 500 })
+    .catch(() => {});
   const sel = await page.evaluate(() => ({
     title: document.querySelector('#sle-parcel-search .sle-ps-sel-title')?.textContent ?? '',
     meta: document.querySelector('#sle-parcel-search .sle-ps-sel-meta')?.textContent ?? '',
@@ -144,7 +148,15 @@ try {
   });
   page.on('pageerror', (e) => errors.push(String(e)));
   await openApp(page);
-  check('search card in „Orte“', true);
+  const order = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('.sle-feat-places')].map((w) => w.getAttribute('data-feature'));
+    return cards;
+  });
+  check(
+    'search card in „Orte“, above „Nachbauten zum Betreten“',
+    order[0] === 'parcel-search' && (!order.includes('zone-portals') || order.indexOf('zone-portals') > 0),
+    order.join(' > '),
+  );
 
   // 1) St. Ingbert (local labels + polygons)
   let r = await typeQuery(page, 'Hassel Flur 6 1405/1');

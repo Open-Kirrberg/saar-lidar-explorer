@@ -277,9 +277,14 @@ export function mountZones(h: FeatureHost): () => void {
   const placesCard = el('section', { class: 'sle-card open sle-zone-places', 'aria-labelledby': 'sle-zone-places-title' });
   const placesList = el('div', { class: 'sle-zone-places-list', role: 'list' });
   placesCard.append(el('h3', { class: 'sle-card-title-static', id: 'sle-zone-places-title', text: 'Nachbauten zum Betreten' }), placesList);
-  // first in the drawer, above „Bekannte Orte“ (seq 0 keeps later features' wrappers below it)
+  // First of the seq-0 cards, above „Bekannte Orte“ (seq 0 keeps later features' wrappers below it);
+  // cards with a negative seq (the Flurstücksuche, −1) stay above it even when the zones mount later.
   h.places.dataset.seq = '0';
-  h.places.parentElement?.prepend(h.places);
+  const drawer = h.places.parentElement;
+  if (drawer) {
+    const next = [...drawer.children].find((c) => c !== h.places && Number((c as HTMLElement).dataset.seq ?? 0) >= 0) ?? null;
+    drawer.insertBefore(h.places, next);
+  }
   const closeDrawer = () => h.places.closest('.sle-drawer')?.querySelector<HTMLButtonElement>('.sle-dlg-close')?.click();
   const renderPlaces = () => {
     placesList.replaceChildren();
